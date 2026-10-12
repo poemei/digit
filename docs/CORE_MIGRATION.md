@@ -71,3 +71,11 @@ This is deliberately a **small fresh Core-only contract** informed by the older 
 **Current limitations:** Registration is in-process only. No shared-library discovery/loading, signature checking, persisted qualification records, or external transport is implemented. The `operator_authorized` value supplied to `digit_module_authorize` is a decision **input**, not proof of actor identity; the verified Core authority boundary must supply it before production activation. The minimal qualification test count in this foundation is a temporary contract value pending alignment with the approved STN-LABZ qualification requirements. These limitations prevent a claim of full Core Phase 1 acceptance.
 
 Run `make clean && make && make test` on the target environment. The new module-manager test uses an internal mock callback only; **no functional modules were migrated**. No build or runtime test is claimed from repository edits alone.
+
+## Core startup integration (2026-10-12)
+
+The standalone `bin/digit` executable now **initializes its Core module manager** after validating Digit's Agent Root, reports its zero-module registration count, and shuts down the manager on normal runtime exit and runtime failure. `Makefile` now links the manager into the Core executable.
+
+**No module loading, implicit module activation, Dispatcher, transport, SA, or unrelated module has been introduced.** Core identity and the existing runtime remain independently operable when no modules are installed.
+
+This integration does not establish production activation authority, persisted qualification, or dynamic discovery. Existing unit tests cover the independent manager. **The operator must run `make clean && make && make test`, then `./bin/digit` followed by Ctrl+C** to verify integrated startup/shutdown on the target system. Do not mark Phase 1 complete from a successful commit alone.
