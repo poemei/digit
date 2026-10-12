@@ -23,7 +23,11 @@ int digit_log_open_path(const char *path)
 int digit_log_open(void)
 {
     if (mkdir(DIGIT_LOG_DIRECTORY, 0700) != 0 && errno != EEXIST) return 0;
-    return digit_log_open_path(DIGIT_LOG_PATH);
+    if (digit_log_stream) return 0;
+    digit_log_stream = fopen(DIGIT_LOG_PATH, "a");
+    if (!digit_log_stream) return 0;
+    (void)setvbuf(digit_log_stream, NULL, _IOLBF, 0);
+    return 1;
 }
 
 int digit_log_event(const char *component, const char *event, const char *detail)
