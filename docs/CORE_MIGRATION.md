@@ -94,3 +94,7 @@ The installation root is **`/opt/digit`** and the sole canonical log file is **`
 **Still to implement before logging is fully universal:** Core module-manager event instrumentation, runtime transition logging, and module ABI access to the Core logger. The new logging test proves logging format/path behavior; it does not alone prove that every future activity is logged.
 
 To qualify on the installed host, ensure `/opt/digit/logs` exists and is writable by the service account, then run `make clean && make && make test && ./bin/digit`. Check `/opt/digit/logs/digit.log` for structured Core startup/shutdown records. No build or runtime qualification is claimed solely from these commits.
+
+## Local logging path adjustment (2026-10-12)
+
+Production Core logging uses `./logs/digit.log` relative to Digit's **current working directory**. On launch from `~/digit`, the log is `~/digit/logs/digit.log`. `digit_log_open()` creates `./logs` with mode 0700 if absent; Core still refuses startup when it cannot open its mandatory logger. `/opt/digit/logs` is no longer required for this development build. When installed under `/opt/digit`, launch with working directory `/opt/digit` to store logs there. No alternate audit.log is used.
