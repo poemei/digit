@@ -24,10 +24,7 @@ bin/test_logging: tests/test_logging.c src/logging.c include/logging.h | bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_logging.c src/logging.c -o $@
 
 test: all
-	./bin/test_agent_root
-	./bin/test_runtime
-	./bin/test_module_manager
-	./bin/test_logging
+	@sh tests/run_all.sh
 
 clean:
 	rm -rf bin
