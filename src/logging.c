@@ -1,5 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
+#include <errno.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 #include "logging.h"
@@ -18,7 +20,11 @@ int digit_log_open_path(const char *path)
     return 1;
 }
 
-int digit_log_open(void) { return digit_log_open_path(DIGIT_LOG_PATH); }
+int digit_log_open(void)
+{
+    if (mkdir(DIGIT_LOG_DIRECTORY, 0700) != 0 && errno != EEXIST) return 0;
+    return digit_log_open_path(DIGIT_LOG_PATH);
+}
 
 int digit_log_event(const char *component, const char *event, const char *detail)
 {
