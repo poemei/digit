@@ -98,3 +98,9 @@ To qualify on the installed host, ensure `/opt/digit/logs` exists and is writabl
 ## Local logging path adjustment (2026-10-12)
 
 Production Core logging uses `./logs/digit.log` relative to Digit's **current working directory**. On launch from `~/digit`, the log is `~/digit/logs/digit.log`. `digit_log_open()` creates `./logs` with mode 0700 if absent; Core still refuses startup when it cannot open its mandatory logger. `/opt/digit/logs` is no longer required for this development build. When installed under `/opt/digit`, launch with working directory `/opt/digit` to store logs there. No alternate audit.log is used.
+
+## Current operator-selected Core acceptance evidence (2026-10-12)
+
+The operator has selected the Core build, `make test` aggregate pass/fail output, standalone console startup/shutdown, and local `./logs/digit.log` records as the current foundation-stage evidence. There is no new Windows APP or Slack connection for this rebuilt Digit. Successful automated checks are not operator acceptance; stop and await explicit acceptance plus next named step authorization under `AGENTS.md`.
+
+The canonical **current development** logging location is `./logs/digit.log` relative to the process working directory; earlier historical `/opt/digit/logs` instructions in this record have been superseded by the local logging adjustment above. Router (formerly called Dispatcher in legacy material) is not yet implemented, and Bootstrap/Router names and responsibilities follow the current roadmap. SA remains outside Core.
