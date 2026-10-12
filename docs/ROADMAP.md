@@ -2,21 +2,22 @@
 
 **Repository:** `poemei/digit`  
 **Reference source:** [`stnlabz/digit`](https://github.com/stnlabz/digit)  
-**Architecture:** ChAoS MVC — **Core → Dispatcher → Modules**  
-**Status:** Planning; implementation has not begun.
+**Architecture:** ChAoS MVC — **Core → Bootstrap → Router → relevant Module → Rendering**  
+**Status:** Core Phase 1 in progress; later phases not yet implemented or authorized.
 
 ## 1. Non-negotiable design rules
 
 1. **ALWAYS START WITH CORE.** Do not create, migrate, or wire a functional module until Core's foundation and acceptance gates are established.
 2. **Digit's identity and core function remain in Core.** Core defines who Digit is, her foundational operating behavior, fundamental authority/policy enforcement, lifecycle, module contracts, registration, qualification, and controlled execution infrastructure. Do not move those responsibilities into modules.
 3. **Modules have nothing to do with implementing Core.** Modules are external capabilities managed by Core. They must not define Digit's identity, rewrite Core rules, own Core lifecycle, or become prerequisites for Core to exist, start, or operate at its foundational level.
-4. **Dispatcher is the one application Controller/router**, attached through Core's module mechanism. It selects and coordinates work. Other modules return results to it; they do not form a mandatory daisy-chain of controllers.
-5. **Rendering is the View.** Models produce results, Dispatcher determines routing/outcome, and Rendering presents the result. An Interface is a transport adapter, not the View or Controller.
+4. **Bootstrap initializes and hands off. Router routes only.** Router maps `/ask` to Ask, `/diagnose` to DSD, etc., through established routes. It does not interpret questions, compose answers, validate responses, or orchestrate a chain of modules. Modules own their work and return results for Rendering.
+5. **Rendering is the View.** Models produce results, Router selects their route, and Rendering presents the result. An Interface is a transport adapter, not the View or Controller.
 6. **One governing authority boundary.** Core enforces the foundational rules and authority model. No module can override them, grant itself authority, or silently redirect command flow.
 7. **Evidence over guesses.** DSD must report actual observed decisions, including source file/function/line when supplied by the responsible code. No fabricated locations, root causes, or repair claims.
 8. **Keep it simple.** A casual learned expression such as `purrs` must not require sequential approval from unrelated modules before Digit can answer or ask for clarification.
 9. **Migrate features, not the old architecture.** The previous repository is reference material; nothing is copied simply because it previously existed.
-10. **Qualification is mandatory.** Each stage must meet its acceptance criteria before the next stage begins. Preserve STN-LABZ module versioning and authorization rules for subsequent source changes.
+10. **Core logging is mandatory.** Use Core-owned `./logs/digit.log` (working-directory relative) during development; do not create `audit.log`. SA functionality is a future optional module, not Core.
+11. **Qualification is mandatory.** Each stage must meet its acceptance criteria before the next stage begins. Preserve STN-LABZ module versioning and authorization rules for subsequent source changes.
 
 ## 2. Boundaries and dependency direction
 
@@ -42,21 +43,21 @@
              console / existing Slack / IRC?
 ```
 
-Diagram shows responsibilities, **not** a mandatory execution chain. Dispatcher invokes only relevant capability modules; a module returns its result to the controller. Rendering and transport deliver the result. Core does not depend on implementation details of any module.
+Diagram shows responsibilities, **not** a mandatory chain of capability modules. Router selects the one relevant route/module (e.g. `/ask` -> Ask); a module returns its result for rendering. Rendering and transport deliver the result. Core does not depend on implementation details of any module.
 
 **Allowed dependency:** module → stable Core-provided ABI/contracts.  
 **Not allowed:** Core → concrete model implementation, model → control of Core, or model → arbitrary next model for routing.  
-**Dispatcher:** a module serving the Controller role; its selection and routing authority exists only within the boundaries established by Core.
+**Router:** single routing component within Core's established boundaries; routing must not become interpretation, composition, or business-logic coordination.
 
 ## 3. Build stages and hard gates
 
-**All phase exit gates also require the [operator acceptance and stop rules](../AGENTS.md).** Automated qualification and module activation are engineering evidence only. Stop for the operator-selected end-to-end demonstration, explicit acceptance, and authorization of the next named step. Before a usable client exists, the operator must explicitly choose the current-stage demonstration; assistants cannot substitute unit tests on their own.
+**All phase exit gates also require the [operator acceptance and stop rules](../AGENTS.md).** Automated qualification and module activation are engineering evidence only. Stop for the operator-selected end-to-end demonstration, explicit acceptance, and authorization of the next named step. For current Core foundation development, the operator explicitly selects build, aggregate test report, Core console run, and local `digit.log` evidence as the acceptance demonstration. These are evidence for the operator's decision, never automatic acceptance. APP/Slack end-to-end checks apply once those interfaces exist.
 
 ### Phase 0 — Baseline and reference inventory (documentation only)
 
 - [ ] Freeze and identify the old repository revision used for reference.
-- [ ] Inventory existing Core facilities, Dispatcher responsibilities, interfaces, module APIs, qualification tests, DSD, and Rendering.
-- [ ] Classify each old feature as **Core foundation**, **Dispatcher/controller**, **Model**, **View**, **transport**, **defer**, or **exclude**.
+- [ ] Inventory existing Core facilities, Router responsibilities, interfaces, module APIs, qualification tests, DSD, and Rendering.
+- [ ] Classify each old feature as **Core foundation**, **Router/controller**, **Model**, **View**, **transport**, **defer**, or **exclude**.
 - [ ] Record coupling/architectural defects; do not import them into the new project.
 - [ ] Establish build/toolchain conventions, source layout, and a minimal change/version policy.
 
@@ -84,21 +85,21 @@ Implement only the independent Core.
 - Core retains identity and foundational functions with every module absent or failing.
 - Core consistently enforces its policy/authority boundaries.
 - Core rejects or isolates unqualified/incompatible modules as specified, with actual recorded reasons.
-- Core qualification and negative tests pass. **Do not begin Dispatcher until this Core gate has explicit operator acceptance and the operator separately authorizes the Dispatcher step.**
+- Core qualification and negative tests pass. **Do not begin Router until this Core gate has explicit operator acceptance and the operator separately authorizes the Router step.**
 
-### Phase 2 — Dispatcher: one Controller / one route owner
+### Phase 2 — Bootstrap and Router: initialization and single-route dispatch
 
-Implement Dispatcher as the first application module, **after** the Core gate.
+After operator acceptance of Core and explicit authorization, implement minimal Bootstrap initialization/handoff and Router's direct route mapping.
 
-- [ ] Register Dispatcher through the Core module ABI; no special-purpose Core implementation of Dispatcher logic.
+- [ ] Register Router through the Core module ABI; no special-purpose Core implementation of Router logic.
 - [ ] Define one bounded request/result contract with verified actor/context, request ID, routing outcome, and structured trace.
-- [ ] Separate *whether a request is permitted* (Core authority) from *which capability handles it* (Dispatcher routing).
-- [ ] Make Dispatcher the sole coordinator: select service(s) needed for the request, invoke, collect results, decide final disposition.
+- [ ] Separate *whether a request is permitted* (Core authority) from *which capability handles it* (Router routing).
+- [ ] Keep Router restricted to mapping one request to its owning module; the module owns execution and returns the result.
 - [ ] Enforce no automatic module-to-module orchestration and no duplicate Controllers in Interfaces or Models.
 - [ ] Provide explicit outcomes for unsupported, unknown, ambiguous, denied, and failed requests without guessing or silently executing.
 - [ ] Include tests for deterministic routing, absent services, denied execution, and controller trace integrity.
 
-**Exit gate:** through a minimal test harness, Core admits Dispatcher; Dispatcher routes a synthetic request to exactly one mock module and returns a traceable result. No chain of independent processing gates.
+**Exit gate:** through a minimal test harness, Core admits Router; Router routes a synthetic request to exactly one mock module and returns a traceable result. No chain of independent processing gates.
 
 ### Phase 3 — Model contracts and minimal capability
 
@@ -109,20 +110,20 @@ Implement Dispatcher as the first application module, **after** the Core gate.
 - [ ] Preserve factual uncertainty: no invented meanings or unearned conversational answers.
 - [ ] Test recognized, unknown, ambiguous, and unavailable-service cases.
 
-**Exit gate:** a simple request (such as `purrs` when a learned relation exists) completes **Core → Dispatcher → relevant Model → result**, without invoking unrelated Models. Unknown `puurs` returns a bounded unknown/clarification outcome.
+**Exit gate:** a simple request (such as `purrs` when a learned relation exists) completes **Core → Router → relevant Model → result**, without invoking unrelated Models. Unknown `puurs` returns a bounded unknown/clarification outcome.
 
 ### Phase 4 — Rendering: the View
 
-- [ ] Define a presentation-neutral result contract emitted by Dispatcher.
+- [ ] Define a presentation-neutral result contract emitted by Router.
 - [ ] Implement a Rendering module that formats successes, clarification prompts, denials, and diagnostics without deciding authority or routing.
 - [ ] Add tests proving Rendering cannot modify the Controller's decision or fabricate evidence.
 
-**Exit gate:** end-to-end demonstration **Core → Dispatcher → Model → Rendering** with exactly the modules needed.
+**Exit gate:** end-to-end demonstration **Core → Router → Model → Rendering** with exactly the modules needed.
 
 ### Phase 5 — DSD: observe the actual path
 
 - [ ] Implement DSD as a diagnostic capability, not an execution controller.
-- [ ] Have Dispatcher associate structured module observations with a single request ID.
+- [ ] Have Router associate structured module observations with a single request ID.
 - [ ] Require the code making a decision to report its own actual source path, function, line, decision code, and reason.
 - [ ] Preserve request-local trace across an authorized diagnostic follow-up without replaying the original action.
 - [ ] Show accepted/rejected steps, missing evidence, and the exact responsible source location where available.
@@ -133,7 +134,7 @@ Implement Dispatcher as the first application module, **after** the Core gate.
 
 ### Phase 6 — Thin transport interfaces
 
-- [ ] Establish a single transport-to-Dispatcher request contract and transport-agnostic result delivery.
+- [ ] Establish a single transport-to-Router request contract and transport-agnostic result delivery.
 - [ ] Keep adapters limited to receiving/sending data and supplying independently verified transport identity/context.
 - [ ] Provide a minimal console path for acceptance testing.
 - [ ] Keep existing Slack integration intact unless the operator separately authorizes a change.
@@ -147,7 +148,7 @@ Implement Dispatcher as the first application module, **after** the Core gate.
 
 For each candidate capability from `stnlabz/digit`:
 
-1. State the capability and its owner: Core / Dispatcher / Model / Rendering / transport.
+1. State the capability and its owner: Core / Router / Model / Rendering / transport.
 2. Confirm that migration does not violate the Core boundary or create duplicate Controllers.
 3. Define its ABI and acceptance tests before migrating code.
 4. Migrate the smallest useful behavior; remove old orchestration and redundant validation chains.
@@ -162,9 +163,9 @@ For each candidate capability from `stnlabz/digit`:
 | --- | --- |
 | Zero modules installed | Core still starts, identifies Digit, enforces core function and policies |
 | Unqualified module | Core rejects admission or activation, without losing foundational operation |
-| `purrs` with recognized authorized lesson | Dispatcher invokes relevant capability and obtains a bounded conversational or clarification result |
+| `purrs` with recognized authorized lesson | Router invokes relevant capability and obtains a bounded conversational or clarification result |
 | Unknown `puurs` | Clear unknown/clarification result without fabricated knowledge |
-| Capability unavailable | Dispatcher reports specific failure without routing through unrelated modules |
+| Capability unavailable | Router reports specific failure without routing through unrelated modules |
 | Unauthorized command | Core authority controls deny; no module may elevate privileges |
 | Diagnostic request | DSD follows retained request trace, including actual source location if observed |
 | New transport | Adapter translates to the common request contract; no duplicated controller logic |
@@ -181,5 +182,5 @@ For each candidate capability from `stnlabz/digit`:
 
 ## 6. Current milestone
 
-**NEXT: Phase 0 documentation/inventory, followed by Phase 1 Core.**  
-No Dispatcher, Models, Views, transport integration, or migration work is authorized by this roadmap alone. Work proceeds only under operator direction and after the applicable gate is met.
+**CURRENT: Phase 1 Core foundation.** Earlier operator-reported Core tests and startup/log demonstrations passed for their tested revisions; full Core-phase acceptance remains pending.  
+No Bootstrap, Router, Models, Views, or transport integration work is authorized by this roadmap alone. Work proceeds only under operator direction and after the applicable gate is met.
