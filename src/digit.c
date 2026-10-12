@@ -13,6 +13,7 @@ int digit_initialize(void)
     const stnlabz_agent_root_t *root;
 
     /* Logging is mandatory; inability to record Core activity denies startup. */
+    digit_module_manager_init(&modules);
     if (!digit_log_open()) {
         fprintf(stderr, "[CORE] Cannot open mandatory log: %s\n", DIGIT_LOG_PATH);
         return 1;
@@ -27,7 +28,6 @@ int digit_initialize(void)
     }
     if (!digit_log_event("CORE", "ROOT_VERIFIED", "agent=digit revision=1")) goto log_failure;
     digit_runtime_init(&runtime);
-    digit_module_manager_init(&modules);
     if (!digit_log_event("CORE", "MODULE_MANAGER_READY", "registered=0")) goto log_failure;
 
     printf("%s\n", DIGIT_NAME);
