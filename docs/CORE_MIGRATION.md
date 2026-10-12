@@ -79,3 +79,18 @@ The standalone `bin/digit` executable now **initializes its Core module manager*
 **No module loading, implicit module activation, Dispatcher, transport, SA, or unrelated module has been introduced.** Core identity and the existing runtime remain independently operable when no modules are installed.
 
 This integration does not establish production activation authority, persisted qualification, or dynamic discovery. Existing unit tests cover the independent manager. **The operator must run `make clean && make && make test`, then `./bin/digit` followed by Ctrl+C** to verify integrated startup/shutdown on the target system. Do not mark Phase 1 complete from a successful commit alone.
+
+## Mandatory Core logging (2026-10-12)
+
+The installation root is **`/opt/digit`** and the sole canonical log file is **`/opt/digit/logs/digit.log`**, not `audit.log`.
+
+- Added `include/logging.h`, `src/logging.c`, and `tests/test_logging.c`.
+- `bin/digit` opens the log before Root validation and refuses startup if logging cannot be opened or key startup events cannot be recorded/synced.
+- Core records startup, Agent Root validation, module-manager initialization, running, runtime failures, and shutdown through the common logger.
+- The log directory must exist and be writable by Digit's service identity **before starting**. Core does not silently create or grant permissions on installation directories.
+- `digit_log_open_path()` permits a private test file; production uses only `digit_log_open()` and the canonical pathname.
+- The logging facility is Core-owned infrastructure; functional modules must eventually submit their operational events through it rather than write independent `audit.log` files.
+
+**Still to implement before logging is fully universal:** Core module-manager event instrumentation, runtime transition logging, and module ABI access to the Core logger. The new logging test proves logging format/path behavior; it does not alone prove that every future activity is logged.
+
+To qualify on the installed host, ensure `/opt/digit/logs` exists and is writable by the service account, then run `make clean && make && make test && ./bin/digit`. Check `/opt/digit/logs/digit.log` for structured Core startup/shutdown records. No build or runtime qualification is claimed solely from these commits.
