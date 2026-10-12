@@ -60,3 +60,14 @@ make clean && make && make test
 Launch independently using `./bin/digit`; use SIGINT (Ctrl-C) or SIGTERM for graceful shutdown. **Compilation, unit-test results, and live runtime behavior must be reported from execution**, not inferred from the GitHub commits.
 
 Core Phase 1 is **not yet completely qualified**: module ABI, registry/admission and qualification boundaries, startup error handling, and zero-module lifecycle behavior still require review and acceptance.
+
+
+## Core-only module-management foundation (2026-10-12)
+
+Added `include/module_manager.h`, `src/module_manager.c`, and `tests/test_module_manager.c`. These files implement **Core infrastructure**, not a functional module: a versioned ABI descriptor, bounded registry, qualification evidence gate, explicitly authorized activation, start/stop callbacks, and shutdown. No module is auto-created or auto-started. Core still runs with **zero modules**.
+
+This is deliberately a **small fresh Core-only contract** informed by the older repository, not a wholesale copy of its module loader, discovery, hotload, or application-service routing.
+
+**Current limitations:** Registration is in-process only. No shared-library discovery/loading, signature checking, persisted qualification records, or external transport is implemented. The `operator_authorized` value supplied to `digit_module_authorize` is a decision **input**, not proof of actor identity; the verified Core authority boundary must supply it before production activation. The minimal qualification test count in this foundation is a temporary contract value pending alignment with the approved STN-LABZ qualification requirements. These limitations prevent a claim of full Core Phase 1 acceptance.
+
+Run `make clean && make && make test` on the target environment. The new module-manager test uses an internal mock callback only; **no functional modules were migrated**. No build or runtime test is claimed from repository edits alone.
