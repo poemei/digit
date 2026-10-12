@@ -1,0 +1,15 @@
+#ifndef DIGIT_LOGGING_H
+#define DIGIT_LOGGING_H
+
+#define DIGIT_INSTALL_PATH "/opt/digit"
+#define DIGIT_LOG_DIRECTORY "/opt/digit/logs"
+#define DIGIT_LOG_PATH "/opt/digit/logs/digit.log"
+
+int digit_log_open(void);
+int digit_log_open_path(const char *absolute_path); /* tests only */
+int digit_log_event(const char *component, const char *event, const char *detail);
+int digit_log_sync(void);
+void digit_log_close(void);
+int digit_log_is_open(void);
+
+#endif
