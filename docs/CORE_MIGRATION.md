@@ -9,11 +9,13 @@ Destination: [poemei/digit](https://github.com/poemei/digit).
 - `src/agent_root.c` — Root identity and General Orders validation
 - `src/identity_digit.c` — **Digit's compiled identity and foundational traits**, including her three General Orders
 - `tests/test_agent_root.c` — existing Root qualification tests
-- `include/core_sa.h`, `src/core_sa.c` — fail-closed Core-owned SA verification
-- `tests/test_core_sa.c` — existing SA negative tests
 - `include/digit.h` — existing Core name and entry-point declaration (entry point **not implemented** in this first foundation)
 
 The imported files are source-reference copies, not proof of qualification in the new repository. `Makefile` is a minimal standalone test harness for the transferred components.
+
+## Scope correction: SA belongs in a module
+
+SA-specific verification and SA qualification are **not Core requirements**. The previously copied `include/core_sa.h`, `src/core_sa.c`, and `tests/test_core_sa.c` have been removed from this repository's Core, and their Makefile targets removed. SA functionality may be developed later as a separate module after Core qualification. Digit's foundational identity, General Orders, and Core-only boot must not depend on the presence of an SA module.
 
 ## Intentionally not imported yet
 
@@ -23,7 +25,7 @@ No `modules/` directory, Dispatcher, Interface, OAuth, ChatGPT connector, conver
 
 ## Qualification boundary
 
-This first commit set is **Core identity/authority groundwork only**, not Phase 1 Core acceptance. Run:
+This first migration stage is **Core identity groundwork only**, not Phase 1 Core acceptance. Run:
 
 ```sh
 make clean
