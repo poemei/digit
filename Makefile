@@ -3,7 +3,7 @@ CFLAGS ?= -std=c11 -Wall -Wextra -Wpedantic -O2
 CPPFLAGS += -Iinclude
 
 .PHONY: all test clean
-all: bin/digit bin/test_agent_root bin/test_runtime
+all: bin/digit bin/test_agent_root bin/test_runtime bin/test_module_manager
 
 bin:
 	mkdir -p bin
@@ -17,9 +17,13 @@ bin/test_agent_root: tests/test_agent_root.c src/agent_root.c src/identity_digit
 bin/test_runtime: tests/test_runtime.c src/runtime.c include/runtime.h | bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_runtime.c src/runtime.c -o $@
 
+bin/test_module_manager: tests/test_module_manager.c src/module_manager.c include/module_manager.h | bin
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_module_manager.c src/module_manager.c -o $@
+
 test: all
 	./bin/test_agent_root
 	./bin/test_runtime
+	./bin/test_module_manager
 
 clean:
 	rm -rf bin
