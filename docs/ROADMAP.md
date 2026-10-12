@@ -50,6 +50,8 @@ Diagram shows responsibilities, **not** a mandatory execution chain. Dispatcher 
 
 ## 3. Build stages and hard gates
 
+**All phase exit gates also require the [operator acceptance and stop rules](../AGENTS.md).** Automated qualification and module activation are engineering evidence only. Stop for the operator-selected end-to-end demonstration, explicit acceptance, and authorization of the next named step. Before a usable client exists, the operator must explicitly choose the current-stage demonstration; assistants cannot substitute unit tests on their own.
+
 ### Phase 0 — Baseline and reference inventory (documentation only)
 
 - [ ] Freeze and identify the old repository revision used for reference.
@@ -82,7 +84,7 @@ Implement only the independent Core.
 - Core retains identity and foundational functions with every module absent or failing.
 - Core consistently enforces its policy/authority boundaries.
 - Core rejects or isolates unqualified/incompatible modules as specified, with actual recorded reasons.
-- Core qualification and negative tests pass. **Do not begin Dispatcher until this gate is green.**
+- Core qualification and negative tests pass. **Do not begin Dispatcher until this Core gate has explicit operator acceptance and the operator separately authorizes the Dispatcher step.**
 
 ### Phase 2 — Dispatcher: one Controller / one route owner
 
@@ -170,7 +172,7 @@ For each candidate capability from `stnlabz/digit`:
 
 ## 5. Development discipline
 
-- **Do not work ahead of the current gate.** Build Core first; expand outward only after demonstrated qualification.
+- **Do not work ahead of the current gate.** Build Core first; expand outward only after the current step's explicit operator acceptance and authorization of the next named step. Qualification or activation alone is insufficient.
 - Keep Core minimal, independent, and stable. **Adding a feature is not a reason to enlarge Core.**
 - Record every module change with its required version increment, and update relevant tests/documentation.
 - Use actual compiler/test/runtime output for acceptance; committed source is not proof of successful compilation or hotload.

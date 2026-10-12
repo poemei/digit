@@ -4,6 +4,10 @@ Digit is an STN-LABZ modular autonomous-agent project. This repository is a **cl
 
 The existing [stnlabz/digit](https://github.com/stnlabz/digit) repository is the **reference implementation**: it provides source material and previously developed functionality, not an architecture to copy wholesale. Working features may be migrated only after being realigned with the design and qualification requirements here.
 
+## Mandatory development stop
+
+**Module activation is not operator acceptance.** Build/test success, qualification GREEN and HOTLOAD_ACTIVE do not authorize moving to the next step. Follow [the operator acceptance gate in AGENTS.md](AGENTS.md): hand over the exact client test procedure, stop for the operator's APP/Slack/other selected end-to-end testing, and wait for explicit acceptance plus authorization of the next named step. This applies to every rebuild phase.
+
 ## Governing architecture
 
 **Core → Dispatcher → Modules**
