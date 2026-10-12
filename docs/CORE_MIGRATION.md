@@ -36,3 +36,27 @@ make test
 Core startup without modules, standalone policy enforcement, module qualification, and lifecycle admission remain outstanding roadmap gates. The new Core must satisfy them before Dispatcher development.
 
 **Development rule:** Start with Core and keep her identity and core functions there. Every other capability belongs outside Core.
+
+
+## Core-only lifecycle migration (2026-10-12)
+
+The original `src/runtime.c` bound its run loop to `hotload.h` and `module_manager.h`. This rebuild **retains the existing Core operational-state semantics** (normal, Core fault → Company Preservation, and explicit human-release flag), but removes module/hotload dependencies from the runtime itself.
+
+New Core-only implementation:
+
+- `include/runtime.h`, `src/runtime.c`: independent lifecycle, signal-based shutdown, and Core fault-state handling.
+- `src/digit.c`, `src/main.c`: standalone entry point; validates Digit's compiled Root before running.
+- `tests/test_runtime.c`: positive and negative tests of operational-state transitions.
+- `Makefile`: builds `bin/digit` and both Core component test binaries without external modules.
+
+This is a **targeted adaptation**, not a verbatim runtime copy. It does not migrate the old module manager, hotload polling, audit/channel/alert services, or SA functions. In particular, `digit_runtime_human_release(..., authorized_human_release)` consumes an authorization outcome; **it is not itself an identity verification mechanism**. Real authorization integration is subject to a separate Core boundary review.
+
+Build and test:
+
+```sh
+make clean && make && make test
+```
+
+Launch independently using `./bin/digit`; use SIGINT (Ctrl-C) or SIGTERM for graceful shutdown. **Compilation, unit-test results, and live runtime behavior must be reported from execution**, not inferred from the GitHub commits.
+
+Core Phase 1 is **not yet completely qualified**: module ABI, registry/admission and qualification boundaries, startup error handling, and zero-module lifecycle behavior still require review and acceptance.
