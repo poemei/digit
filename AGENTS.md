@@ -2,7 +2,7 @@
 
 ## Scope and architecture
 
-Read README.md and docs/ROADMAP.md before changes. Work on one operator-authorized step at a time. Preserve Core -> Dispatcher -> Modules, with Rendering as View. A roadmap is an ordered plan, not permission to implement future steps.
+Read README.md and docs/ROADMAP.md before changes. Work on one operator-authorized step at a time. Preserve **Core -> Bootstrap -> Router -> relevant Module (Model) -> Rendering (View)**, following ChAoS MVC. Core contains Digit's identity, General Orders, foundational function, lifecycle, mandatory logging, and module management. Bootstrap initializes and hands off; Router only routes (e.g. `/ask` -> Ask module). Modules work independently and return results for rendering: never require module-to-module-to-module response chains. SA-specific authorization is a future module, not part of Core identity or a mandatory Core dependency. A roadmap is an ordered plan, not permission to implement future steps.
 
 ## Mandatory operator acceptance gate
 
@@ -33,9 +33,13 @@ The operator's test result belongs to the tested revision, version, client and s
 
 A request to install, activate, hotload, test, diagnose, or fix the current step is permission for that requested action only. Silence, successful activation, a passing screenshot, or an automated test result is not permission to advance. Acceptance alone is not authorization for another step: wait for the operator to identify or explicitly approve that next step. One explicit operator message may both accept the current step and authorize the named next step.
 
-For foundation work before an APP/Slack path exists, report that limitation. The operator must explicitly select and accept a suitable current-stage demonstration (for example, a Core console run); the assistant cannot waive the gate or declare module tests an equivalent on its own.
+**Current Core-stage selection:** Digit has no Windows APP or Slack client connection. The operator has explicitly selected Core compilation, the aggregate `make test` pass/fail report, Core console startup/shutdown, and `logs/digit.log` evidence as the applicable foundation-stage evaluation procedure. Present actual results from those checks and await the operator's explicit acceptance and next-step authorization. Do not require a nonexistent APP/Slack interface during Core development, and do not assume automated success alone is acceptance. Once a client exists, use the operator-selected end-to-end client checks.
 
 Failures keep the current step open. Address only repairs within the authorized scope, then return the affected behavior for operator testing. Preserve failed evidence.
+
+## Core logging requirement
+
+Core logging is mandatory. In the current development build, write to `./logs/digit.log` relative to Digit's working directory (e.g. `~/digit/logs/digit.log` when launched there). Production installation is intended under `/opt/digit`; the working directory determines the local log path. Core events and future module diagnostics must use the common logging facility; do not introduce `audit.log`.
 
 ## Enforcement boundary
 
