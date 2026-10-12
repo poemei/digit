@@ -19,9 +19,9 @@ int main(void)
     int fd = mkstemp(path);
     if (fd < 0) return 1;
     close(fd);
-    check(!strcmp(DIGIT_LOG_PATH, "/opt/digit/logs/digit.log"), "canonical path");
+    check(!strcmp(DIGIT_LOG_PATH, "./logs/digit.log"), "canonical path");
     check(!digit_log_event("CORE", "PREOPEN", NULL), "logging before open denied");
-    check(!digit_log_open_path("relative"), "relative path rejected");
+    check(!digit_log_open_path("relative"), "relative test path rejected");
     check(digit_log_open_path(path), "private test log opened");
     check(digit_log_is_open(), "log state open");
     check(!digit_log_open_path(path), "second open denied");
