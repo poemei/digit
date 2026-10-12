@@ -8,8 +8,8 @@ all: bin/digit bin/test_agent_root bin/test_runtime bin/test_module_manager
 bin:
 	mkdir -p bin
 
-bin/digit: src/main.c src/digit.c src/runtime.c src/agent_root.c src/identity_digit.c include/digit.h include/runtime.h include/agent_root.h | bin
-	$(CC) $(CPPFLAGS) $(CFLAGS) src/main.c src/digit.c src/runtime.c src/agent_root.c src/identity_digit.c -o $@
+bin/digit: src/main.c src/digit.c src/runtime.c src/agent_root.c src/identity_digit.c src/module_manager.c include/digit.h include/runtime.h include/agent_root.h include/module_manager.h | bin
+	$(CC) $(CPPFLAGS) $(CFLAGS) src/main.c src/digit.c src/runtime.c src/agent_root.c src/identity_digit.c src/module_manager.c -o $@
 
 bin/test_agent_root: tests/test_agent_root.c src/agent_root.c src/identity_digit.c include/agent_root.h | bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_agent_root.c src/agent_root.c src/identity_digit.c -o $@
