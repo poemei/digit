@@ -2,8 +2,8 @@
 #define DIGIT_LOGGING_H
 
 #define DIGIT_INSTALL_PATH "/opt/digit"
-#define DIGIT_LOG_DIRECTORY "/opt/digit/logs"
-#define DIGIT_LOG_PATH "/opt/digit/logs/digit.log"
+#define DIGIT_LOG_DIRECTORY "./logs"
+#define DIGIT_LOG_PATH "./logs/digit.log"
 
 int digit_log_open(void);
 int digit_log_open_path(const char *absolute_path); /* tests only */
