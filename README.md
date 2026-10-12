@@ -6,25 +6,26 @@ The existing [stnlabz/digit](https://github.com/stnlabz/digit) repository is the
 
 ## Mandatory development stop
 
-**Module activation is not operator acceptance.** Build/test success, qualification GREEN and HOTLOAD_ACTIVE do not authorize moving to the next step. Follow [the operator acceptance gate in AGENTS.md](AGENTS.md): hand over the exact client test procedure, stop for the operator's APP/Slack/other selected end-to-end testing, and wait for explicit acceptance plus authorization of the next named step. This applies to every rebuild phase.
+**Module activation is not operator acceptance.** Build/test success, qualification GREEN and HOTLOAD_ACTIVE do not authorize moving to the next step. Follow [the operator acceptance gate in AGENTS.md](AGENTS.md): hand over the exact operator-selected test procedure, stop for the operator's Core build/test/console/log evaluation (APP/Slack testing once available), and wait for explicit acceptance plus authorization of the next named step. This applies to every rebuild phase.
 
 ## Governing architecture
 
-**Core → Dispatcher → Modules**
+**Core → Bootstrap → Router → relevant Module → Rendering**
 
 - **Core** is the foundation. It owns module lifecycle, registration, service contracts, qualification gates, and the infrastructure that enforces established policies and authority boundaries. Build and verify Core first; expand outward.
-- **Dispatcher** is the application's **single controller/router**. It receives requests via the applicable interface, selects appropriate module services, coordinates the request, and records an end-to-end execution trace. It does not delegate control of the overall request flow to a chain of modules.
-- **Modules** perform their own bounded jobs and return structured results to Dispatcher. Knowledge, language interpretation, diagnostics, validation, and other capabilities belong in modules according to their contracts—not as mandatory successive routing checkpoints for every request.
+- **Bootstrap** initializes the application and hands off to Router; it does not run capabilities.
+- **Router** is the single MVC routing component. It maps a request such as `/ask` directly to its registered Ask module. It does not interpret, compose, validate answers, or run a processing pipeline.
+- **Modules** perform their own bounded jobs and return structured results to Router. Knowledge, language interpretation, diagnostics, validation, and other capabilities belong in modules according to their contracts—not as mandatory successive routing checkpoints for every request.
 - **Rendering** provides the **view**: it presents results and diagnostic reports. Presentation must not become another source of business logic or routing authority.
 
-This is **MVC in the ChAoS MVC pattern**: Dispatcher is the Controller; capability modules are Models; Rendering supplies the Views. Core provides the common foundation.
+This is **MVC in the ChAoS MVC pattern**: Router is the Controller; capability modules are Models; Rendering supplies the Views. Core provides the common foundation.
 
 ### Request flow
 
 1. An interface receives a request and passes along verified transport/session context.
-2. Core's established authority and policy controls remain applicable; Dispatcher coordinates the authorized request through the relevant module or modules.
+2. Core's established authority and policy controls remain applicable; Bootstrap passes control to Router, which selects the single responsible route/module (subject to Core policy).
 3. Each invoked module does its assigned work and returns a bounded result, including evidence of its decisions or failures.
-4. Dispatcher determines the outcome and hands the result to Rendering for presentation.
+4. The responsible module returns its result for Rendering to present; Router does not do the module's work.
 
 **A simple expression must not have to pass through a maze of unrelated modules merely to obtain a reply.** For example, a learned or unfamiliar expression such as `puurs` should be resolved by the relevant capability or receive an appropriate clarification—not trigger a serial chain of independent answer vetoes.
 
@@ -32,7 +33,9 @@ One governing authority boundary applies to the request. Module-level checks sup
 
 ## Diagnostics by design
 
-Digit's diagnostic system (DSD) must be able to trace a request **from Core through Dispatcher to the specific module decision point**, including the actual source-file line number where available. Traceability is part of the architecture from the start, not an afterthought.
+Digit's diagnostic system (DSD) must be able to trace a request **from Core through Router to the specific module decision point**, including the actual source-file line number where available. Traceability is part of the architecture from the start, not an afterthought.
+
+Core logging is mandatory: the current development runtime logs to **`./logs/digit.log`** relative to the working directory, not `audit.log`. The installed location is intended to be `/opt/digit` when permissions and deployment are ready. SA-specific checks are a later module concern, **not a prerequisite for Core startup**.
 
 The shared diagnostic contract should make the following observable:
 
@@ -43,11 +46,11 @@ The shared diagnostic contract should make the following observable:
 - Evidence used, specific recorded rejection/acceptance reason, and the final rendered outcome.
 - Established authority and repair-authorization status.
 
-**DSD reports observations; it does not guess causes, invent line numbers, repair code without authorization, or control application routing.** Dispatcher maintains the coherent request trace; each module is responsible for reporting its own internal decision location and reason.
+**DSD reports observations; it does not guess causes, invent line numbers, repair code without authorization, or control application routing.** Core logging and diagnostic records provide a coherent request trace; each module reports its actual internal decision location and reason. DSD observes these records without becoming a routing checkpoint.
 
 ## Interface boundaries
 
-Interfaces are **communication adapters**, not application controllers. They should receive and deliver messages, transport verified identity/context when applicable, and hand the request to Dispatcher. They should not take ownership of knowledge interpretation, Corpus logic, intent decisions, response composition, or application-wide routing.
+Interfaces are **communication adapters**, not application controllers. They should receive and deliver messages, transport verified identity/context when applicable, and hand the request to Router. They should not take ownership of knowledge interpretation, Corpus logic, intent decisions, response composition, or application-wide routing.
 
 Rebuild decisions:
 
@@ -61,7 +64,7 @@ Transport-specific authentication and permissions must continue to respect the e
 ## Rebuild method
 
 1. Establish the **Core** and its common contracts, lifecycle, policy/authority boundaries, and qualification system.
-2. Establish **Dispatcher** as the sole application request router and controller, with request-scoped trace collection.
+2. Establish **Bootstrap** (initialize and hand off) and **Router** (route only) according to ChAoS MVC.
 3. Bring over necessary **modules individually**, adapting their contracts and responsibilities to the new architecture rather than copying the old pipeline.
 4. Establish **Rendering** as the view layer and keep interfaces small.
 5. Verify each migrated capability against its contract, including diagnostics and negative cases, before treating it as ready.
@@ -70,8 +73,8 @@ Preserve proven behavior and useful tests without preserving unnecessary couplin
 
 ## Status
 
-**Architectural rebuild / foundation stage.** This document records the intended development structure; it does not claim that the new Core, Dispatcher, modules, interfaces, or runtime have already been implemented.
+**Core foundation in progress.** Agent Root, standalone runtime, module-manager foundation and local logging have been implemented; the operator has supplied passing Core build/test and console/log observations for earlier revisions. Core Phase 1 as a whole is not yet accepted. Router, application modules, Rendering and external interfaces have not been implemented.
 
 The governing design is simple:
 
-> **Core provides the foundation. Dispatcher routes. Modules do their jobs. Rendering presents. DSD explains what happened.**
+> **Core provides the foundation. Bootstrap initializes. Router routes. Modules do their jobs. Rendering presents. DSD explains what happened.**
