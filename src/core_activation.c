@@ -47,10 +47,12 @@ stnlabz_module_result_t digit_core_authorize(stnlabz_module_registry_t *registry
 }
 
 stnlabz_module_result_t digit_core_activate(stnlabz_module_registry_t *registry,
-    const char *module_id, const stnlabz_module_host_t *host)
+    const char *module_id, const stnlabz_module_host_t *host,
+    const digit_policy_request_t *request)
 {
     const stnlabz_module_record_t *record;
     stnlabz_module_result_t rc;
+    digit_policy_result_t decision;
     if (!registry || !module_id || !digit_log_is_open())
         return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
     record = stnlabz_module_registry_find(registry, module_id);
@@ -62,6 +64,14 @@ stnlabz_module_result_t digit_core_activate(stnlabz_module_registry_t *registry,
              record->state != STNLABZ_MODULE_STATE_STOPPED)
         rc = STNLABZ_MODULE_ERR_NOT_QUALIFIED;
     else if (!record->activation_authorized)
+        rc = STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
+    else if (!request || !request->operation || !request->module_id ||
+             strcmp(request->operation, "module.activate") != 0 ||
+             strcmp(request->module_id, module_id) != 0)
+        rc = STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
+    else if (!digit_core_policy_evaluate(request, &decision))
+        rc = STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
+    else if (decision.decision != DIGIT_POLICY_ALLOW)
         rc = STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
     else {
         /* The shared ABI owns the start->active transition and failure handling.
