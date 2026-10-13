@@ -337,6 +337,68 @@ static void lifecycle_assessment(const char *line,char *out,size_t cap){
  else
   snprintf(out,cap,"Module lifecycle failure recorded (reason=%.120s result=%.100s). Inspect the related lifecycle events and implementation before assigning a code defect.",reason[0]?reason:"not_recorded",result[0]?result:"not_recorded");
 }
+/* Explicit read-only source investigation via Code Reference over Core ABI. */
+static stnlabz_module_result_t diagnose_source_command(const char *relative,
+ stnlabz_module_command_reply_fn reply,void *ctx){
+ const char *root=getenv("DIGIT_SOURCE_ROOT");
+ char path[1024],message[1024];
+ code_reference_request_t request={0};
+ code_reference_response_t response={0};
+ FILE *fp;size_t n,used=0;
+ stnlabz_module_result_t rc;
+ if(!root||!*root)root="/home/stnchain/digit";
+ if(!relative||!*relative||relative[0]=='/'||strstr(relative,"..")||
+    strchr(relative,'\\')||strchr(relative,' ')){
+  return emit(reply,ctx,"DSD: invalid relative source path.")?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
+ }
+ if(snprintf(path,sizeof path,"%s/%s",root,relative)>=(int)sizeof path)
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ fp=fopen(path,"rb");
+ if(!fp)return emit(reply,ctx,"DSD: source file is not readable.")?
+  STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
+ n=fread(request.source,1,sizeof request.source-1,fp);
+ if(ferror(fp)||!feof(fp)||memchr(request.source,0,n)){
+  fclose(fp);
+  return emit(reply,ctx,"DSD: complete source cannot be analyzed (size or content).")?
+   STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
+ }
+ fclose(fp);request.source[n]=0;
+ request.contract_version=CODE_REFERENCE_CONTRACT_VERSION;
+ snprintf(request.language,sizeof request.language,"c");
+ snprintf(request.source_name,sizeof request.source_name,"%.127s",relative);
+ if(!emit(reply,ctx,"DSD SOURCE INVESTIGATION"))return STNLABZ_MODULE_ERR_INVALID_STATE;
+ snprintf(message,sizeof message,"Code: %.950s",path);
+ if(!emit(reply,ctx,message))return STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(!dsd_host||!dsd_host->invoke_service)
+  return emit(reply,ctx,"Finding: Code Reference service interface unavailable.")?
+   STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
+ rc=dsd_host->invoke_service("code_reference.analyze",&request,sizeof request,
+  &response,sizeof response,&used);
+ if(rc!=STNLABZ_MODULE_OK||used!=sizeof response||
+    response.contract_version!=CODE_REFERENCE_CONTRACT_VERSION||
+    !memchr(response.diagnostics,0,sizeof response.diagnostics))
+  return emit(reply,ctx,"Finding: Code Reference service unavailable or returned invalid evidence.")?
+   STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(response.status==CODE_REFERENCE_SOURCE_INVALID){
+  snprintf(message,sizeof message,"Finding: C compiler rejected source: %.850s",response.diagnostics);
+  if(!emit(reply,ctx,message))return STNLABZ_MODULE_ERR_INVALID_STATE;
+  if(strstr(response.diagnostics,"undeclared")||strstr(response.diagnostics,"not declared")){
+   if(!emit(reply,ctx,"Recommended fix: Resolve the undeclared identifier at the reported line by using the intended in-scope declaration or adding the correct declaration. Verify intended behavior, then rerun compiler and module tests."))
+    return STNLABZ_MODULE_ERR_INVALID_STATE;
+  }else if(!emit(reply,ctx,"Recommended fix: Correct the specific compiler-reported error at the indicated source location, then rerun compiler and module tests."))
+   return STNLABZ_MODULE_ERR_INVALID_STATE;
+ }else if(response.status==CODE_REFERENCE_ANALYZED){
+  if(!emit(reply,ctx,"Finding: C11 frontend accepted the source. Runtime correctness and absence of defects are not established."))
+   return STNLABZ_MODULE_ERR_INVALID_STATE;
+  if(!emit(reply,ctx,"Recommended fix: None established by compiler diagnostics; investigate runtime behavior and invariants."))
+   return STNLABZ_MODULE_ERR_INVALID_STATE;
+ }else{
+  snprintf(message,sizeof message,"Finding: Code Reference did not complete analysis (status=%d): %.650s",
+   (int)response.status,response.diagnostics);
+  if(!emit(reply,ctx,message))return STNLABZ_MODULE_ERR_INVALID_STATE;
+ }
+ return STNLABZ_MODULE_OK;
+}
 static stnlabz_module_result_t diagnose_command(
  const stnlabz_module_command_t *command,
  stnlabz_module_command_reply_fn reply,void *reply_context,void *context){
@@ -353,6 +415,7 @@ static stnlabz_module_result_t diagnose_command(
  if(!command||!reply)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  args=command->arguments;
  while(*args==' ')args++;
+ if(!strncmp(args,"source ",7))return diagnose_source_command(args+7,reply,reply_context);
  if(!strcmp(args,"my last request")||!strcmp(args,"last")){last_request=1;args="";}
  if(!strcmp(args,"module failures")||!strcmp(args,"modules")||!strcmp(args,"module failure")){module_failures=1;args="";}
  if(*args){
@@ -526,7 +589,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=3;d.version_patch=9;
+ d.version_major=0;d.version_minor=3;d.version_patch=10;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
