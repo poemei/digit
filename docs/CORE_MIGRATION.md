@@ -178,3 +178,15 @@ Digit Core initializes an empty Linux loader alongside its empty ABI registry, a
 A new `tests/test_loader.c` suite exercises a compiled mock `.so`: valid ABI descriptor export, expected identity, duplicate-load denial, clean unload, identity mismatch denial, legacy/missing-export denial, missing library denial, invalid identity, and missing-unload denial. The test verifies that loader success never registers or activates a module. `tests/fixtures/abi_loader_fixture.c` is test-only and not an operational functional module.
 
 **Acceptance procedure:** `git pull && make clean && make && make test` should compile the loader and mock shared objects and complete **7** suites without failure; then start `./bin/digit`, stop using Ctrl+C, and inspect `tail -n 20 logs/digit.log`. Confirm zero registered modules and full shutdown log. Automated tests establish Linux mock loader contract behavior only; acceptance and live real-binary compatibility remain separate. No source-only claim of passing server tests.
+
+## Core-controlled discovery, ABI 1.5 (2026-10-12)
+
+**Authorized scope:** Discovery only. Vendored `stnlabz/ABI` `module_discovery.h` and `module_discovery_linux.c` unchanged. No ABI public layout, entry point, qualification threshold, or loader contract change.
+
+At Core initialization, the approved Linux discovery path is obtained from the executable location (`bin/digit` looks for `bin/modules`). For a candidate directory, shared discovery expects `module.conf` with `id=...` and `bin/<id>.so`. It loads the descriptor and records `DISCOVERED` in the shared Core registry; it does **not** verify, qualify, authorize, or activate it. A missing modules directory is normal and recorded as `DISCOVERY SCAN_ABSENT`.
+
+Digit's thin `core_discovery` host wrapper records scan counts and the last rejected module's actual stage/reason in `./logs/digit.log`. **Known limitation:** the upstream discovery report only holds the most recent rejection, not an individual audit entry for every candidate when multiple modules are rejected in one scan. No claim of complete per-candidate audit is made. The shared discovery scanner also reports rejection details to stderr.
+
+On shutdown, Core transitions discovered-only candidates out of the registry before unloading their handles; no active module unloading, dynamic replacement, monitoring, or module execution is enabled. Module fixtures are limited to tests.
+
+**Operator tests:** `git pull && make clean && make && make test` should execute eight suites, including discovery manifest and shared-library positive/negative cases. Run `./bin/digit`, Ctrl+C, then `tail -n 25 logs/digit.log`; inspect `DISCOVERY SCAN_START`, `SCAN_ABSENT` when `bin/modules` is absent, Core startup with zero modules, and completed shutdown. To test discovered candidates, use only test fixtures; do not place untrusted shared libraries under the operational scan tree. Build/test and human acceptance remain separate gates.
