@@ -5,11 +5,18 @@ TARGET := bin/dsd.so
 PREFIX ?= /opt/digit
 OWNER ?= digit
 GROUP ?= digit
-.PHONY: all clean install
+.PHONY: all clean install test
 all: $(TARGET)
 $(TARGET): src/dsd.c include/dsd.h
 	mkdir -p bin
 	$(CC) $(CFLAGS) -Iinclude -I$(ROOT)/include -I$(ROOT)/include/stnlabz_abi -shared src/dsd.c -o $@
+bin/test_dsd: tests/test_dsd.c src/dsd.c include/dsd.h
+	mkdir -p bin
+	$(CC) $(CFLAGS) -Iinclude -I$(ROOT)/include -I$(ROOT)/include/stnlabz_abi tests/test_dsd.c src/dsd.c -o $@
+test: $(TARGET) bin/test_dsd
+	@echo '-----------'
+	@echo 'DSD MODULE TESTS'
+	@DIGIT_SOURCE_ROOT="$(abspath $(ROOT))" ./bin/test_dsd
 install: $(TARGET)
 	@test -d "$(PREFIX)/modules" || { echo "Install Digit first: $(PREFIX)/modules missing" >&2; exit 2; }
 	@install -d -m 0750 "$(PREFIX)/modules/dsd" "$(PREFIX)/modules/dsd/bin"
