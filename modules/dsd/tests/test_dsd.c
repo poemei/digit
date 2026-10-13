@@ -186,7 +186,7 @@ int main(void){
     fp=fopen(dsdfile,"w");if(!fp)return 2;
     fputs("void call(void){ dsd_host->invoke_service(\"code_reference.analyze\"); }\n",fp);fclose(fp);
     fp=fopen(docsrc,"a");if(!fp)return 2;
-    fputs("void register_it(void){ h->register_service(\\"code_reference.analyze\\"); }\n",fp);fclose(fp);
+    fputs("void register_it(void){ h->register_service(\"code_reference.analyze\"); }\n",fp);fclose(fp);
     fp=fopen(docreadme,"w");if(!fp)return 2;
     fputs("# Code Reference 0.1.0\nNo Core changes or DSD integration.\n",fp);fclose(fp);
     for(poll=0;poll<24;poll++){
