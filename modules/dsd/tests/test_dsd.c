@@ -46,7 +46,7 @@ int main(void){
  stnlabz_module_host_t host={0};
  stnlabz_module_qualification_result_t qualification;
  check(!strcmp(desc.id,"dsd"),"module identity");
- check(desc.version_major==0&&desc.version_minor==3&&desc.version_patch==4,"module version");
+ check(desc.version_major==0&&desc.version_minor==3&&desc.version_patch==5,"module version");
  check(desc.qualify(&qualification)==STNLABZ_MODULE_OK&&qualification.tests_failed==0,"qualifies");
  check(mkdtemp(directory)!=NULL,"fixture directory");
  if(!getcwd(cwd,sizeof cwd)||chdir(directory)!=0)return 2;
@@ -71,9 +71,11 @@ int main(void){
  diagnose("my last request");
  check(strstr(output,"Module: router")!=NULL,"identifies router");
  check(strstr(output,"route=/Digit,")!=NULL,"preserves route evidence");
- check(strstr(output,"Source confirms console parses /Digit,")!=NULL,"assesses routing with inspected source");
+ check(strstr(output,"No registration for /Digit, found")!=NULL,"assesses absent module command from source inventory");
  check(strstr(output,"parse=")!=NULL&&strstr(output,"bind=")!=NULL&&strstr(output,"lookup=")!=NULL&&strstr(output,"reject=")!=NULL,"traces console registration and Router lookup");
  check(strstr(output,"src/router.c:")!=NULL&&strstr(output,"src/mvc_console.c:")!=NULL,"locates both code paths in checkout");
+ diagnose("my last request");
+ check(strstr(output,"not a proven Router defect")!=NULL,"does not invent Router defect");
  {
   const char *saved=getenv("DIGIT_SOURCE_ROOT");
   char root_copy[1024];
