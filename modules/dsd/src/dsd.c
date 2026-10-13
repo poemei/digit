@@ -24,7 +24,7 @@ static stnlabz_module_result_t diagnose_command(
  for(i=0;i<count;i++){
   const char *event=ring[(index+16-count+i)%16];
   (void)snprintf(message,sizeof message,"%s",event);
-  message[strcspn(message,"\\n")]=0;
+  message[strcspn(message,"\n")]=0;
   if(!reply(reply_context,message))return STNLABZ_MODULE_ERR_INVALID_STATE;
  }
  if(!count)(void)reply(reply_context,"DSD: no recorded events.");
@@ -97,7 +97,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=2;
+ d.version_major=0;d.version_minor=2;d.version_patch=0;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
