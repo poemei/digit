@@ -5,7 +5,6 @@
 
 #include "module.h"
 
-#define STNLABZ_MODULE_LOADER_MAX 32
 #define STNLABZ_MODULE_LOADER_PATH_MAX 1024
 #define STNLABZ_MODULE_DESCRIPTOR_EXPORT "stnlabz_module_get_descriptor"
 
@@ -35,8 +34,9 @@ typedef struct
 
 typedef struct
 {
-    stnlabz_loaded_module_t modules[STNLABZ_MODULE_LOADER_MAX];
+    stnlabz_loaded_module_t *modules;
     size_t count;
+    size_t capacity;
 } stnlabz_module_loader_t;
 
 void stnlabz_module_loader_init(stnlabz_module_loader_t *loader);
@@ -55,6 +55,7 @@ stnlabz_module_loader_unload(
     const char *module_id
 );
 
+/* Unloads handles and releases dynamic storage. */
 void stnlabz_module_loader_unload_all(stnlabz_module_loader_t *loader);
 
 const stnlabz_loaded_module_t *
