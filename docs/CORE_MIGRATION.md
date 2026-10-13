@@ -261,3 +261,13 @@ A denied request with an explicitly supplied next-level contact produces `ESCALA
 The operator directed that detailed diagnostic correlation, source-location investigation, and diagnostic reports belong to DSD rather than Core. The Core trace subsystem and its tests were removed. Core retains mandatory operational logging and recorded policy and lifecycle outcomes in ./logs/digit.log. No DSD module has been implemented. Shared ABI 1.5 remains unchanged.
 
 The Core acceptance review must distinguish internally tested authorization gates from externally authenticated authority: current Core policy evaluation relies on verified inputs supplied by a trusted caller and is not itself an authentication system.
+
+## Core consolidation review (operator-authorized)
+
+Reviewed the current Core implementation against AGENTS.md, README.md, and ROADMAP.md. Agent Root validation, General Orders evaluation, qualified module lifecycle, inventory snapshots, and mandatory operational auditing remain Core-owned. DSD diagnostic investigation, Router, Bootstrap, Rendering, and external adapters are not introduced in this review. ABI 1.5 is unchanged.
+
+Failure path corrected: digit_core_discover now returns failure when the underlying scan reports directory-unavailable or another non-OK error, irrespective of whether recording SCAN_FAILED succeeded. Previously an audit success could incorrectly be returned as scan success.
+
+Known boundary: the internal policy evaluator consumes context asserted by a trusted caller; it does not independently authenticate actor, mission assignment, or authority flags. Existing module authorization and activation checks are not a substitute for a future verified caller boundary. The absence of a live capability module also limits operator demonstration to Core startup and test fixtures.
+
+Operator test: git pull; make clean && make && make test; ./bin/digit; Ctrl+C; tail -n 30 logs/digit.log. Expect 14 suites, zero failures, no TRACE RECORD events, and normal START/RUNNING/STOPPED events. Compilation, server tests, and operator acceptance remain separate from this review.
