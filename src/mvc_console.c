@@ -1,6 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/select.h>
+#include <unistd.h>
+#include <errno.h>
+#include "dsd.h"
 #include "mvc_console.h"
 #include "router.h"
 #include "core_activation.h"
@@ -91,6 +95,15 @@ static int unregister_service(const char *name,void *ctx){
 static const stnlabz_module_host_t host={
  NULL,NULL,register_command,unregister_command,register_service,unregister_service,invoke
 };
+static void console_dsd_watch(void){
+ unsigned int version=1U;digit_dsd_watch_response_t result={0};
+ size_t used=0;
+ if(invoke("dsd.watch",&version,sizeof version,&result,sizeof result,&used)==STNLABZ_MODULE_OK&&
+    used==sizeof result&&result.contract_version==1U&&
+    memchr(result.text,0,sizeof result.text)&&result.text[0]){
+  puts(result.text);fflush(stdout);
+ }
+}
 int digit_mvc_console(void){
  stnlabz_module_registry_t registry;
  stnlabz_module_loader_t loader;
@@ -134,7 +147,16 @@ int digit_mvc_console(void){
  puts("STN-LABZ Digit | interactive console");
  puts("Module commands are registered on activation. /quit exits.");
  fflush(stdout);
- while(fgets(line,sizeof line,stdin)){
+ console_dsd_watch();
+ for(;;){
+  fd_set readfds;struct timeval timeout;
+  int ready;
+  FD_ZERO(&readfds);FD_SET(STDIN_FILENO,&readfds);
+  timeout.tv_sec=5;timeout.tv_usec=0;
+  ready=select(STDIN_FILENO+1,&readfds,NULL,NULL,&timeout);
+  if(ready==0){console_dsd_watch();continue;}
+  if(ready<0){if(errno==EINTR)continue;good=0;break;}
+  if(!fgets(line,sizeof line,stdin))break;
   stnlabz_module_command_t command={0};
   digit_router_request_t request={0};
   digit_router_result_t result={0};
