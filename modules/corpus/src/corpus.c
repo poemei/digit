@@ -15,11 +15,7 @@ static stnlabz_module_result_t search(const stnlabz_module_command_t *cmd,
  return reply(ctx,msg)?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
 }
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q){
- if(!q)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
- memset(q,0,sizeof *q);
- q->tests_executed=q->tests_passed=STNLABZ_MODULE_MIN_TESTS;
- q->negative_test_executed=q->negative_test_passed=1;
- return STNLABZ_MODULE_OK;
+ return digit_corpus_selftest(q);
 }
 static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
  if(host||!h||!h->register_command||!h->unregister_command)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
@@ -36,7 +32,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"corpus");
  (void)snprintf(d.name,sizeof d.name,"Corpus");
- d.version_major=0;d.version_minor=1;d.version_patch=0;
+ d.version_major=0;d.version_minor=1;d.version_patch=1;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
