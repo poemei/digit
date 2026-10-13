@@ -76,18 +76,22 @@ int main(int argc, char **argv)
     }
     check(digit_log_sync(), "logging synchronized");
     digit_log_close();
-    f = fopen(argv[4], "r");
+    char module_path[2048];
+    snprintf(module_path,sizeof module_path,"%s",argv[4]);
+    char *slash=strrchr(module_path,'/');
+    if(slash)strcpy(slash+1,"modules.log");
+    f = fopen(module_path, "r");
     if (f) {
         while (fgets(line, sizeof line, f)) {
-            if (strstr(line, "DISCOVERY REJECTED_LAST") &&
+            if (strstr(line, "MODULE REJECTED_LAST") &&
                 strstr(line, "stage=manifest")) saw_rejection = 1;
-            if (strstr(line, "DISCOVERY VERIFY_PASS") &&
+            if (strstr(line, "MODULE VERIFY_PASS") &&
                 strstr(line, "id=mock")) saw_pass = 1;
-            if (strstr(line, "DISCOVERY VERIFY_REJECT") &&
+            if (strstr(line, "MODULE VERIFY_REJECT") &&
                 strstr(line, "id=bad-abi") &&
                 strstr(line, "result=INCOMPATIBLE")) saw_verification_reject = 1;
-            if (strstr(line, "DISCOVERY DIRECTORY_CREATED")) saw_created = 1;
-            if (strstr(line, "DISCOVERY DIRECTORY_FAILED") &&
+            if (strstr(line, "MODULE DIRECTORY_CREATED")) saw_created = 1;
+            if (strstr(line, "MODULE DIRECTORY_FAILED") &&
                 strstr(line, "not_a_directory")) saw_dir_failure = 1;
         }
         fclose(f);
