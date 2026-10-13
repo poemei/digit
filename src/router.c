@@ -13,12 +13,21 @@ static int valid(const char *s,size_t cap) {
 }
 void digit_router_reset(void){binding_count=0;router_host=NULL;memset(bindings,0,sizeof bindings);}
 int digit_router_bind(const char *path,const char *service){
- size_t i;if(router_host||!valid(path,DIGIT_ROUTER_PATH_MAX)||path[0]!='/'||
+ size_t i;if(!valid(path,DIGIT_ROUTER_PATH_MAX)||path[0]!='/'||
  !valid(service,DIGIT_ROUTER_SERVICE_MAX)||binding_count>=DIGIT_ROUTER_MAX_ROUTES)return 0;
  for(i=0;i<binding_count;++i)if(!strcmp(bindings[i].path,path))return 0;
  (void)snprintf(bindings[binding_count].path,DIGIT_ROUTER_PATH_MAX,"%s",path);
  (void)snprintf(bindings[binding_count].service,DIGIT_ROUTER_SERVICE_MAX,"%s",service);
  ++binding_count;return 1;
+}
+int digit_router_unbind(const char *path,const char *service){
+ size_t i;
+ if(!path||!service)return 0;
+ for(i=0;i<binding_count;i++)if(!strcmp(bindings[i].path,path)&&!strcmp(bindings[i].service,service)){
+  if(i+1<binding_count)memmove(&bindings[i],&bindings[i+1],(binding_count-i-1)*sizeof bindings[0]);
+  --binding_count;memset(&bindings[binding_count],0,sizeof bindings[0]);return 1;
+ }
+ return 0;
 }
 digit_route_status_t digit_router_dispatch(const digit_router_request_t *request,
  void *response,size_t capacity,digit_router_result_t *result){
