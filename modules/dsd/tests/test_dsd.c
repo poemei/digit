@@ -76,6 +76,15 @@ int main(void){
  check(strstr(output,"src/router.c:")!=NULL&&strstr(output,"src/mvc_console.c:")!=NULL,"locates both code paths in checkout");
  diagnose("my last request");
  check(strstr(output,"not a proven Router defect")!=NULL,"does not invent Router defect");
+ /* Two requests within one timestamp second must resolve to the latest
+    appended console request, not the first matching timestamp. */
+ snprintf(path,sizeof path,"%s/digit.log",logs);
+ fp=fopen(path,"a");if(!fp)return 2;
+ fputs("2026-10-13T15:09:43Z ROUTER DISPATCH request=console-2 route=/help service=none outcome=2 service_result=1\n",fp);
+ fclose(fp);
+ diagnose("my last request");
+ check(strstr(output,"route=/help")!=NULL,"last request selected by append order");
+ check(strstr(output,"No registration for /help")!=NULL,"missing help registration assessed");
  {
   const char *saved=getenv("DIGIT_SOURCE_ROOT");
   char root_copy[1024];
