@@ -4,6 +4,12 @@ Digit is an STN-LABZ modular autonomous-agent project. This repository is a **cl
 
 The existing [stnlabz/digit](https://github.com/stnlabz/digit) repository is the **reference implementation**: it provides source material and previously developed functionality, not an architecture to copy wholesale. Working features may be migrated only after being realigned with the design and qualification requirements here.
 
+## Current operator-directed runtime (pending operator acceptance)
+
+**Digit → Router → Module.** Run `sudo -u digit /opt/digit/run` (or `cd /opt/digit && sudo -u digit ./bin/digit`) to open the native console without `--mvc`. The console scans installed modules through `module.conf`, verifies and qualifies them using existing Core APIs, and makes authorized activation requests. Each activated module registers its own commands through the frozen ABI 1.5 `register_command` callback; the generic Router automatically binds those commands and removes their routes on unregistration. No module-specific Router edits or Bootstrap involvement are needed.
+
+DSD 0.2.0 is independently built and installed. When active, she registers the `diagnose` command. Enter `diagnose my last request` or `/diagnose` in Digit's native console to see the most recent 16 existing operational-log events. This is real logged evidence, **not** a fabricated explanation or complete source-level root-cause report. `--core` remains available for the separate frozen Core-only regression. This revision is **not yet operator-tested or accepted**. Historical phase descriptions below document previously developed stages, not the current startup behavior.
+
 ## Mandatory development stop
 
 **Module activation is not operator acceptance.** Build/test success, qualification GREEN and HOTLOAD_ACTIVE do not authorize moving to the next step. Follow [the operator acceptance gate in AGENTS.md](AGENTS.md): hand over the exact operator-selected test procedure, stop for the operator's Core build/test/console/log evaluation (APP/Slack testing once available), and wait for explicit acceptance plus authorization of the next named step. This applies to every rebuild phase.
