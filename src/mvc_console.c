@@ -53,21 +53,25 @@ static int unregister_command(const char *name,void *context){
  }
  return 0;
 }
-static stnlabz_module_result_t invoke(const char *service,const void *request,size_t size,
- void *response,size_t capacity,size_t *used){
- size_t i;
- (void)response;(void)capacity;
- if(used)*used=0;
- if(!service||!request||size!=sizeof(stnlabz_module_command_t)||!used)
- return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
- for(i=0;i<command_count;i++)if(commands[i].handler&&
- !strncmp(service,"command.",8)&&!strcmp(commands[i].name,service+8))
- return commands[i].handler((const stnlabz_module_command_t *)request,reply,NULL,commands[i].context);
- return STNLABZ_MODULE_ERR_NOT_FOUND;
-}
 typedef struct {char name[STNLABZ_MODULE_SERVICE_NAME_MAX];stnlabz_module_service_handler_fn handler;void *context;} service_entry_t;
 static service_entry_t services[32];
 static size_t service_count;
+static stnlabz_module_result_t invoke(const char *service,const void *request,size_t size,
+ void *response,size_t capacity,size_t *used){
+ size_t i;
+ if(used)*used=0;
+ if(!service||!request||!used)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ if(!strncmp(service,"command.",8)){
+  if(size!=sizeof(stnlabz_module_command_t))return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+  for(i=0;i<command_count;i++)if(commands[i].handler&&
+   !strcmp(commands[i].name,service+8))
+   return commands[i].handler((const stnlabz_module_command_t *)request,reply,NULL,commands[i].context);
+  return STNLABZ_MODULE_ERR_NOT_FOUND;
+ }
+ for(i=0;i<service_count;i++)if(services[i].handler&&!strcmp(services[i].name,service))
+  return services[i].handler(request,size,response,capacity,used,services[i].context);
+ return STNLABZ_MODULE_ERR_NOT_FOUND;
+}
 static int register_service(const char *name,stnlabz_module_service_handler_fn handler,void *ctx){
  size_t i;
  if(!name||!name[0]||strlen(name)>=sizeof services[0].name||!handler||service_count>=32)return 0;
