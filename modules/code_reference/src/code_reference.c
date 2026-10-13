@@ -17,7 +17,19 @@ static int bounded(const char *s,size_t n){return memchr(s,0,n)!=NULL;}
 static void note(code_reference_response_t *r,const char *message){
  snprintf(r->diagnostics,sizeof r->diagnostics,"%s",message);
 }
-static int analyze_c(const char *source,code_reference_response_t *r){
+static int analyze_c(const code_reference_request_t *req,code_reference_response_t *r){
+ const char *source=req->source;
+ const char *root=getenv("DIGIT_SOURCE_ROOT");
+ char inc[1024],incabi[1024],srcdir[1024],srcfull[1024];
+ const char *slash;size_t prefix;
+ if(!root||!*root)root="/home/stnchain/digit";
+ if(req->source_name[0]=='/'||strstr(req->source_name,".."))return -2;
+ if(snprintf(inc,sizeof inc,"%s/include",root)>=(int)sizeof inc||
+ snprintf(incabi,sizeof incabi,"%s/include/stnlabz_abi",root)>=(int)sizeof incabi||
+ snprintf(srcfull,sizeof srcfull,"%s/%s",root,req->source_name)>=(int)sizeof srcfull)return -2;
+ slash=strrchr(srcfull,'/');prefix=slash?(size_t)(slash-srcfull):0;
+ if(!prefix||prefix>=sizeof srcdir)return -2;
+ memcpy(srcdir,srcfull,prefix);srcdir[prefix]=0;
  int in[2]={-1,-1},out[2]={-1,-1},status;
  pid_t pid;
  size_t length=strlen(source),offset=0,used=0;
@@ -39,7 +51,7 @@ static int analyze_c(const char *source,code_reference_response_t *r){
   if(devnull>=0){dup2(devnull,STDOUT_FILENO);close(devnull);}
   close(in[0]);close(in[1]);close(out[0]);close(out[1]);
   execlp(compiler,compiler,"-std=c11","-pedantic-errors","-fsyntax-only",
-         "-x","c","-", (char *)NULL);
+         "-I",inc,"-I",incabi,"-I",srcdir,"-x","c","-", (char *)NULL);
   _exit(127);
  }
  close(in[0]);close(out[1]);
@@ -93,12 +105,17 @@ stnlabz_module_result_t code_reference_analyze(const void *input,size_t size,
   note(response,"Empty translation unit is not a useful analysis request.");
   return STNLABZ_MODULE_OK;
  }
- status=analyze_c(request->source,response);
- if(status<0){
+ status=analyze_c(request,response);
+ if(status==-2){
+  response->status=CODE_REFERENCE_ANALYSIS_INCOMPLETE;
+  note(response,"Source path or project compilation context invalid.");
+ }else if(status<0){
   response->status=CODE_REFERENCE_ANALYZER_UNAVAILABLE;
   note(response,"Compiler frontend could not be executed or completed.");
  }else if(status>0){
-  response->status=CODE_REFERENCE_SOURCE_INVALID;
+  response->status=(strstr(response->diagnostics,"No such file or directory")||
+   strstr(response->diagnostics,"file not found"))?
+   CODE_REFERENCE_ANALYSIS_INCOMPLETE:CODE_REFERENCE_SOURCE_INVALID;
   if(!response->diagnostics[0])note(response,"Compiler rejected translation unit without diagnostics.");
  }else{
   response->status=CODE_REFERENCE_ANALYZED;
@@ -130,7 +147,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"code_reference");
  snprintf(d.name,sizeof d.name,"Language-Independent Code Reference");
- d.version_major=0;d.version_minor=1;d.version_patch=0;
+ d.version_major=0;d.version_minor=1;d.version_patch=1;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;
