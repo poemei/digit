@@ -73,7 +73,9 @@ Preserve proven behavior and useful tests without preserving unnecessary couplin
 
 ## Status
 
-**Core foundation in progress.** Agent Root, standalone runtime, module-manager foundation and local logging have been implemented; the operator has supplied passing Core build/test and console/log observations for earlier revisions. Core Phase 1 as a whole is not yet accepted. Router, application modules, Rendering and external interfaces have not been implemented.
+**Phase 1 Core foundation qualification COMPLETE AND OPERATOR ACCEPTED.** Accepted source baseline: [`bee0d22`](https://github.com/poemei/digit/commit/bee0d2297889c14d7794ed533baa72fcbc14755c). The operator reported **20/20 suites**, **1,410/1,410 assertions passed**, **0 failed assertions**, and **0 suite/report errors**. Digit independently started with zero modules, verified Agent Root revision 1, entered RUNNING, and shut down normally on SIGINT. The supplied `./logs/digit.log` session spans **2026-10-13 02:43:30–02:43:33 UTC** and records the Core lifecycle and shutdown. The operator explicitly accepted the result.
+
+This acceptance covers the tested Phase 1 Core foundation. It does not establish external identity authentication, delivery of GO3 escalation notifications, or policy enforcement against callers invoking generic ABI functions outside Digit Core. These remain documented future integration boundaries, **not additional Phase 1 test milestones**. ABI 1.5 is unchanged. **Phase 2 Bootstrap and Router have not begun and require separate operator authorization.**
 
 The governing design is simple:
 
