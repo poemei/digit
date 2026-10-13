@@ -35,7 +35,9 @@ int digit_core_policy_evaluate(const digit_policy_request_t *request,
         result->policy_id = "CORE.ROOT";
         result->reason = "invalid_agent_root";
     } else if (request && valid(request->actor) && valid(request->mission) &&
-               valid(request->operation) && valid(request->module_id)) {
+               valid(request->operation) && valid(request->module_id) &&
+               valid(request->verification_source) &&
+               request->context_verified == 1) {
         if (!request->within_mission) {
             result->policy_id = "CORE.GO1";
             result->reason = "outside_assigned_mission";
