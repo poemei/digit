@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <time.h>
 #include "runtime.h"
+#include "logging.h"
+#include <stdio.h>
 
 /* Core lifecycle; no module manager or hotload dependency. */
 static volatile sig_atomic_t digit_stop_requested = 0;
@@ -22,6 +24,7 @@ void digit_runtime_init(digit_runtime_t *runtime)
     runtime->operational_state = DIGIT_OPERATIONAL_NORMAL;
     runtime->preservation_cause = DIGIT_FAULT_SYSTEM;
     runtime->preservation_cause_set = 0;
+    if (digit_log_is_open()) (void)digit_log_event("RUNTIME", "INITIALIZED", "state=normal");
 }
 int digit_runtime_report_fault(digit_runtime_t *runtime, digit_fault_t fault)
 {
@@ -32,6 +35,11 @@ int digit_runtime_report_fault(digit_runtime_t *runtime, digit_fault_t fault)
     runtime->preservation_cause = fault;
     runtime->preservation_cause_set = 1;
     runtime->operational_state = DIGIT_OPERATIONAL_COMPANY_PRESERVATION;
+    if (digit_log_is_open()) {
+        char detail[64];
+        (void)snprintf(detail, sizeof detail, "fault=%d state=company_preservation", (int)fault);
+        if (!digit_log_event("RUNTIME", "CORE_FAULT", detail) || !digit_log_sync()) return 0;
+    }
     return 1;
 }
 int digit_runtime_human_release(digit_runtime_t *runtime, int authorized_human_release)
@@ -41,6 +49,8 @@ int digit_runtime_human_release(digit_runtime_t *runtime, int authorized_human_r
         return 0;
     runtime->operational_state = DIGIT_OPERATIONAL_NORMAL;
     runtime->preservation_cause_set = 0;
+    if (digit_log_is_open() &&
+        (!digit_log_event("RUNTIME", "HUMAN_RELEASE", "state=normal") || !digit_log_sync())) return 0;
     return 1;
 }
 digit_operational_state_t digit_runtime_operational_state(const digit_runtime_t *runtime)
@@ -67,6 +77,13 @@ int digit_runtime_run(digit_runtime_t *runtime)
     }
     digit_stop_requested = 0;
     runtime->running = 1;
+    if (digit_log_is_open() &&
+        (!digit_log_event("RUNTIME", "START", "status=running") || !digit_log_sync())) {
+        runtime->running = 0;
+        (void)sigaction(SIGINT, &previous_int, NULL);
+        (void)sigaction(SIGTERM, &previous_term, NULL);
+        return 0;
+    }
     while (!digit_stop_requested) {
         struct timespec remaining = delay;
         while (nanosleep(&remaining, &remaining) != 0) {
@@ -85,5 +102,8 @@ int digit_runtime_run(digit_runtime_t *runtime)
     runtime->running = 0;
     (void)sigaction(SIGINT, &previous_int, NULL);
     (void)sigaction(SIGTERM, &previous_term, NULL);
+    if (digit_log_is_open() &&
+        (!digit_log_event("RUNTIME", "STOP", "reason=stop_requested") || !digit_log_sync()))
+        return 0;
     return 1;
 }
