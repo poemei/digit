@@ -5,11 +5,18 @@ TARGET := bin/corpus.so
 PREFIX ?= /opt/digit
 OWNER ?= digit
 GROUP ?= digit
-.PHONY: all install clean
+.PHONY: all test install clean
 all: $(TARGET)
 $(TARGET): src/corpus.c src/corpus_store.c include/corpus_store.h
 	mkdir -p bin
 	$(CC) $(CFLAGS) -Iinclude -I$(ROOT)/include -shared src/corpus.c src/corpus_store.c -o $@
+bin/test_corpus: tests/test_corpus.c src/corpus_store.c include/corpus_store.h
+	mkdir -p bin
+	$(CC) $(CFLAGS) -Iinclude -I$(ROOT)/include tests/test_corpus.c src/corpus_store.c -o $@
+
+test: $(TARGET) bin/test_corpus
+	@./bin/test_corpus
+
 install: $(TARGET)
 	@test -d "$(PREFIX)/modules" || { echo "Install Digit first" >&2; exit 2; }
 	@install -d -m 0750 "$(PREFIX)/modules/corpus" "$(PREFIX)/modules/corpus/bin"
