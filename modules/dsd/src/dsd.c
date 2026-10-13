@@ -112,7 +112,7 @@ static stnlabz_module_result_t diagnose_command(
   }else if(term[0]){
    if(!strstr(line,term))continue;
   }else if(!evidence_problem(line))continue;
-  matches++;
+  matches=last_request?1:matches+1;
   /* Both logs use UTC ISO-8601 timestamps. Do not infer ordering within
      the same second; retain the first encountered matching event. */
   if(!found||strncmp(line,selected,20)>0){
