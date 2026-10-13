@@ -46,7 +46,7 @@ int main(void){
  stnlabz_module_host_t host={0};
  stnlabz_module_qualification_result_t qualification;
  check(!strcmp(desc.id,"dsd"),"module identity");
- check(desc.version_major==0&&desc.version_minor==3&&desc.version_patch==5,"module version");
+ check(desc.version_major==0&&desc.version_minor==3&&desc.version_patch==6,"module version");
  check(desc.qualify(&qualification)==STNLABZ_MODULE_OK&&qualification.tests_failed==0,"qualifies");
  check(mkdtemp(directory)!=NULL,"fixture directory");
  if(!getcwd(cwd,sizeof cwd)||chdir(directory)!=0)return 2;
@@ -66,8 +66,16 @@ int main(void){
  check(handler!=NULL&&service!=NULL,"ABI registrations");
  diagnose("fixture_failure");
  check(strstr(output,"Module: dsd")!=NULL,"identifies failed module");
- check(strstr(output,"Code: modules/dsd/src/dsd.c:42")!=NULL,"preserves recorded source evidence");
- check(strstr(output,"reason=fixture_failure")!=NULL,"reports recorded failure reason");
+ check(strstr(output,"/modules/dsd/src/dsd.c:42")!=NULL,"verifies module source against checkout");
+ check(strstr(output,"Verified source line:")!=NULL,"inspects recorded source line instead of repeating log");
+ /* Malformed or stale line evidence must not become a claimed root cause. */
+ snprintf(path,sizeof path,"%s/modules.log",logs);
+ fp=fopen(path,"a");if(!fp)return 2;
+ fputs("2026-10-13T17:00:00Z MODULE FAILED id=dsd file=modules/dsd/src/dsd.c line=999999 reason=stale_trace\\n",fp);
+ fclose(fp);
+ diagnose("stale_trace");
+ check(strstr(output,"SOURCE LINE NOT PRESENT")!=NULL,"stale line rejected");
+ check(strstr(output,"diagnosis unresolved")!=NULL,"stale source does not establish cause");
  diagnose("my last request");
  check(strstr(output,"Module: router")!=NULL,"identifies router");
  check(strstr(output,"route=/Digit,")!=NULL,"preserves route evidence");
