@@ -5,11 +5,14 @@ PREFIX=${PREFIX:-/opt/digit}
 OWNER=${OWNER:-digit}
 GROUP=${GROUP:-digit}
 case "$PREFIX" in /*) ;; *) echo "PREFIX must be absolute" >&2; exit 2;; esac
-if ! id "$OWNER" >/dev/null 2>&1; then
- echo "Missing user $OWNER. Create digit system account before installation." >&2; exit 2
+if [ "$(id -u)" -ne 0 ]; then
+ echo "Installation requires root (sudo make install)." >&2; exit 2
 fi
 if ! getent group "$GROUP" >/dev/null 2>&1; then
- echo "Missing group $GROUP." >&2; exit 2
+ groupadd --system "$GROUP"
+fi
+if ! id "$OWNER" >/dev/null 2>&1; then
+ useradd --system --gid "$GROUP" --home-dir "$PREFIX" --no-create-home --shell /usr/sbin/nologin "$OWNER"
 fi
 install -d -m 0750 "$PREFIX" "$PREFIX/modules" "$PREFIX/logs"
 install -m 0750 bin/digit "$PREFIX/digit"
