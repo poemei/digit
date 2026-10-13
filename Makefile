@@ -78,5 +78,5 @@ bin/test_core_failure: tests/test_core_failure.c src/core_policy.c src/agent_roo
 bin/test_authority_boundary: tests/test_authority_boundary.c src/core_activation.c src/core_policy.c src/agent_root.c src/identity_digit.c src/stnlabz_abi/abi.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/logging.c | bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_authority_boundary.c src/core_activation.c src/core_policy.c src/agent_root.c src/identity_digit.c src/stnlabz_abi/abi.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/logging.c -o $@
 
-bin/test_router: tests/test_router.c src/router.c src/logging.c include/router.h | bin
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_router.c src/router.c src/logging.c -o $@
+bin/test_router: tests/test_router.c src/router.c src/logging.c src/stnlabz_abi/module_registry.c include/router.h | bin
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_router.c src/router.c src/logging.c src/stnlabz_abi/module_registry.c -o $@
