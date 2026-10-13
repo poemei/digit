@@ -7,6 +7,8 @@ static const char *const required_orders[STNLABZ_ROOT_ORDER_COUNT] = {
     "Follow established policies and authorized instructions.",
     "Report anything outside your authority to the appropriate next level of authority."
 };
+static const char required_core_rule[] =
+    "Digit SHALL NOT modify, rebuild, replace, deploy or update her Core without explicit highest-level STN-LABZ company authorization. Module, documentation and GitHub permissions do not authorize Core changes.";
 static const char *const required_traits[STNLABZ_ROOT_TRAIT_COUNT] = {
     "stoic", "loyal", "curious", "truthful", "respectful", "accountable", "humorous"
 };
@@ -43,6 +45,7 @@ int stnlabz_agent_root_validate(const stnlabz_agent_root_t *r)
     } else if (r->related_agent_id && r->related_agent_id[0]) return 0;
     for (i=0;i<STNLABZ_ROOT_ORDER_COUNT;++i)
         if (!bounded(r->orders[i]) || strcmp(r->orders[i],required_orders[i])) return 0;
+    if (!r->core_modification_rule || strcmp(r->core_modification_rule,required_core_rule)) return 0;
     for (i=0;i<STNLABZ_ROOT_TRAIT_COUNT;++i) {
         if (!bounded(r->traits[i])) return 0;
         for (j=i+1;j<STNLABZ_ROOT_TRAIT_COUNT;++j)
