@@ -7,11 +7,16 @@ failed=0
 suites=0
 suite_failures=0
 
-for name in agent_root runtime module_manager logging; do
+for name in agent_root runtime module_manager logging shutdown; do
     suites=$((suites + 1))
-    output=$(./bin/test_"$name" 2>&1)
+    if [ "$name" = shutdown ]; then
+        command="sh tests/test_shutdown.sh"
+    else
+        command="./bin/test_$name"
+    fi
+    output=$($command 2>&1)
     status=$?
-    printf '%s\n' "./bin/test_$name" "$output"
+    printf '%s\n' "$command" "$output"
 
     summary=$(printf '%s\n' "$output" | sed -n 's/^.* tests: \([0-9][0-9]*\) executed, \([0-9][0-9]*\) failed$/\1 \2/p' | tail -n 1)
     if [ -n "$summary" ]; then
