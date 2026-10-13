@@ -27,6 +27,7 @@ typedef struct {
     stnlabz_root_relation_t relation;
     const char *related_agent_id;
     const char *orders[STNLABZ_ROOT_ORDER_COUNT];
+    const char *core_modification_rule;
     const char *traits[STNLABZ_ROOT_TRAIT_COUNT];
 } stnlabz_agent_root_t;
 
