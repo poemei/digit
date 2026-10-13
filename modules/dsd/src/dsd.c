@@ -1,8 +1,36 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include "dsd.h"
 
 static const stnlabz_module_host_t *dsd_host;
+static stnlabz_module_result_t diagnose_command(
+ const stnlabz_module_command_t *command,
+ stnlabz_module_command_reply_fn reply,void *reply_context,void *context){
+ FILE *log;
+ char ring[16][384],line[384],message[512];
+ unsigned int count=0,index=0,i;
+ (void)context;
+ if(!command||!reply)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ log=fopen("./logs/digit.log","r");
+ if(!log){(void)reply(reply_context,"DSD: log unavailable.");return STNLABZ_MODULE_OK;}
+ while(fgets(line,sizeof line,log)){
+  (void)snprintf(ring[index],sizeof ring[index],"%s",line);
+  index=(index+1)%16;
+  if(count<16)count++;
+ }
+ fclose(log);
+ (void)reply(reply_context,"DSD diagnostic evidence (most recent logged events):");
+ for(i=0;i<count;i++){
+  const char *event=ring[(index+16-count+i)%16];
+  (void)snprintf(message,sizeof message,"%s",event);
+  message[strcspn(message,"\\n")]=0;
+  if(!reply(reply_context,message))return STNLABZ_MODULE_ERR_INVALID_STATE;
+ }
+ if(!count)(void)reply(reply_context,"DSD: no recorded events.");
+ return STNLABZ_MODULE_OK;
+}
+
 static int text_ok(const char *s,size_t n){return memchr(s,0,n)!=NULL;}
 stnlabz_module_result_t digit_dsd_report(const void *request,size_t request_size,
  void *response,size_t response_size,size_t *response_used,void *context){
@@ -46,15 +74,21 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  q->negative_test_executed=q->negative_test_passed=1;return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
- if(dsd_host||!h||!h->register_service||!h->unregister_service)
+ if(dsd_host||!h||!h->register_service||!h->unregister_service||
+ !h->register_command||!h->unregister_command)
  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  if(!h->register_service("dsd.report",digit_dsd_report,NULL))
  return STNLABZ_MODULE_ERR_START_FAILED;
+ if(!h->register_command("diagnose",diagnose_command,NULL)){
+  (void)h->unregister_service("dsd.report",NULL);
+  return STNLABZ_MODULE_ERR_START_FAILED;
+ }
  dsd_host=h;
  return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t stop(void){
  if(!dsd_host)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(!dsd_host->unregister_command("diagnose",NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
  if(!dsd_host->unregister_service("dsd.report",NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
  dsd_host=NULL;
  return STNLABZ_MODULE_OK;
@@ -63,7 +97,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=1;
+ d.version_major=0;d.version_minor=2;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
