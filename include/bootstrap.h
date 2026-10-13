@@ -10,6 +10,11 @@ typedef struct {
 int digit_bootstrap_start(digit_bootstrap_t *bootstrap,
  stnlabz_module_registry_t *registry,const stnlabz_module_host_t *host,
  const digit_policy_request_t *policy,const char *path,const char *service);
+/* Optional second service route, configured before Router activation. */
+int digit_bootstrap_start_with_diagnostics(digit_bootstrap_t *bootstrap,
+ stnlabz_module_registry_t *registry,const stnlabz_module_host_t *host,
+ const digit_policy_request_t *policy,const char *path,const char *service,
+ const char *diagnostic_service);
 /* Handoff only. Router retains sole responsibility for route selection. */
 digit_route_status_t digit_bootstrap_handoff(const digit_bootstrap_t *bootstrap,
  const digit_router_request_t *request,void *response,size_t capacity,
