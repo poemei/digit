@@ -71,11 +71,15 @@ Transport-specific authentication and permissions must continue to respect the e
 
 Preserve proven behavior and useful tests without preserving unnecessary coupling. Module versioning, qualification, and authorized change control remain part of STN-LABZ development practice. Source edits and migration are subject to the project's established rules.
 
+## Router implementation (Phase 2, pending acceptance)
+
+`include/router.h` and `src/router.c` define a bounded route-to-single-service mapping. A trusted host configures routes before module start, and the Router registers `router.dispatch` through the existing ABI 1.5 service host callbacks on activation. Core authority precedes routing; an asserted `core_authorized` flag in the bounded request cannot independently authenticate its caller and is only appropriate behind an enforced Core boundary. Unknown routes, denied requests, unavailable service hosts, malformed requests, and downstream errors have explicit results. No capability modules or runtime autoactivation are introduced. Run `make clean && make && make test` for the existing 20 Core suites plus the Router regression suite.
+
 ## Status
 
 **Phase 1 Core foundation qualification COMPLETE AND OPERATOR ACCEPTED.** Accepted source baseline: [`bee0d22`](https://github.com/poemei/digit/commit/bee0d2297889c14d7794ed533baa72fcbc14755c). The operator reported **20/20 suites**, **1,410/1,410 assertions passed**, **0 failed assertions**, and **0 suite/report errors**. Digit independently started with zero modules, verified Agent Root revision 1, entered RUNNING, and shut down normally on SIGINT. The supplied `./logs/digit.log` session spans **2026-10-13 02:43:30–02:43:33 UTC** and records the Core lifecycle and shutdown. The operator explicitly accepted the result.
 
-This acceptance covers the tested Phase 1 Core foundation. It does not establish external identity authentication, delivery of GO3 escalation notifications, or policy enforcement against callers invoking generic ABI functions outside Digit Core. These remain documented future integration boundaries, **not additional Phase 1 test milestones**. ABI 1.5 is unchanged. **Phase 2 Bootstrap and Router have not begun and require separate operator authorization.**
+This acceptance covers the tested Phase 1 Core foundation. It does not establish external identity authentication, delivery of GO3 escalation notifications, or policy enforcement against callers invoking generic ABI functions outside Digit Core. These remain documented future integration boundaries, **not additional Phase 1 test milestones**. ABI 1.5 is unchanged. **Phase 2 Router implementation has been explicitly authorized and is under operator testing.** The new Router is a separate ABI 1.5 module (version 0.1.0), not a new Core controller. Bootstrap handoff and production Router activation have not been authorized or implemented; the accepted Core runtime still starts with zero modules.
 
 The governing design is simple:
 
