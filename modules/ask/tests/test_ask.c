@@ -47,7 +47,7 @@ int main(void){
   context.has_previous=1;strcpy(context.previous_request,"http-1");strcpy(context.previous_route,"/ask");strcpy(context.previous_service,"route./ask");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"DSD SCOPED REPORT"))return 1;
  }
- if(handler("what is STN-Labz?",20,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+ if(handler("what is STN-Labz?",18,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"engineering research organization")||
      !strstr(out,"fixture-corpus"))return 1;
  if(handler("what is unlisted?",18,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
