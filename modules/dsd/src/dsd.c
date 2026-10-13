@@ -162,9 +162,9 @@ static stnlabz_module_result_t diagnose_command(
    if(!strstr(line,term))continue;
   }else if(!evidence_problem(line))continue;
   matches=last_request?1:matches+1;
-  /* Both logs use UTC ISO-8601 timestamps. Do not infer ordering within
-     the same second; retain the first encountered matching event. */
-  if(!found||strncmp(line,selected,20)>0){
+  /* For last-request selection, append order in digit.log is authoritative.
+     Timestamp seconds alone cannot distinguish consecutive console commands. */
+  if(last_request||!found||strncmp(line,selected,20)>0){
    (void)snprintf(selected,sizeof selected,"%s",line);
    found=1;
   }
