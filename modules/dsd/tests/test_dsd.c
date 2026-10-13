@@ -74,6 +74,17 @@ int main(void){
  check(strstr(output,"Source confirms console parses /Digit,")!=NULL,"assesses routing with inspected source");
  check(strstr(output,"parse=")!=NULL&&strstr(output,"bind=")!=NULL&&strstr(output,"lookup=")!=NULL&&strstr(output,"reject=")!=NULL,"traces console registration and Router lookup");
  check(strstr(output,"src/router.c:")!=NULL&&strstr(output,"src/mvc_console.c:")!=NULL,"locates both code paths in checkout");
+ {
+  const char *saved=getenv("DIGIT_SOURCE_ROOT");
+  char root_copy[1024];
+  snprintf(root_copy,sizeof root_copy,"%s",saved?saved:"");
+  setenv("DIGIT_SOURCE_ROOT","/nonexistent/dsd-test-source",1);
+  diagnose("my last request");
+  check(strstr(output,"SOURCE ACCESS FAILED")!=NULL,"reports source access failure");
+  check(strstr(output,"diagnosis incomplete")!=NULL,"does not fabricate a source finding");
+  if(saved)setenv("DIGIT_SOURCE_ROOT",root_copy,1);
+  else unsetenv("DIGIT_SOURCE_ROOT");
+ }
  diagnose("nonexistent_record");
  check(strstr(output,"no matching recorded event")!=NULL,"negative evidence handled");
  check(desc.stop()==STNLABZ_MODULE_OK,"stops");
