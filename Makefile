@@ -2,7 +2,7 @@ CC ?= cc
 CFLAGS ?= -std=c11 -Wall -Wextra -Wpedantic -O2
 CPPFLAGS += -Iinclude -Iinclude/stnlabz_abi
 
-.PHONY: all test clean
+.PHONY: all test clean install install-modules
 all: bin/digit bin/test_agent_root bin/test_runtime bin/test_module_manager bin/test_logging bin/test_abi_compat bin/test_loader bin/test_discovery bin/test_registry_growth bin/test_loader_growth bin/test_qualification bin/test_activation bin/test_inventory bin/test_policy bin/test_provenance bin/test_escalation bin/test_lifecycle_isolation bin/test_core_failure bin/test_authority_boundary bin/test_router bin/test_bootstrap bin/test_model_expression bin/test_rendering
 
 bin:
@@ -56,6 +56,17 @@ bin/test_inventory: tests/test_inventory.c src/core_inventory.c src/stnlabz_abi/
 bin/test_policy: tests/test_policy.c src/core_policy.c src/core_activation.c src/agent_root.c src/identity_digit.c src/stnlabz_abi/abi.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/logging.c | bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_policy.c src/core_policy.c src/core_activation.c src/agent_root.c src/identity_digit.c src/stnlabz_abi/abi.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/logging.c -o $@
 
+
+install: bin/digit
+	@sh scripts/install.sh
+	@$(MAKE) install-modules
+
+install-modules:
+	@set -eu; for manifest in modules/*/module.conf; do \
+		[ -f "$manifest" ] || continue; \
+		dir=$(dirname "$manifest"); \
+		$(MAKE) -C "$dir" install PREFIX=/opt/digit OWNER=digit GROUP=digit; \
+	done
 
 test: all bin/loader_valid.so bin/loader_legacy.so
 	@sh tests/run_all.sh
