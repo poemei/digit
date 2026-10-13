@@ -209,3 +209,13 @@ The fixed 32-entry caps in the upstream STN-LABZ ABI module registry, platform l
 Digit adds regression suites `registry_growth` and `loader_growth`. These exercise 128 registrations, multiple expansions, qualification/authority retention, duplicate denial, removal/reuse, injected registry allocation failure/recovery, and 65 distinct Linux mock shared libraries including loader allocation-failure injection/retry. No production module qualification or activation is enabled.
 
 Run `git pull && make clean && make && make test` and inspect the reported suite/assertion totals. Test `./bin/digit`, Ctrl+C, and `tail -n 25 logs/digit.log`. Confirm zero-module discovery, runtime continuity, and complete shutdown logging. Upstream Windows loader, catalog, and inventory tests/builds are **not** verified by Digit's Linux suite and remain independently pending. Do not claim unlimited physical memory or full multi-platform qualification.
+
+## Core-controlled module qualification (operator-authorized)
+
+After shared ABI 1.5 discovery and descriptor verification, Digit's Core now invokes `stnlabz_module_registry_qualify` for each candidate in `UNVERIFIED`. The unchanged authoritative qualification contract enforces at least 10 executed tests, all tests passed, zero failures, and both negative-test-executed and negative-test-passed evidence. Qualification callbacks run candidate code: only deploy trusted shared libraries; this is **not** a sandbox.
+
+The host reports each `QUALIFY_ATTEMPT`, `QUALIFY_PASS` or `QUALIFY_REJECT` into `./logs/digit.log`, including identity, result, lifecycle state, count fields and negative-validation results. Each candidate failure is isolated; logging failure stops Core. Successfully qualified modules remain **inactive and activation-unauthorized**. No start callbacks, automatic activation, Router, Bootstrap, or hotloading have been implemented. Shutdown safely unregisters qualified (non-active) modules and unloads their libraries.
+
+The `qualification` test suite covers 64 verified mock descriptors (beyond the historical 32-entry cap), retained reports and authorization gates, repeat-call exclusion, rejection with fewer than 10 tests, missing negative-test success, failed test evidence and callback failure, plus per-candidate audit records. It does not claim to demonstrate security isolation or production module trust.
+
+Operator validation: `git pull && make clean && make && make test` (expected **11 suites**, zero failures), `./bin/digit`, Ctrl+C, and `tail -n 25 logs/digit.log`. Without installed modules, `SCAN_ABSENT` and zero registered modules remain expected. Actual server compilation, runtime results and operator acceptance are separate gates.
