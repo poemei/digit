@@ -2,8 +2,8 @@
 
 **Repository:** `poemei/digit`  
 **Reference source:** [`stnlabz/digit`](https://github.com/stnlabz/digit)  
-**Architecture:** ChAoS MVC — **Core → Bootstrap → Router → relevant Module → Rendering**  
-**Status:** Phase 1 Core foundation qualification COMPLETE AND OPERATOR ACCEPTED at revision `bee0d22`; Phase 2 Router module 0.1.0 implemented under separate operator authorization, awaiting build/test acceptance. Bootstrap and later stages are not authorized.
+**Current operator-directed operational architecture:** **Digit → Router → Module**; no Bootstrap in the production console path  
+**Status:** Native console and generic module-owned command routes implemented for operator verification, not accepted. Historical phase record: Phase 1 Core foundation qualification COMPLETE AND OPERATOR ACCEPTED at revision `bee0d22`; Phase 2 Router module 0.1.0 implemented under separate operator authorization, awaiting build/test acceptance. Bootstrap and later stages are not authorized.
 
 ## 1. Non-negotiable design rules
 
