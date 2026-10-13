@@ -93,6 +93,14 @@ int main(void){
  check(strstr(output,"stage=loader")!=NULL,"reports observed loader stage");
  check(strstr(output,"missing_symbol")!=NULL,"preserves observed loader reason");
  check(strstr(output,"No defective source line")==NULL,"does not fabricate known defect");
+ snprintf(path,sizeof path,"%s/modules.log",logs);
+ fp=fopen(path,"a");if(!fp)return 2;
+ fputs("2026-10-13T20:01:00Z MODULE ACTIVATE_REJECT module=unseen version=0.1.0 result=STNLABZ_MODULE_ERR_START_FAILED state=FAILED authorized=1\\n",fp);
+ fclose(fp);
+ diagnose("module failures");
+ check(strstr(output,"ACTIVATE_REJECT")!=NULL,"latest lifecycle failure selected");
+ check(strstr(output,"Module: unseen")!=NULL,"activation identifies module");
+ check(strstr(output,"start callback")!=NULL,"activation analysis identifies investigation branch");
  diagnose("fixture_failure");
  check(strstr(output,"Module: dsd")!=NULL,"identifies failed module");
  check(strstr(output,"/modules/dsd/src/dsd.c:42")!=NULL,"verifies module source against checkout");
