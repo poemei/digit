@@ -73,7 +73,7 @@ int main(void){
  stnlabz_module_host_t host={0};
  stnlabz_module_qualification_result_t qualification;
  check(!strcmp(desc.id,"dsd"),"module identity");
- check(desc.version_major==0&&desc.version_minor==3&&desc.version_patch==21,"module version");
+ check(desc.version_major==0&&desc.version_minor==3&&desc.version_patch==22,"module version");
  check(desc.qualify(&qualification)==STNLABZ_MODULE_OK&&qualification.tests_failed==0,"qualifies");
  check(mkdtemp(directory)!=NULL,"fixture directory");
  if(!getcwd(cwd,sizeof cwd)||chdir(directory)!=0)return 2;
@@ -186,6 +186,7 @@ int main(void){
     fp=fopen(dsdfile,"w");if(!fp)return 2;
     fputs("void call(void){ dsd_host->invoke_service(\"code_reference.analyze\"); }\n",fp);fclose(fp);
     fp=fopen(docsrc,"a");if(!fp)return 2;
+    fputs("int code_reference_analyze(void)\n{\n return 0;\n}\n",fp);
     fputs("void register_it(void){ h->register_service(\"code_reference.analyze\",code_reference_analyze,NULL); }\n",fp);fclose(fp);
     fp=fopen(docreadme,"w");if(!fp)return 2;
     fputs("# Code Reference 0.1.0\nNo Core changes or DSD integration.\n",fp);fclose(fp);
@@ -194,7 +195,8 @@ int main(void){
      if(watch_service(&watch_version,sizeof watch_version,&report,sizeof report,&watch_used,NULL)!=STNLABZ_MODULE_OK)break;
      if(strstr(report.text,"No Core changes or DSD integration.")&&
         strstr(report.text,"Provider: modules/code_reference/src/code_reference.c:2")&&
-        strstr(report.text,"Provider handler: code_reference_analyze")){detected=1;break;}
+        strstr(report.text,"Provider handler: code_reference_analyze")&&
+        strstr(report.text,"Handler definition: modules/code_reference/src/code_reference.c:2")){detected=1;break;}
     }
     check(detected,"integration claim surfaces despite unresolved README version drift");
     /* Existing version drift must remain suppressed once reported. */
