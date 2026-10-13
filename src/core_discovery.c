@@ -57,7 +57,8 @@ int digit_core_discover(stnlabz_module_registry_t *registry,
     if (rc != STNLABZ_MODULE_OK) {
         (void)snprintf(detail, sizeof detail, "reason=%s",
                        stnlabz_module_result_string(rc));
-        return audit("SCAN_FAILED", detail);
+        (void)audit("SCAN_FAILED", detail);
+        return 0;
     }
     (void)snprintf(detail, sizeof detail,
         "examined=%zu loaded=%zu discovered=%zu rejected=%zu",
