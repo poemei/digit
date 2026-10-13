@@ -7,10 +7,12 @@ failed=0
 suites=0
 suite_failures=0
 
-for name in agent_root runtime module_manager logging abi_compat loader registry_growth loader_growth discovery qualification activation inventory policy shutdown; do
+for name in agent_root runtime module_manager logging abi_compat loader registry_growth loader_growth discovery qualification activation inventory policy trace shutdown; do
     suites=$((suites + 1))
     if [ "$name" = shutdown ]; then
         command="sh tests/test_shutdown.sh"
+    elif [ "$name" = trace ]; then
+        command="sh tests/test_trace.sh"
     elif [ "$name" = policy ]; then
         command="sh tests/test_policy.sh"
     elif [ "$name" = inventory ]; then
