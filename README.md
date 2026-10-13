@@ -32,7 +32,7 @@ Run `make clean && make && make test` first. Then install the Core executable an
 sudo make install
 ```
 
-The installer creates the Linux system account/group `digit:digit` when absent. All installed files and directories under `/opt/digit` are recursively owned by `digit:digit`. Existing module directories and logs are preserved; the executable and installed module files are updated. The executable is installed at `/opt/digit/bin/digit`, not `/opt/digit/digit`. Core's existing module discovery and logging code are unchanged.
+The installer creates the Linux system account/group `digit:digit` when absent. Core executable, launcher, and their parent directories are owned by `root:root` and are not writable by the `digit` runtime account. Runtime logs and independently installed module directories remain owned by `digit:digit`. This operating-system boundary prevents the Digit process from directly replacing installed Core files; it does **not** grant Core-update authority or protect a writable source checkout, a GitHub credential, or root-level processes. Repository access to Core must independently restrict Digit's credentials. Existing module directories and logs are preserved; the executable and installed module files are updated. The executable is installed at `/opt/digit/bin/digit`, not `/opt/digit/digit`. Core's existing module discovery and logging code are unchanged.
 
 ```text
 /opt/digit/
