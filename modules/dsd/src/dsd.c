@@ -98,9 +98,78 @@ static int scan_module_commands(const char *root,const char *command,
  closedir(modules);
  return found;
 }
+/* A suggestion is source-derived, not evidence a route is active.
+   Recognize only literal registrations; reject ambiguous candidates. */
+static unsigned spelling_distance(const char *a,const char *b){
+ size_t i,j,na=strlen(a),nb=strlen(b);
+ unsigned d[65][65];
+ if(na>64||nb>64)return 99;
+ for(i=0;i<=na;i++)d[i][0]=(unsigned)i;
+ for(j=0;j<=nb;j++)d[0][j]=(unsigned)j;
+ for(i=1;i<=na;i++)for(j=1;j<=nb;j++){
+  unsigned sub=d[i-1][j-1]+(a[i-1]!=b[j-1]);
+  unsigned del=d[i-1][j]+1,ins=d[i][j-1]+1;
+  unsigned best=sub<del?sub:del;
+  if(ins<best)best=ins;
+  if(i>1&&j>1&&a[i-1]==b[j-2]&&a[i-2]==b[j-1]&&d[i-2][j-2]+1<best)
+   best=d[i-2][j-2]+1;
+  d[i][j]=best;
+ }
+ return d[na][nb];
+}
+static void suggest_command(const char *root,const char *input,
+ char *suggestion,size_t cap,int *incomplete){
+ char base[1024];
+ DIR *modules;struct dirent *module;
+ unsigned best=3;int ambiguous=0;
+ suggestion[0]=0;
+ if(!identifier(input))return;
+ if(snprintf(base,sizeof base,"%s/modules",root)>=(int)sizeof base){*incomplete=1;return;}
+ modules=opendir(base);
+ if(!modules){*incomplete=1;return;}
+ while((module=readdir(modules))!=NULL){
+  char dir[1200];DIR *sources;struct dirent *entry;struct stat st;
+  if(module->d_name[0]=='.')continue;
+  if(snprintf(dir,sizeof dir,"%s/%s",base,module->d_name)>=(int)sizeof dir){*incomplete=1;continue;}
+  if(lstat(dir,&st)!=0){*incomplete=1;continue;}
+  if(!S_ISDIR(st.st_mode))continue;
+  if(snprintf(dir,sizeof dir,"%s/modules/%s/src",root,module->d_name)>=(int)sizeof dir){*incomplete=1;continue;}
+  sources=opendir(dir);
+  if(!sources){*incomplete=1;continue;}
+  while((entry=readdir(sources))!=NULL){
+   char path[1400],line[2048];FILE *fp;size_t len=strlen(entry->d_name);
+   if(len<3||strcmp(entry->d_name+len-2,".c"))continue;
+   if(snprintf(path,sizeof path,"%s/%s",dir,entry->d_name)>=(int)sizeof path){*incomplete=1;continue;}
+   if(lstat(path,&st)!=0||!S_ISREG(st.st_mode)){*incomplete=1;continue;}
+   fp=fopen(path,"r");if(!fp){*incomplete=1;continue;}
+   while(fgets(line,sizeof line,fp)){
+    const char *p=line;
+    while((p=strstr(p,"register_command("))!=NULL){
+     char name[65];size_t k=0;unsigned score;
+     p+=strlen("register_command(");
+     while(*p==' '||*p=='\\t')p++;
+     if(*p!='\"')continue;
+     p++;
+     while(k<64&&(((*p>='a'&&*p<='z')||(*p>='A'&&*p<='Z')||
+        (*p>='0'&&*p<='9')||*p=='_'||*p=='-')))name[k++]=*p++;
+     name[k]=0;
+     if(*p!='\"'||!k||!strcmp(name,input))continue;
+     score=spelling_distance(input,name);
+     if(score<best){best=score;ambiguous=0;snprintf(suggestion,cap,"%s",name);}
+     else if(score==best&&strcmp(suggestion,name))ambiguous=1;
+    }
+   }
+   if(ferror(fp))*incomplete=1;
+   fclose(fp);
+  }
+  closedir(sources);
+ }
+ closedir(modules);
+ if(ambiguous)suggestion[0]=0;
+}
 static int inspect_route(const char *route,char *location,size_t cap,char *finding,size_t fcap){
  const char *root=getenv("DIGIT_SOURCE_ROOT");
- char parse[1024],bind[1024],lookup[1024],reject[1024],registration[1200]={0};
+ char parse[1024],bind[1024],lookup[1024],reject[1024],registration[1200]={0},suggestion[65]={0};
  const char *name=route&&route[0]=='/'?route+1:"";
  int incomplete=0,found;
  if(!root||!*root)root="/home/stnchain/digit";
@@ -113,6 +182,7 @@ static int inspect_route(const char *route,char *location,size_t cap,char *findi
  return 0;
  }
  found=scan_module_commands(root,name,registration,sizeof registration,&incomplete);
+ if(!found)suggest_command(root,name,suggestion,sizeof suggestion,&incomplete);
  if(strlen(parse)>250||strlen(bind)>250||strlen(lookup)>250||strlen(reject)>250){
   snprintf(location,cap,"SOURCE LOCATION TOO LONG: cannot report complete route evidence");
   snprintf(finding,fcap,"Source references exceed diagnostic bounds; investigation incomplete.");
@@ -123,6 +193,8 @@ static int inspect_route(const char *route,char *location,size_t cap,char *findi
   snprintf(finding,fcap,"Source registration for /%.60s located at %.450s. Router has no active binding: inspect that module's discovery, qualification, activation and registration errors in modules.log before proposing a fix.",name,registration);
  }else if(incomplete){
   snprintf(finding,fcap,"No registration for /%.60s was located, but the module source scan was incomplete. Cannot establish whether the command is implemented; check source readability and module inventory.",name);
+ }else if(suggestion[0]){
+  snprintf(finding,fcap,"No registration for /%.60s found in examined module C sources. Source contains a similar command registration: /%.60s. Possible command spelling error; verify that module is installed, qualified, activated and the route is currently bound. This does not establish a Router defect.",name,suggestion);
  }else{
   snprintf(finding,fcap,"No registration for /%.60s found in examined module C sources. Console passes /%.60s to Router, which rejects the unbound route. This indicates an absent module command in inspected sources, not a proven Router defect. If the operator requires this command, implement it in an authorized module and test its registration and activation.",name,name);
  }
@@ -415,7 +487,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=3;d.version_patch=7;
+ d.version_major=0;d.version_minor=3;d.version_patch=8;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
