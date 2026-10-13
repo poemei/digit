@@ -7,6 +7,7 @@
 /* Opaque Core-mediated service response; no DSD linkage or dependency. */
 typedef struct {unsigned int contract_version;char text[2048];} console_dsd_alert_t;
 #include "mvc_console.h"
+#include "agent_root.h"
 #include "router.h"
 #include "core_activation.h"
 #include "core_discovery.h"
@@ -150,6 +151,8 @@ int digit_mvc_console(void){
   router_active=1;
  }
  puts("STN-LABZ Digit | interactive console");
+ puts("CORE AUTHORITY RULE:");
+ puts(stnlabz_agent_root_identity()->core_modification_rule);
  puts("Module commands are registered on activation. /quit exits.");
  fflush(stdout);
  console_dsd_watch();
