@@ -2,7 +2,6 @@
 #include <string.h>
 #include "core_policy.h"
 #include "logging.h"
-#include "core_trace.h"
 
 static int valid(const char *s)
 {
@@ -55,8 +54,5 @@ int digit_core_policy_evaluate(const digit_policy_request_t *request,
         request && valid(request->escalation_target) ?
             request->escalation_target : "unknown");
     if (written < 0 || (size_t)written >= sizeof detail) return 0;
-    if (!digit_log_event("POLICY", decision, detail) || !digit_log_sync()) return 0;
-    return DIGIT_TRACE("POLICY", request && valid(request->operation) ?
-        request->operation : "UNKNOWN", decision, result->policy_id,
-        result->reason);
+    return digit_log_event("POLICY", decision, detail) && digit_log_sync();
 }
