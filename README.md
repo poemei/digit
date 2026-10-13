@@ -8,6 +8,31 @@ The existing [stnlabz/digit](https://github.com/stnlabz/digit) repository is the
 
 **Module activation is not operator acceptance.** Build/test success, qualification GREEN and HOTLOAD_ACTIVE do not authorize moving to the next step. Follow [the operator acceptance gate in AGENTS.md](AGENTS.md): hand over the exact operator-selected test procedure, stop for the operator's Core build/test/console/log evaluation (APP/Slack testing once available), and wait for explicit acceptance plus authorization of the next named step. This applies to every rebuild phase.
 
+## Linux installation — /opt/digit
+
+Run `make clean && make && make test` first. Then install the Core executable and **all independently buildable modules**:
+
+```sh
+sudo make install
+```
+
+The installer creates the Linux system account/group `digit:digit` when absent. All installed files and directories under `/opt/digit` are recursively owned by `digit:digit`. Existing module directories and logs are preserved; the executable and installed module files are updated. Core's existing module discovery and logging code are unchanged.
+
+```text
+/opt/digit/
+  digit                 # executable
+  run                   # launcher (sets /opt/digit as working directory)
+  logs/digit.log         # mandatory operational log
+  modules/
+    dsd/
+      module.conf
+      bin/dsd.so
+```
+
+Launch with `sudo -u digit /opt/digit/run`, or `sudo -u digit /opt/digit/run --mvc` for the previously accepted local test mode. **Use the launcher:** the current log contract is relative to the working directory, so invoking `/opt/digit/digit` directly from elsewhere would not guarantee `/opt/digit/logs/digit.log`. The executable-relative loader discovers `/opt/digit/modules/*/module.conf`, then each module's `bin/<id>.so`.
+
+Every module remains independently buildable. To build/install only DSD: `make -C modules/dsd` and `sudo make -C modules/dsd install`. The root install target delegates to each present `modules/*/module.conf` module Makefile. Discovery and qualification do not imply activation. No Core source or ABI changes are required to add a module.
+
 ## Governing architecture
 
 **Core → Bootstrap → Router → relevant Module → Rendering**
