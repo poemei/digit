@@ -4,10 +4,12 @@
 #include <string.h>
 #include "core_discovery.h"
 #include "logging.h"
+#include "core_trace.h"
 
 static int audit(const char *event, const char *detail)
 {
-    return digit_log_event("DISCOVERY", event, detail) && digit_log_sync();
+    return digit_log_event("DISCOVERY", event, detail) && digit_log_sync() &&
+        DIGIT_TRACE("DISCOVERY", event, "OBSERVED", "RECORDED", "see_discovery_event");
 }
 
 int digit_core_discover(stnlabz_module_registry_t *registry,
@@ -91,6 +93,7 @@ int digit_core_verify(stnlabz_module_registry_t *registry)
             r->descriptor.required_core_api_minor);
         if (!audit("VERIFY_ATTEMPT", detail)) return 0;
         result = stnlabz_module_registry_verify(registry, r->descriptor.id);
+        if (!DIGIT_TRACE("DISCOVERY", "module.verify", result == STNLABZ_MODULE_OK ? "ALLOW" : "DENY", stnlabz_module_result_string(result), result == STNLABZ_MODULE_OK ? "compatible" : "incompatible_descriptor")) return 0;
         (void)snprintf(detail, sizeof detail,
             "id=%.63s result=%s state=%s",
             r->descriptor.id, stnlabz_module_result_string(result),
@@ -114,6 +117,7 @@ int digit_core_qualify(stnlabz_module_registry_t *registry)
             r->descriptor.id, (unsigned)STNLABZ_MODULE_MIN_TESTS);
         if (!audit("QUALIFY_ATTEMPT", detail)) return 0;
         result = stnlabz_module_registry_qualify(registry, r->descriptor.id);
+        if (!DIGIT_TRACE("DISCOVERY", "module.qualify", result == STNLABZ_MODULE_OK ? "ALLOW" : "DENY", stnlabz_module_result_string(result), result == STNLABZ_MODULE_OK ? "qualification_pass" : "qualification_rejected")) return 0;
         (void)snprintf(detail, sizeof detail,
             "id=%.63s result=%s state=%s executed=%u passed=%u failed=%u negative_executed=%d negative_passed=%d authorized=%d",
             r->descriptor.id, stnlabz_module_result_string(result),
