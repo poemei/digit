@@ -15,7 +15,6 @@
 #include "module.h"
 
 
-#define STNLABZ_MODULE_REGISTRY_MAX 32
 
 
 /*
@@ -45,11 +44,10 @@ typedef struct
 
 typedef struct
 {
-    stnlabz_module_record_t modules[
-        STNLABZ_MODULE_REGISTRY_MAX
-    ];
+    stnlabz_module_record_t *modules;
 
     size_t count;
+    size_t capacity;
 
 } stnlabz_module_registry_t;
 
@@ -64,6 +62,9 @@ void
 stnlabz_module_registry_init(
     stnlabz_module_registry_t *registry
 );
+
+/* Call on an initialized registry after all modules are stopped/unregistered. */
+void stnlabz_module_registry_destroy(stnlabz_module_registry_t *registry);
 
 
 stnlabz_module_result_t
