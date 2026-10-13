@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <errno.h>
 #include "dsd.h"
 
 static const stnlabz_module_host_t *dsd_host;
@@ -55,10 +58,48 @@ static int find_source(const char *root,const char *file,const char *token,char 
  while(fgets(line,sizeof line,f)){n++;if(strstr(line,token)){snprintf(out,cap,"%s:%lu",path,n);fclose(f);return 1;}}
  fclose(f);return 0;
 }
+/* Inspect module-owned registrations without assuming DSD owns all commands.
+   A failed scan never establishes the absence of a registration. */
+static int scan_module_commands(const char *root,const char *command,
+ char *registration,size_t cap,int *incomplete){
+ char base[1024],pattern[160];
+ DIR *modules;struct dirent *module;
+ int found=0;
+ if(snprintf(base,sizeof base,"%s/modules",root)>=(int)sizeof base){*incomplete=1;return 0;}
+ modules=opendir(base);
+ if(!modules){*incomplete=1;return 0;}
+ snprintf(pattern,sizeof pattern,"register_command(\"%.80s\"",command);
+ while((module=readdir(modules))!=NULL){
+  char dirpath[1200],sourcepath[1300],relative[500];
+  struct stat st;DIR *sources;struct dirent *entry;
+  if(module->d_name[0]=='.')continue;
+  if(snprintf(dirpath,sizeof dirpath,"%s/%s",base,module->d_name)>=(int)sizeof dirpath){*incomplete=1;continue;}
+  if(lstat(dirpath,&st)!=0){*incomplete=1;continue;}
+  if(!S_ISDIR(st.st_mode))continue;
+  if(snprintf(sourcepath,sizeof sourcepath,"%s/src",dirpath)>=(int)sizeof sourcepath){*incomplete=1;continue;}
+  sources=opendir(sourcepath);
+  if(!sources){*incomplete=1;continue;}
+  while((entry=readdir(sources))!=NULL){
+   size_t n=strlen(entry->d_name);
+   char match[1200],full[1400];
+   if(n<3||strcmp(entry->d_name+n-2,".c"))continue;
+   if(snprintf(full,sizeof full,"%s/%s",sourcepath,entry->d_name)>=(int)sizeof full){*incomplete=1;continue;}
+   if(lstat(full,&st)!=0||!S_ISREG(st.st_mode)){*incomplete=1;continue;}
+   if(snprintf(relative,sizeof relative,"modules/%s/src/%s",module->d_name,entry->d_name)>=(int)sizeof relative){*incomplete=1;continue;}
+   if(find_source(root,relative,pattern,match,sizeof match)){
+    snprintf(registration,cap,"%s",match);found++;
+   }else if(access(full,R_OK)!=0)*incomplete=1;
+  }
+  closedir(sources);
+ }
+ closedir(modules);
+ return found;
+}
 static int inspect_route(const char *route,char *location,size_t cap,char *finding,size_t fcap){
  const char *root=getenv("DIGIT_SOURCE_ROOT");
- char parse[1024],bind[1024],lookup[1024],reject[1024],registration[1024],key[160];
+ char parse[1024],bind[1024],lookup[1024],reject[1024],registration[1200]={0};
  const char *name=route&&route[0]=='/'?route+1:"";
+ int incomplete=0,found;
  if(!root||!*root)root="/home/stnchain/digit";
  if(!find_source(root,"src/mvc_console.c","while(line[start+j]",parse,sizeof parse)||
  !find_source(root,"src/mvc_console.c","digit_router_bind(path,service)",bind,sizeof bind)||
@@ -68,11 +109,15 @@ static int inspect_route(const char *route,char *location,size_t cap,char *findi
  snprintf(finding,fcap,"Unable to inspect required checkout source; diagnosis incomplete. Check source path and read permissions.");
  return 0;
  }
+ found=scan_module_commands(root,name,registration,sizeof registration,&incomplete);
  snprintf(location,cap,"parse=%s; bind=%s; lookup=%s; reject=%s",parse,bind,lookup,reject);
- snprintf(key,sizeof key,"register_command(\"%.80s\"",name);
- if(find_source(root,"modules/dsd/src/dsd.c",key,registration,sizeof registration))
- snprintf(finding,fcap,"Source confirms /%.80s is registered by DSD at %s, but Router logged no binding. Examine module activation/registration evidence before deciding on repair.",name,registration);
- else snprintf(finding,fcap,"Source confirms console parses /%.80s as a command, activated modules register routes, and Router rejects unbound paths. No DSD registration for that command was verified. A missing route is not proof of defective source; investigate intended module registration.",name);
+ if(found){
+  snprintf(finding,fcap,"Source registration for /%.60s located at %.450s. Router has no active binding: inspect that module's discovery, qualification, activation and registration errors in modules.log before proposing a fix.",name,registration);
+ }else if(incomplete){
+  snprintf(finding,fcap,"No registration for /%.60s was located, but the module source scan was incomplete. Cannot establish whether the command is implemented; check source readability and module inventory.",name);
+ }else{
+  snprintf(finding,fcap,"No registration for /%.60s found in examined module C sources. Console passes /%.60s to Router, which rejects the unbound route. This indicates an absent module command in inspected sources, not a proven Router defect. If the operator requires this command, implement it in an authorized module and test its registration and activation.",name,name);
+ }
  return 1;
 }
 static stnlabz_module_result_t diagnose_command(
@@ -152,7 +197,6 @@ static stnlabz_module_result_t diagnose_command(
  extract_token(selected,"reason=",reason,sizeof reason);
  if(strstr(selected,"ROUTER DISPATCH")){
   (void)snprintf(module,sizeof module,"router");
-  extract_token(selected,"route=",route,sizeof route);
   extract_token(selected,"route=",route,sizeof route);
   if(strstr(selected,"outcome=2"))(void)snprintf(reason,sizeof reason,"no_registered_route");
   else if(strstr(selected,"outcome=3"))(void)snprintf(reason,sizeof reason,"service_unavailable");
@@ -252,7 +296,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=3;d.version_patch=4;
+ d.version_major=0;d.version_minor=3;d.version_patch=5;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
