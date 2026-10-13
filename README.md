@@ -10,6 +10,16 @@ The existing [stnlabz/digit](https://github.com/stnlabz/digit) repository is the
 
 DSD retains an independently installed diagnostic command. Corpus 0.1.0 and Expressions 0.2.0 are independent ABI modules; Expressions registers `express` and Corpus registers `corpus`. Both retrieve knowledge deterministically from the preexisting append-only `/opt/digit/corpus/corpus.tsv` (id, category, source, text; tab-separated). Neither module hardcodes expressions, meanings or learned answers, writes to the TSV, or uses an LLM. Invoke `express <term>` or `corpus <term>`; unknown terms are not assigned meanings. The historical built-in `src/model_expression.c` fixture is not part of the default console dispatch path and remains only for prior regression suites. Production Corpus records are not included or modified by GitHub commits. All changes await operator acceptance.
 
+
+## Operational log separation
+
+Digit uses exactly two shared operational logs, created and opened together by its common logger:
+
+- `/opt/digit/logs/modules.log`: module discovery, verification, qualification GREEN/FAILED (with executed/passed/failed counts), authorization, activation/hotload and stop outcomes, and explicitly logged MODULE status messages. Events have UTC timestamps and the module identifier/version when available. No fabricated success or update events are emitted.
+- `/opt/digit/logs/digit.log`: Core, Router, Runtime, Console, and other non-module traffic.
+
+Logs are append-only. Missing module log access makes mandatory logging fail rather than silently hiding module qualification results. Neither log uses per-module subdirectories. Core logging regression tests check that entries are not mirrored into both files.
+
 ## Mandatory development stop
 
 **Module activation is not operator acceptance.** Build/test success, qualification GREEN and HOTLOAD_ACTIVE do not authorize moving to the next step. Follow [the operator acceptance gate in AGENTS.md](AGENTS.md): hand over the exact operator-selected test procedure, stop for the operator's Core build/test/console/log evaluation (APP/Slack testing once available), and wait for explicit acceptance plus authorization of the next named step. This applies to every rebuild phase.
