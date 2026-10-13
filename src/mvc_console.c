@@ -94,8 +94,11 @@ static int unregister_service(const char *name,void *ctx){
  }
  return 0;
 }
+static int module_message(const char *message){
+ return message&&digit_log_event("MODULE","MESSAGE",message)&&digit_log_sync();
+}
 static const stnlabz_module_host_t host={
- NULL,NULL,register_command,unregister_command,register_service,unregister_service,invoke
+ module_message,NULL,register_command,unregister_command,register_service,unregister_service,invoke
 };
 static void console_dsd_watch(void){
  static int previously_reported;
