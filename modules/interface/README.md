@@ -1,4 +1,4 @@
-# Interface 0.1.0
+# Interface 0.1.1
 
 Independent ABI 1.5 transport module. Listens on TCP port 8081 and accepts TLS handshakes using existing credentials:
 
@@ -14,3 +14,5 @@ Failure to load credentials or bind port 8081 fails module activation. The liste
 Build: `make -C modules/interface clean && make -C modules/interface && make -C modules/interface test`.
 Install: `sudo make -C modules/interface install`.
 Operator test: restart Digit and inspect concise `modules.log` for `QUALIFICATION_GREEN` and `HOTLOAD_ACTIVE` for `interface`; then run `openssl s_client -connect 127.0.0.1:8081 -servername digit.stn-labz.com -brief` from the host. TLS handshake should succeed, then close without an HTTP response. Wrong/missing credentials or a port conflict must prevent activation.
+
+On successful TLS listener startup the module emits `MODULE MESSAGE [INTERFACE] TLS listener active on port 8081; TLS required` through the Core-provided module message callback. Startup errors emit an `INTERFACE` failure message; the module does not claim success if the message cannot be recorded.
