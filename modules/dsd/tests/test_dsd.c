@@ -100,6 +100,20 @@ int main(void){
  check(desc.start(&host)==STNLABZ_MODULE_OK,"starts");
  check(handler!=NULL&&service!=NULL&&repair_handler!=NULL,"ABI registrations");
  check(watch_service!=NULL,"autonomous watch service registered");
+ check(scoped_service!=NULL,"scoped DSD service registered");
+ if(scoped_service){
+  digit_scoped_diagnostic_t obs={0};
+  char scoped_result[512];size_t scoped_used=0;
+  snprintf(obs.request_id,sizeof obs.request_id,"http-7");
+  snprintf(obs.route,sizeof obs.route,"/ask");
+  snprintf(obs.service,sizeof obs.service,"route./ask");
+  obs.outcome=0;obs.service_result=0;
+  check(scoped_service(&obs,sizeof obs,scoped_result,sizeof scoped_result,&scoped_used,NULL)==STNLABZ_MODULE_OK&&
+        strstr(scoped_result,"http-7")&&strstr(scoped_result,"route./ask"),"scoped result uses supplied evidence");
+  check(scoped_service(&obs,sizeof obs-1,scoped_result,sizeof scoped_result,&scoped_used,NULL)!=STNLABZ_MODULE_OK,
+        "malformed scoped evidence rejected");
+ }
+
  /* A logged loader rejection must outrank unrelated Router command errors. */
  snprintf(path,sizeof path,"%s/modules.log",logs);
  fp=fopen(path,"a");if(!fp)return 2;
