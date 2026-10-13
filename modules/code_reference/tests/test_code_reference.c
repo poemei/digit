@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include "code_reference.h"
@@ -33,6 +35,7 @@ int main(void){
  check(service(&req,sizeof req,&res,sizeof res,&used,NULL)==STNLABZ_MODULE_OK,"invalid C request");
  check(res.status==CODE_REFERENCE_SOURCE_INVALID,"compiler detects undeclared identifier");
  check(strstr(res.diagnostics,"missing_identifier")!=NULL,"actual diagnostic identifies symbol");
+ setenv("DIGIT_SOURCE_ROOT","../..",1);
  strcpy(req.source_name,"src/digit.c");
  strcpy(req.source,"#include \"agent_root.h\"\nint test_context(void){return 1;}\n");
  check(service(&req,sizeof req,&res,sizeof res,&used,NULL)==STNLABZ_MODULE_OK,"project header analysis");
