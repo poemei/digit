@@ -7,9 +7,9 @@ OWNER ?= digit
 GROUP ?= digit
 .PHONY: all install clean
 all: $(TARGET)
-$(TARGET): src/expression.c
+$(TARGET): src/expression.c ../corpus/src/corpus_store.c ../corpus/include/corpus_store.h
 	mkdir -p bin
-	$(CC) $(CFLAGS) -I$(ROOT)/include -shared src/expression.c -o $@
+	$(CC) $(CFLAGS) -I$(ROOT)/include -I../corpus/include -shared src/expression.c ../corpus/src/corpus_store.c -o $@
 install: $(TARGET)
 	@test -d "$(PREFIX)/modules" || { echo "Install Digit first" >&2; exit 2; }
 	@install -d -m 0750 "$(PREFIX)/modules/expression" "$(PREFIX)/modules/expression/bin"
