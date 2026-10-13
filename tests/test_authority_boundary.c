@@ -8,7 +8,8 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *host){(void)ho
 static void check(int ok,const char *msg){++count;if(!ok){++failed;fprintf(stderr,"FAIL authority boundary: %s\n",msg);}}
 int main(int argc,char **argv){
  stnlabz_module_registry_t reg;stnlabz_module_descriptor_t d;digit_policy_request_t p={"operator","mission","module.activate","boundary",1,1,1,1,NULL,"fixture",1};
- if(argc!=2||!digit_log_open_path(argv[1]))return 2;stnlabz_module_registry_init(&reg);memset(&d,0,sizeof d);strcpy(d.id,"boundary");strcpy(d.name,"Boundary fixture");d.qualify=qualify;d.start=start;d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
+ if(argc!=2||!digit_log_open_path(argv[1]))return 2;
+ stnlabz_module_registry_init(&reg);memset(&d,0,sizeof d);strcpy(d.id,"boundary");strcpy(d.name,"Boundary fixture");d.qualify=qualify;d.start=start;d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  check(stnlabz_module_registry_discover(&reg,&d)==STNLABZ_MODULE_OK,"discover");
  check(stnlabz_module_registry_verify(&reg,d.id)==STNLABZ_MODULE_OK,"verify");
  check(stnlabz_module_registry_qualify(&reg,d.id)==STNLABZ_MODULE_OK,"qualify");
