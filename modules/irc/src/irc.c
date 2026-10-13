@@ -93,7 +93,7 @@ static int diagnostic_question(const char *text){
 /* Only explicitly addressed conversation, never arbitrary IRC commands. */
 static void chat_message(SSL *tls,const char *line){
  const char *sep,*body,*prefix;char sender[64]={0},target[128]={0},message[513];
- char answer[1024],wire[512];size_t n=0,used=0,i;
+ char answer[1024],wire[512];size_t n=0,used=0;
  digit_router_request_t req={0};
  digit_ask_context_t context={0};irc_history_t *conversation;
  stnlabz_module_result_t dispatch_result;
@@ -141,15 +141,26 @@ static void chat_message(SSL *tls,const char *line){
   conversation->previous.service_result=(int)dispatch_result;
  }
  if(dispatch_result!=STNLABZ_MODULE_OK||!used||used>sizeof answer||!memchr(answer,0,used))return;
- /* One bounded IRC line. Never forward newline, control, or unverified long output. */
- for(i=0;answer[i]&&i<350;i++){
-  if(answer[i]=='\r'||answer[i]=='\n'||(unsigned char)answer[i]<32)break;
-  message[i]=answer[i];
+ /* IRC protocol framing, not server-side presentation: one PRIVMSG per report line. */
+ {
+  const char *p=answer;const char *recipient=!strcasecmp(target,config.nick)?sender:config.channel;
+  size_t sent=0;
+  while(*p&&sent<12){
+   size_t j=0;
+   while(*p&&*p!='\n'&&*p!='\r'&&j<350){
+    if(p[0]=='\\'&&p[1]=='n'){p+=2;break;}
+    if((unsigned char)*p<32){p++;continue;}
+    message[j++]=*p++;
+   }
+   message[j]=0;
+   while(*p=='\r'||*p=='\n')p++;
+   if(!j)continue;
+   if(snprintf(wire,sizeof wire,"PRIVMSG %s :%s",recipient,message)>=(int)sizeof wire)break;
+   if(!send_line(tls,wire))break;
+   sent++;
+  }
  }
- message[i]=0;
- if(!message[0])return;
- if(snprintf(wire,sizeof wire,"PRIVMSG %s :%s",!strcasecmp(target,config.nick)?sender:config.channel,message)>=(int)sizeof wire)return;
- (void)send_line(tls,wire);
+
 }
 static int handle_line(SSL *tls,const char *line,int *authenticated,int *joined){
  char cmd[513],payload[513];const char *p;
