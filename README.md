@@ -93,6 +93,12 @@ The production executable now links the accepted Router, Bootstrap, Expression M
 
 **Security boundary:** The local development CLI is an operator-selected test mode, *not* authenticated transport or general-purpose permission delegation. Its policy context is an in-process assertion; it does not independently establish user identity. Do not expose this mode as a remote interface. Capability modules are still built in for this explicit development integration and are not yet separately deployed dynamically loaded packages. The automated live console integration smoke test is an additional 25th suite and does not reopen previous operator-accepted test records.
 
+## Phase 5 — DSD 0.1.0 (qualification pending)
+
+The operator authorized DSD as the first dedicated diagnostic module. `include/dsd.h` and `src/dsd.c` implement its ABI 1.5 `dsd.report` service. A bounded observation record provides request ID, decision, reason, and source location **as recorded at the decision point**. DSD formats existing evidence and explicitly labels absent locations `not_recorded`; it cannot run Models, route requests, grant permissions, diagnose unobserved code, or repair anything.
+
+The explicit local `./bin/digit --mvc` mode now also activates DSD under the same Core policy and lifecycle gates. Use `/diagnose` after an expression to show the most recent Router and Model observations without repeating that request. This is a development demonstration that forwards in-process observations to DSD; no complete cross-process historical tracing, authenticated external access, or independent binary deployment is claimed. The first dedicated DSD suite increases the aggregate from the accepted **25 suites / 1,532 assertions** to **26 suites** for operator qualification. The ordinary `./bin/digit` Core startup remains unchanged.
+
 ## Status
 
 **Phase 1 Core foundation qualification COMPLETE AND OPERATOR ACCEPTED.** Accepted source baseline: [`bee0d22`](https://github.com/poemei/digit/commit/bee0d2297889c14d7794ed533baa72fcbc14755c). The operator reported **20/20 suites**, **1,410/1,410 assertions passed**, **0 failed assertions**, and **0 suite/report errors**. Digit independently started with zero modules, verified Agent Root revision 1, entered RUNNING, and shut down normally on SIGINT. The supplied `./logs/digit.log` session spans **2026-10-13 02:43:30–02:43:33 UTC** and records the Core lifecycle and shutdown. The operator explicitly accepted the result.
