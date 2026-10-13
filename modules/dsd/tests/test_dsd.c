@@ -149,6 +149,26 @@ int main(void){
   check(analysis_calls>0,"Core-mediated analysis invoked");
   check(strstr(output,"Code Reference: C11 frontend accepted")!=NULL,"analysis evidence included");
   check(strstr(output,"Module: mock")!=NULL,"diagnostic retains module");
+  /* Autonomous poll finds previously unseen broken source without a
+     diagnose command, using the independently registered service. */
+  snprintf(tinyfile,sizeof tinyfile,"%s/broken.c",tinydir);
+  fp=fopen(tinyfile,"w");if(!fp)return 2;
+  fputs("int arbitrary(int value){ return missing_amount + value; }\n",fp);
+  fclose(fp);
+  {
+   unsigned int watch_version=1U;
+   digit_dsd_watch_response_t report={0};
+   size_t watch_used=0;
+   check(watch_service(&watch_version,sizeof watch_version,
+     &report,sizeof report,&watch_used,NULL)==STNLABZ_MODULE_OK,"automatic watch invoked");
+   check(watch_used==sizeof report,"watch response contract");
+   check(strstr(report.text,"DSD DEVELOPMENT ALERT")!=NULL,"watch proactively reports defect");
+   check(strstr(report.text,"missing_amount")!=NULL,"watch retains actual analysis evidence");
+   check(strstr(report.text,"Recommended fix:")!=NULL,"watch recommends validation and repair");
+  }
+  unlink(tinyfile);
+  snprintf(tinyfile,sizeof tinyfile,"%s/mock.c",tinydir);
+
   if(before)setenv("DIGIT_SOURCE_ROOT",oldroot,1);else unsetenv("DIGIT_SOURCE_ROOT");
   unlink(tinyfile);rmdir(tinydir);
   snprintf(tinydir,sizeof tinydir,"%s/modules/mock",tinyroot);rmdir(tinydir);
