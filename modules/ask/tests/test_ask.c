@@ -11,6 +11,8 @@ int main(void){
  stnlabz_module_host_t h={0};h.register_service=reg;h.unregister_service=unreg;
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return 1;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"Hello"))return 1;
+ if(handler("Hi digit",9,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"Hello"))return 1;
+ if(d->version_patch!=1)return 1;
  if(handler("",1,out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK)return 1;
  if(handler("hello",6,out,2,&used,NULL)==STNLABZ_MODULE_OK)return 1;
  if(d->stop()!=STNLABZ_MODULE_OK)return 1;
