@@ -1,9 +1,9 @@
-# Interface 0.1.1
+# Interface 0.1.2
 
 Independent ABI 1.5 transport module. Listens on TCP port 8081 and accepts TLS handshakes using existing credentials:
 
-- `/opt/digit/state/interface-cert.pem`
-- `/opt/digit/state/interface-key.pem`
+- `/opt/digit/state/auth/interface-cert.pem`
+- `/opt/digit/state/auth/interface-key.pem`
 
 OpenSSL TLS 1.2 or newer; certificate/private key must both be readable by the Digit runtime account and match. The module never creates, modifies, or stores credentials.
 
