@@ -256,14 +256,8 @@ A denied request with an explicitly supplied next-level contact produces `ESCALA
 
 `tests/test_policy.c` includes allowed, mission denial, unauthorized instruction/policy, out-of-authority denial and escalation, missing context, mismatched operation/module, and a 48-module authorization test. The established activation regression suite is updated to use explicit policy context. Operator checks: `git pull && make clean && make && make test` (expected **14 suites**, zero failures), `./bin/digit`, Ctrl+C, `tail -n 30 logs/digit.log`. A zero-module startup should remain functional and inactive. No external identity verification, policy ingestion, escalation delivery, or production module activation is claimed.
 
-## Core structured trace contract (operator-authorized)
+## Core and DSD responsibility correction
 
-`include/core_trace.h` and `src/core_trace.c` provide a C11 thread-local correlation scope (`digit_trace_begin/current/end`), dynamically allocated numeric trace identifiers from an atomic sequence, and source-grounded `DIGIT_TRACE` emission. No fixed-size trace registry or module-count ceiling is introduced. Numeric ID `0` means no correlation scope was established; it must not be interpreted as a proven request association.
+The operator directed that detailed diagnostic correlation, source-location investigation, and diagnostic reports belong to DSD rather than Core. The Core trace subsystem and its tests were removed. Core retains mandatory operational logging and recorded policy and lifecycle outcomes in ./logs/digit.log. No DSD module has been implemented. Shared ABI 1.5 remains unchanged.
 
-Each `TRACE RECORD` in the mandatory `./logs/digit.log` includes trace ID, emitting component, operation, decision, result, reason, and source file/function/line captured at the actual instrumented decision call. Fields missing from the observation are explicitly `UNKNOWN`; a missing actual source location yields line `0`, never an invented line. This records Core emitter locations, **not unreported source locations inside shared-library callbacks**. Existing Core audit records and ABI 1.5 remain intact.
-
-Core runtime establishes a startup/shutdown trace scope for its main thread. Discovery, qualification, policy evaluation and activation audits emit additional structured records. Trace context is thread-local and is not automatically transferred across asynchronous tasks or future transport boundaries: a trusted future caller must explicitly propagate its own context. This is **evidence production**, not a DSD module, permission grant, diagnostic conclusion, or external tracing interface. No claim is made that all old Core paths are instrumented or that distinct module callbacks can be correlated across threads without explicit context.
-
-`tests/test_trace.c` verifies nested context reuse, restoration, explicit unknown fields, 65 independent trace contexts, and negative-decision evidence.
-
-Operator checks: `git pull && make clean && make && make test` (expected **15 suites**, zero failures), run `./bin/digit`, Ctrl+C, then `grep ' TRACE RECORD ' logs/digit.log | tail -n 15`. Expect source-backed `file=`, `function=`, `line=` and `trace=` fields. Operator acceptance remains separate.
+The Core acceptance review must distinguish internally tested authorization gates from externally authenticated authority: current Core policy evaluation relies on verified inputs supplied by a trusted caller and is not itself an authentication system.
