@@ -66,7 +66,7 @@ int main(int argc, char **argv)
     digit_log_close();
     f = fopen(argv[4], "r");
     if (f) {
-        while (fgets(line, sizeof line, f))
+        while (fgets(line, sizeof line, f)) {
             if (strstr(line, "DISCOVERY REJECTED_LAST") &&
                 strstr(line, "stage=manifest")) saw_rejection = 1;
             if (strstr(line, "DISCOVERY VERIFY_PASS") &&
@@ -74,6 +74,7 @@ int main(int argc, char **argv)
             if (strstr(line, "DISCOVERY VERIFY_REJECT") &&
                 strstr(line, "id=bad-abi") &&
                 strstr(line, "result=INCOMPATIBLE")) saw_verification_reject = 1;
+        }
         fclose(f);
     }
     check(saw_rejection, "rejection stage recorded");
