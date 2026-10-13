@@ -20,6 +20,8 @@ expect 'Expression unknown.' out.txt
 expect 'No request trace recorded.' out.txt
 expect 'EXPRESSION decision=UNKNOWN file=src/model_expression.c' out.txt
 expect 'DSD REPORT status=observed_only' logs/digit.log
+expect 'ROUTER DISPATCH request=console-3 route=/diagnose service=dsd.report outcome=0' logs/digit.log
+expect 'RENDERING DIAGNOSTIC status=formatted' logs/digit.log
 expect 'ACTIVATION ACTIVATE_PASS id=dsd' logs/digit.log
 expect 'DSD STOP status=stopped' logs/digit.log
 expect 'MVC START mode=explicit_local_development authentication=not_provided' logs/digit.log
