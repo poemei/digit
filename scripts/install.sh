@@ -24,6 +24,9 @@ install -m 0750 scripts/digit-run "$PREFIX/run"
 if [ ! -e "$PREFIX/logs/digit.log" ]; then
  install -m 0640 /dev/null "$PREFIX/logs/digit.log"
 fi
+if [ ! -e "$PREFIX/logs/modules.log" ]; then
+ install -m 0640 /dev/null "$PREFIX/logs/modules.log"
+fi
 chown -R "$OWNER:$GROUP" "$PREFIX"
 printf 'Installed Digit to %s/bin/digit; owner=%s:%s\n' "$PREFIX" "$OWNER" "$GROUP"
 printf 'Use %s/run to ensure logs are written to %s/logs/digit.log\n' "$PREFIX" "$PREFIX"
