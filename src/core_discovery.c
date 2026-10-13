@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <errno.h>
+#include <sys/stat.h>
 #include <string.h>
 #include "core_discovery.h"
 #include "logging.h"
@@ -16,10 +18,40 @@ int digit_core_discover(stnlabz_module_registry_t *registry,
     char detail[512];
     if (!registry || !loader || !path || !report || !digit_log_is_open())
         return 0;
+    {
+        struct stat st;
+        if (stat(path, &st) != 0) {
+            int error = errno;
+            if (error != ENOENT) {
+                (void)snprintf(detail, sizeof detail,
+                    "path=%.360s errno=%d reason=%s", path, error, strerror(error));
+                (void)audit("DIRECTORY_FAILED", detail);
+                return 0;
+            }
+            if (mkdir(path, 0755) != 0) {
+                error = errno;
+                /* A concurrent creator is fine only if the result is a directory. */
+                if (error != EEXIST || stat(path, &st) != 0 || !S_ISDIR(st.st_mode)) {
+                    (void)snprintf(detail, sizeof detail,
+                        "path=%.360s errno=%d reason=%s", path, error, strerror(error));
+                    (void)audit("DIRECTORY_FAILED", detail);
+                    return 0;
+                }
+            } else {
+                (void)snprintf(detail, sizeof detail, "path=%.400s status=created", path);
+                if (!audit("DIRECTORY_CREATED", detail)) return 0;
+            }
+        } else if (!S_ISDIR(st.st_mode)) {
+            (void)snprintf(detail, sizeof detail,
+                "path=%.400s reason=not_a_directory", path);
+            (void)audit("DIRECTORY_FAILED", detail);
+            return 0;
+        }
+    }
     if (!audit("SCAN_START", "status=initiated")) return 0;
     rc = stnlabz_module_discovery_scan(registry, loader, path, report);
     if (rc == STNLABZ_MODULE_ERR_NOT_FOUND) {
-        return audit("SCAN_ABSENT", "status=no_module_directory");
+        return audit("SCAN_FAILED", "reason=directory_unavailable");
     }
     if (rc != STNLABZ_MODULE_OK) {
         (void)snprintf(detail, sizeof detail, "reason=%s",
