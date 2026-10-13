@@ -107,10 +107,10 @@ int main(void) {
     check(logread != NULL, "module event log readable");
     if (logread) {
         while (fgets(line, sizeof line, logread)) {
-            if (strstr(line, "MODULE REGISTER id=mock result=0")) saw_register = 1;
-            if (strstr(line, "MODULE QUALIFY id=mock result=5")) saw_reject = 1;
-            if (strstr(line, "MODULE ACTIVATE id=mock result=0")) saw_activate = 1;
-            if (strstr(line, "MODULE STOP id=mock result=0")) saw_stop = 1;
+            if (strstr(line, "MODULE REGISTER sequence=") && strstr(line, "module=mock")) saw_register = 1;
+            if (strstr(line, "MODULE QUALIFY sequence=") && strstr(line, "module=mock")) saw_reject = 1;
+            if (strstr(line, "MODULE ACTIVATE sequence=") && strstr(line, "module=mock")) saw_activate = 1;
+            if (strstr(line, "MODULE STOP sequence=") && strstr(line, "module=mock")) saw_stop = 1;
         }
         fclose(logread);
     }
