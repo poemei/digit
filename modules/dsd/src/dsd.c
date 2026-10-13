@@ -23,7 +23,7 @@ static void extract_token(const char *line,const char *key,char *out,size_t cap)
  out[0]=0;
  if(!p)return;
  p+=strlen(key);
- while(p[i]&&p[i]!=' '&&p[i]!='\\n'&&p[i]!='\\r'&&i+1<cap){out[i]=p[i];i++;}
+ while(p[i]&&p[i]!=' '&&p[i]!='\n'&&p[i]!='\r'&&i+1<cap){out[i]=p[i];i++;}
  out[i]=0;
 }
 static int evidence_problem(const char *line){
@@ -52,7 +52,7 @@ static stnlabz_module_result_t diagnose_command(
  FILE *log;
  char line[DSD_LOG_LINE],selected[DSD_LOG_LINE]={0},module[64]={0};
  char file[128]={0},lineno[24]={0},reason[256],message[1024],term[128]={0};
- char request_id[64]={0},candidate_id[64],candidate_module[64];
+ char candidate_id[64],candidate_module[64];
  unsigned long matches=0;
  int found=0;
  const char *args;
@@ -74,8 +74,8 @@ static stnlabz_module_result_t diagnose_command(
  }
  while(fgets(line,sizeof line,log)){
   size_t len=strlen(line);
-  if(len&&!strchr(line,'\\n')&&!feof(log)){
-   int c;while((c=fgetc(log))!='\\n'&&c!=EOF){}
+  if(len&&!strchr(line,'\n')&&!feof(log)){
+   int c;while((c=fgetc(log))!='\n'&&c!=EOF){}
    continue; /* No truncated or fabricated evidence. */
   }
   if(term[0]){
