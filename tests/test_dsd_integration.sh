@@ -26,10 +26,10 @@ expect 'STN-LABZ Digit | interactive console' out.txt
 expect 'DSD DIAGNOSTIC REPORT' out.txt
 expect 'Module: dsd' out.txt
 expect 'ROUTER DISPATCH request=console-3 route=/express service=command.express outcome=0' logs/digit.log
-expect 'ACTIVATION ACTIVATE_PASS id=expression' logs/digit.log
-expect 'ACTIVATION ACTIVATE_PASS id=corpus' logs/digit.log
-expect 'ACTIVATION STOP_PASS id=expression' logs/digit.log
-expect 'ACTIVATION STOP_PASS id=corpus' logs/digit.log
+expect 'MODULE HOTLOAD_ACTIVE module=expression' logs/modules.log
+expect 'MODULE HOTLOAD_ACTIVE module=corpus' logs/modules.log
+expect 'MODULE STOP_PASS module=expression' logs/modules.log
+expect 'MODULE STOP_PASS module=corpus' logs/modules.log
 expect 'Log: 2026-10-13T03:51:47Z MODULE FAILED' out.txt
 expect 'Code: modules/dsd/src/dsd.c:42' out.txt
 expect 'Finding: Recorded event indicates the requested condition; reason=fixture_failure.' out.txt
@@ -40,8 +40,8 @@ expect 'Module: router' out.txt
 expect 'route=/express' out.txt
 expect 'ROUTER DISPATCH request=console-4 route=/express service=command.express outcome=0' logs/digit.log
 expect 'ROUTER DISPATCH request=console-1 route=/diagnose service=command.diagnose outcome=0' logs/digit.log
-expect 'ACTIVATION ACTIVATE_PASS id=dsd' logs/digit.log
-expect 'ACTIVATION STOP_PASS id=dsd' logs/digit.log
+expect 'MODULE HOTLOAD_ACTIVE module=dsd' logs/modules.log
+expect 'MODULE STOP_PASS module=dsd' logs/modules.log
 expect 'CONSOLE STOPPED mode=local' logs/digit.log
 printf 'Core dsd_integration tests: %s executed, %s failed\n' "$checks" "$failures"
 [ "$failures" -eq 0 ]
