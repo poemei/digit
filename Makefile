@@ -3,7 +3,7 @@ CFLAGS ?= -std=c11 -Wall -Wextra -Wpedantic -O2
 CPPFLAGS += -Iinclude -Iinclude/stnlabz_abi
 
 .PHONY: all test clean
-all: bin/digit bin/test_agent_root bin/test_runtime bin/test_module_manager bin/test_logging bin/test_abi_compat bin/test_loader bin/test_discovery bin/test_registry_growth bin/test_loader_growth bin/test_qualification bin/test_activation bin/test_inventory bin/test_policy
+all: bin/digit bin/test_agent_root bin/test_runtime bin/test_module_manager bin/test_logging bin/test_abi_compat bin/test_loader bin/test_discovery bin/test_registry_growth bin/test_loader_growth bin/test_qualification bin/test_activation bin/test_inventory bin/test_policy bin/test_provenance bin/test_escalation bin/test_lifecycle_isolation bin/test_core_failure bin/test_authority_boundary
 
 bin:
 	mkdir -p bin
@@ -62,3 +62,18 @@ test: all bin/loader_valid.so bin/loader_legacy.so
 
 clean:
 	rm -rf bin
+
+bin/test_provenance: tests/test_provenance.c src/core_policy.c src/agent_root.c src/identity_digit.c src/logging.c | bin
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_provenance.c src/core_policy.c src/agent_root.c src/identity_digit.c src/logging.c -o $@
+
+bin/test_escalation: tests/test_escalation.c src/core_policy.c src/agent_root.c src/identity_digit.c src/logging.c | bin
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_escalation.c src/core_policy.c src/agent_root.c src/identity_digit.c src/logging.c -o $@
+
+bin/test_lifecycle_isolation: tests/test_lifecycle_isolation.c src/stnlabz_abi/module_registry.c | bin
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_lifecycle_isolation.c src/stnlabz_abi/module_registry.c -o $@
+
+bin/test_core_failure: tests/test_core_failure.c src/core_policy.c src/agent_root.c src/identity_digit.c src/logging.c | bin
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_core_failure.c src/core_policy.c src/agent_root.c src/identity_digit.c src/logging.c -o $@
+
+bin/test_authority_boundary: tests/test_authority_boundary.c src/core_activation.c src/core_policy.c src/agent_root.c src/identity_digit.c src/stnlabz_abi/abi.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/logging.c | bin
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_authority_boundary.c src/core_activation.c src/core_policy.c src/agent_root.c src/identity_digit.c src/stnlabz_abi/abi.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/logging.c -o $@
