@@ -10,7 +10,8 @@ static int valid(const char *s)
 int digit_core_policy_evaluate(const digit_policy_request_t *request,
     digit_policy_result_t *result)
 {
-    char detail[640];
+    char detail[1024];
+    int written;
     const char *decision;
     const stnlabz_agent_root_t *root = stnlabz_agent_root_identity();
     if (!result || !digit_log_is_open()) return 0;
@@ -43,7 +44,7 @@ int digit_core_policy_evaluate(const digit_policy_request_t *request,
     }
     decision = result->decision == DIGIT_POLICY_ALLOW ? "ALLOW" :
         result->decision == DIGIT_POLICY_ESCALATE ? "ESCALATE" : "DENY";
-    (void)snprintf(detail, sizeof detail,
+    written = snprintf(detail, sizeof detail,
         "actor=%.127s mission=%.127s operation=%.127s module=%.63s decision=%s policy=%s reason=%s escalation=%.127s",
         request && valid(request->actor) ? request->actor : "unknown",
         request && valid(request->mission) ? request->mission : "unknown",
@@ -52,5 +53,6 @@ int digit_core_policy_evaluate(const digit_policy_request_t *request,
         decision, result->policy_id, result->reason,
         request && valid(request->escalation_target) ?
             request->escalation_target : "unknown");
+    if (written < 0 || (size_t)written >= sizeof detail) return 0;
     return digit_log_event("POLICY", decision, detail) && digit_log_sync();
 }
