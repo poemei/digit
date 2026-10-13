@@ -69,6 +69,33 @@ int digit_core_verify(stnlabz_module_registry_t *registry)
     return 1;
 }
 
+int digit_core_qualify(stnlabz_module_registry_t *registry)
+{
+    size_t i;
+    char detail[384];
+    if (!registry || !digit_log_is_open()) return 0;
+    for (i = 0; i < registry->count; ++i) {
+        stnlabz_module_record_t *r = &registry->modules[i];
+        stnlabz_module_result_t result;
+        if (r->state != STNLABZ_MODULE_STATE_UNVERIFIED) continue;
+        (void)snprintf(detail, sizeof detail, "id=%.63s state=UNVERIFIED min_tests=%u",
+            r->descriptor.id, (unsigned)STNLABZ_MODULE_MIN_TESTS);
+        if (!audit("QUALIFY_ATTEMPT", detail)) return 0;
+        result = stnlabz_module_registry_qualify(registry, r->descriptor.id);
+        (void)snprintf(detail, sizeof detail,
+            "id=%.63s result=%s state=%s executed=%u passed=%u failed=%u negative_executed=%d negative_passed=%d authorized=%d",
+            r->descriptor.id, stnlabz_module_result_string(result),
+            stnlabz_module_state_string(r->state),
+            r->qualification.tests_executed, r->qualification.tests_passed,
+            r->qualification.tests_failed,
+            r->qualification.negative_test_executed,
+            r->qualification.negative_test_passed, r->activation_authorized);
+        if (!audit(result == STNLABZ_MODULE_OK ? "QUALIFY_PASS" : "QUALIFY_REJECT",
+                   detail)) return 0;
+    }
+    return 1;
+}
+
 void digit_core_discovery_cleanup(stnlabz_module_registry_t *registry,
     stnlabz_module_loader_t *loader)
 {
@@ -78,6 +105,7 @@ void digit_core_discovery_cleanup(stnlabz_module_registry_t *registry,
         stnlabz_module_record_t *r = &registry->modules[registry->count - 1];
         if (r->state != STNLABZ_MODULE_STATE_DISCOVERED &&
             r->state != STNLABZ_MODULE_STATE_UNVERIFIED &&
+            r->state != STNLABZ_MODULE_STATE_QUALIFIED &&
             r->state != STNLABZ_MODULE_STATE_FAILED &&
             r->state != STNLABZ_MODULE_STATE_QUARANTINED) break;
         (void)stnlabz_module_registry_fail(registry, r->descriptor.id);
