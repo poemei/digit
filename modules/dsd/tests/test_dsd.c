@@ -109,10 +109,10 @@ int main(void){
   if(mkdir(tinydir,0700)!=0)return 2;
   snprintf(tinyfile,sizeof tinyfile,"%s/mock.c",tinydir);
   fp=fopen(tinyfile,"w");if(!fp)return 2;
-  fputs("int answer(void){return 42;}\\n",fp);fclose(fp);
+  fputs("int answer(void){return 42;}\n",fp);fclose(fp);
   snprintf(path,sizeof path,"%s/modules.log",logs);
   fp=fopen(path,"a");if(!fp)return 2;
-  fputs("2026-10-13T18:00:00Z MODULE FAILED id=mock file=modules/mock/src/mock.c line=1 reason=fixture_analysis\\n",fp);
+  fputs("2026-10-13T18:00:00Z MODULE FAILED id=mock file=modules/mock/src/mock.c line=1 reason=fixture_analysis\n",fp);
   fclose(fp);
   setenv("DIGIT_SOURCE_ROOT",tinyroot,1);
   diagnose("fixture_analysis");
