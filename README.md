@@ -16,11 +16,12 @@ Run `make clean && make && make test` first. Then install the Core executable an
 sudo make install
 ```
 
-The installer creates the Linux system account/group `digit:digit` when absent. All installed files and directories under `/opt/digit` are recursively owned by `digit:digit`. Existing module directories and logs are preserved; the executable and installed module files are updated. Core's existing module discovery and logging code are unchanged.
+The installer creates the Linux system account/group `digit:digit` when absent. All installed files and directories under `/opt/digit` are recursively owned by `digit:digit`. Existing module directories and logs are preserved; the executable and installed module files are updated. The executable is installed at `/opt/digit/bin/digit`, not `/opt/digit/digit`. Core's existing module discovery and logging code are unchanged.
 
 ```text
 /opt/digit/
-  digit                 # executable
+  bin/digit             # executable
+  bin/modules -> ../modules  # Core's executable-relative discovery
   run                   # launcher (sets /opt/digit as working directory)
   logs/digit.log         # mandatory operational log
   modules/
@@ -29,7 +30,7 @@ The installer creates the Linux system account/group `digit:digit` when absent. 
       bin/dsd.so
 ```
 
-Launch with `sudo -u digit /opt/digit/run`, or `sudo -u digit /opt/digit/run --mvc` for the previously accepted local test mode. **Use the launcher:** the current log contract is relative to the working directory, so invoking `/opt/digit/digit` directly from elsewhere would not guarantee `/opt/digit/logs/digit.log`. The executable-relative loader discovers `/opt/digit/modules/*/module.conf`, then each module's `bin/<id>.so`.
+Launch with `sudo -u digit /opt/digit/run`, or `sudo -u digit /opt/digit/run --mvc` for the previously accepted local test mode. **Use the launcher:** the current log contract is relative to the working directory, so invoking `/opt/digit/bin/digit` directly from elsewhere would not guarantee `/opt/digit/logs/digit.log`. The executable-relative loader follows `/opt/digit/bin/modules` → `/opt/digit/modules` and discovers `/opt/digit/modules/*/module.conf`, then each module's `bin/<id>.so`.
 
 Every module remains independently buildable. To build/install only DSD: `make -C modules/dsd` and `sudo make -C modules/dsd install`. The root install target delegates to each present `modules/*/module.conf` module Makefile. Discovery and qualification do not imply activation. No Core source or ABI changes are required to add a module.
 
