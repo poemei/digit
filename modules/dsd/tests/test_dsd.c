@@ -197,7 +197,7 @@ int main(void){
         strstr(report.text,"Provider: modules/code_reference/src/code_reference.c:8")&&
         strstr(report.text,"Provider handler: code_reference_analyze")&&
         strstr(report.text,"Handler definition: modules/code_reference/src/code_reference.c:2")&&
-        strstr(report.text,"Internal call: analyze_c")){detected=1;break;}
+        strstr(report.text,"\n\nInternal call: analyze_c")){detected=1;break;}
     }
     check(detected,"integration claim surfaces despite unresolved README version drift");
     /* Existing version drift must remain suppressed once reported. */
