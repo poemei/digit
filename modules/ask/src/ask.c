@@ -3,6 +3,7 @@
 #include <strings.h>
 #include "stnlabz_abi/module.h"
 #include "ask_context.h"
+#include "corpus_lookup.h"
 static const stnlabz_module_host_t *host;
 static stnlabz_module_result_t answer(const void *request,size_t length,
  void *response,size_t capacity,size_t *used,void *context){
@@ -49,6 +50,36 @@ static stnlabz_module_result_t answer(const void *request,size_t length,
     return STNLABZ_MODULE_ERR_NOT_FOUND;
    *used=n;return STNLABZ_MODULE_OK;
   }
+ }else if(!strncasecmp(s,"what is ",8)){
+  const char *term=s+8;size_t n=strlen(term),used_lookup=0;
+  digit_corpus_lookup_request_t query={0};
+  digit_corpus_lookup_response_t found={0};
+  int written;
+  while(n&&(term[n-1]=='?'||term[n-1]=='.'||term[n-1]==' '))n--;
+  if(!n||n>=sizeof query.term)
+   reply="Corpus: invalid knowledge query.";
+  else if(!host||!host->invoke_service)
+   reply="Corpus service is unavailable.";
+  else {
+   memcpy(query.term,term,n);
+   if(host->invoke_service("corpus.lookup",&query,sizeof query,
+        &found,sizeof found,&used_lookup)!=STNLABZ_MODULE_OK||
+      used_lookup!=sizeof found)
+    reply="Corpus service is unavailable.";
+   else if(!found.found)
+    reply="Corpus: no matching knowledge record.";
+   else if(!memchr(found.text,0,sizeof found.text)||
+           !memchr(found.source,0,sizeof found.source)||
+           !memchr(found.id,0,sizeof found.id))
+    return STNLABZ_MODULE_ERR_INVALID_STATE;
+   else {
+    written=snprintf(out,capacity,"%s [Corpus: %s; source: %s]",
+                     found.text,found.id,found.source);
+    if(written<0||(size_t)written>=capacity)
+     reply="Corpus record exceeds this interface's response limit.";
+    else {*used=(size_t)written+1;return STNLABZ_MODULE_OK;}
+   }
+  }
  }else
   reply="I received your message. General language interpretation is not connected yet; I cannot give a grounded answer to that request.";
  if(strlen(reply)+1>capacity)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
@@ -73,7 +104,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
- d.version_major=0;d.version_minor=1;d.version_patch=3;
+ d.version_major=0;d.version_minor=1;d.version_patch=4;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
