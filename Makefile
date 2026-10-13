@@ -63,9 +63,9 @@ install: bin/digit
 
 install-modules:
 	@set -eu; for manifest in modules/*/module.conf; do \
-		[ -f "$manifest" ] || continue; \
-		dir=$(dirname "$manifest"); \
-		$(MAKE) -C "$dir" install PREFIX=/opt/digit OWNER=digit GROUP=digit; \
+		[ -f "$$manifest" ] || continue; \
+		dir=$$(dirname "$$manifest"); \
+		$(MAKE) -C "$$dir" install PREFIX=/opt/digit OWNER=digit GROUP=digit; \
 	done
 
 test: all bin/loader_valid.so bin/loader_legacy.so
