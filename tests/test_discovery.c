@@ -3,6 +3,11 @@
 #include "core_discovery.h"
 #include "logging.h"
 static unsigned count, failed;
+static stnlabz_module_result_t never_qualify(stnlabz_module_qualification_result_t *q)
+{
+    (void)q;
+    return STNLABZ_MODULE_ERR_QUALIFICATION;
+}
 static void check(int ok, const char *reason)
 {
     ++count;
@@ -46,7 +51,7 @@ int main(int argc, char **argv)
         strcpy(descriptor.name, "Unsupported ABI");
         descriptor.required_core_api_major = STNLABZ_MODULE_API_MAJOR + 1;
         /* Discovery API enforces callback presence, verification only checks ABI. */
-        descriptor.qualify = NULL; /* verification does not invoke qualification */
+        descriptor.qualify = never_qualify; /* verification must never call this */
         check(stnlabz_module_registry_discover(&registry, &descriptor) ==
               STNLABZ_MODULE_OK, "register incompatible mock descriptor");
         check(digit_core_verify(&registry), "reject candidate without stopping Core");
