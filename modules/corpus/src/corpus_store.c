@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
+#include <sys/types.h>
 #include "corpus_store.h"
 static int copy(char *dst,size_t cap,const char *src){
  size_t n=strlen(src);
