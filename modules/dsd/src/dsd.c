@@ -1021,12 +1021,14 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
   return STNLABZ_MODULE_ERR_START_FAILED;
  }
  if(!h->register_command("diagnose",diagnose_command,NULL)){
+  (void)h->unregister_service("dsd.scoped",NULL);
   (void)h->unregister_service("dsd.watch",NULL);
   (void)h->unregister_service("dsd.report",NULL);
   return STNLABZ_MODULE_ERR_START_FAILED;
  }
  if(!h->register_command("repair-doc",repair_doc_command,NULL)){
   (void)h->unregister_command("diagnose",NULL);
+  (void)h->unregister_service("dsd.scoped",NULL);
   (void)h->unregister_service("dsd.watch",NULL);
   (void)h->unregister_service("dsd.report",NULL);
   return STNLABZ_MODULE_ERR_START_FAILED;
