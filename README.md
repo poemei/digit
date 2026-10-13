@@ -93,11 +93,11 @@ The production executable now links the accepted Router, Bootstrap, Expression M
 
 **Security boundary:** The local development CLI is an operator-selected test mode, *not* authenticated transport or general-purpose permission delegation. Its policy context is an in-process assertion; it does not independently establish user identity. Do not expose this mode as a remote interface. Capability modules are still built in for this explicit development integration and are not yet separately deployed dynamically loaded packages. The automated live console integration smoke test is an additional 25th suite and does not reopen previous operator-accepted test records.
 
-## Phase 5 — DSD 0.1.0 (qualification pending)
+## Phase 5 — DSD independent module source (pending operator verification)
 
-The operator authorized DSD as the first dedicated diagnostic module. `include/dsd.h` and `src/dsd.c` implement its ABI 1.5 `dsd.report` service. A bounded observation record provides request ID, decision, reason, and source location **as recorded at the decision point**. DSD formats existing evidence and explicitly labels absent locations `not_recorded`; it cannot run Models, route requests, grant permissions, diagnose unobserved code, or repair anything.
+`modules/dsd/` holds DSD's independent `module.conf`, sources, and Makefile. From that directory, `make` builds `bin/dsd.so` without rebuilding or changing Digit's Core. The existing ABI 1.5 loader reads `module.conf` and loads the shared object from the executable-relative `bin/modules/dsd/bin/dsd.so` after deployment. Core discovers and qualifies the module, but does not automatically activate it. An authorized Router service connection requires separately implemented configuration through normal module lifecycle, not Core modification.
 
-The explicit local `./bin/digit --mvc` mode now also activates DSD as an ordinary capability module under the same Core policy and lifecycle gates. Use `/diagnose` after an expression to show the most recent Router and Model observations without repeating that request. The console hands `/diagnose` to the same Router used for `/lookup`, Router selects `dsd.report`, and Rendering presents the report. DSD is **not** invoked directly by the console or inserted as a mandatory checkpoint. This is a development demonstration that forwards in-process observations to DSD; no complete cross-process historical tracing, authenticated external access, or independent binary deployment is claimed. The first dedicated DSD suite increases the aggregate from the accepted **25 suites / 1,532 assertions** to **26 suites** for operator qualification. The ordinary `./bin/digit` Core startup remains unchanged.
+The previously attempted DSD linkage into `src/mvc_console.c`, Bootstrap and Rendering has been reverted. The accepted 25-suite baseline is preserved for retest. **Do not treat DSD as a built-in Core capability.**
 
 ## Status
 
