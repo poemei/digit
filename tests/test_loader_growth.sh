@@ -4,7 +4,7 @@ root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 i=0
-while [ "$i" -lt 48 ]; do
+while [ "$i" -lt 65 ]; do
     id=$(printf 'grow-%03d' "$i")
     "${CC:-cc}" -I"$root/include" -I"$root/include/stnlabz_abi" -std=c11 -fPIC -shared \
       -DTEST_EXPORT -DTEST_MODULE_ID="\"$id\"" \
