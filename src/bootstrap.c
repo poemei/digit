@@ -30,7 +30,9 @@ int digit_bootstrap_start(digit_bootstrap_t *b,stnlabz_module_registry_t *regist
  b->registry=registry;b->ready=1;return 1;
 fail:
  /* Stop on partial activation before dropping the registry entry. */
- (void)digit_core_stop_all(registry);
+ if (stnlabz_module_registry_find(registry,"router") &&
+     stnlabz_module_registry_find(registry,"router")->state==STNLABZ_MODULE_STATE_ACTIVE)
+  (void)digit_core_stop(registry,"router");
  (void)stnlabz_module_registry_unregister(registry,"router");
  digit_router_reset();
  (void)record("FAILED","status=start_rejected");
@@ -51,7 +53,7 @@ int digit_bootstrap_stop(digit_bootstrap_t *b){
  if(!b||!b->ready||!b->registry||!digit_log_is_open())return 0;
  router=stnlabz_module_registry_find(b->registry,"router");
  if(!router||router->state!=STNLABZ_MODULE_STATE_ACTIVE)return 0;
- if(!digit_core_stop_all(b->registry))return 0;
+ if(!digit_core_stop(b->registry,"router"))return 0;
  if(!record("STOPPED","status=router_stopped"))return 0;
  b->ready=0;b->registry=NULL;digit_router_reset();return 1;
 }
