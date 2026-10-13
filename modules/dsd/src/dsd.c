@@ -28,7 +28,7 @@ static void extract_token(const char *line,const char *key,char *out,size_t cap)
 }
 static int evidence_problem(const char *line){
  return strstr(line,"FAILED")||strstr(line,"FAIL ")||strstr(line,"REJECT")||
- strstr(line,"DENIED")||strstr(line,"ERROR")||strstr(line,"outcome=5")||
+ strstr(line,"DENIED")||strstr(line,"ERROR")||strstr(line,"outcome=2")||strstr(line,"outcome=3")||strstr(line,"outcome=5")||
  strstr(line,"outcome=4")||strstr(line,"result=ERR_")||
  strstr(line,"status=failed");
 }
@@ -54,14 +54,13 @@ static stnlabz_module_result_t diagnose_command(
  char file[128]={0},lineno[24]={0},reason[256],message[1024],term[128]={0};
  char candidate_id[64],candidate_module[64];
  unsigned long matches=0;
- int found=0;
+ int found=0,last_request=0;
  const char *args;
  (void)context;
  if(!command||!reply)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  args=command->arguments;
  while(*args==' ')args++;
- if(*args&&!strcmp(args,"my last request"))args="";
- if(*args&&!strcmp(args,"last"))args="";
+ if(!strcmp(args,"my last request")||!strcmp(args,"last")){last_request=1;args="";}
  if(*args){
   size_t n=strlen(args);
   if(n>=sizeof term)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
@@ -78,7 +77,9 @@ static stnlabz_module_result_t diagnose_command(
    int c;while((c=fgetc(log))!='\n'&&c!=EOF){}
    continue; /* No truncated or fabricated evidence. */
   }
-  if(term[0]){
+  if(last_request){
+   if(!strstr(line,"ROUTER DISPATCH")||strstr(line,"route=/diagnose "))continue;
+  }else if(term[0]){
    if(!strstr(line,term))continue;
   }else if(!evidence_problem(line))continue;
   matches++;
@@ -99,7 +100,7 @@ static stnlabz_module_result_t diagnose_command(
    term[0]?"matching":"failure");
   return emit(reply,reply_context,message)?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
  }
- selected[strcspn(selected,"\\n")]=0;
+ selected[strcspn(selected,"\n")]=0;
  component_name(selected,module,sizeof module);
  extract_token(selected,"id=",candidate_id,sizeof candidate_id);
  if(identifier(candidate_id)&&strcmp(candidate_id,"unknown")==0)candidate_id[0]=0;
@@ -112,6 +113,13 @@ static stnlabz_module_result_t diagnose_command(
  extract_token(selected,"file=",file,sizeof file);
  extract_token(selected,"line=",lineno,sizeof lineno);
  extract_token(selected,"reason=",reason,sizeof reason);
+ if(strstr(selected,"ROUTER DISPATCH")){
+  (void)snprintf(module,sizeof module,"router");
+  if(strstr(selected,"outcome=2"))(void)snprintf(reason,sizeof reason,"no_registered_route");
+  else if(strstr(selected,"outcome=3"))(void)snprintf(reason,sizeof reason,"service_unavailable");
+  else if(strstr(selected,"outcome=1"))(void)snprintf(reason,sizeof reason,"request_denied");
+  else if(strstr(selected,"outcome=5"))(void)snprintf(reason,sizeof reason,"dispatch_failed");
+ }
  if(!emit(reply,reply_context,""))return STNLABZ_MODULE_ERR_INVALID_STATE;
  (void)snprintf(message,sizeof message,"Module: %s",module);
  if(!emit(reply,reply_context,message))return STNLABZ_MODULE_ERR_INVALID_STATE;
@@ -200,7 +208,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=3;d.version_patch=0;
+ d.version_major=0;d.version_minor=3;d.version_patch=1;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
