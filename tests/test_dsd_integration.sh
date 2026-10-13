@@ -14,7 +14,7 @@ cp "$root/modules/corpus/module.conf" "$tmp/bin/modules/corpus/module.conf"
 cd "$tmp"
 mkdir -p logs
 printf '2026-10-13T03:51:47Z MODULE FAILED id=dsd file=modules/dsd/src/dsd.c line=42 reason=fixture_failure\n' >logs/modules.log
-printf 'diagnose fixture_failure\ndiagnose no_such_record\nexpress purrs\nexpress puuurs\ndiagnose my last request\n/quit\n' | DIGIT_SOURCE_ROOT="$root" ./bin/digit >out.txt 2>err.txt
+printf 'diagnose fixture_failure\ndiagnose no_such_record\nexpress purrs\nexpress puuurs\ndiagnose my last request\nDigit, hi\ndiagnose my last request\n/quit\n' | DIGIT_SOURCE_ROOT="$root" ./bin/digit >out.txt 2>err.txt
 checks=0;failures=0
 expect(){
  checks=$((checks+1))
@@ -40,6 +40,8 @@ expect 'Module: router' out.txt
 expect "Code: $root/src/router.c:" out.txt
 expect 'Module: router' out.txt
 expect 'route=/express' out.txt
+expect 'route=/Digit,' out.txt
+expect 'Finding: Router found no registered command for /Digit,' out.txt
 expect 'ROUTER DISPATCH request=console-4 route=/express service=command.express outcome=0' logs/digit.log
 expect 'ROUTER DISPATCH request=console-1 route=/diagnose service=command.diagnose outcome=0' logs/digit.log
 expect 'MODULE HOTLOAD_ACTIVE module=dsd' logs/modules.log
