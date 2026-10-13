@@ -48,7 +48,8 @@ static int analyze_c(const char *source,code_reference_response_t *r){
  while(offset<length){
   n=write(in[1],source+offset,length-offset);
   if(n<0){if(errno==EINTR)continue;break;}
-  if(n==0)break;offset+=(size_t)n;
+  if(n==0)break;
+  offset+=(size_t)n;
  }
  close(in[1]);
  while((n=read(out[0],chunk,sizeof chunk))>0){
