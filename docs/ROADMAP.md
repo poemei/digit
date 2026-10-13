@@ -128,6 +128,10 @@ After operator acceptance of Core and explicit authorization, implement minimal 
 
 **Exit gate:** end-to-end demonstration **Core → Router → Model → Rendering** with exactly the modules needed.
 
+### Post-Phase 4 — Explicit local MVC process integration (pending acceptance)
+
+The operator authorized integration of the accepted MVC components into the running executable. The `--mvc` local development console starts Core-qualified, explicitly activated Model/View/Router components through the common ABI contract and performs end-to-end local request/response with mandatory logs. Default `./bin/digit` remains unchanged. This provides real process-level MVC evidence, not merely isolated module harness tests, but **it is not an authenticated general-purpose interface** and modules remain linked into the executable for the development trial. The new process-level smoke test is suite 25; operator testing and explicit acceptance are required before treating this integration as accepted.
+
 ### Phase 5 — DSD: observe the actual path
 
 - [ ] Implement DSD as a diagnostic capability, not an execution controller.
