@@ -688,11 +688,12 @@ static int documented_integration_drift(const char *root,char *alert,size_t cap)
   "Review integration behavior before approving. No documentation was modified.");
  return 1;
 }
-static int documentation_drift(const char *root,char *alert,size_t capacity){
+static int documentation_drift(const char *root,char *alert,size_t capacity,unsigned issue){
  const char *modules[]={"code_reference","dsd"};
  const char *sources[]={"src/code_reference.c","src/dsd.c"};
  size_t i;
  for(i=0;i<sizeof modules/sizeof modules[0];i++){
+  if(i!=issue)continue;
   char code[1024],readme[1024],first[256],label[128];
   FILE *fp;unsigned major=0,minor=0,patch=0,dm,dn,dp;
   int has_version;
@@ -713,7 +714,7 @@ static int documentation_drift(const char *root,char *alert,size_t capacity){
    i==0?"Code Reference":"DSD",major,minor,patch);
   return 1;
  }
- return documented_integration_drift(root,alert,capacity);
+ return issue==2?documented_integration_drift(root,alert,capacity):0;
 }
 static stnlabz_module_result_t dsd_watch_poll(const void *request,size_t request_size,
  void *response,size_t capacity,size_t *response_used,void *context){
@@ -732,17 +733,24 @@ static stnlabz_module_result_t dsd_watch_poll(const void *request,size_t request
   gather_sources(root,"modules",0);
  }
  read_ledger();
- if(!watch_ticks||watch_ticks%12==1){
-  char drift[DSD_WATCH_TEXT_MAX]={0};
-  if(documentation_drift(root,drift,sizeof drift)){
-   /* One evidence-backed drift notice per process, not every poll. */
-   static unsigned long last_doc_alert;
-   unsigned long fingerprint=source_fingerprint(drift,strlen(drift));
-   if(last_doc_alert!=fingerprint){
-    last_doc_alert=fingerprint;
-    snprintf(out->text,sizeof out->text,"%s",drift);
-    return STNLABZ_MODULE_OK;
-   }
+ /* Rotate independent documentation findings. A stale version must not
+    prevent another supported claim mismatch from being reported. */
+ if(watch_ticks%12==1){
+  static unsigned long reported[3];
+  static unsigned cursor;
+  unsigned item;
+  for(item=0;item<3;item++){
+   unsigned slot=(cursor+item)%3;
+   char drift[DSD_WATCH_TEXT_MAX]={0};
+   if(documentation_drift(root,drift,sizeof drift,slot)){
+    unsigned long fingerprint=source_fingerprint(drift,strlen(drift));
+    if(reported[slot]!=fingerprint){
+     reported[slot]=fingerprint;
+     cursor=(slot+1)%3;
+     snprintf(out->text,sizeof out->text,"%s",drift);
+     return STNLABZ_MODULE_OK;
+    }
+   }else reported[slot]=0;
   }
  }
  while(watched_count&&checks++<DSD_WATCH_CHECKS){
@@ -820,7 +828,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=3;d.version_patch=16;
+ d.version_major=0;d.version_minor=3;d.version_patch=17;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
