@@ -714,10 +714,32 @@ static unsigned handler_analyze_call_line(const char *path,unsigned start){
  }
  fclose(fp);return found;
 }
+/* A narrow implementation fact: locate fork() within analyze_c body.
+   This identifies a source call only, never proof the branch executes. */
+static unsigned analyze_c_fork_line(const char *path,unsigned start){
+ FILE *fp;char line[2048];unsigned number=0;
+ int entered=0,depth=0;
+ if(!start)return 0;
+ fp=fopen(path,"r");if(!fp)return 0;
+ while(fgets(line,sizeof line,fp)){
+  const char *p;number++;
+  if(number<start)continue;
+  if(number>start+110)break;
+  if(entered&&depth>0&&strstr(line,"fork()")&&!strstr(line,"//")){
+   fclose(fp);return number;
+  }
+  for(p=line;*p;p++){
+   if(*p=='{'){entered=1;depth++;}
+   else if(*p=='}'&&entered)depth--;
+  }
+  if(entered&&depth<=0)break;
+ }
+ fclose(fp);return 0;
+}
 static int documented_integration_drift(const char *root,char *alert,size_t cap){
  char readme[1024],dsd[1024],provider[1024],line[2048];
  FILE *fp;int claim=0;unsigned number=0,call_line=0,registration_line=0;
- char handler[96]={0},callee_detail[180];unsigned definition_line=0,internal_call_line=0,callee_definition_line=0;
+ char handler[96]={0},callee_detail[180];unsigned definition_line=0,internal_call_line=0,callee_definition_line=0,fork_line=0;
  if(snprintf(readme,sizeof readme,"%s/modules/code_reference/README.md",root)>=(int)sizeof readme||
     snprintf(dsd,sizeof dsd,"%s/modules/dsd/src/dsd.c",root)>=(int)sizeof dsd||
     snprintf(provider,sizeof provider,"%s/modules/code_reference/src/code_reference.c",root)>=(int)sizeof provider)return 0;
@@ -763,6 +785,7 @@ static int documented_integration_drift(const char *root,char *alert,size_t cap)
  if(!definition_line)return 0;
  internal_call_line=handler_analyze_call_line(provider,definition_line);
  if(internal_call_line)callee_definition_line=handler_definition_line(provider,"analyze_c");
+ if(callee_definition_line)fork_line=analyze_c_fork_line(provider,callee_definition_line);
  if(callee_definition_line)
   snprintf(callee_detail,sizeof callee_detail,"analyze_c at modules/code_reference/src/code_reference.c:%u (lexically located; execution not established)",callee_definition_line);
  else snprintf(callee_detail,sizeof callee_detail,"not established");
@@ -776,6 +799,7 @@ static int documented_integration_drift(const char *root,char *alert,size_t cap)
   "Handler definition: modules/code_reference/src/code_reference.c:%u\n\n"
   "%s"
   "Callee definition: %s\n"
+  "%s"
   "Document: modules/code_reference/README.md\n"
   "Recommended Markdown change: Replace 'No Core changes or DSD integration.' "
   "with 'DSD invokes the independently registered code_reference.analyze service "
@@ -783,7 +807,8 @@ static int documented_integration_drift(const char *root,char *alert,size_t cap)
   "Registration and invocation establish an interface relationship, not runtime activation. "
   "No documentation was modified.",call_line,registration_line,handler,definition_line,
   internal_call_line?"Internal call: analyze_c (lexically present; execution not established)\n":"Internal call: not established\n",
-  callee_detail);
+  callee_detail,
+  fork_line?"Implementation evidence: analyze_c contains a fork() call (source only; execution not established)\n":"Implementation evidence: fork() call not established\n");
  return 1;
 }
 static int documentation_drift(const char *root,char *alert,size_t capacity,unsigned issue){
@@ -927,7 +952,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=3;d.version_patch=24;
+ d.version_major=0;d.version_minor=3;d.version_patch=25;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
