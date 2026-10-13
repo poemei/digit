@@ -150,7 +150,7 @@ int main(int argc, char **argv) {
         fclose(f);
     }
     check(activated == 50, "activation results audited");
-    check(stopped == 49, "successful stops audited");
+    check(stopped == 0, "routine successful stops omitted from operator log");
     check(denials >= 4, "denials and failure events audited");
     printf("Core activation tests: %u executed, %u failed\n", checks, failures);
     return failures != 0;
