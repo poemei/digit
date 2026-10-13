@@ -58,16 +58,24 @@ static stnlabz_module_result_t invoke(const char *service,const void *request,si
  return commands[i].handler((const stnlabz_module_command_t *)request,reply,NULL,commands[i].context);
  return STNLABZ_MODULE_ERR_NOT_FOUND;
 }
-static stnlabz_module_service_handler_fn reserved_handler;
-static const char *reserved_name;
-static void *reserved_context;
+typedef struct {char name[STNLABZ_MODULE_SERVICE_NAME_MAX];stnlabz_module_service_handler_fn handler;void *context;} service_entry_t;
+static service_entry_t services[32];
+static size_t service_count;
 static int register_service(const char *name,stnlabz_module_service_handler_fn handler,void *ctx){
- if(!name||!handler||reserved_handler)return 0;
- reserved_name=name;reserved_handler=handler;reserved_context=ctx;return 1;
+ size_t i;
+ if(!name||!name[0]||strlen(name)>=sizeof services[0].name||!handler||service_count>=32)return 0;
+ for(i=0;i<service_count;i++)if(!strcmp(services[i].name,name))return 0;
+ (void)snprintf(services[service_count].name,sizeof services[0].name,"%s",name);
+ services[service_count].handler=handler;services[service_count++].context=ctx;return 1;
 }
 static int unregister_service(const char *name,void *ctx){
- if(!reserved_handler||strcmp(name,reserved_name)||ctx!=reserved_context)return 0;
- reserved_handler=NULL;reserved_name=NULL;reserved_context=NULL;return 1;
+ size_t i;
+ if(!name)return 0;
+ for(i=0;i<service_count;i++)if(!strcmp(services[i].name,name)&&services[i].context==ctx){
+  if(i+1<service_count)memmove(&services[i],&services[i+1],(service_count-i-1)*sizeof services[0]);
+  --service_count;memset(&services[service_count],0,sizeof services[0]);return 1;
+ }
+ return 0;
 }
 static const stnlabz_module_host_t host={
  NULL,NULL,register_command,unregister_command,register_service,unregister_service,invoke
@@ -83,7 +91,7 @@ int digit_mvc_console(void){
  int good=1,router_active=0;
  stnlabz_module_registry_init(&registry);
  stnlabz_module_loader_init(&loader);
- digit_router_reset();command_count=0;
+ digit_router_reset();command_count=0;service_count=0;
  if(!digit_log_open()){fputs("Digit: mandatory log unavailable\n",stderr);return 1;}
  if(!digit_log_event("CONSOLE","START","mode=local")||!digit_log_sync()){good=0;goto done;}
  if(stnlabz_module_discovery_get_path(directory,sizeof directory)!=STNLABZ_MODULE_OK ||
