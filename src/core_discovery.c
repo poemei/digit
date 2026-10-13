@@ -51,7 +51,8 @@ int digit_core_discover(stnlabz_module_registry_t *registry,
     if (!audit("SCAN_START", "status=initiated")) return 0;
     rc = stnlabz_module_discovery_scan(registry, loader, path, report);
     if (rc == STNLABZ_MODULE_ERR_NOT_FOUND) {
-        return audit("SCAN_FAILED", "reason=directory_unavailable");
+        (void)audit("SCAN_FAILED", "reason=directory_unavailable");
+        return 0;
     }
     if (rc != STNLABZ_MODULE_OK) {
         (void)snprintf(detail, sizeof detail, "reason=%s",
