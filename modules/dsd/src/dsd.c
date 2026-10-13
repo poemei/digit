@@ -769,7 +769,7 @@ static int documented_integration_drift(const char *root,char *alert,size_t cap)
   "Consumer: modules/dsd/src/dsd.c:%u\n"
   "Provider: modules/code_reference/src/code_reference.c:%u\n"
   "Provider handler: %s (registered callback, execution not established)\n"
-  "Handler definition: modules/code_reference/src/code_reference.c:%u\n"
+  "Handler definition: modules/code_reference/src/code_reference.c:%u\n\n"
   "%s"
   "Document: modules/code_reference/README.md\n"
   "Recommended Markdown change: Replace 'No Core changes or DSD integration.' "
