@@ -5,6 +5,7 @@
 #include "core_discovery.h"
 #include "core_activation.h"
 #include "core_inventory.h"
+#include "core_trace.h"
 #include "stnlabz_abi/module_registry.h"
 #include "stnlabz_abi/module_loader.h"
 #include "runtime.h"
@@ -26,6 +27,7 @@ int digit_initialize(void)
         fprintf(stderr, "[CORE] Cannot open mandatory log: %s\n", DIGIT_LOG_PATH);
         return 1;
     }
+    (void)digit_trace_begin();
     if (!digit_log_event("CORE", "START", "status=initiated")) goto log_failure;
     root = stnlabz_agent_root_identity();
     if (!stnlabz_agent_root_validate(root)) {
