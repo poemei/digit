@@ -16,6 +16,11 @@ int main(void) {
     check(!strcmp(root->agent_id,"digit") && !strcmp(root->agent_name,"Digit"),"Digit identity");
     check(root->relation==STNLABZ_ROOT_RELATION_OLDER_SISTER &&
           !strcmp(root->related_agent_id,"ezra"),"sibling lineage");
+    check(strstr(root->core_modification_rule,"SHALL NOT modify")!=NULL &&
+          strstr(root->core_modification_rule,"highest-level STN-LABZ")!=NULL,
+          "Core modification restriction is visible in compiled Root");
+    bad=*root;bad.core_modification_rule="Core self-update allowed";
+    check(!stnlabz_agent_root_validate(&bad),"Core authority rule override rejected");
     check(!stnlabz_agent_root_validate(NULL),"null rejected");
     bad=*root;bad.schema_major=99;check(!stnlabz_agent_root_validate(&bad),"schema rejected");
     bad=*root;bad.agent_id="";check(!stnlabz_agent_root_validate(&bad),"empty id rejected");
