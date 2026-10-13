@@ -640,6 +640,46 @@ static void gather_sources(const char *root,const char *relative,int depth){
  }
  closedir(dir);
 }
+/* Conservative project-documentation consistency check. Source descriptor
+   version is compared against an explicitly versioned module README heading.
+   This is evidence of drift only, not general documentation comprehension. */
+static int version_from_source(const char *path,unsigned *major,unsigned *minor,unsigned *patch){
+ FILE *fp;char line[1024];int found=0;
+ fp=fopen(path,"r");if(!fp)return 0;
+ while(fgets(line,sizeof line,fp)){
+  unsigned x;
+  const char *p;
+  if((p=strstr(line,"d.version_major="))!=NULL&&sscanf(p,"d.version_major=%u;",&x)==1){*major=x;found|=1;}
+  if((p=strstr(line,"d.version_minor="))!=NULL&&sscanf(p,"d.version_minor=%u;",&x)==1){*minor=x;found|=2;}
+  if((p=strstr(line,"d.version_patch="))!=NULL&&sscanf(p,"d.version_patch=%u;",&x)==1){*patch=x;found|=4;}
+ }
+ fclose(fp);return found==7;
+}
+static int documentation_drift(const char *root,char *alert,size_t capacity){
+ const char *modules[]={"code_reference","dsd"};
+ const char *sources[]={"src/code_reference.c","src/dsd.c"};
+ size_t i;
+ for(i=0;i<sizeof modules/sizeof modules[0];i++){
+  char code[1024],readme[1024],first[256],label[128];
+  FILE *fp;unsigned major=0,minor=0,patch=0,dm,dn,dp;
+  int has_version;
+  if(snprintf(code,sizeof code,"%s/modules/%s/%s",root,modules[i],sources[i])>=(int)sizeof code||
+     snprintf(readme,sizeof readme,"%s/modules/%s/README.md",root,modules[i])>=(int)sizeof readme)continue;
+  if(!version_from_source(code,&major,&minor,&patch))continue;
+  fp=fopen(readme,"r");if(!fp)continue;
+  has_version=fgets(first,sizeof first,fp)!=NULL;
+  fclose(fp);
+  if(!has_version)continue;
+  if(snprintf(label,sizeof label,"# %s %%u.%%u.%%u",i==0?"Code Reference":"DSD")>=(int)sizeof label)continue;
+  if(sscanf(first,label,&dm,&dn,&dp)!=3)continue;
+  if(major==dm&&minor==dn&&patch==dp)continue;
+  snprintf(alert,capacity,
+   "DSD DOCUMENTATION DRIFT\nModule: %s\nEvidence: source descriptor declares %u.%u.%u; README heading declares %u.%u.%u.\nCode: modules/%s/%s\nDocument: modules/%s/README.md\nRecommended fix: Review the source descriptor and module behavior, then propose a README version update for human approval. Documentation was not modified.",
+   modules[i],major,minor,patch,dm,dn,dp,modules[i],sources[i],modules[i]);
+  return 1;
+ }
+ return 0;
+}
 static stnlabz_module_result_t dsd_watch_poll(const void *request,size_t request_size,
  void *response,size_t capacity,size_t *response_used,void *context){
  digit_dsd_watch_response_t *out=response;
@@ -657,6 +697,19 @@ static stnlabz_module_result_t dsd_watch_poll(const void *request,size_t request
   gather_sources(root,"modules",0);
  }
  read_ledger();
+ if(!watch_ticks||watch_ticks%12==1){
+  char drift[DSD_WATCH_TEXT_MAX]={0};
+  if(documentation_drift(root,drift,sizeof drift)){
+   /* One evidence-backed drift notice per process, not every poll. */
+   static unsigned long last_doc_alert;
+   unsigned long fingerprint=source_fingerprint(drift,strlen(drift));
+   if(last_doc_alert!=fingerprint){
+    last_doc_alert=fingerprint;
+    snprintf(out->text,sizeof out->text,"%s",drift);
+    return STNLABZ_MODULE_OK;
+   }
+  }
+ }
  while(watched_count&&checks++<DSD_WATCH_CHECKS){
   watched_file_t *entry=&watched[watch_cursor++%watched_count];
   char full[1024];struct stat st;FILE *fp;
@@ -732,7 +785,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=3;d.version_patch=13;
+ d.version_major=0;d.version_minor=3;d.version_patch=14;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
