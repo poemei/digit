@@ -3,7 +3,7 @@ CFLAGS ?= -std=c11 -Wall -Wextra -Wpedantic -O2
 CPPFLAGS += -Iinclude -Iinclude/stnlabz_abi
 
 .PHONY: all test clean
-all: bin/digit bin/test_agent_root bin/test_runtime bin/test_module_manager bin/test_logging bin/test_abi_compat bin/test_loader bin/test_discovery
+all: bin/digit bin/test_agent_root bin/test_runtime bin/test_module_manager bin/test_logging bin/test_abi_compat bin/test_loader bin/test_discovery bin/test_registry_growth bin/test_loader_growth
 
 bin:
 	mkdir -p bin
@@ -37,6 +37,12 @@ bin/loader_legacy.so: tests/fixtures/abi_loader_fixture.c include/stnlabz_abi/mo
 
 bin/test_discovery: tests/test_discovery.c src/core_discovery.c src/stnlabz_abi/module_discovery_linux.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/stnlabz_abi/loader_linux.c src/logging.c | bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_discovery.c src/core_discovery.c src/stnlabz_abi/module_discovery_linux.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/stnlabz_abi/loader_linux.c src/logging.c -ldl -o $@
+
+bin/test_registry_growth: tests/test_registry_growth.c src/stnlabz_abi/module_registry.c | bin
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_registry_growth.c src/stnlabz_abi/module_registry.c -Wl,--wrap=realloc -o $@
+
+bin/test_loader_growth: tests/test_loader_growth.c src/stnlabz_abi/loader_linux.c | bin
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_loader_growth.c src/stnlabz_abi/loader_linux.c -ldl -o $@
 
 test: all bin/loader_valid.so bin/loader_legacy.so
 	@sh tests/run_all.sh
