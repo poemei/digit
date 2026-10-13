@@ -13,7 +13,7 @@ cp "$root/modules/corpus/bin/corpus.so" "$tmp/bin/modules/corpus/bin/corpus.so"
 cp "$root/modules/corpus/module.conf" "$tmp/bin/modules/corpus/module.conf"
 cd "$tmp"
 mkdir -p logs
-printf '2026-10-13T03:51:47Z MODULE FAILED id=dsd file=modules/dsd/src/dsd.c line=42 reason=fixture_failure\n' >logs/digit.log
+printf '2026-10-13T03:51:47Z MODULE FAILED id=dsd file=modules/dsd/src/dsd.c line=42 reason=fixture_failure\n' >logs/modules.log
 printf 'diagnose fixture_failure\ndiagnose no_such_record\nexpress purrs\nexpress puuurs\ndiagnose my last request\n/quit\n' | ./bin/digit >out.txt 2>err.txt
 checks=0;failures=0
 expect(){
@@ -31,6 +31,7 @@ expect 'MODULE HOTLOAD_ACTIVE module=corpus' logs/modules.log
 expect 'MODULE STOP_PASS module=expression' logs/modules.log
 expect 'MODULE STOP_PASS module=corpus' logs/modules.log
 expect 'Log: 2026-10-13T03:51:47Z MODULE FAILED' out.txt
+expect 'MODULE FAILED id=dsd file=modules/dsd/src/dsd.c' logs/modules.log
 expect 'Code: modules/dsd/src/dsd.c:42' out.txt
 expect 'Finding: Recorded event indicates the requested condition; reason=fixture_failure.' out.txt
 expect 'Log: no matching recorded event' out.txt
