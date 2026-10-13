@@ -9,3 +9,5 @@ Invoke `express <term>` in Digit's console. A bare term is not a registered comm
 Build: `make -C modules/expression`. Install: `sudo make -C modules/expression install`. Corpus file must be readable by the runtime user.
 
 Qualification integrity: the module executes 13 isolated deterministic retrieval checks against a temporary TSV fixture, including token boundaries, source fidelity, missing records, malformed terms, and inaccessible paths. Reported counts derive from executed checks, not declared PASS fixtures. The production Corpus remains untouched. Qualification requires writable temporary storage at `/tmp`.
+
+Module-local verification (from this module directory): `make clean && make && make test`. The test binary is built under this module's `bin/` and reports its own assertion totals. No repository-root build or test command is required.
