@@ -117,3 +117,16 @@ The canonical **current development** logging location is `./logs/digit.log` rel
 **Limitations:** An external actor-verification mechanism for authorization has not been implemented. Test runners use a private log rather than claiming production activation. Some invalid/null argument paths cannot safely supply an identifiable module and may not emit diagnostic records. The module-management interface is still an in-process foundation only. The source and tests have been committed but have **not** yet been compiled or run on the operator's host.
 
 **Required operator check:** `git pull && make clean && make && make test`, then `./bin/digit`, stop with Ctrl+C, and inspect `tail -n 30 logs/digit.log` for Core and Runtime entries. The operator reviews the aggregate test report and runtime log before deciding acceptance under `AGENTS.md`. This work does not authorize a next development step.
+
+## Core qualification and admission hardening (2026-10-12)
+
+**Authorized step:** reinforce Core qualification and admission checks without adding any functional module, Router, Bootstrap, or client.
+
+- `src/module_manager.c` now checks that positive tests were executed and all passed, failed tests are zero, and both negative-test fields are exactly `1` before moving a registered module to QUALIFIED.
+- The same qualification evidence is required again at authorization and activation, rather than relying solely on the module state value.
+- The QUALIFIED transition occurs only after the associated qualification result has been successfully logged.
+- `tests/test_module_manager.c` adds negative evidence and lifecycle checks, including denial of requalification when ACTIVE, required authorization after STOPPED, and authorized restart.
+
+**Limits:** these checks validate the supplied evidence structure, **not its authenticity**; verified actor authorization, qualification persistence, and dynamic module loading are still outstanding. `DIGIT_MODULE_MIN_TESTS` remains unchanged in this step. Source changes are committed; compilation, test success, and operator acceptance have not yet been established for this revision.
+
+**Operator procedure:** run `git pull && make clean && make && make test`, confirm aggregate `OVERALL RESULT: PASS` and zero suite/report errors; run `./bin/digit`, stop it with Ctrl+C, and inspect `tail -n 20 logs/digit.log`. Expected: module-manager tests pass including the added negative and restart checks; Digit still starts with zero registered modules and emits startup/stop events. No functional module activation should occur in the running Core.
