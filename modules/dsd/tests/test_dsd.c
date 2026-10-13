@@ -71,7 +71,7 @@ int main(void){
  /* Malformed or stale line evidence must not become a claimed root cause. */
  snprintf(path,sizeof path,"%s/modules.log",logs);
  fp=fopen(path,"a");if(!fp)return 2;
- fputs("2026-10-13T17:00:00Z MODULE FAILED id=dsd file=modules/dsd/src/dsd.c line=999999 reason=stale_trace\\n",fp);
+ fputs("2026-10-13T17:00:00Z MODULE FAILED id=dsd file=modules/dsd/src/dsd.c line=999999 reason=stale_trace\n",fp);
  fclose(fp);
  diagnose("stale_trace");
  check(strstr(output,"SOURCE LINE NOT PRESENT")!=NULL,"stale line rejected");
