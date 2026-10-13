@@ -140,3 +140,17 @@ An operator reported shutdown missing from `digit.log` despite clean console exi
 - `src/digit.c` displays the log path in the successful shutdown confirmation, only after shutdown records are written and synchronized.
 
 This is a regression guard and improved verification, not a claim that the historical failure's cause has been reproduced. Changes committed to GitHub only; no operator-host compilation or runtime results are asserted. Operator: `git pull && make clean && make && make test`, then `./bin/digit`, Ctrl+C, and `tail -n 20 logs/digit.log`. The fifth suite must pass and the current invocation must have its own shutdown records. Await explicit operator acceptance.
+
+## Qualification-integrity audit gate (2026-10-12)
+
+Authorized Core-only step: review qualification/admission evidence trust and prevent admission without the mandatory audit trail.
+
+**Finding:** `digit_module_qualification_t` contains counters and two boolean indicators. These are caller-supplied assertions, **not independently verifiable qualification evidence**. The current public ABI provides no authenticated provenance or trusted test-result receipt. No claim of independently verified qualification is made, and no new ABI, authority provider, functional module, or qualification threshold is introduced here.
+
+**Change:** `src/module_manager.c` now denies registration, qualification, and authorization when the Core logger is not open or the decision cannot be synchronized. Registration records its decision **before** inserting the record into the registry; failed auditing leaves the registration count unchanged. Activation and stop callbacks require an audited attempt record before execution. Existing state/result types are preserved.
+
+**Tests:** `tests/test_module_manager.c` asserts that registration without the logger is rejected with no registry change, and that registration and authorization are rejected after logging is closed. Previous qualification negative tests remain.
+
+**Open risk:** caller-supplied test counts can still be fabricated by a trusted or compromised caller; authenticating them requires a separately approved trusted evidence source/contract. This step addresses audit integrity, not evidence provenance. Production authority identity and persistent qualification verification remain outside this change.
+
+**Operator gate:** `git pull && make clean && make && make test`; check the fifth shutdown integration suite, updated module-manager suite, and overall PASS. Run `./bin/digit`, stop with Ctrl+C and confirm the shutdown events in `tail -n 20 logs/digit.log`. Report failures exactly; no passing server test or acceptance is presumed from commits.
