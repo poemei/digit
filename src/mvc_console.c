@@ -97,12 +97,16 @@ static const stnlabz_module_host_t host={
  NULL,NULL,register_command,unregister_command,register_service,unregister_service,invoke
 };
 static void console_dsd_watch(void){
+ static int previously_reported;
  unsigned int version=1U;console_dsd_alert_t result={0};
  size_t used=0;
  if(invoke("dsd.watch",&version,sizeof version,&result,sizeof result,&used)==STNLABZ_MODULE_OK&&
     used==sizeof result&&result.contract_version==1U&&
     memchr(result.text,0,sizeof result.text)&&result.text[0]){
-  puts(result.text);fflush(stdout);
+  if(previously_reported)putchar('\n');
+  puts(result.text);
+  previously_reported=1;
+  fflush(stdout);
  }
 }
 int digit_mvc_console(void){
