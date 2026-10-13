@@ -271,3 +271,11 @@ Failure path corrected: digit_core_discover now returns failure when the underly
 Known boundary: the internal policy evaluator consumes context asserted by a trusted caller; it does not independently authenticate actor, mission assignment, or authority flags. Existing module authorization and activation checks are not a substitute for a future verified caller boundary. The absence of a live capability module also limits operator demonstration to Core startup and test fixtures.
 
 Operator test: git pull; make clean && make && make test; ./bin/digit; Ctrl+C; tail -n 30 logs/digit.log. Expect 14 suites, zero failures, no TRACE RECORD events, and normal START/RUNNING/STOPPED events. Compilation, server tests, and operator acceptance remain separate from this review.
+
+## Core authority boundary integrity — execution recheck
+
+Digit Core now requires a policy request at both digit_core_authorize and digit_core_activate. The activation entrypoint denies a missing request, mismatched module ID or operation, or an out-of-scope/denied current policy decision before entering the shared ABI start callback. The existing registry activation-authorized flag is still necessary but is no longer sufficient for Digit's Core activation entrypoint. Policy and activation outcomes continue to be recorded in ./logs/digit.log.
+
+This is application-specific enforcement. ABI 1.5 is unchanged: its public generic registry and combined authorization/activation functions are mechanisms, not an implementation of Digit's General Orders. They must not be used as alternate Digit operational entrypoints. As a result, callers that bypass Digit Core entirely cannot be claimed to be mechanically intercepted by the shared ABI. The existing Core evaluator also relies on authenticated/verified context supplied by a trusted caller; it does not independently authenticate an operator or establish authorization provenance. Phase 1 authority exit remains conditional on explicitly dispositioning these boundaries.
+
+The test suite now includes missing execution authority, revoked authority after grant, wrong module, wrong operation, authorized activation, and stop revocation, without enabling automatic activation. The operator must validate build and regression results on the target host before acceptance.
