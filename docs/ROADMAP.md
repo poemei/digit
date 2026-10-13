@@ -134,8 +134,7 @@ The operator authorized integration of the accepted MVC components into the runn
 
 ### Phase 5 — DSD: observe the actual path
 
-**Authorized implementation awaiting operator acceptance:** DSD 0.1.0 is an independent ABI 1.5 service that reports bounded request-correlated observations, actual source locations when supplied, and explicit missing-evidence fields. The local MVC console hands `/diagnose` to Router, which dispatches to the regular `dsd.report` Model service, with Rendering presenting results without replaying Model execution; a new independent DSD suite covers Core qualification and authorization, failure reporting, missing and malformed observations, and shutdown. The accepted baseline is 25 suites / 1,532 assertions; the target is 26 suites, with no claimed pass until operator verification. DSD remains an independently controlled Router-selected capability and is not inserted into the normal expression route. Deeper historical trace collection and separately dynamically loaded deployment remain unimplemented.
-
+**Corrected module boundary, pending operator verification:** DSD source, `module.conf`, and independent build now reside in `modules/dsd/`. The existing Core dynamic discovery scans deployed module directories next to the executable, reads the manifest, and loads the ABI 1.5 shared object. The DSD-specific Bootstrap, Rendering, and local console integration was reverted. The module remains unactivated until an authorized Router and host-service configuration makes `/diagnose` available; no Core modification is justified by adding this capability. The accepted 25-suite baseline must be retested.
 
 - [ ] Implement DSD as a diagnostic capability, not an execution controller.
 - [ ] Have Router associate structured module observations with a single request ID.
