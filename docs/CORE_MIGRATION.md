@@ -168,3 +168,13 @@ Authorized Core-only step: review qualification/admission evidence trust and pre
 **Limits:** no dynamic loader, module discovery, or hot replacement filesystem watcher is enabled. The shared ABI registry currently has no live modules. Common ABI qualification callbacks return evidence supplied by module code and do not by themselves attest binary provenance or human approval. Production actor authentication, secure evidence provenance, and an audited activation boundary remain separate work. The exact descriptor export required by the established loader is `stnlabz_module_get_descriptor`; it has not been changed.
 
 **Operator acceptance:** run `git pull && make clean && make && make test`, verify **6** suites and aggregate PASS, then launch `./bin/digit`, stop with Ctrl+C, and inspect `tail -n 20 logs/digit.log`. Expect zero modules and shutdown records `RUNTIME STOP`, `MODULE MANAGER_SHUTDOWN`, and `CORE STOPPED`. The ABI compatibility suite runs mock callbacks only; no real module is activated. Do not infer host test success from GitHub commits.
+
+## ABI 1.5 Linux loader compatibility milestone
+
+**Operator-authorized Core-only change.** Imported `stnlabz/ABI` `includes/module_loader.h` and `src/loader_linux.c` unchanged into Digit's vendored ABI 1.5 tree. No shared ABI edits.
+
+Digit Core initializes an empty Linux loader alongside its empty ABI registry, and links `-ldl`. **No automatic module scanning, discovery, qualification, activation, or hotloading.** Existing Core zero-module startup and logging behavior remain the operational baseline. This loader is a handle mechanism, not an authority or lifecycle controller. Host integration must never unload active module code: a future authorized admission/unload path must enforce stop and quiescence and record its actual transitions before unloading.
+
+A new `tests/test_loader.c` suite exercises a compiled mock `.so`: valid ABI descriptor export, expected identity, duplicate-load denial, clean unload, identity mismatch denial, legacy/missing-export denial, missing library denial, invalid identity, and missing-unload denial. The test verifies that loader success never registers or activates a module. `tests/fixtures/abi_loader_fixture.c` is test-only and not an operational functional module.
+
+**Acceptance procedure:** `git pull && make clean && make && make test` should compile the loader and mock shared objects and complete **7** suites without failure; then start `./bin/digit`, stop using Ctrl+C, and inspect `tail -n 20 logs/digit.log`. Confirm zero registered modules and full shutdown log. Automated tests establish Linux mock loader contract behavior only; acceptance and live real-binary compatibility remain separate. No source-only claim of passing server tests.
