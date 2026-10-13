@@ -11,7 +11,7 @@ int main(void){
  const stnlabz_module_descriptor_t *d=stnlabz_module_get_descriptor();
  check(d!=NULL,"descriptor");
  check(!strcmp(d->id,"interface"),"module identity");
- check(d->version_major==0&&d->version_minor==1&&d->version_patch==0,"version");
+ check(d->version_major==0&&d->version_minor==1&&d->version_patch==1,"version");
  check(d->required_core_api_major==STNLABZ_MODULE_API_MAJOR&&d->required_core_api_minor==STNLABZ_MODULE_API_MINOR,"ABI");
  check(d->qualify(&result)==STNLABZ_MODULE_OK,"qualification");
  check(result.tests_executed==STNLABZ_MODULE_MIN_TESTS&&result.tests_passed==STNLABZ_MODULE_MIN_TESTS,"qualification results");
