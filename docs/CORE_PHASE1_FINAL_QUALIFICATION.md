@@ -38,3 +38,11 @@ Source-inspection findings in this review do not constitute a compiler run or ru
 **HOLD Phase 1 exit.** Earlier milestones remain individually accepted. Resolve or expressly disposition the authority-path and escalation/reporting gaps, determine the production relevance of the legacy manager, then perform targeted regression and operator-selected `make clean && make && make test`, `./bin/digit`, Ctrl+C, and `logs/digit.log` review.
 
 No Phase 2 Bootstrap, Router, DSD module, transport or other capability implementation was authorized by this review. **Operator approval is required for Phase 1 closure and separate authorization is required for the next named step.**
+
+## Final operator disposition — supersedes original hold
+
+**Phase 1 Core foundation qualification: COMPLETE AND OPERATOR ACCEPTED.** The original HOLD recommendation and findings above describe the earlier review and are retained as historical evidence, not the current gate status.
+
+**Accepted revision:** [`bee0d22`](https://github.com/poemei/digit/commit/bee0d2297889c14d7794ed533baa72fcbc14755c). **Operator-reported result:** 20/20 suites; 1,410/1,410 assertions passed; 0 assertion failures; 0 suite/report errors. The operator also verified independent zero-module startup, Agent Root revision 1, mandatory operational audit and clean SIGINT shutdown in a session timestamped **2026-10-13T02:43:30Z–2026-10-13T02:43:33Z**. Explicit operator acceptance followed.
+
+Intervening accepted Core changes added execution-time Digit Core policy recheck, caller-provenance fields and fail-closed requirements, GO3 structured pending/unavailable reporting, and six independent qualification suites. Future trust boundaries remain transparent: provenance assertions do not authenticate an external actor; shared ABI 1.5 generic direct calls are not intercepted by Digit Core; GO3 events do not attest actual external delivery. Those limitations are deferred to the appropriate future integration design and **do not reopen the accepted 20-suite Core qualification**. DSD owns detailed diagnostics. Phase 2 Bootstrap and Router require separate operator authorization.
