@@ -5,7 +5,7 @@ tmp=$(mktemp -d)
 pid=
 cleanup(){ if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then kill -TERM "$pid" 2>/dev/null || :; wait "$pid" 2>/dev/null || :; fi; rm -rf "$tmp"; }
 trap cleanup EXIT HUP INT TERM
-( cd "$tmp"; exec "$root/bin/digit" >"$tmp/stdout" 2>"$tmp/stderr" ) &
+( cd "$tmp"; exec "$root/bin/digit" --core >"$tmp/stdout" 2>"$tmp/stderr" ) &
 pid=$!
 ready=0
 i=0
