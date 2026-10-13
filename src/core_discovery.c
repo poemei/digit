@@ -100,12 +100,13 @@ void digit_core_discovery_cleanup(stnlabz_module_registry_t *registry,
     stnlabz_module_loader_t *loader)
 {
     if (!registry || !loader) return;
-    /* Unload only never-activated discovered candidates. */
+    /* Unload only modules known non-running or successfully stopped. */
     while (registry->count) {
         stnlabz_module_record_t *r = &registry->modules[registry->count - 1];
         if (r->state != STNLABZ_MODULE_STATE_DISCOVERED &&
             r->state != STNLABZ_MODULE_STATE_UNVERIFIED &&
             r->state != STNLABZ_MODULE_STATE_QUALIFIED &&
+            r->state != STNLABZ_MODULE_STATE_STOPPED &&
             r->state != STNLABZ_MODULE_STATE_FAILED &&
             r->state != STNLABZ_MODULE_STATE_QUARANTINED) break;
         (void)stnlabz_module_registry_fail(registry, r->descriptor.id);
