@@ -567,7 +567,7 @@ stnlabz_module_result_t digit_dsd_report(const void *request,size_t request_size
 #define DSD_WATCH_CHECKS 8
 typedef struct { char path[320]; time_t modified; off_t size; unsigned long fingerprint; } watched_file_t;
 static watched_file_t watched[DSD_WATCH_FILES];
-static size_t watched_count,watch_cursor;
+static size_t watched_count,watch_cursor,watch_ticks;
 static unsigned long source_fingerprint(const char *text,size_t n){
  size_t i;unsigned long h=2166136261UL;
  for(i=0;i<n;i++){h^=(unsigned char)text[i];h*=16777619UL;}
@@ -592,7 +592,11 @@ static void gather_sources(const char *root,const char *relative,int depth){
    if(!strcmp(entry->d_name,"bin")||!strcmp(entry->d_name,".git"))continue;
    gather_sources(root,child,depth+1);
   }else if(S_ISREG(st.st_mode)&&source_file(entry->d_name)){
-   watched_file_t *slot=&watched[watched_count++];
+   size_t k;
+   watched_file_t *slot;
+   for(k=0;k<watched_count;k++)if(!strcmp(watched[k].path,child))break;
+   if(k<watched_count)continue;
+   slot=&watched[watched_count++];
    memset(slot,0,sizeof *slot);
    snprintf(slot->path,sizeof slot->path,"%s",child);
   }
@@ -611,7 +615,7 @@ static stnlabz_module_result_t dsd_watch_poll(const void *request,size_t request
     *(const unsigned int *)request!=1U)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(out,0,sizeof *out);out->contract_version=1U;*response_used=sizeof *out;
  if(!root||!*root)root="/home/stnchain/digit";
- if(!watched_count){
+ if(!watched_count||++watch_ticks%12==0){
   gather_sources(root,"src",0);
   gather_sources(root,"modules",0);
  }
