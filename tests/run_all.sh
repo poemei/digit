@@ -7,12 +7,14 @@ failed=0
 suites=0
 suite_failures=0
 
-for name in agent_root runtime module_manager logging abi_compat loader registry_growth loader_growth discovery qualification activation inventory policy shutdown provenance escalation lifecycle_isolation core_failure authority_boundary core_integration router bootstrap; do
+for name in agent_root runtime module_manager logging abi_compat loader registry_growth loader_growth discovery qualification activation inventory policy shutdown provenance escalation lifecycle_isolation core_failure authority_boundary core_integration router bootstrap model_expression; do
     suites=$((suites + 1))
     if [ "$name" = core_integration ]; then
         command="sh tests/test_core_integration.sh"
     elif [ "$name" = provenance ] || [ "$name" = escalation ] || [ "$name" = core_failure ] || [ "$name" = authority_boundary ]; then
         command="sh tests/test_$name.sh"
+    elif [ "$name" = model_expression ]; then
+        command="sh tests/test_model_expression.sh"
     elif [ "$name" = bootstrap ]; then
         command="sh tests/test_bootstrap.sh"
     elif [ "$name" = router ]; then
