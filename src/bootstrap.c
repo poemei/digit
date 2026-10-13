@@ -4,14 +4,15 @@
 static int record(const char *event,const char *status){
  return digit_log_event("BOOTSTRAP",event,status)&&digit_log_sync();
 }
-int digit_bootstrap_start_with_diagnostics(digit_bootstrap_t *b,stnlabz_module_registry_t *registry,
+int digit_bootstrap_start_routes(digit_bootstrap_t *b,stnlabz_module_registry_t *registry,
  const stnlabz_module_host_t *host,const digit_policy_request_t *policy,
- const char *path,const char *service,const char *diagnostic_service){
+ const digit_bootstrap_route_t *routes,size_t route_count){
  stnlabz_module_descriptor_t d;
+ size_t i;
  const stnlabz_module_record_t *existing;
  if(!b||!registry||b->ready||!digit_log_is_open())return 0;
  b->registry=NULL;b->ready=0;
- if(!policy||!host||!path||!service||
+ if(!policy||!host||!routes||!route_count||route_count>DIGIT_ROUTER_MAX_ROUTES||
  !policy->operation||!policy->module_id||
  strcmp(policy->operation,"module.activate")||
  strcmp(policy->module_id,"router")||
@@ -19,8 +20,7 @@ int digit_bootstrap_start_with_diagnostics(digit_bootstrap_t *b,stnlabz_module_r
  existing=stnlabz_module_registry_find(registry,"router");
  if(existing)return 0; /* No implicit adoption or reactivation. */
  digit_router_reset();
- if(!digit_router_bind(path,service))return 0;
- if(diagnostic_service&&!digit_router_bind("/diagnose",diagnostic_service))goto fail;
+ for(i=0;i<route_count;i++)if(!digit_router_bind(routes[i].path,routes[i].service))goto fail;
  d=digit_router_descriptor();
  if(stnlabz_module_registry_discover(registry,&d)!=STNLABZ_MODULE_OK)goto fail;
  if(stnlabz_module_registry_verify(registry,"router")!=STNLABZ_MODULE_OK)goto fail;
@@ -42,7 +42,8 @@ fail:
 int digit_bootstrap_start(digit_bootstrap_t *b,stnlabz_module_registry_t *registry,
  const stnlabz_module_host_t *host,const digit_policy_request_t *policy,
  const char *path,const char *service){
- return digit_bootstrap_start_with_diagnostics(b,registry,host,policy,path,service,NULL);
+ digit_bootstrap_route_t route={path,service};
+ return digit_bootstrap_start_routes(b,registry,host,policy,&route,1);
 }
 digit_route_status_t digit_bootstrap_handoff(const digit_bootstrap_t *b,
  const digit_router_request_t *request,void *response,size_t capacity,
