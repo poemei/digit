@@ -83,7 +83,7 @@ static stnlabz_module_result_t diagnose_command(
  size_t source;
  char line[DSD_LOG_LINE],selected[DSD_LOG_LINE]={0},module[64]={0};
  char file[128]={0},lineno[24]={0},reason[256],message[1024],term[128]={0};
- char candidate_id[64],candidate_module[64],source_location[1200]={0},route[128]={0};
+ char candidate_id[64],candidate_module[64],source_location[1200]={0},assessment[800]={0},route[128]={0};
  unsigned long matches=0;
  int found=0,last_request=0;
  const char *args;
