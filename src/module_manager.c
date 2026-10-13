@@ -1,6 +1,21 @@
 #include <ctype.h>
 #include <string.h>
+#include <stdio.h>
+#include "logging.h"
 #include "module_manager.h"
+
+static digit_module_result_t recorded(const char *event, const char *id,
+    digit_module_result_t result)
+{
+    char detail[160];
+    if (digit_log_is_open()) {
+        (void)snprintf(detail, sizeof detail, "id=%s result=%d",
+                       id ? id : "unknown", (int)result);
+        if (!digit_log_event("MODULE", event, detail) || !digit_log_sync())
+            return DIGIT_MODULE_CALLBACK_FAILED;
+    }
+    return result;
+}
 
 static int valid_id(const char *s)
 {
@@ -32,6 +47,7 @@ const digit_module_record_t *digit_module_find(const digit_module_manager_t *m, 
 void digit_module_manager_init(digit_module_manager_t *m)
 {
     if (m) memset(m, 0, sizeof(*m));
+    if (digit_log_is_open()) (void)digit_log_event("MODULE", "MANAGER_INIT", "registered=0");
 }
 digit_module_result_t digit_module_register(digit_module_manager_t *m,
     const digit_module_descriptor_t *d, const digit_module_callbacks_t *cb)
@@ -39,59 +55,59 @@ digit_module_result_t digit_module_register(digit_module_manager_t *m,
     digit_module_record_t *r;
     if (!m || !d || !cb || !valid_id(d->id) || !cb->start || !cb->stop ||
         d->abi_major != DIGIT_MODULE_ABI_MAJOR ||
-        d->abi_minor > DIGIT_MODULE_ABI_MINOR) return DIGIT_MODULE_INVALID;
-    if (find_mut(m, d->id)) return DIGIT_MODULE_DUPLICATE;
-    if (m->count >= DIGIT_MODULE_MAX) return DIGIT_MODULE_FULL;
+        d->abi_minor > DIGIT_MODULE_ABI_MINOR) return recorded("REGISTER", d ? d->id : NULL, DIGIT_MODULE_INVALID);
+    if (find_mut(m, d->id)) return recorded("REGISTER", d ? d->id : NULL, DIGIT_MODULE_DUPLICATE);
+    if (m->count >= DIGIT_MODULE_MAX) return recorded("REGISTER", d ? d->id : NULL, DIGIT_MODULE_FULL);
     r = &m->modules[m->count++];
     memset(r, 0, sizeof(*r));
     r->descriptor = *d;
     r->callbacks = *cb;
     r->state = DIGIT_MODULE_REGISTERED;
-    return DIGIT_MODULE_OK;
+    return recorded("REGISTER", d ? d->id : NULL, DIGIT_MODULE_OK);
 }
 digit_module_result_t digit_module_qualify(digit_module_manager_t *m,
     const char *id, const digit_module_qualification_t *q)
 {
     digit_module_record_t *r = find_mut(m, id);
-    if (!r) return DIGIT_MODULE_NOT_FOUND;
+    if (!r) return recorded("QUALIFY", id, DIGIT_MODULE_NOT_FOUND);
     if (!q || r->state != DIGIT_MODULE_REGISTERED ||
         q->tests_executed < DIGIT_MODULE_MIN_TESTS ||
         q->tests_failed != 0 || q->tests_passed != q->tests_executed ||
         !q->negative_test_executed || !q->negative_test_passed)
-        return DIGIT_MODULE_UNQUALIFIED;
+        return recorded("QUALIFY", id, DIGIT_MODULE_UNQUALIFIED);
     r->qualification = *q;
     r->state = DIGIT_MODULE_QUALIFIED;
-    return DIGIT_MODULE_OK;
+    return recorded("QUALIFY", id, DIGIT_MODULE_OK);
 }
 digit_module_result_t digit_module_authorize(digit_module_manager_t *m,
     const char *id, int operator_authorized)
 {
     digit_module_record_t *r = find_mut(m, id);
-    if (!r) return DIGIT_MODULE_NOT_FOUND;
+    if (!r) return recorded("AUTHORIZE", id, DIGIT_MODULE_NOT_FOUND);
     if (r->state != DIGIT_MODULE_QUALIFIED && r->state != DIGIT_MODULE_STOPPED)
-        return DIGIT_MODULE_UNQUALIFIED;
+        return recorded("AUTHORIZE", id, DIGIT_MODULE_UNQUALIFIED);
     r->activation_authorized = operator_authorized == 1;
     return r->activation_authorized ? DIGIT_MODULE_OK : DIGIT_MODULE_UNQUALIFIED;
 }
 digit_module_result_t digit_module_activate(digit_module_manager_t *m, const char *id)
 {
     digit_module_record_t *r = find_mut(m, id);
-    if (!r) return DIGIT_MODULE_NOT_FOUND;
+    if (!r) return recorded("ACTIVATE", id, DIGIT_MODULE_NOT_FOUND);
     if ((r->state != DIGIT_MODULE_QUALIFIED && r->state != DIGIT_MODULE_STOPPED) ||
-        !r->activation_authorized) return DIGIT_MODULE_UNQUALIFIED;
-    if (!r->callbacks.start(r->callbacks.context)) return DIGIT_MODULE_CALLBACK_FAILED;
+        !r->activation_authorized) return recorded("ACTIVATE", id, DIGIT_MODULE_UNQUALIFIED);
+    if (!r->callbacks.start(r->callbacks.context)) return recorded("ACTIVATE", id, DIGIT_MODULE_CALLBACK_FAILED);
     r->state = DIGIT_MODULE_ACTIVE;
-    return DIGIT_MODULE_OK;
+    return recorded("ACTIVATE", id, DIGIT_MODULE_OK);
 }
 digit_module_result_t digit_module_stop(digit_module_manager_t *m, const char *id)
 {
     digit_module_record_t *r = find_mut(m, id);
-    if (!r) return DIGIT_MODULE_NOT_FOUND;
-    if (r->state != DIGIT_MODULE_ACTIVE) return DIGIT_MODULE_INVALID;
+    if (!r) return recorded("STOP", id, DIGIT_MODULE_NOT_FOUND);
+    if (r->state != DIGIT_MODULE_ACTIVE) return recorded("STOP", id, DIGIT_MODULE_INVALID);
     r->callbacks.stop(r->callbacks.context);
     r->state = DIGIT_MODULE_STOPPED;
     r->activation_authorized = 0;
-    return DIGIT_MODULE_OK;
+    return recorded("STOP", id, DIGIT_MODULE_OK);
 }
 void digit_module_manager_shutdown(digit_module_manager_t *m)
 {
@@ -102,7 +118,9 @@ void digit_module_manager_shutdown(digit_module_manager_t *m)
         if (r->state == DIGIT_MODULE_ACTIVE) {
             r->callbacks.stop(r->callbacks.context);
             r->state = DIGIT_MODULE_STOPPED;
+            (void)recorded("SHUTDOWN_STOP", r->descriptor.id, DIGIT_MODULE_OK);
         }
         r->activation_authorized = 0;
     }
+    (void)recorded("MANAGER_SHUTDOWN", NULL, DIGIT_MODULE_OK);
 }
