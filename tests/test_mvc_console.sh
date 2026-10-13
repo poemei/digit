@@ -12,7 +12,8 @@ expect(){
 }
 expect 'STN-LABZ Digit | interactive console' out.txt
 expect 'Unknown command.' out.txt
-expect 'MODULE HOTLOAD_ACTIVE module=router' logs/modules.log
+expect 'MODULE HOTLOAD_ACTIVE sequence=' logs/modules.log
+expect 'module=router' logs/modules.log
 expect 'ROUTER DISPATCH request=console-1' logs/digit.log
 expect 'CONSOLE STOPPED mode=local' logs/digit.log
 if "$root/bin/digit" --bogus >bad.txt 2>&1; then failed=$((failed+1)); fi
