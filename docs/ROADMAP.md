@@ -3,7 +3,7 @@
 **Repository:** `poemei/digit`  
 **Reference source:** [`stnlabz/digit`](https://github.com/stnlabz/digit)  
 **Architecture:** ChAoS MVC — **Core → Bootstrap → Router → relevant Module → Rendering**  
-**Status:** Phase 1 Core foundation qualification COMPLETE AND OPERATOR ACCEPTED at revision `bee0d22`; subsequent phases not yet implemented or authorized.
+**Status:** Phase 1 Core foundation qualification COMPLETE AND OPERATOR ACCEPTED at revision `bee0d22`; Phase 2 Router module 0.1.0 implemented under separate operator authorization, awaiting build/test acceptance. Bootstrap and later stages are not authorized.
 
 ## 1. Non-negotiable design rules
 
@@ -88,6 +88,8 @@ Implement only the independent Core.
 - Core qualification and negative tests pass. **Do not begin Router until this Core gate has explicit operator acceptance and the operator separately authorizes the Router step.**
 
 ### Phase 2 — Bootstrap and Router: initialization and single-route dispatch
+
+**Current implementation status:** Router 0.1.0 source and standalone ABI-service test harness committed, **awaiting operator verification/acceptance**. Router is configured explicitly before start and dispatches a single registered service through the ABI host; it never selects a chain of models. No Bootstrap handoff or production Router activation was introduced by this Router-only authorization. The previously accepted 20 Core suites remain baseline; the Router suite is additional. No Phase 2 exit is claimed before the test harness establishes an accepted Core/Router/mock-module execution path.
 
 After operator acceptance of Core and explicit authorization, implement minimal Bootstrap initialization/handoff and Router's direct route mapping.
 
