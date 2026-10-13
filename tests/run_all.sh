@@ -12,7 +12,7 @@ for name in agent_root runtime module_manager logging abi_compat loader registry
     if [ "$name" = shutdown ]; then
         command="sh tests/test_shutdown.sh"
     elif [ "$name" = qualification ]; then
-        command="./bin/test_qualification ./logs/test_qualification.log"
+        command="sh tests/test_qualification.sh"
     elif [ "$name" = loader_growth ]; then
         command="sh tests/test_loader_growth.sh"
     elif [ "$name" = discovery ]; then
