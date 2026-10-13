@@ -6,7 +6,6 @@
 #include "bootstrap.h"
 #include "model_expression.h"
 #include "rendering.h"
-#include "dsd.h"
 
 typedef struct {const char *name;stnlabz_module_service_handler_fn handler;void *context;} service_t;
 static service_t services[8];
@@ -55,10 +54,6 @@ int digit_mvc_console(void){
  digit_expression_response_t model;
  digit_render_request_t view_input;
  digit_render_response_t rendered;
- digit_dsd_trace_t trace={0};
- digit_dsd_report_t diagnostic;
- digit_router_result_t diagnostic_route;
- char diagnostic_text[2048];
  digit_router_request_t request;
  char line[256];
  size_t seq=0,used;
@@ -69,16 +64,14 @@ int digit_mvc_console(void){
  !digit_log_sync()){ok=0;goto done;}
  /* Local opt-in development proof only. This fixture context is NOT an identity validator. */
  if(!activate(&registry,digit_expression_descriptor(),&policy)||
- !activate(&registry,digit_rendering_descriptor(),&policy)||
- !activate(&registry,digit_dsd_descriptor(),&policy)){ok=0;goto done;}
+ !activate(&registry,digit_rendering_descriptor(),&policy)){ok=0;goto done;}
  policy.module_id="router";
- if(!digit_bootstrap_start_two_routes(&bootstrap,&registry,&host,&policy,
- "/lookup","expression.lookup","/diagnose","dsd.report")){
+ if(!digit_bootstrap_start(&bootstrap,&registry,&host,&policy,"/lookup","expression.lookup")){
   ok=0;goto done;
  }
  puts("STN-LABZ Digit | MVC local development console");
- puts("Modules ACTIVE: router, expression, rendering, dsd (local development mode)");
- puts("Enter an expression; /diagnose to inspect the last request; /quit to stop. This console does not authenticate users.");
+ puts("Modules ACTIVE: router, expression, rendering (local development mode)");
+ puts("Enter an expression; /quit to stop. This console does not authenticate users.");
  fflush(stdout);
  while(fgets(line,sizeof line,stdin)){
   size_t len=strlen(line);
@@ -88,17 +81,6 @@ int digit_mvc_console(void){
   }
   while(len&&(line[len-1]=='\n'||line[len-1]=='\r'))line[--len]=0;
   if(!strcmp(line,"/quit"))break;
-  if(!strcmp(line,"/diagnose")){
-   if(!trace.request_id[0]){puts("No request trace recorded.");continue;}
-   memset(&request,0,sizeof request);
-   (void)snprintf(request.request_id,sizeof request.request_id,"console-%zu",++seq);
-   (void)snprintf(request.path,sizeof request.path,"/diagnose");
-   request.core_authorized=1;
-   request.payload=&trace;request.payload_size=sizeof trace;
-   if(digit_bootstrap_handoff(&bootstrap,&request,&diagnostic,sizeof diagnostic,&diagnostic_route)!=DIGIT_ROUTE_OK ||
-      digit_rendering_diagnostic(&diagnostic,diagnostic_text,sizeof diagnostic_text)!=STNLABZ_MODULE_OK){ok=0;break;}
-   fputs(diagnostic_text,stdout);fflush(stdout);continue;
-  }
   memset(&expression,0,sizeof expression);
   if(len>=sizeof expression.expression){puts("Invalid expression.");continue;}
   memcpy(expression.expression,line,len+1);
@@ -114,24 +96,6 @@ int digit_mvc_console(void){
   }
   if(call_service("rendering.render",&view_input,sizeof view_input,
    &rendered,sizeof rendered,&used)!=STNLABZ_MODULE_OK){ok=0;break;}
-  memset(&trace,0,sizeof trace);
-  (void)snprintf(trace.request_id,sizeof trace.request_id,"%s",request.request_id);
-  trace.count=2;
-  (void)snprintf(trace.observations[0].component,sizeof trace.observations[0].component,"ROUTER");
-  (void)snprintf(trace.observations[0].decision,sizeof trace.observations[0].decision,"%s",
-   view_input.route.status==DIGIT_ROUTE_OK?"ROUTED":"FAILED");
-  (void)snprintf(trace.observations[0].reason,sizeof trace.observations[0].reason,
-   "route_status=%d",(int)view_input.route.status);
-  (void)snprintf(trace.observations[1].component,sizeof trace.observations[1].component,"EXPRESSION");
-  (void)snprintf(trace.observations[1].decision,sizeof trace.observations[1].decision,"%s",
-   model.status==DIGIT_EXPRESSION_INVALID?"FAILED":model.status==DIGIT_EXPRESSION_UNKNOWN?"UNKNOWN":"KNOWN");
-  if(view_input.route.status==DIGIT_ROUTE_OK){
-   (void)snprintf(trace.observations[1].file,sizeof trace.observations[1].file,"%s",model.source_file);
-   (void)snprintf(trace.observations[1].function,sizeof trace.observations[1].function,"%s",model.source_function);
-   trace.observations[1].line=model.source_line;
-  }
-  (void)snprintf(trace.observations[1].reason,sizeof trace.observations[1].reason,
-   "model_status=%d",(int)model.status);
   printf("%s\n",rendered.text);fflush(stdout);
  }
 done:
