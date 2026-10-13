@@ -2,6 +2,7 @@
 #include "agent_root.h"
 #include "digit.h"
 #include "logging.h"
+#include "core_discovery.h"
 #include "stnlabz_abi/module_registry.h"
 #include "stnlabz_abi/module_loader.h"
 #include "runtime.h"
@@ -12,6 +13,8 @@ int digit_initialize(void)
     digit_runtime_t runtime;
     stnlabz_module_registry_t modules;
     stnlabz_module_loader_t loader;
+    stnlabz_module_discovery_report_t discovery;
+    char modules_path[1024];
     const stnlabz_agent_root_t *root;
 
     /* Logging is mandatory; inability to record Core activity denies startup. */
@@ -31,24 +34,28 @@ int digit_initialize(void)
     }
     if (!digit_log_event("CORE", "ROOT_VERIFIED", "agent=digit revision=1")) goto log_failure;
     digit_runtime_init(&runtime);
-    if (!digit_log_event("CORE", "MODULE_MANAGER_READY", "registered=0")) goto log_failure;
+    if (stnlabz_module_discovery_get_path(modules_path, sizeof modules_path) != STNLABZ_MODULE_OK)
+        goto log_failure;
+    if (!digit_core_discover(&modules, &loader, modules_path, &discovery))
+        goto log_failure;
+    if (!digit_log_event("CORE", "MODULE_MANAGER_READY", "status=discovery_complete")) goto log_failure;
 
     printf("%s\n", DIGIT_NAME);
     printf("[CORE] Agent Root verified: %s (revision %u)\n",
            root->agent_name, (unsigned)root->revision);
     printf("[CORE] Module manager ready: %zu registered modules.\n", modules.count);
-    puts("[CORE] Running without external modules. SIGINT/SIGTERM to stop.");
+    puts("[CORE] No modules qualified or activated. SIGINT/SIGTERM to stop.");
     fflush(stdout);
-    if (!digit_log_event("CORE", "RUNNING", "modules=0") || !digit_log_sync()) goto log_failure;
+    if (!digit_log_event("CORE", "RUNNING", "qualification=disabled activation=disabled") || !digit_log_sync()) goto log_failure;
     if (!digit_runtime_run(&runtime)) {
         (void)digit_log_event("CORE", "RUNTIME_FAILED", NULL);
-        stnlabz_module_loader_unload_all(&loader);
+        digit_core_discovery_cleanup(&modules, &loader);
         (void)digit_log_event("MODULE", "MANAGER_SHUTDOWN", "id=unknown result=0");
         digit_log_close();
         fputs("[CORE] Runtime failed.\n", stderr);
         return 1;
     }
-    stnlabz_module_loader_unload_all(&loader);
+    digit_core_discovery_cleanup(&modules, &loader);
     (void)digit_log_event("MODULE", "MANAGER_SHUTDOWN", "id=unknown result=0");
     if (!digit_log_event("CORE", "STOPPED", "reason=signal") || !digit_log_sync()) goto log_failure;
     digit_log_close();
@@ -56,7 +63,7 @@ int digit_initialize(void)
     return 0;
 
 log_failure:
-    stnlabz_module_loader_unload_all(&loader);
+    digit_core_discovery_cleanup(&modules, &loader);
     (void)digit_log_event("MODULE", "MANAGER_SHUTDOWN", "id=unknown result=0");
     digit_log_close();
     fputs("[CORE] Mandatory logging failed.\n", stderr);
