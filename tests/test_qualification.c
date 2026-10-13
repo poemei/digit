@@ -92,13 +92,17 @@ int main(int argc, char **argv)
     }
     check(starts == 0, "failed modules never started");
     digit_log_close();
-    log = fopen(argv[1], "r");
+    char module_path[2048];
+    snprintf(module_path,sizeof module_path,"%s",argv[1]);
+    char *slash=strrchr(module_path,'/');
+    if(slash)strcpy(slash+1,"modules.log");
+    log = fopen(module_path, "r");
     if (log) {
         while (fgets(line, sizeof line, log)) {
-            if (strstr(line, "DISCOVERY QUALIFY_PASS") &&
+            if (strstr(line, "MODULE QUALIFICATION_GREEN") &&
                 strstr(line, "executed=10") && strstr(line, "negative_passed=1"))
                 ++passed_log;
-            if (strstr(line, "DISCOVERY QUALIFY_REJECT") &&
+            if (strstr(line, "MODULE QUALIFICATION_FAILED") &&
                 strstr(line, "state=FAILED")) ++rejected_log;
         }
         fclose(log);
