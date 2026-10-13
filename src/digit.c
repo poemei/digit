@@ -39,15 +39,16 @@ int digit_initialize(void)
     if (!digit_core_discover(&modules, &loader, modules_path, &discovery))
         goto log_failure;
     if (!digit_core_verify(&modules)) goto log_failure;
+    if (!digit_core_qualify(&modules)) goto log_failure;
     if (!digit_log_event("CORE", "MODULE_MANAGER_READY", "status=discovery_complete")) goto log_failure;
 
     printf("%s\n", DIGIT_NAME);
     printf("[CORE] Agent Root verified: %s (revision %u)\n",
            root->agent_name, (unsigned)root->revision);
     printf("[CORE] Module manager ready: %zu registered modules.\n", modules.count);
-    puts("[CORE] Descriptors verified only; no modules qualified or activated. SIGINT/SIGTERM to stop.");
+    puts("[CORE] Qualification complete; no modules activated. SIGINT/SIGTERM to stop.");
     fflush(stdout);
-    if (!digit_log_event("CORE", "RUNNING", "verification=complete qualification=disabled activation=disabled") || !digit_log_sync()) goto log_failure;
+    if (!digit_log_event("CORE", "RUNNING", "verification=complete qualification=complete activation=disabled") || !digit_log_sync()) goto log_failure;
     if (!digit_runtime_run(&runtime)) {
         (void)digit_log_event("CORE", "RUNTIME_FAILED", NULL);
         digit_core_discovery_cleanup(&modules, &loader);
