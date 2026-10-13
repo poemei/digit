@@ -73,7 +73,7 @@ int main(void){
  stnlabz_module_host_t host={0};
  stnlabz_module_qualification_result_t qualification;
  check(!strcmp(desc.id,"dsd"),"module identity");
- check(desc.version_major==0&&desc.version_minor==3&&desc.version_patch==14,"module version");
+ check(desc.version_major==0&&desc.version_minor==3&&desc.version_patch==15,"module version");
  check(desc.qualify(&qualification)==STNLABZ_MODULE_OK&&qualification.tests_failed==0,"qualifies");
  check(mkdtemp(directory)!=NULL,"fixture directory");
  if(!getcwd(cwd,sizeof cwd)||chdir(directory)!=0)return 2;
@@ -173,6 +173,8 @@ int main(void){
    check(strstr(report.text,"DSD DOCUMENTATION DRIFT")!=NULL,"detects module version drift");
    check(strstr(report.text,"source descriptor declares 0.9.2")!=NULL,"cites actual source version");
    check(strstr(report.text,"README heading declares 0.1.0")!=NULL,"cites actual README version");
+   check(strstr(report.text,"Replace heading '# Code Reference 0.1.0' with '# Code Reference 0.9.2'")!=NULL,
+    "proposes source-evidenced exact Markdown change");
    unlink(docreadme);unlink(docsrc);rmdir(docsr);rmdir(docdir);
   }
   /* Autonomous poll finds previously unseen broken source without a
