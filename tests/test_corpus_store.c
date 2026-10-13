@@ -5,6 +5,15 @@
 #include <unistd.h>
 #include "corpus_store.h"
 int main(void){
+ stnlabz_module_qualification_result_t qual;
+ stnlabz_module_result_t qualification=digit_corpus_selftest(&qual);
+ int qok=qualification==STNLABZ_MODULE_OK&&qual.tests_executed>=10&&
+ qual.tests_passed==qual.tests_executed&&qual.tests_failed==0&&
+ qual.negative_test_executed&&qual.negative_test_passed;
+ if(!qok){fputs("FAIL executable qualification\n",stderr);return 1;}
+ if(digit_corpus_selftest(NULL)!=STNLABZ_MODULE_ERR_INVALID_ARGUMENT){
+  fputs("FAIL qualification null-argument rejection\n",stderr);return 1;
+ }
  char path[]="/tmp/digit-corpus-XXXXXX";
  digit_corpus_record_t r;
  FILE *f;int fd=mkstemp(path),failed=0;
@@ -23,6 +32,6 @@ int main(void){
   puts("FAIL unavailable Corpus");failed++;
  }
  unlink(path);
- printf("Corpus store regression: %d failed\n",failed);
+ printf("Corpus store tests: 7 executed, %d failed\n",failed);
  return failed?1:0;
 }
