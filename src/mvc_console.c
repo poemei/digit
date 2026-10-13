@@ -38,6 +38,10 @@ static int register_command(const char *name,stnlabz_module_command_handler_fn h
 static int unregister_command(const char *name,void *context){
  size_t i;
  for(i=0;i<command_count;i++)if(!strcmp(commands[i].name,name)&&commands[i].context==context){
+  char path[DIGIT_ROUTER_PATH_MAX],service[STNLABZ_MODULE_SERVICE_NAME_MAX];
+  (void)snprintf(path,sizeof path,"/%s",name);
+  (void)snprintf(service,sizeof service,"command.%s",name);
+  if(!digit_router_unbind(path,service))return 0;
   commands[i].handler=NULL;return 1;
  }
  return 0;
