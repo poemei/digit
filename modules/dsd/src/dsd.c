@@ -773,6 +773,7 @@ static int documented_integration_drift(const char *root,char *alert,size_t cap)
   "Handler definition: modules/code_reference/src/code_reference.c:%u\n\n"
   "%s"
   "%s"
+  "Callee definition: %s\n"
   "Document: modules/code_reference/README.md\n"
   "Recommended Markdown change: Replace 'No Core changes or DSD integration.' "
   "with 'DSD invokes the independently registered code_reference.analyze service "
@@ -780,7 +781,8 @@ static int documented_integration_drift(const char *root,char *alert,size_t cap)
   "Registration and invocation establish an interface relationship, not runtime activation. "
   "No documentation was modified.",call_line,registration_line,handler,definition_line,
   internal_call_line?"Internal call: analyze_c (lexically present; execution not established)\n":"Internal call: not established\n",
-  callee_definition_line?"Callee definition: analyze_c in modules/code_reference/src/code_reference.c (lexically located)\n":"Callee definition: not established\n");
+  internal_call_line?"Call evidence: source text only; execution not established\n":"Call evidence: unavailable\n",
+  callee_definition_line?"analyze_c (see source definition; execution not established)":"not established");
  return 1;
 }
 static int documentation_drift(const char *root,char *alert,size_t capacity,unsigned issue){
