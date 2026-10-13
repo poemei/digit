@@ -57,6 +57,8 @@ int digit_mvc_console(void){
  digit_render_response_t rendered;
  digit_dsd_trace_t trace={0};
  digit_dsd_report_t diagnostic;
+ digit_router_result_t diagnostic_route;
+ char diagnostic_text[2048];
  digit_router_request_t request;
  char line[256];
  size_t seq=0,used;
@@ -70,7 +72,8 @@ int digit_mvc_console(void){
  !activate(&registry,digit_rendering_descriptor(),&policy)||
  !activate(&registry,digit_dsd_descriptor(),&policy)){ok=0;goto done;}
  policy.module_id="router";
- if(!digit_bootstrap_start(&bootstrap,&registry,&host,&policy,"/lookup","expression.lookup")){
+ if(!digit_bootstrap_start_two_routes(&bootstrap,&registry,&host,&policy,
+ "/lookup","expression.lookup","/diagnose","dsd.report")){
   ok=0;goto done;
  }
  puts("STN-LABZ Digit | MVC local development console");
@@ -87,8 +90,14 @@ int digit_mvc_console(void){
   if(!strcmp(line,"/quit"))break;
   if(!strcmp(line,"/diagnose")){
    if(!trace.request_id[0]){puts("No request trace recorded.");continue;}
-   if(call_service("dsd.report",&trace,sizeof trace,&diagnostic,sizeof diagnostic,&used)!=STNLABZ_MODULE_OK){ok=0;break;}
-   fputs(diagnostic.report,stdout);fflush(stdout);continue;
+   memset(&request,0,sizeof request);
+   (void)snprintf(request.request_id,sizeof request.request_id,"console-%zu",++seq);
+   (void)snprintf(request.path,sizeof request.path,"/diagnose");
+   request.core_authorized=1;
+   request.payload=&trace;request.payload_size=sizeof trace;
+   if(digit_bootstrap_handoff(&bootstrap,&request,&diagnostic,sizeof diagnostic,&diagnostic_route)!=DIGIT_ROUTE_OK ||
+      digit_rendering_diagnostic(&diagnostic,diagnostic_text,sizeof diagnostic_text)!=STNLABZ_MODULE_OK){ok=0;break;}
+   fputs(diagnostic_text,stdout);fflush(stdout);continue;
   }
   memset(&expression,0,sizeof expression);
   if(len>=sizeof expression.expression){puts("Invalid expression.");continue;}
