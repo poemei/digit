@@ -139,6 +139,9 @@ int main(void){
  fp=fopen(path,"a");if(!fp)return 2;
  fputs("2026-10-13T15:09:43Z ROUTER DISPATCH request=console-2 route=/help service=none outcome=2 service_result=1\n",fp);
  fclose(fp);
+ diagnose("my last request");
+ check(strstr(output,"route=/help")!=NULL,"last request selected by append order");
+ check(strstr(output,"No registration for /help")!=NULL,"missing help registration assessed");
  /* A previously unseen misspelling must be compared against module-owned
     source registrations, never a hardcoded DSD command dictionary. */
  snprintf(path,sizeof path,"%s/digit.log",logs);
@@ -149,9 +152,6 @@ int main(void){
  check(strstr(output,"route=/diadnose")!=NULL,"misspelled command is selected");
  check(strstr(output,"Possible command spelling error")!=NULL,"misspelling recognized from source");
  check(strstr(output,"/diagnose")!=NULL,"suggests source-derived registered command");
- diagnose("my last request");
- check(strstr(output,"route=/help")!=NULL,"last request selected by append order");
- check(strstr(output,"No registration for /help")!=NULL,"missing help registration assessed");
  {
   const char *saved=getenv("DIGIT_SOURCE_ROOT");
   char root_copy[1024];
