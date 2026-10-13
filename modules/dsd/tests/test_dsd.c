@@ -149,6 +149,28 @@ int main(void){
   check(analysis_calls>0,"Core-mediated analysis invoked");
   check(strstr(output,"Code Reference: C11 frontend accepted")!=NULL,"analysis evidence included");
   check(strstr(output,"Module: mock")!=NULL,"diagnostic retains module");
+  /* Synthetic source/README mismatch: source-derived evidence, no document write. */
+  {
+   char docdir[1400],docsr[1400],docsrc[1500],docreadme[1500];
+   unsigned int watch_version=1U;digit_dsd_watch_response_t report={0};
+   size_t watch_used=0;
+   snprintf(docdir,sizeof docdir,"%s/modules/code_reference",tinyroot);
+   snprintf(docsr,sizeof docsr,"%s/src",docdir);
+   snprintf(docsrc,sizeof docsrc,"%s/code_reference.c",docsr);
+   snprintf(docreadme,sizeof docreadme,"%s/README.md",docdir);
+   if(mkdir(docdir,0700)!=0||mkdir(docsr,0700)!=0)return 2;
+   fp=fopen(docsrc,"w");if(!fp)return 2;
+   fputs("int descriptor(void){d.version_major=0;d.version_minor=9;d.version_patch=2;return 0;}\n",fp);
+   fclose(fp);
+   fp=fopen(docreadme,"w");if(!fp)return 2;
+   fputs("# Code Reference 0.1.0\n",fp);fclose(fp);
+   check(watch_service(&watch_version,sizeof watch_version,&report,sizeof report,&watch_used,NULL)==STNLABZ_MODULE_OK,
+    "documentation drift watch executes");
+   check(strstr(report.text,"DSD DOCUMENTATION DRIFT")!=NULL,"detects module version drift");
+   check(strstr(report.text,"source descriptor declares 0.9.2")!=NULL,"cites actual source version");
+   check(strstr(report.text,"README heading declares 0.1.0")!=NULL,"cites actual README version");
+   unlink(docreadme);unlink(docsrc);rmdir(docsr);rmdir(docdir);
+  }
   /* Autonomous poll finds previously unseen broken source without a
      diagnose command, using the independently registered service. */
   snprintf(tinyfile,sizeof tinyfile,"%s/broken.c",tinydir);
