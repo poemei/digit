@@ -14,7 +14,7 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 (
     cd "$tmp"
-    exec "$root/bin/digit" >"$tmp/stdout" 2>"$tmp/stderr"
+    exec "$root/bin/digit" --core >"$tmp/stdout" 2>"$tmp/stderr"
 ) &
 pid=$!
 ready=0
