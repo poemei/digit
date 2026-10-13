@@ -37,9 +37,12 @@ static stnlabz_module_result_t invoke_analysis(const char *name,const void *inpu
  if(size!=sizeof *request||capacity<sizeof *response)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(response,0,sizeof *response);
  response->contract_version=CODE_REFERENCE_CONTRACT_VERSION;
- response->status=CODE_REFERENCE_ANALYZED;
+ response->status=strstr(request->source,"missing_amount")?
+  CODE_REFERENCE_SOURCE_INVALID:CODE_REFERENCE_ANALYZED;
  snprintf(response->analyzer,sizeof response->analyzer,"fixture");
- snprintf(response->diagnostics,sizeof response->diagnostics,"fixture evidence only");
+ snprintf(response->diagnostics,sizeof response->diagnostics,"%s",
+  response->status==CODE_REFERENCE_SOURCE_INVALID?
+  "error: 'missing_amount' undeclared":"fixture evidence only");
  *response_used=sizeof *response;
  return STNLABZ_MODULE_OK;
 }
@@ -63,7 +66,7 @@ int main(void){
  stnlabz_module_host_t host={0};
  stnlabz_module_qualification_result_t qualification;
  check(!strcmp(desc.id,"dsd"),"module identity");
- check(desc.version_major==0&&desc.version_minor==3&&desc.version_patch==9,"module version");
+ check(desc.version_major==0&&desc.version_minor==3&&desc.version_patch==10,"module version");
  check(desc.qualify(&qualification)==STNLABZ_MODULE_OK&&qualification.tests_failed==0,"qualifies");
  check(mkdtemp(directory)!=NULL,"fixture directory");
  if(!getcwd(cwd,sizeof cwd)||chdir(directory)!=0)return 2;
@@ -101,6 +104,10 @@ int main(void){
  check(strstr(output,"ACTIVATE_REJECT")!=NULL,"latest lifecycle failure selected");
  check(strstr(output,"Module: unseen")!=NULL,"activation identifies module");
  check(strstr(output,"start callback")!=NULL,"activation analysis identifies investigation branch");
+ diagnose("source modules/code_reference/tests/intentional_broken.c");
+ check(strstr(output,"DSD SOURCE INVESTIGATION")!=NULL,"direct source investigation");
+ check(strstr(output,"missing_amount")!=NULL,"compiler error evidence retained");
+ check(strstr(output,"Recommended fix: Resolve the undeclared identifier")!=NULL,"actionable general repair guidance");
  diagnose("fixture_failure");
  check(strstr(output,"Module: dsd")!=NULL,"identifies failed module");
  check(strstr(output,"/modules/dsd/src/dsd.c:42")!=NULL,"verifies module source against checkout");
