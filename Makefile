@@ -1,6 +1,6 @@
 CC ?= cc
 CFLAGS ?= -std=c11 -Wall -Wextra -Wpedantic -O2
-CPPFLAGS += -Iinclude
+CPPFLAGS += -Iinclude -Iinclude/stnlabz_abi
 
 .PHONY: all test clean
 all: bin/digit bin/test_agent_root bin/test_runtime bin/test_module_manager bin/test_logging bin/test_abi_compat
