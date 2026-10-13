@@ -1,9 +1,9 @@
-# Independent Expression Model
+# Corpus-backed Expressions
 
-The existing accepted expression fixture recognizes `purrs` as `cat vocalization`. This standalone module packages that capability for Digit's default console.
+Version 0.2.0. Frozen ABI 1.5. Registers the generic `express` command on activation and unregisters it on stop. No expression, vocabulary, or answer is hardcoded.
 
-It exports the frozen ABI 1.5 descriptor and registers the `purrs` command on activation; the generic Router binds the command without module-specific changes. On stop the module unregisters its command.
+The expression command reads `/opt/digit/corpus/corpus.tsv` via the shared read-only TSV parser in `modules/corpus/src/corpus_store.c`. Schema: `record_id<TAB>category<TAB>source<TAB>text`. Source attribution comes from matching records; an absent term returns an unknown expression. Corpus is never created, rewritten or truncated by either module.
 
-Build: `make -C modules/expression`. Install: `sudo make -C modules/expression install`. Launch with `sudo -u digit /opt/digit/run`, then enter `purrs`. An unknown command such as `puuurs` remains unknown; no meaning is invented.
+Invoke `express <term>` in Digit's console. A bare term is not a registered command; it is not silently redirected into a capability module. The full four-field corpus data remains on disk. The lookup is deterministic lexical retrieval, not a language model or inference engine.
 
-This is a bounded fixture, not general natural-language recognition or a replacement for future language interpretation.
+Build: `make -C modules/expression`. Install: `sudo make -C modules/expression install`. Corpus file must be readable by the runtime user.
