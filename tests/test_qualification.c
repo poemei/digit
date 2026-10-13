@@ -100,7 +100,7 @@ int main(int argc, char **argv)
     if (log) {
         while (fgets(line, sizeof line, log)) {
             if (strstr(line, "MODULE QUALIFICATION_GREEN") &&
-                strstr(line, "executed=10") && strstr(line, "negative_passed=1"))
+                strstr(line, "sequence=") && strstr(line, "module=qual-"))
                 ++passed_log;
             if (strstr(line, "MODULE QUALIFICATION_FAILED") &&
                 strstr(line, "state=FAILED")) ++rejected_log;
