@@ -3,6 +3,7 @@
 #include "digit.h"
 #include "logging.h"
 #include "stnlabz_abi/module_registry.h"
+#include "stnlabz_abi/module_loader.h"
 #include "runtime.h"
 
 /* Core identity and operations never depend on installed capability modules. */
@@ -10,10 +11,12 @@ int digit_initialize(void)
 {
     digit_runtime_t runtime;
     stnlabz_module_registry_t modules;
+    stnlabz_module_loader_t loader;
     const stnlabz_agent_root_t *root;
 
     /* Logging is mandatory; inability to record Core activity denies startup. */
     stnlabz_module_registry_init(&modules);
+    stnlabz_module_loader_init(&loader);
     if (!digit_log_open()) {
         fprintf(stderr, "[CORE] Cannot open mandatory log: %s\n", DIGIT_LOG_PATH);
         return 1;
@@ -39,11 +42,13 @@ int digit_initialize(void)
     if (!digit_log_event("CORE", "RUNNING", "modules=0") || !digit_log_sync()) goto log_failure;
     if (!digit_runtime_run(&runtime)) {
         (void)digit_log_event("CORE", "RUNTIME_FAILED", NULL);
+        stnlabz_module_loader_unload_all(&loader);
         (void)digit_log_event("MODULE", "MANAGER_SHUTDOWN", "id=unknown result=0");
         digit_log_close();
         fputs("[CORE] Runtime failed.\n", stderr);
         return 1;
     }
+    stnlabz_module_loader_unload_all(&loader);
     (void)digit_log_event("MODULE", "MANAGER_SHUTDOWN", "id=unknown result=0");
     if (!digit_log_event("CORE", "STOPPED", "reason=signal") || !digit_log_sync()) goto log_failure;
     digit_log_close();
@@ -51,6 +56,7 @@ int digit_initialize(void)
     return 0;
 
 log_failure:
+    stnlabz_module_loader_unload_all(&loader);
     (void)digit_log_event("MODULE", "MANAGER_SHUTDOWN", "id=unknown result=0");
     digit_log_close();
     fputs("[CORE] Mandatory logging failed.\n", stderr);
