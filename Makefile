@@ -3,13 +3,13 @@ CFLAGS ?= -std=c11 -Wall -Wextra -Wpedantic -O2
 CPPFLAGS += -Iinclude -Iinclude/stnlabz_abi
 
 .PHONY: all test clean
-all: bin/digit bin/test_agent_root bin/test_runtime bin/test_module_manager bin/test_logging bin/test_abi_compat bin/test_loader bin/test_discovery bin/test_registry_growth bin/test_loader_growth bin/test_qualification bin/test_activation bin/test_inventory bin/test_policy
+all: bin/digit bin/test_agent_root bin/test_runtime bin/test_module_manager bin/test_logging bin/test_abi_compat bin/test_loader bin/test_discovery bin/test_registry_growth bin/test_loader_growth bin/test_qualification bin/test_activation bin/test_inventory bin/test_policy bin/test_trace
 
 bin:
 	mkdir -p bin
 
-bin/digit: src/main.c src/digit.c src/runtime.c src/agent_root.c src/identity_digit.c src/stnlabz_abi/module.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/abi.c src/stnlabz_abi/loader_linux.c src/stnlabz_abi/module_discovery_linux.c src/core_discovery.c src/core_activation.c src/core_inventory.c src/core_policy.c src/logging.c include/core_policy.h include/core_inventory.h include/logging.h include/digit.h include/runtime.h include/agent_root.h include/stnlabz_abi/module.h include/stnlabz_abi/module_registry.h include/stnlabz_abi/abi.h include/stnlabz_abi/module_discovery.h include/core_discovery.h | bin
-	$(CC) $(CPPFLAGS) $(CFLAGS) src/main.c src/digit.c src/runtime.c src/agent_root.c src/identity_digit.c src/stnlabz_abi/module.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/abi.c src/stnlabz_abi/loader_linux.c src/stnlabz_abi/module_discovery_linux.c src/core_discovery.c src/core_activation.c src/core_inventory.c src/core_policy.c src/logging.c -ldl -o $@
+bin/digit: src/main.c src/digit.c src/runtime.c src/agent_root.c src/identity_digit.c src/stnlabz_abi/module.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/abi.c src/stnlabz_abi/loader_linux.c src/stnlabz_abi/module_discovery_linux.c src/core_discovery.c src/core_activation.c src/core_inventory.c src/core_policy.c src/core_trace.c src/logging.c include/core_policy.h include/core_inventory.h include/logging.h include/digit.h include/runtime.h include/agent_root.h include/stnlabz_abi/module.h include/stnlabz_abi/module_registry.h include/stnlabz_abi/abi.h include/stnlabz_abi/module_discovery.h include/core_discovery.h | bin
+	$(CC) $(CPPFLAGS) $(CFLAGS) src/main.c src/digit.c src/runtime.c src/agent_root.c src/identity_digit.c src/stnlabz_abi/module.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/abi.c src/stnlabz_abi/loader_linux.c src/stnlabz_abi/module_discovery_linux.c src/core_discovery.c src/core_activation.c src/core_inventory.c src/core_policy.c src/core_trace.c src/logging.c -ldl -o $@
 
 bin/test_agent_root: tests/test_agent_root.c src/agent_root.c src/identity_digit.c include/agent_root.h | bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_agent_root.c src/agent_root.c src/identity_digit.c -o $@
@@ -35,8 +35,8 @@ bin/loader_valid.so: tests/fixtures/abi_loader_fixture.c include/stnlabz_abi/mod
 bin/loader_legacy.so: tests/fixtures/abi_loader_fixture.c include/stnlabz_abi/module.h | bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared -DTEST_MODULE_ID='"mock"' tests/fixtures/abi_loader_fixture.c -o $@
 
-bin/test_discovery: tests/test_discovery.c src/core_discovery.c src/stnlabz_abi/module_discovery_linux.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/stnlabz_abi/loader_linux.c src/logging.c | bin
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_discovery.c src/core_discovery.c src/stnlabz_abi/module_discovery_linux.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/stnlabz_abi/loader_linux.c src/logging.c -ldl -o $@
+bin/test_discovery: tests/test_discovery.c src/core_discovery.c src/stnlabz_abi/module_discovery_linux.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/stnlabz_abi/loader_linux.c src/core_trace.c src/logging.c | bin
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_discovery.c src/core_discovery.c src/stnlabz_abi/module_discovery_linux.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/stnlabz_abi/loader_linux.c src/core_trace.c src/logging.c -ldl -o $@
 
 bin/test_registry_growth: tests/test_registry_growth.c src/stnlabz_abi/module_registry.c | bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_registry_growth.c src/stnlabz_abi/module_registry.c -Wl,--wrap=realloc -o $@
@@ -44,17 +44,20 @@ bin/test_registry_growth: tests/test_registry_growth.c src/stnlabz_abi/module_re
 bin/test_loader_growth: tests/test_loader_growth.c src/stnlabz_abi/loader_linux.c | bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_loader_growth.c src/stnlabz_abi/loader_linux.c -ldl -Wl,--wrap=realloc -o $@
 
-bin/test_qualification: tests/test_qualification.c src/core_discovery.c src/stnlabz_abi/module_discovery_linux.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/stnlabz_abi/loader_linux.c src/logging.c | bin
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_qualification.c src/core_discovery.c src/stnlabz_abi/module_discovery_linux.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/stnlabz_abi/loader_linux.c src/logging.c -ldl -o $@
+bin/test_qualification: tests/test_qualification.c src/core_discovery.c src/stnlabz_abi/module_discovery_linux.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/stnlabz_abi/loader_linux.c src/core_trace.c src/logging.c | bin
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_qualification.c src/core_discovery.c src/stnlabz_abi/module_discovery_linux.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/stnlabz_abi/loader_linux.c src/core_trace.c src/logging.c -ldl -o $@
 
-bin/test_activation: tests/test_activation.c src/core_activation.c src/core_policy.c src/agent_root.c src/identity_digit.c src/core_discovery.c src/stnlabz_abi/abi.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/stnlabz_abi/module_discovery_linux.c src/stnlabz_abi/loader_linux.c src/logging.c | bin
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_activation.c src/core_activation.c src/core_policy.c src/agent_root.c src/identity_digit.c src/core_discovery.c src/stnlabz_abi/abi.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/stnlabz_abi/module_discovery_linux.c src/stnlabz_abi/loader_linux.c src/logging.c -ldl -o $@
+bin/test_activation: tests/test_activation.c src/core_activation.c src/core_policy.c src/agent_root.c src/identity_digit.c src/core_discovery.c src/stnlabz_abi/abi.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/stnlabz_abi/module_discovery_linux.c src/stnlabz_abi/loader_linux.c src/core_trace.c src/logging.c | bin
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_activation.c src/core_activation.c src/core_policy.c src/agent_root.c src/identity_digit.c src/core_discovery.c src/stnlabz_abi/abi.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/stnlabz_abi/module_discovery_linux.c src/stnlabz_abi/loader_linux.c src/core_trace.c src/logging.c -ldl -o $@
 
 bin/test_inventory: tests/test_inventory.c src/core_inventory.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/logging.c | bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_inventory.c src/core_inventory.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/logging.c -o $@
 
-bin/test_policy: tests/test_policy.c src/core_policy.c src/core_activation.c src/agent_root.c src/identity_digit.c src/stnlabz_abi/abi.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/logging.c | bin
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_policy.c src/core_policy.c src/core_activation.c src/agent_root.c src/identity_digit.c src/stnlabz_abi/abi.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/logging.c -o $@
+bin/test_policy: tests/test_policy.c src/core_policy.c src/core_activation.c src/agent_root.c src/identity_digit.c src/stnlabz_abi/abi.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/core_trace.c src/logging.c | bin
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_policy.c src/core_policy.c src/core_activation.c src/agent_root.c src/identity_digit.c src/stnlabz_abi/abi.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/core_trace.c src/logging.c -o $@
+
+bin/test_trace: tests/test_trace.c src/core_trace.c src/logging.c | bin
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_trace.c src/core_trace.c src/logging.c -o $@
 
 test: all bin/loader_valid.so bin/loader_legacy.so
 	@sh tests/run_all.sh
