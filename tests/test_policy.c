@@ -26,7 +26,7 @@ int main(int argc, char **argv)
         1, 1, 1, 1, NULL
     };
     digit_policy_result_t result;
-    unsigned i, allows = 0, denies = 0, escalations = 0;
+    unsigned i, allows = 0, denies = 0, escalations = 0, reports_pending = 0, reports_unavailable = 0;
     FILE *f;
     char line[1024];
     if (argc != 2) return 2;
@@ -54,7 +54,20 @@ int main(int argc, char **argv)
           !strcmp(result.policy_id, "CORE.GO3"), "missing authority");
     request.escalation_target = "operator";
     check(digit_core_policy_evaluate(&request, &result) &&
-          result.decision == DIGIT_POLICY_ESCALATE, "report beyond authority");
+          result.decision == DIGIT_POLICY_ESCALATE &&
+          result.escalation_status == DIGIT_ESCALATION_PENDING_DELIVERY,
+          "report beyond authority is pending, not delivered");
+    request.escalation_target = "invalid recipient";
+    check(digit_core_policy_evaluate(&request, &result) &&
+          result.decision == DIGIT_POLICY_DENY &&
+          result.escalation_status == DIGIT_ESCALATION_UNAVAILABLE,
+          "invalid recipient denies and records unavailable");
+    request.escalation_target = NULL;
+    check(digit_core_policy_evaluate(&request, &result) &&
+          result.decision == DIGIT_POLICY_DENY &&
+          result.escalation_status == DIGIT_ESCALATION_UNAVAILABLE,
+          "missing recipient denies and records unavailable");
+    request.escalation_target = "operator";
     request.authority_granted = 1;
     request.actor = NULL;
     check(digit_core_policy_evaluate(&request, &result) &&
@@ -135,11 +148,19 @@ int main(int argc, char **argv)
             if (strstr(line, " POLICY ALLOW ")) ++allows;
             if (strstr(line, " POLICY DENY ")) ++denies;
             if (strstr(line, " POLICY ESCALATE ")) ++escalations;
+            if (strstr(line, " ESCALATION REPORT ") &&
+                strstr(line, "status=pending_delivery") &&
+                strstr(line, "execution=prohibited")) ++reports_pending;
+            if (strstr(line, " ESCALATION REPORT ") &&
+                strstr(line, "status=recipient_unavailable") &&
+                strstr(line, "execution=prohibited")) ++reports_unavailable;
         }
         fclose(f);
     }
-    check(allows >= 49 && denies >= 6 && escalations == 1,
+    check(allows >= 49 && denies >= 8 && escalations == 1,
           "policy outcomes synchronized to audit");
+    check(reports_pending == 1 && reports_unavailable >= 3,
+          "Core escalation reporting status persisted without delivery claim");
     stnlabz_module_registry_destroy(&reg);
     printf("Core policy tests: %u executed, %u failed\n", assertions, failures);
     return failures != 0;
