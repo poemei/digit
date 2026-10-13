@@ -728,7 +728,8 @@ static stnlabz_module_result_t dsd_watch_poll(const void *request,size_t request
     *(const unsigned int *)request!=1U)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(out,0,sizeof *out);out->contract_version=1U;*response_used=sizeof *out;
  if(!root||!*root)root="/home/stnchain/digit";
- if(!watched_count||++watch_ticks%12==0){
+ ++watch_ticks;
+ if(!watched_count||watch_ticks%12==0){
   gather_sources(root,"src",0);
   gather_sources(root,"modules",0);
  }
