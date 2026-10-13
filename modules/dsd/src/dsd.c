@@ -577,7 +577,7 @@ static unsigned long watch_context(void){
  unsigned long hash=1469598103UL;const char *p;
  if(!cc||!*cc)cc="cc";
  if(!root||!*root)root="/home/stnchain/digit";
- for(p="iso-c11-project-include-v2";*p;p++){hash^=(unsigned char)*p;hash*=16777619UL;}
+ for(p="iso-c11-project-include-repair-v3";*p;p++){hash^=(unsigned char)*p;hash*=16777619UL;}
  for(p=cc;*p;p++){hash^=(unsigned char)*p;hash*=16777619UL;}
  for(p=root;*p;p++){hash^=(unsigned char)*p;hash*=16777619UL;}
  return hash;
@@ -687,8 +687,11 @@ static stnlabz_module_result_t dsd_watch_poll(const void *request,size_t request
   }
   if(result.status==CODE_REFERENCE_SOURCE_INVALID){
    snprintf(out->text,sizeof out->text,
-    "DSD DEVELOPMENT ALERT\nStatus: COMPILER-CONFIRMED SOURCE ERROR\nCode: %.310s\nFinding: %.1000s\nRecommended fix: Correct the compiler-identified declaration, type or syntax error at its reported location; verify intended behavior, rebuild and run the module's tests. No source changes were made.",
-    entry->path,result.diagnostics);
+    "DSD DEVELOPMENT ALERT\nStatus: COMPILER-CONFIRMED SOURCE ERROR\nCode: %.310s\nFinding: %.1000s\nRecommended fix: %s\nNo source changes were made.",
+    entry->path,result.diagnostics,
+    strstr(result.diagnostics,"Repair candidate (")?
+    "Review the compiler-validated repair candidate in the finding, confirm intended behavior, then rebuild and test.":
+    "No uniquely supported repair established. Inspect the compiler error and intended behavior before patching.");
    return STNLABZ_MODULE_OK;
   }
  }
@@ -729,7 +732,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=3;d.version_patch=12;
+ d.version_major=0;d.version_minor=3;d.version_patch=13;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
