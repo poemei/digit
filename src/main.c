@@ -5,9 +5,9 @@
 
 int main(int argc, char **argv)
 {
-    if (argc == 1) return digit_initialize();
-    if (argc == 2 && strcmp(argv[1], "--mvc") == 0)
-        return digit_mvc_console();
-    fputs("Usage: ./bin/digit [--mvc]\n", stderr);
+    if (argc == 1) return digit_mvc_console();
+    if (argc == 2 && strcmp(argv[1], "--core") == 0)
+        return digit_initialize();
+    fputs("Usage: ./bin/digit [--core]\n", stderr);
     return 2;
 }
