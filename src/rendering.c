@@ -80,6 +80,17 @@ stnlabz_module_result_t digit_rendering_stop(void){
  return digit_log_event("RENDERING","STOP","status=stopped")&&digit_log_sync()?
  STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_STOP_FAILED;
 }
+stnlabz_module_result_t digit_rendering_diagnostic(const digit_dsd_report_t *report,
+ char *text,size_t capacity){
+ size_t n;
+ if(!render_host||!digit_log_is_open()||!report||!text||!capacity||
+ !memchr(report->report,0,sizeof report->report))return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ n=strlen(report->report);
+ if(!n||n>=capacity)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ memcpy(text,report->report,n+1);
+ return digit_log_event("RENDERING","DIAGNOSTIC","status=presented")&&digit_log_sync()?
+ STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
+}
 stnlabz_module_descriptor_t digit_rendering_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"rendering");
