@@ -3,6 +3,7 @@
 #include "digit.h"
 #include "logging.h"
 #include "core_discovery.h"
+#include "core_activation.h"
 #include "stnlabz_abi/module_registry.h"
 #include "stnlabz_abi/module_loader.h"
 #include "runtime.h"
@@ -51,12 +52,14 @@ int digit_initialize(void)
     if (!digit_log_event("CORE", "RUNNING", "verification=complete qualification=complete activation=disabled") || !digit_log_sync()) goto log_failure;
     if (!digit_runtime_run(&runtime)) {
         (void)digit_log_event("CORE", "RUNTIME_FAILED", NULL);
+        if (!digit_core_stop_all(&modules)) goto stop_failure;
         digit_core_discovery_cleanup(&modules, &loader);
         (void)digit_log_event("MODULE", "MANAGER_SHUTDOWN", "id=unknown result=0");
         digit_log_close();
         fputs("[CORE] Runtime failed.\n", stderr);
         return 1;
     }
+    if (!digit_core_stop_all(&modules)) goto stop_failure;
     digit_core_discovery_cleanup(&modules, &loader);
     (void)digit_log_event("MODULE", "MANAGER_SHUTDOWN", "id=unknown result=0");
     if (!digit_log_event("CORE", "STOPPED", "reason=signal") || !digit_log_sync()) goto log_failure;
@@ -64,7 +67,14 @@ int digit_initialize(void)
     printf("[CORE] Stopped. Shutdown recorded in %s\n", DIGIT_LOG_PATH);
     return 0;
 
+stop_failure:
+    (void)digit_log_event("CORE", "STOP_FAILED", "reason=module_stop_failure_or_audit");
+    digit_log_close();
+    fputs("[CORE] Module stop failed; shared library handles retained.\n", stderr);
+    return 1;
+
 log_failure:
+    if (!digit_core_stop_all(&modules)) goto stop_failure;
     digit_core_discovery_cleanup(&modules, &loader);
     (void)digit_log_event("MODULE", "MANAGER_SHUTDOWN", "id=unknown result=0");
     digit_log_close();
