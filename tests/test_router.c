@@ -53,7 +53,9 @@ int main(int argc,char **argv){
  host.invoke_service=invoke;host.register_service=register_service;host.unregister_service=unregister_service;
  check(descriptor.start(&host)==STNLABZ_MODULE_OK,"start Router via ABI");
  check(registrations==1&&service_handler!=NULL,"service registered");
- check(!digit_router_bind("/later","mock.echo"),"configuration frozen after start");
+ check(digit_router_bind("/later","mock.echo"),"live module binding accepted");
+ check(digit_router_unbind("/later","mock.echo"),"live route withdrawal");
+ check(!digit_router_unbind("/later","mock.echo"),"double withdrawal rejected");
  req.core_authorized=0;
  check(digit_router_dispatch(&req,output,sizeof output,&result)==DIGIT_ROUTE_DENIED,"Core-denied execution blocked");
  check(calls==0,"denied request invokes no Model");
