@@ -24,15 +24,19 @@ stnlabz_module_result_t digit_expression_lookup(const void *request,size_t reque
  out->status=DIGIT_EXPRESSION_INVALID;
  (void)snprintf(out->source_file,sizeof out->source_file,"src/model_expression.c");
  (void)snprintf(out->source_function,sizeof out->source_function,"digit_expression_lookup");
- out->source_line=__LINE__+1;
- if(!valid(in->expression,sizeof in->expression))goto recorded;
+ if(!valid(in->expression,sizeof in->expression)){
+  out->source_line=__LINE__;
+  goto recorded;
+ }
  (void)snprintf(out->expression,sizeof out->expression,"%s",in->expression);
  if(!strcmp(in->expression,"purrs")){
   out->status=DIGIT_EXPRESSION_KNOWN;
+  out->source_line=__LINE__;
   (void)snprintf(out->meaning,sizeof out->meaning,"cat vocalization");
   (void)snprintf(out->evidence,sizeof out->evidence,"fixture:expression-v1");
  }else{
   out->status=DIGIT_EXPRESSION_UNKNOWN;
+  out->source_line=__LINE__;
  }
 recorded:
  n=snprintf(detail,sizeof detail,"expression=%.63s status=%d evidence=%.63s",
