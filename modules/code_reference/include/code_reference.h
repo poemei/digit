@@ -27,6 +27,8 @@ typedef struct {
  char analyzer[64];
  char diagnostics[CODE_REFERENCE_DIAGNOSTIC_MAX];
 } code_reference_response_t;
+/* ABI entry point for module-local qualification tests and the loader. */
+const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void);
 stnlabz_module_result_t code_reference_analyze(
  const void *,size_t,void *,size_t,size_t *,void *);
 #endif
