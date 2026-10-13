@@ -675,8 +675,10 @@ static int documentation_drift(const char *root,char *alert,size_t capacity){
   if(sscanf(first,label,&dm,&dn,&dp)!=3)continue;
   if(major==dm&&minor==dn&&patch==dp)continue;
   snprintf(alert,capacity,
-   "DSD DOCUMENTATION DRIFT\nModule: %s\nEvidence: source descriptor declares %u.%u.%u; README heading declares %u.%u.%u.\nCode: modules/%s/%s\nDocument: modules/%s/README.md\nRecommended fix: Review the source descriptor and module behavior, then propose a README version update for human approval. Documentation was not modified.",
-   modules[i],major,minor,patch,dm,dn,dp,modules[i],sources[i],modules[i]);
+   "DSD DOCUMENTATION DRIFT\nModule: %s\nEvidence: source descriptor declares %u.%u.%u; README heading declares %u.%u.%u.\nCode: modules/%s/%s\nDocument: modules/%s/README.md\nRecommended Markdown change: Replace heading '# %s %u.%u.%u' with '# %s %u.%u.%u' after validating the module release metadata. Review remaining README claims against current source; no documentation was modified.",
+   modules[i],major,minor,patch,dm,dn,dp,modules[i],sources[i],modules[i],
+   i==0?"Code Reference":"DSD",dm,dn,dp,
+   i==0?"Code Reference":"DSD",major,minor,patch);
   return 1;
  }
  return 0;
@@ -786,7 +788,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=3;d.version_patch=14;
+ d.version_major=0;d.version_minor=3;d.version_patch=15;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
