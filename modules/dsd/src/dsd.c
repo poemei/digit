@@ -122,6 +122,61 @@ static int inspect_route(const char *route,char *location,size_t cap,char *findi
  }
  return 1;
 }
+/* Inspect a recorded decision location in the checkout, without trusting a
+   log-provided relative path or line number as verified source evidence. */
+static int inspect_recorded_code(const char *relative,const char *number,
+ char *location,size_t cap,char *finding,size_t fcap){
+ const char *root=getenv("DIGIT_SOURCE_ROOT");
+ char path[1024],buffer[2048],last[2048]={0};
+ char *end;unsigned long target,current=0;FILE *fp;size_t i;
+ if(!root||!*root)root="/home/stnchain/digit";
+ if(!relative||relative[0]=='/'||!relative[0]||strstr(relative,"..")||
+    !number||!number[0]){
+  snprintf(location,cap,"source path or line not safely specified");
+  snprintf(finding,fcap,"Log names a source location that cannot be safely verified. No code-level cause established.");
+  return 0;
+ }
+ for(i=0;relative[i];i++)
+  if(!((relative[i]>='a'&&relative[i]<='z')||
+       (relative[i]>='A'&&relative[i]<='Z')||
+       (relative[i]>='0'&&relative[i]<='9')||
+       relative[i]=='_'||relative[i]=='-'||relative[i]=='.'||relative[i]=='/')){
+   snprintf(location,cap,"unsafe source path");
+   snprintf(finding,fcap,"Source location rejected; no code-level cause established.");
+   return 0;
+  }
+ errno=0;target=strtoul(number,&end,10);
+ if(errno||*end||target==0||target>1000000){
+  snprintf(location,cap,"invalid source line");
+  snprintf(finding,fcap,"Recorded line number is invalid; no code-level cause established.");
+  return 0;
+ }
+ if(snprintf(path,sizeof path,"%s/%s",root,relative)>=(int)sizeof path){
+  snprintf(location,cap,"source path too long");
+  snprintf(finding,fcap,"Recorded source path exceeds inspection bounds.");
+  return 0;
+ }
+ fp=fopen(path,"r");
+ if(!fp){
+  snprintf(location,cap,"SOURCE ACCESS FAILED: %.700s",path);
+  snprintf(finding,fcap,"Cannot inspect logged source file; code-level cause remains unverified.");
+  return 0;
+ }
+ while(fgets(buffer,sizeof buffer,fp)){
+  current++;
+  if(current==target){snprintf(last,sizeof last,"%s",buffer);break;}
+ }
+ fclose(fp);
+ if(current!=target){
+  snprintf(location,cap,"SOURCE LINE NOT PRESENT: %.700s:%lu",path,target);
+  snprintf(finding,fcap,"The recorded line does not exist in the inspected checkout. Source revision or trace may differ; diagnosis unresolved.");
+  return 0;
+ }
+ last[strcspn(last,"\r\n")]=0;
+ snprintf(location,cap,"%.700s:%lu",path,target);
+ snprintf(finding,fcap,"Verified source line: %.500s. This corroborates the recorded location, not the runtime cause. Inspect surrounding control flow and matching runtime evidence before authorizing repair.",last);
+ return 1;
+}
 static stnlabz_module_result_t diagnose_command(
  const stnlabz_module_command_t *command,
  stnlabz_module_command_reply_fn reply,void *reply_context,void *context){
@@ -214,7 +269,8 @@ static stnlabz_module_result_t diagnose_command(
   (void)inspect_route(route,source_location,sizeof source_location,assessment,sizeof assessment);
   (void)snprintf(message,sizeof message,"Code: %.950s",source_location);
  }else if(file[0]&&lineno[0]){
-  (void)snprintf(message,sizeof message,"Code: %s:%s",file,lineno);
+  (void)inspect_recorded_code(file,lineno,source_location,sizeof source_location,assessment,sizeof assessment);
+  (void)snprintf(message,sizeof message,"Code: %.950s",source_location);
  }else if(file[0]){
   (void)snprintf(message,sizeof message,"Code: %s (line not recorded)",file);
  }else{
@@ -223,7 +279,9 @@ static stnlabz_module_result_t diagnose_command(
  if(!emit(reply,reply_context,message))return STNLABZ_MODULE_ERR_INVALID_STATE;
  if(!strcmp(module,"router")&&strstr(selected,"outcome=2")){
   (void)snprintf(message,sizeof message,"Finding: %.950s",assessment);
- }else if(reason[0]) (void)snprintf(message,sizeof message,
+ }else if(file[0]&&lineno[0]) (void)snprintf(message,sizeof message,
+  "Finding: %.950s",assessment);
+ else if(reason[0]) (void)snprintf(message,sizeof message,
   "Finding: Recorded event indicates %s; reason=%s. Matched events: %lu.",
   term[0]?"the requested condition":"a failure",reason,matches);
  else (void)snprintf(message,sizeof message,
@@ -298,7 +356,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=3;d.version_patch=5;
+ d.version_major=0;d.version_minor=3;d.version_patch=6;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
