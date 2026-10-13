@@ -23,8 +23,9 @@ typedef struct {
  stnlabz_module_result_t service_result;
  size_t response_used;
 } digit_router_result_t;
-/* Configuration by trusted Bootstrap prior to activation; no model execution. */
+/* Generic module command routes; bind on activation and unbind on shutdown. */
 int digit_router_bind(const char *path,const char *service);
+int digit_router_unbind(const char *path,const char *service);
 void digit_router_reset(void);
 stnlabz_module_result_t digit_router_qualify(stnlabz_module_qualification_result_t *result);
 stnlabz_module_result_t digit_router_start(const stnlabz_module_host_t *host);
