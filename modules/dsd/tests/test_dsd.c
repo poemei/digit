@@ -63,7 +63,7 @@ int main(void){
  stnlabz_module_host_t host={0};
  stnlabz_module_qualification_result_t qualification;
  check(!strcmp(desc.id,"dsd"),"module identity");
- check(desc.version_major==0&&desc.version_minor==3&&desc.version_patch==7,"module version");
+ check(desc.version_major==0&&desc.version_minor==3&&desc.version_patch==8,"module version");
  check(desc.qualify(&qualification)==STNLABZ_MODULE_OK&&qualification.tests_failed==0,"qualifies");
  check(mkdtemp(directory)!=NULL,"fixture directory");
  if(!getcwd(cwd,sizeof cwd)||chdir(directory)!=0)return 2;
@@ -139,6 +139,16 @@ int main(void){
  fp=fopen(path,"a");if(!fp)return 2;
  fputs("2026-10-13T15:09:43Z ROUTER DISPATCH request=console-2 route=/help service=none outcome=2 service_result=1\n",fp);
  fclose(fp);
+ /* A previously unseen misspelling must be compared against module-owned
+    source registrations, never a hardcoded DSD command dictionary. */
+ snprintf(path,sizeof path,"%s/digit.log",logs);
+ fp=fopen(path,"a");if(!fp)return 2;
+ fputs("2026-10-13T15:09:44Z ROUTER DISPATCH request=console-3 route=/diadnose service=none outcome=2 service_result=1\\n",fp);
+ fclose(fp);
+ diagnose("my last request");
+ check(strstr(output,"route=/diadnose")!=NULL,"misspelled command is selected");
+ check(strstr(output,"Possible command spelling error")!=NULL,"misspelling recognized from source");
+ check(strstr(output,"/diagnose")!=NULL,"suggests source-derived registered command");
  diagnose("my last request");
  check(strstr(output,"route=/help")!=NULL,"last request selected by append order");
  check(strstr(output,"No registration for /help")!=NULL,"missing help registration assessed");
