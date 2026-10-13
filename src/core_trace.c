@@ -35,7 +35,7 @@ int digit_trace_record_at(const char *component, const char *operation,
     const char *decision, const char *result, const char *reason,
     const char *file, const char *function, unsigned int line)
 {
-    char detail[768];
+    char detail[1280];
     int n;
     if (!digit_log_is_open()) return 0;
     n = snprintf(detail, sizeof detail,
