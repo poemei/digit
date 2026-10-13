@@ -58,12 +58,27 @@ stnlabz_module_result_t digit_router_qualify(stnlabz_module_qualification_result
  result->negative_test_executed=result->negative_test_passed=1;
  return STNLABZ_MODULE_OK;
 }
+static stnlabz_module_result_t route_service(const void *request,size_t request_size,
+ void *response,size_t response_size,size_t *response_used,void *context){
+ digit_router_result_t result;digit_route_status_t status;
+ (void)context;
+ if(!request||request_size!=sizeof(digit_router_request_t)||!response_used)
+ return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ status=digit_router_dispatch((const digit_router_request_t *)request,response,response_size,&result);
+ *response_used=result.response_used;
+ return status==DIGIT_ROUTE_OK?STNLABZ_MODULE_OK:
+ status==DIGIT_ROUTE_DENIED?STNLABZ_MODULE_ERR_NOT_AUTHORIZED:
+ status==DIGIT_ROUTE_UNKNOWN||status==DIGIT_ROUTE_UNAVAILABLE?STNLABZ_MODULE_ERR_NOT_FOUND:
+ STNLABZ_MODULE_ERR_INVALID_STATE;
+}
 stnlabz_module_result_t digit_router_start(const stnlabz_module_host_t *host){
- if(router_host||!host||!host->invoke_service||!digit_log_is_open())
+ if(router_host||!host||!host->invoke_service||!host->register_service||
+ !host->unregister_service||!digit_log_is_open())
  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  router_host=host;
+ if(!host->register_service("router.dispatch",route_service,NULL)){router_host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;}
  if(!digit_log_event("ROUTER","START","status=ready")||!digit_log_sync()){
- router_host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
+ (void)host->unregister_service("router.dispatch",NULL);router_host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
  }
  return STNLABZ_MODULE_OK;
 }
@@ -71,6 +86,7 @@ stnlabz_module_result_t digit_router_stop(void){
  if(!router_host)return STNLABZ_MODULE_ERR_INVALID_STATE;
  if(!digit_log_event("ROUTER","STOP","status=stopped")||!digit_log_sync())
  return STNLABZ_MODULE_ERR_STOP_FAILED;
+ if(!router_host->unregister_service("router.dispatch",NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
  router_host=NULL;return STNLABZ_MODULE_OK;
 }
 stnlabz_module_descriptor_t digit_router_descriptor(void){
