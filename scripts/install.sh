@@ -14,6 +14,13 @@ fi
 if ! id "$OWNER" >/dev/null 2>&1; then
  useradd --system --gid "$GROUP" --home-dir "$PREFIX" --no-create-home --shell /usr/sbin/nologin "$OWNER"
 fi
+# Refuse symlinked Core destinations; installation must not follow runtime-created links.
+for core_path in "$PREFIX" "$PREFIX/bin" "$PREFIX/bin/digit" "$PREFIX/run"; do
+ if [ -L "$core_path" ]; then
+  echo "Refusing symlinked Core installation path: $core_path" >&2
+  exit 2
+ fi
+done
 install -d -m 0750 "$PREFIX" "$PREFIX/bin" "$PREFIX/modules" "$PREFIX/logs"
 if [ -e "$PREFIX/bin/modules" ] && [ ! -L "$PREFIX/bin/modules" ]; then
  echo "Refusing to replace existing $PREFIX/bin/modules; resolve it before installation." >&2; exit 2
