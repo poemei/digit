@@ -102,6 +102,32 @@ int main(int argc, char **argv)
         check(reg.modules[i].activation_authorized &&
               reg.modules[i].state == STNLABZ_MODULE_STATE_QUALIFIED,
               "authority granted without activation");
+    /* A raw ABI registry grant cannot substitute for Core policy at execution. */
+    request.module_id = "policy-000";
+    check(digit_core_activate(&reg, "policy-000", NULL, NULL) ==
+          STNLABZ_MODULE_ERR_NOT_AUTHORIZED, "missing execution authority denied");
+    check(reg.modules[0].state == STNLABZ_MODULE_STATE_QUALIFIED,
+          "denied execution leaves module inactive");
+    request.authority_granted = 0;
+    check(digit_core_activate(&reg, "policy-000", NULL, &request) ==
+          STNLABZ_MODULE_ERR_NOT_AUTHORIZED, "revoked authority denied at activation");
+    request.authority_granted = 1;
+    request.module_id = "policy-001";
+    check(digit_core_activate(&reg, "policy-000", NULL, &request) ==
+          STNLABZ_MODULE_ERR_NOT_AUTHORIZED, "mismatched module denied at activation");
+    request.module_id = "policy-000";
+    request.operation = "module.stop";
+    check(digit_core_activate(&reg, "policy-000", NULL, &request) ==
+          STNLABZ_MODULE_ERR_NOT_AUTHORIZED, "mismatched operation denied at activation");
+    request.operation = "module.activate";
+    check(digit_core_activate(&reg, "policy-000", NULL, &request) ==
+          STNLABZ_MODULE_OK, "authorized activation after recheck");
+    check(reg.modules[0].state == STNLABZ_MODULE_STATE_ACTIVE,
+          "valid policy enables only intended module");
+    check(stnlabz_module_registry_stop(&reg, "policy-000") ==
+          STNLABZ_MODULE_OK, "authorized mock activation stopped");
+    check(!reg.modules[0].activation_authorized,
+          "stop revokes authorization");
     digit_log_close();
     f = fopen(argv[1], "r");
     if (f) {
