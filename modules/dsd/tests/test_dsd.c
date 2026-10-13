@@ -12,6 +12,7 @@ static stnlabz_module_service_handler_fn service;
 static char output[8192];
 static size_t used;
 static unsigned analysis_calls;
+static stnlabz_module_service_handler_fn watch_service;
 static unsigned tests, failures;
 static void check(int ok,const char *name){
  ++tests;if(!ok){++failures;fprintf(stderr,"FAIL DSD: %s\n",name);}
@@ -23,10 +24,12 @@ static int unreg_command(const char *name,void *ctx){
  (void)ctx;if(strcmp(name,"diagnose"))return 0;handler=NULL;return 1;
 }
 static int reg_service(const char *name,stnlabz_module_service_handler_fn fn,void *ctx){
- (void)ctx;if(strcmp(name,"dsd.report"))return 0;service=fn;return 1;
+ (void)ctx;if(!strcmp(name,"dsd.watch")){watch_service=fn;return 1;}
+ if(strcmp(name,"dsd.report"))return 0;service=fn;return 1;
 }
 static int unreg_service(const char *name,void *ctx){
- (void)ctx;if(strcmp(name,"dsd.report"))return 0;service=NULL;return 1;
+ (void)ctx;if(!strcmp(name,"dsd.watch")){watch_service=NULL;return 1;}
+ if(strcmp(name,"dsd.report"))return 0;service=NULL;return 1;
 }
 static stnlabz_module_result_t invoke_analysis(const char *name,const void *input,
  size_t size,void *output,size_t capacity,size_t *response_used){
@@ -66,7 +69,7 @@ int main(void){
  stnlabz_module_host_t host={0};
  stnlabz_module_qualification_result_t qualification;
  check(!strcmp(desc.id,"dsd"),"module identity");
- check(desc.version_major==0&&desc.version_minor==3&&desc.version_patch==10,"module version");
+ check(desc.version_major==0&&desc.version_minor==3&&desc.version_patch==11,"module version");
  check(desc.qualify(&qualification)==STNLABZ_MODULE_OK&&qualification.tests_failed==0,"qualifies");
  check(mkdtemp(directory)!=NULL,"fixture directory");
  if(!getcwd(cwd,sizeof cwd)||chdir(directory)!=0)return 2;
@@ -85,6 +88,7 @@ int main(void){
  host.invoke_service=invoke_analysis;
  check(desc.start(&host)==STNLABZ_MODULE_OK,"starts");
  check(handler!=NULL&&service!=NULL,"ABI registrations");
+ check(watch_service!=NULL,"autonomous watch service registered");
  /* A logged loader rejection must outrank unrelated Router command errors. */
  snprintf(path,sizeof path,"%s/modules.log",logs);
  fp=fopen(path,"a");if(!fp)return 2;
@@ -193,6 +197,7 @@ int main(void){
  check(strstr(output,"no matching recorded event")!=NULL,"negative evidence handled");
  check(desc.stop()==STNLABZ_MODULE_OK,"stops");
  check(handler==NULL&&service==NULL,"ABI unregistrations");
+ check(watch_service==NULL,"watch service unregistered");
  if(chdir(cwd)!=0)return 2;
  snprintf(path,sizeof path,"%s/digit.log",logs);unlink(path);
  snprintf(path,sizeof path,"%s/modules.log",logs);unlink(path);
