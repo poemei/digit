@@ -568,6 +568,43 @@ stnlabz_module_result_t digit_dsd_report(const void *request,size_t request_size
 typedef struct { char path[320]; time_t modified; off_t size; unsigned long fingerprint; } watched_file_t;
 static watched_file_t watched[DSD_WATCH_FILES];
 static size_t watched_count,watch_cursor,watch_ticks;
+/* Persistent review ledger, separate from the two operational logs.
+   Key includes compiler selection and source identity, so a changed
+   compilation environment invalidates the cached review. */
+static int watch_ledger_loaded;
+static unsigned long watch_context(void){
+ const char *cc=getenv("CODE_REFERENCE_CC"),*root=getenv("DIGIT_SOURCE_ROOT");
+ unsigned long hash=1469598103UL;const char *p;
+ if(!cc||!*cc)cc="cc";
+ if(!root||!*root)root="/home/stnchain/digit";
+ for(p="iso-c11-project-include-v2";*p;p++){hash^=(unsigned char)*p;hash*=16777619UL;}
+ for(p=cc;*p;p++){hash^=(unsigned char)*p;hash*=16777619UL;}
+ for(p=root;*p;p++){hash^=(unsigned char)*p;hash*=16777619UL;}
+ return hash;
+}
+static void read_ledger(void){
+ FILE *fp;char path[320];unsigned long value,context;
+ if(watch_ledger_loaded)return;
+ watch_ledger_loaded=1;
+ fp=fopen("./logs/dsd_source_baseline.tsv","r");if(!fp)return;
+ while(fscanf(fp,"%319s %lu %lu",path,&value,&context)==3){
+  size_t i;
+  if(context!=watch_context())continue;
+  for(i=0;i<watched_count;i++)if(!strcmp(watched[i].path,path)){
+   watched[i].fingerprint=value;break;
+  }
+ }
+ fclose(fp);
+}
+static void save_ledger(void){
+ FILE *fp;size_t i;
+ fp=fopen("./logs/dsd_source_baseline.tsv.tmp","w");if(!fp)return;
+ for(i=0;i<watched_count;i++)if(watched[i].fingerprint)
+  fprintf(fp,"%s %lu %lu\n",watched[i].path,watched[i].fingerprint,watch_context());
+ if(fflush(fp)!=0||ferror(fp)){fclose(fp);unlink("./logs/dsd_source_baseline.tsv.tmp");return;}
+ if(fclose(fp)!=0){unlink("./logs/dsd_source_baseline.tsv.tmp");return;}
+ (void)rename("./logs/dsd_source_baseline.tsv.tmp","./logs/dsd_source_baseline.tsv");
+}
 static unsigned long source_fingerprint(const char *text,size_t n){
  size_t i;unsigned long h=2166136261UL;
  for(i=0;i<n;i++){h^=(unsigned char)text[i];h*=16777619UL;}
@@ -619,6 +656,7 @@ static stnlabz_module_result_t dsd_watch_poll(const void *request,size_t request
   gather_sources(root,"src",0);
   gather_sources(root,"modules",0);
  }
+ read_ledger();
  while(watched_count&&checks++<DSD_WATCH_CHECKS){
   watched_file_t *entry=&watched[watch_cursor++%watched_count];
   char full[1024];struct stat st;FILE *fp;
@@ -636,7 +674,6 @@ static stnlabz_module_result_t dsd_watch_poll(const void *request,size_t request
   hash=source_fingerprint(query.source,n);
   entry->modified=st.st_mtime;entry->size=st.st_size;
   if(entry->fingerprint==hash)continue;
-  entry->fingerprint=hash;
   query.source[n]=0;query.contract_version=CODE_REFERENCE_CONTRACT_VERSION;
   snprintf(query.language,sizeof query.language,"c");
   snprintf(query.source_name,sizeof query.source_name,"%.127s",entry->path);
@@ -645,6 +682,9 @@ static stnlabz_module_result_t dsd_watch_poll(const void *request,size_t request
     &result,sizeof result,&used)!=STNLABZ_MODULE_OK||
     used!=sizeof result||result.contract_version!=CODE_REFERENCE_CONTRACT_VERSION||
     !memchr(result.diagnostics,0,sizeof result.diagnostics))continue;
+  if(result.status==CODE_REFERENCE_ANALYZED||result.status==CODE_REFERENCE_SOURCE_INVALID){
+   entry->fingerprint=hash;save_ledger();
+  }
   if(result.status==CODE_REFERENCE_SOURCE_INVALID){
    snprintf(out->text,sizeof out->text,
     "DSD DEVELOPMENT ALERT\nStatus: COMPILER-CONFIRMED SOURCE ERROR\nCode: %.310s\nFinding: %.1000s\nRecommended fix: Correct the compiler-identified declaration, type or syntax error at its reported location; verify intended behavior, rebuild and run the module's tests. No source changes were made.",
@@ -689,7 +729,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=3;d.version_patch=11;
+ d.version_major=0;d.version_minor=3;d.version_patch=12;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
