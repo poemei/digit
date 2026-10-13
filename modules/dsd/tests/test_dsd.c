@@ -63,7 +63,7 @@ int main(void){
  stnlabz_module_host_t host={0};
  stnlabz_module_qualification_result_t qualification;
  check(!strcmp(desc.id,"dsd"),"module identity");
- check(desc.version_major==0&&desc.version_minor==3&&desc.version_patch==8,"module version");
+ check(desc.version_major==0&&desc.version_minor==3&&desc.version_patch==9,"module version");
  check(desc.qualify(&qualification)==STNLABZ_MODULE_OK&&qualification.tests_failed==0,"qualifies");
  check(mkdtemp(directory)!=NULL,"fixture directory");
  if(!getcwd(cwd,sizeof cwd)||chdir(directory)!=0)return 2;
@@ -82,6 +82,17 @@ int main(void){
  host.invoke_service=invoke_analysis;
  check(desc.start(&host)==STNLABZ_MODULE_OK,"starts");
  check(handler!=NULL&&service!=NULL,"ABI registrations");
+ /* A logged loader rejection must outrank unrelated Router command errors. */
+ snprintf(path,sizeof path,"%s/modules.log",logs);
+ fp=fopen(path,"a");if(!fp)return 2;
+ fputs("2026-10-13T20:00:00Z MODULE REJECTED_LAST module=unseen stage=loader reason=missing_symbol rejected=1\n",fp);
+ fclose(fp);
+ diagnose("module failures");
+ check(strstr(output,"Module: unseen")!=NULL,"identifies rejected module");
+ check(strstr(output,"REJECTED_LAST")!=NULL,"selects actual module lifecycle failure");
+ check(strstr(output,"stage=loader")!=NULL,"reports observed loader stage");
+ check(strstr(output,"missing_symbol")!=NULL,"preserves observed loader reason");
+ check(strstr(output,"No defective source line")==NULL,"does not fabricate known defect");
  diagnose("fixture_failure");
  check(strstr(output,"Module: dsd")!=NULL,"identifies failed module");
  check(strstr(output,"/modules/dsd/src/dsd.c:42")!=NULL,"verifies module source against checkout");
