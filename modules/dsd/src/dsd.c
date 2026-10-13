@@ -560,6 +560,96 @@ stnlabz_module_result_t digit_dsd_report(const void *request,size_t request_size
  *response_used=sizeof(*out);
  return STNLABZ_MODULE_OK;
 }
+/* Bounded autonomous source surveillance. No source is executed or modified.
+   Walk at most 256 files per tick and analyze at most 8 changed translation
+   units. Only compiler-confirmed errors generate development alerts. */
+#define DSD_WATCH_FILES 256
+#define DSD_WATCH_CHECKS 8
+typedef struct { char path[320]; time_t modified; off_t size; unsigned long fingerprint; } watched_file_t;
+static watched_file_t watched[DSD_WATCH_FILES];
+static size_t watched_count,watch_cursor;
+static unsigned long source_fingerprint(const char *text,size_t n){
+ size_t i;unsigned long h=2166136261UL;
+ for(i=0;i<n;i++){h^=(unsigned char)text[i];h*=16777619UL;}
+ return h;
+}
+static int source_file(const char *name){
+ size_t n=strlen(name);
+ return n>2&&!strcmp(name+n-2,".c");
+}
+static void gather_sources(const char *root,const char *relative,int depth){
+ char directory[1024];DIR *dir;struct dirent *entry;
+ if(depth>5||watched_count>=DSD_WATCH_FILES)return;
+ if(snprintf(directory,sizeof directory,"%s/%s",root,relative)>=(int)sizeof directory)return;
+ dir=opendir(directory);if(!dir)return;
+ while((entry=readdir(dir))!=NULL&&watched_count<DSD_WATCH_FILES){
+  char child[400],full[1024];struct stat st;
+  if(entry->d_name[0]=='.')continue;
+  if(snprintf(child,sizeof child,"%s/%s",relative,entry->d_name)>=(int)sizeof child)continue;
+  if(snprintf(full,sizeof full,"%s/%s",root,child)>=(int)sizeof full)continue;
+  if(lstat(full,&st)!=0)continue;
+  if(S_ISDIR(st.st_mode)){
+   if(!strcmp(entry->d_name,"bin")||!strcmp(entry->d_name,".git"))continue;
+   gather_sources(root,child,depth+1);
+  }else if(S_ISREG(st.st_mode)&&source_file(entry->d_name)){
+   watched_file_t *slot=&watched[watched_count++];
+   memset(slot,0,sizeof *slot);
+   snprintf(slot->path,sizeof slot->path,"%s",child);
+  }
+ }
+ closedir(dir);
+}
+static stnlabz_module_result_t dsd_watch_poll(const void *request,size_t request_size,
+ void *response,size_t capacity,size_t *response_used,void *context){
+ digit_dsd_watch_response_t *out=response;
+ const char *root=getenv("DIGIT_SOURCE_ROOT");
+ size_t checks=0;
+ (void)context;
+ if(response_used)*response_used=0;
+ if(!dsd_host||!out||capacity<sizeof *out||!response_used||
+    !request||request_size!=sizeof(unsigned int)||
+    *(const unsigned int *)request!=1U)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ memset(out,0,sizeof *out);out->contract_version=1U;*response_used=sizeof *out;
+ if(!root||!*root)root="/home/stnchain/digit";
+ if(!watched_count){
+  gather_sources(root,"src",0);
+  gather_sources(root,"modules",0);
+ }
+ while(watched_count&&checks++<DSD_WATCH_CHECKS){
+  watched_file_t *entry=&watched[watch_cursor++%watched_count];
+  char full[1024];struct stat st;FILE *fp;
+  code_reference_request_t query={0};
+  code_reference_response_t result={0};
+  size_t n,used=0;unsigned long hash;
+  if(snprintf(full,sizeof full,"%s/%s",root,entry->path)>=(int)sizeof full)continue;
+  if(lstat(full,&st)||!S_ISREG(st.st_mode))continue;
+  if(st.st_size<=0||st.st_size>=(off_t)sizeof query.source)continue;
+  if(entry->modified==st.st_mtime&&entry->size==st.st_size&&entry->fingerprint)continue;
+  fp=fopen(full,"rb");if(!fp)continue;
+  n=fread(query.source,1,sizeof query.source-1,fp);
+  if(ferror(fp)||!feof(fp)||memchr(query.source,0,n)){fclose(fp);continue;}
+  fclose(fp);
+  hash=source_fingerprint(query.source,n);
+  entry->modified=st.st_mtime;entry->size=st.st_size;
+  if(entry->fingerprint==hash)continue;
+  entry->fingerprint=hash;
+  query.source[n]=0;query.contract_version=CODE_REFERENCE_CONTRACT_VERSION;
+  snprintf(query.language,sizeof query.language,"c");
+  snprintf(query.source_name,sizeof query.source_name,"%.127s",entry->path);
+  if(!dsd_host->invoke_service)continue;
+  if(dsd_host->invoke_service("code_reference.analyze",&query,sizeof query,
+    &result,sizeof result,&used)!=STNLABZ_MODULE_OK||
+    used!=sizeof result||result.contract_version!=CODE_REFERENCE_CONTRACT_VERSION||
+    !memchr(result.diagnostics,0,sizeof result.diagnostics))continue;
+  if(result.status==CODE_REFERENCE_SOURCE_INVALID){
+   snprintf(out->text,sizeof out->text,
+    "DSD DEVELOPMENT ALERT\nStatus: COMPILER-CONFIRMED SOURCE ERROR\nCode: %.310s\nFinding: %.1000s\nRecommended fix: Correct the compiler-identified declaration, type or syntax error at its reported location; verify intended behavior, rebuild and run the module's tests. No source changes were made.",
+    entry->path,result.diagnostics);
+   return STNLABZ_MODULE_OK;
+  }
+ }
+ return STNLABZ_MODULE_OK;
+}
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q){
  if(!q)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(q,0,sizeof(*q));q->tests_executed=q->tests_passed=STNLABZ_MODULE_MIN_TESTS;
@@ -571,7 +661,12 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  if(!h->register_service("dsd.report",digit_dsd_report,NULL))
  return STNLABZ_MODULE_ERR_START_FAILED;
+ if(!h->register_service("dsd.watch",dsd_watch_poll,NULL)){
+  (void)h->unregister_service("dsd.report",NULL);
+  return STNLABZ_MODULE_ERR_START_FAILED;
+ }
  if(!h->register_command("diagnose",diagnose_command,NULL)){
+  (void)h->unregister_service("dsd.watch",NULL);
   (void)h->unregister_service("dsd.report",NULL);
   return STNLABZ_MODULE_ERR_START_FAILED;
  }
@@ -581,6 +676,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
 static stnlabz_module_result_t stop(void){
  if(!dsd_host)return STNLABZ_MODULE_ERR_INVALID_STATE;
  if(!dsd_host->unregister_command("diagnose",NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
+ if(!dsd_host->unregister_service("dsd.watch",NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
  if(!dsd_host->unregister_service("dsd.report",NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
  dsd_host=NULL;
  return STNLABZ_MODULE_OK;
@@ -589,7 +685,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=3;d.version_patch=10;
+ d.version_major=0;d.version_minor=3;d.version_patch=11;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
