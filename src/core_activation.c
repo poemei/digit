@@ -9,11 +9,15 @@ static int audit(const char *event, const char *id,
 {
     char detail[320];
     (void)snprintf(detail, sizeof detail,
-        "id=%.63s result=%s state=%s authorized=%d",
-        id ? id : "unknown", stnlabz_module_result_string(result),
+        "module=%.63s version=%u.%u.%u result=%s state=%s authorized=%d",
+        id ? id : "unknown",
+        record ? record->descriptor.version_major : 0,
+        record ? record->descriptor.version_minor : 0,
+        record ? record->descriptor.version_patch : 0,
+        stnlabz_module_result_string(result),
         record ? stnlabz_module_state_string(record->state) : "NOT_FOUND",
         record ? record->activation_authorized : 0);
-    return digit_log_event("ACTIVATION", event, detail) && digit_log_sync();
+    return digit_log_event("MODULE", event, detail) && digit_log_sync();
 }
 
 stnlabz_module_result_t digit_core_authorize(stnlabz_module_registry_t *registry,
@@ -78,7 +82,7 @@ stnlabz_module_result_t digit_core_activate(stnlabz_module_registry_t *registry,
            Its combined helper repeats authorization only AFTER the explicit gate. */
         rc = stnlabz_module_abi_authorize_and_activate(registry, module_id, host);
     }
-    if (!audit(rc == STNLABZ_MODULE_OK ? "ACTIVATE_PASS" : "ACTIVATE_REJECT",
+    if (!audit(rc == STNLABZ_MODULE_OK ? "HOTLOAD_ACTIVE" : "ACTIVATE_REJECT",
                module_id, rc, stnlabz_module_registry_find(registry, module_id)))
         return STNLABZ_MODULE_ERR_INVALID_STATE;
     return rc;
