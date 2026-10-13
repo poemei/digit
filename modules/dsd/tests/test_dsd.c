@@ -73,7 +73,7 @@ int main(void){
  stnlabz_module_host_t host={0};
  stnlabz_module_qualification_result_t qualification;
  check(!strcmp(desc.id,"dsd"),"module identity");
- check(desc.version_major==0&&desc.version_minor==3&&desc.version_patch==18,"module version");
+ check(desc.version_major==0&&desc.version_minor==3&&desc.version_patch==19,"module version");
  check(desc.qualify(&qualification)==STNLABZ_MODULE_OK&&qualification.tests_failed==0,"qualifies");
  check(mkdtemp(directory)!=NULL,"fixture directory");
  if(!getcwd(cwd,sizeof cwd)||chdir(directory)!=0)return 2;
@@ -194,6 +194,17 @@ int main(void){
         strstr(report.text,"Core-mediated ABI service interface")){detected=1;break;}
     }
     check(detected,"integration claim surfaces despite unresolved README version drift");
+    /* Existing version drift must remain suppressed once reported. */
+    {
+     unsigned k,duplicates=0;
+     for(k=0;k<4;k++){
+      memset(&report,0,sizeof report);watch_used=0;
+      if(watch_service(&watch_version,sizeof watch_version,&report,sizeof report,&watch_used,NULL)!=STNLABZ_MODULE_OK)break;
+      if(strstr(report.text,"README heading declares 0.1.0")||
+         strstr(report.text,"No Core changes or DSD integration."))duplicates++;
+     }
+     check(duplicates==0,"unchanged documentation issues stay suppressed");
+    }
     unlink(dsdfile);rmdir(dsdsrc);rmdir(dsdmodule);
    }
    unlink(docreadme);unlink(docsrc);rmdir(docsr);rmdir(docdir);
