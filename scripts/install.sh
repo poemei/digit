@@ -13,6 +13,7 @@ if ! getent group "$GROUP" >/dev/null 2>&1; then
 fi
 install -d -m 0750 "$PREFIX" "$PREFIX/modules" "$PREFIX/logs"
 install -m 0750 bin/digit "$PREFIX/digit"
+install -m 0750 scripts/digit-run "$PREFIX/run"
 if [ ! -e "$PREFIX/logs/digit.log" ]; then
  install -m 0640 /dev/null "$PREFIX/logs/digit.log"
 fi
