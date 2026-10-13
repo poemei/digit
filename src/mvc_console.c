@@ -159,9 +159,11 @@ done:
  if(!digit_core_stop_all(&registry))ok=0;
  if(!digit_log_event("MVC",ok?"STOPPED":"FAILED","mode=explicit_local_development")||
  !digit_log_sync())ok=0;
- if(registry.count==0)stnlabz_module_loader_unload_all(&loader);
- else digit_log_event("MVC","LOADER_RETAINED","reason=active_or_failed_module");
- stnlabz_module_registry_destroy(&registry);digit_log_close();
+ if(ok){
+  stnlabz_module_registry_destroy(&registry);
+  stnlabz_module_loader_unload_all(&loader);
+ } /* On stop failure retain module handles until process exit. */
+ digit_log_close();
  if(!ok)fputs("MVC local console failed; inspect logs/digit.log\n",stderr);
  return ok?0:1;
 }
