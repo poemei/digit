@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include "dsd.h"
+#include "ask_context.h"
 #include "code_reference.h"
 
 static stnlabz_module_command_handler_fn handler;
@@ -14,6 +15,7 @@ static char output[8192];
 static size_t used;
 static unsigned analysis_calls;
 static stnlabz_module_service_handler_fn watch_service;
+static stnlabz_module_service_handler_fn scoped_service;
 static unsigned tests, failures;
 static void check(int ok,const char *name){
  ++tests;if(!ok){++failures;fprintf(stderr,"FAIL DSD: %s\n",name);}
@@ -28,12 +30,14 @@ static int unreg_command(const char *name,void *ctx){
 }
 static int reg_service(const char *name,stnlabz_module_service_handler_fn fn,void *ctx){
  (void)ctx;if(!strcmp(name,"dsd.watch")){watch_service=fn;return 1;}
+ if(!strcmp(name,"dsd.scoped")){scoped_service=fn;return 1;}
  if(strcmp(name,"dsd.report"))return 0;
  service=fn;
  return 1;
 }
 static int unreg_service(const char *name,void *ctx){
  (void)ctx;if(!strcmp(name,"dsd.watch")){watch_service=NULL;return 1;}
+ if(!strcmp(name,"dsd.scoped")){scoped_service=NULL;return 1;}
  if(strcmp(name,"dsd.report"))return 0;
  service=NULL;
  return 1;
@@ -76,7 +80,7 @@ int main(void){
  stnlabz_module_host_t host={0};
  stnlabz_module_qualification_result_t qualification;
  check(!strcmp(desc.id,"dsd"),"module identity");
- check(desc.version_major==0&&desc.version_minor==4&&desc.version_patch==2,"module version");
+ check(desc.version_major==0&&desc.version_minor==4&&desc.version_patch==3,"module version");
  check(desc.qualify(&qualification)==STNLABZ_MODULE_OK&&qualification.tests_failed==0,"qualifies");
  check(mkdtemp(directory)!=NULL,"fixture directory");
  if(!getcwd(cwd,sizeof cwd)||chdir(directory)!=0)return 2;
