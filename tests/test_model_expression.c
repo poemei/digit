@@ -68,6 +68,9 @@ int main(int argc,char **argv){
  output.status==DIGIT_EXPRESSION_INVALID,"invalid model input explicit");
  check(digit_bootstrap_stop(&bootstrap),"Bootstrap stops router");
  check(expression_handler!=NULL,"Model retained independently of Router");
+ record=stnlabz_module_registry_find(&reg,"expression");
+ check(record&&record->state==STNLABZ_MODULE_STATE_ACTIVE&&record->activation_authorized,
+       "Bootstrap stops Router only; Model stays active and authorized");
  check(digit_core_stop_all(&reg),"Core stops Model");
  check(expression_handler==NULL,"Model unregisters service");
  record=stnlabz_module_registry_find(&reg,"expression");
