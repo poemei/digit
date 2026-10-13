@@ -6,6 +6,8 @@
 #include <dlfcn.h>
 #include <stddef.h>
 #include <string.h>
+#include <stdlib.h>
+#include <stdint.h>
 
 #include "module_loader.h"
 
@@ -56,6 +58,21 @@ static int stnlabz_module_loader_descriptor_valid(
         return 0;
     }
 
+    return 1;
+}
+
+static int stnlabz_module_loader_reserve(stnlabz_module_loader_t *loader)
+{
+    size_t cap;
+    stnlabz_loaded_module_t *p;
+    if (loader->count < loader->capacity) return 1;
+    if (loader->capacity > SIZE_MAX / 2) return 0;
+    cap = loader->capacity ? loader->capacity * 2 : 16;
+    if (cap > SIZE_MAX / sizeof(*p)) return 0;
+    p = realloc(loader->modules, cap * sizeof(*p));
+    if (!p) return 0;
+    loader->modules = p;
+    loader->capacity = cap;
     return 1;
 }
 
@@ -121,10 +138,6 @@ stnlabz_module_loader_load(
         return STNLABZ_MODULE_LOADER_ERR_ALREADY_LOADED;
     }
 
-    if (loader->count >= STNLABZ_MODULE_LOADER_MAX)
-    {
-        return STNLABZ_MODULE_LOADER_ERR_FULL;
-    }
 
     id_length = strlen(expected_module_id);
     path_length = strlen(module_path);
@@ -161,6 +174,12 @@ stnlabz_module_loader_load(
     {
         dlclose(handle);
         return STNLABZ_MODULE_LOADER_ERR_ID_MISMATCH;
+    }
+
+    if (!stnlabz_module_loader_reserve(loader))
+    {
+        dlclose(handle);
+        return STNLABZ_MODULE_LOADER_ERR_FULL;
     }
 
     loaded = &loader->modules[loader->count];
@@ -233,6 +252,9 @@ void stnlabz_module_loader_unload_all(stnlabz_module_loader_t *loader)
         memset(&loader->modules[index], 0, sizeof(loader->modules[index]));
         loader->count--;
     }
+    free(loader->modules);
+    loader->modules = NULL;
+    loader->capacity = 0;
 }
 
 const char *
