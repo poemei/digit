@@ -658,9 +658,11 @@ static int version_from_source(const char *path,unsigned *major,unsigned *minor,
 }
 /* Verify one explicit README behavior claim against actual DSD service
    invocation. Do not infer arbitrary semantics from text matching. */
+/* Only a call-site carrying the service name is evidence of integration.
+   Mentions in prose, comments or separate literals are not sufficient. */
 static int documented_integration_drift(const char *root,char *alert,size_t cap){
- char readme[1024],dsd[1024],line[1024],code[2048];
- FILE *fp;int claim=0,registration=0,invocation=0;
+ char readme[1024],dsd[1024],line[2048];
+ FILE *fp;int claim=0;unsigned number=0,call_line=0;
  if(snprintf(readme,sizeof readme,"%s/modules/code_reference/README.md",root)>=(int)sizeof readme||
     snprintf(dsd,sizeof dsd,"%s/modules/dsd/src/dsd.c",root)>=(int)sizeof dsd)return 0;
  fp=fopen(readme,"r");if(!fp)return 0;
@@ -669,23 +671,27 @@ static int documented_integration_drift(const char *root,char *alert,size_t cap)
  fclose(fp);
  if(!claim)return 0;
  fp=fopen(dsd,"r");if(!fp)return 0;
- while(fgets(code,sizeof code,fp)){
-  if(strstr(code,"code_reference.analyze"))invocation=1;
-  if(strstr(code,"invoke_service("))registration=1;
+ while(fgets(line,sizeof line,fp)){
+  const char *call=strstr(line,"invoke_service(");
+  const char *name=call?strstr(call,"\"code_reference.analyze\""):NULL;
+  number++;
+  /* Exclude declarative mentions and quoted source examples; require the
+     actual ABI callback invocation and matching service on that line. */
+  if(call&&name&&strstr(line,"dsd_host->invoke_service(")&&
+     (strchr(line,'"')==name)){call_line=number;break;}
  }
  fclose(fp);
- if(!invocation||!registration)return 0;
+ if(!call_line)return 0;
  snprintf(alert,cap,
   "DSD DOCUMENTATION DRIFT\nModule: code_reference\n"
   "Evidence: README claims 'No Core changes or DSD integration.'; "
-  "DSD source contains Core-mediated invoke_service calls targeting "
-  "'code_reference.analyze'.\n"
-  "Code: modules/dsd/src/dsd.c\n"
+  "DSD invokes the Core-mediated ABI service 'code_reference.analyze'.\n"
+  "Code: modules/dsd/src/dsd.c:%u\n"
   "Document: modules/code_reference/README.md\n"
   "Recommended Markdown change: Replace 'No Core changes or DSD integration.' "
   "with 'DSD invokes code_reference.analyze through the Core-mediated ABI service interface; "
   "Code Reference remains an independent module.' "
-  "Review integration behavior before approving. No documentation was modified.");
+  "Review integration behavior before approving. No documentation was modified.",call_line);
  return 1;
 }
 static int documentation_drift(const char *root,char *alert,size_t capacity,unsigned issue){
@@ -829,7 +835,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=3;d.version_patch=17;
+ d.version_major=0;d.version_minor=3;d.version_patch=18;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
