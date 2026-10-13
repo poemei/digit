@@ -22,7 +22,7 @@ int main(void){
  size_t used=0;
  h.register_service=register_service;h.unregister_service=unregister_service;
  check(!strcmp(d->id,"code_reference"),"module id");
- check(d->version_major==0&&d->version_minor==1&&d->version_patch==1,"module version");
+ check(d->version_major==0&&d->version_minor==1&&d->version_patch==2,"module version");
  check(d->qualify(&q)==STNLABZ_MODULE_OK&&q.tests_failed==0,"qualification");
  check(d->start(&h)==STNLABZ_MODULE_OK,"start");
  check(service!=NULL,"service published");
@@ -43,6 +43,15 @@ int main(void){
  strcpy(req.source,"#include \"intentionally_nonexistent_header_65438.h\"\nint f(void){return 1;}\n");
  check(service(&req,sizeof req,&res,sizeof res,&used,NULL)==STNLABZ_MODULE_OK,"missing header analysis");
  check(res.status==CODE_REFERENCE_ANALYSIS_INCOMPLETE,"missing header is context error not proven source defect");
+ strcpy(req.source_name,"modules/code_reference/tests/intentional_broken.c");
+ strcpy(req.source,"int compute_total(int subtotal, int tax)\n{\n    return subtotal + missing_amount;\n}\n");
+ check(service(&req,sizeof req,&res,sizeof res,&used,NULL)==STNLABZ_MODULE_OK,"candidate C request");
+ check(res.status==CODE_REFERENCE_SOURCE_INVALID,"fixture remains broken");
+ check(strstr(res.diagnostics,"Replace undeclared identifier 'missing_amount' with unused parameter 'tax'")!=NULL,
+  "source-derived unused parameter is a compiler-validated candidate");
+ strcpy(req.source,"int compute_total(int subtotal, int tax){return subtotal + missing_amount + tax;}\n");
+ check(service(&req,sizeof req,&res,sizeof res,&used,NULL)==STNLABZ_MODULE_OK,"ambiguous candidate request");
+ check(strstr(res.diagnostics,"Repair candidate")==NULL,"no invented candidate when both parameters already used");
  strcpy(req.language,"go");
  check(service(&req,sizeof req,&res,sizeof res,&used,NULL)==STNLABZ_MODULE_OK,"future language request");
  check(res.status==CODE_REFERENCE_LANGUAGE_UNSUPPORTED,"Go not falsely supported");
