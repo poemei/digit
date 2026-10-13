@@ -16,6 +16,8 @@ typedef struct {
     int instruction_authorized;
     int authority_granted;
     const char *escalation_target; /* Valid next-level contact supplied by operator policy. */
+    const char *verification_source; /* Trusted Core caller provenance label. */
+    int context_verified; /* Asserted by trusted caller, NOT independent authentication. */
 } digit_policy_request_t;
 typedef enum {
     DIGIT_ESCALATION_NONE = 0,
