@@ -80,7 +80,7 @@ module-expression:
 module-corpus:
 	@$(MAKE) -C modules/corpus
 
-test: all bin/loader_valid.so bin/loader_legacy.so module-dsd module-expression
+test: all bin/loader_valid.so bin/loader_legacy.so
 	@sh tests/run_all.sh
 
 clean:
