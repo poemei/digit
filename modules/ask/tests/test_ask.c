@@ -2,11 +2,25 @@
 #include <string.h>
 #include "stnlabz_abi/module.h"
 #include "ask_context.h"
+#include "corpus_lookup.h"
 extern const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void);
 static stnlabz_module_service_handler_fn handler;
 static int identity_calls;
 static stnlabz_module_result_t invoke(const char *name,const void *req,size_t size,void *reply,size_t cap,size_t *used){
  const char *msg="I am Digit, the STN-LABZ foundational autonomous agent.";
+ if(!strcmp(name,"corpus.lookup")){
+  const digit_corpus_lookup_request_t *q=req;
+  digit_corpus_lookup_response_t *result=reply;
+  if(size!=sizeof *q||cap<sizeof *result)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+  memset(result,0,sizeof *result);
+  if(!strcmp(q->term,"STN-Labz")){
+   result->found=1;
+   strcpy(result->id,"TEST-ORG");
+   strcpy(result->source,"fixture-corpus");
+   strcpy(result->text,"STN-LABZ engineering research organization.");
+  }
+  *used=sizeof *result;return STNLABZ_MODULE_OK;
+ }
  if(!strcmp(name,"dsd.scoped")){
   const digit_scoped_diagnostic_t *d=req;
   const char *m="DSD SCOPED REPORT";
@@ -25,7 +39,7 @@ int main(void){
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return 1;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"Hello"))return 1;
  if(handler("Hi digit",9,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"Hello"))return 1;
- if(d->version_patch!=3)return 1;
+ if(d->version_patch!=4)return 1;
  if(handler("who are you?",13,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"foundational autonomous agent")||identity_calls!=1)return 1;
  {digit_ask_context_t context={0};context.magic=DIGIT_ASK_CONTEXT_MAGIC;
   strcpy(context.question,"diagnose my last request");
@@ -33,6 +47,11 @@ int main(void){
   context.has_previous=1;strcpy(context.previous_request,"http-1");strcpy(context.previous_route,"/ask");strcpy(context.previous_service,"route./ask");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"DSD SCOPED REPORT"))return 1;
  }
+ if(handler("what is STN-Labz?",20,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     !strstr(out,"engineering research organization")||
+     !strstr(out,"fixture-corpus"))return 1;
+ if(handler("what is unlisted?",18,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     !strstr(out,"no matching knowledge record"))return 1;
  if(handler("",1,out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK)return 1;
  if(handler("hello",6,out,2,&used,NULL)==STNLABZ_MODULE_OK)return 1;
  if(d->stop()!=STNLABZ_MODULE_OK)return 1;
