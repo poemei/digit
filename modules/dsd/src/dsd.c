@@ -304,6 +304,39 @@ static void analyze_source(const char *relative,char *report,size_t capacity){
   snprintf(report,capacity,"Code Reference: analysis unavailable or incomplete (status=%d): %.320s",
    (int)response.status,response.diagnostics);
 }
+/* Diagnose observed module lifecycle failures, without treating a failed
+   authorization, loader error or callback error as a proven source defect. */
+static int module_failure_event(const char *line){
+ return strstr(line," MODULE REJECTED_LAST ")||
+ strstr(line," MODULE SCAN_FAILED ")||
+ strstr(line," MODULE DIRECTORY_FAILED ")||
+ strstr(line," MODULE VERIFY_REJECT ")||
+ strstr(line," MODULE QUALIFICATION_FAILED ")||
+ strstr(line," MODULE AUTHORIZE_REJECT ")||
+ strstr(line," MODULE ACTIVATE_REJECT ")||
+ strstr(line," MODULE STOP_FAILED ")||
+ strstr(line," MODULE UNAVAILABLE ");
+}
+static void lifecycle_assessment(const char *line,char *out,size_t cap){
+ char result[128],stage[64],reason[160];
+ extract_token(line,"result=",result,sizeof result);
+ extract_token(line,"stage=",stage,sizeof stage);
+ extract_token(line,"reason=",reason,sizeof reason);
+ if(strstr(line," REJECTED_LAST "))
+  snprintf(out,cap,"Discovery rejected a module candidate (stage=%.60s reason=%.120s). Inspect the recorded loader rejection, module manifest, descriptor and ABI compatibility before attributing a source defect.",stage[0]?stage:"not_recorded",reason[0]?reason:"not_recorded");
+ else if(strstr(line," ACTIVATE_REJECT "))
+  snprintf(out,cap,"Activation failed (result=%.100s). Correlate the module's authorization and qualification events; determine whether its start callback failed or Core rejected a prerequisite. No defective source line established.",result[0]?result:"not_recorded");
+ else if(strstr(line," QUALIFICATION_FAILED "))
+  snprintf(out,cap,"Qualification failed (result=%.100s). Inspect recorded executed/passed/failed counts and reproduce the responsible module's qualification tests before proposing a repair.",result[0]?result:"not_recorded");
+ else if(strstr(line," VERIFY_REJECT "))
+  snprintf(out,cap,"Verification rejected the module (result=%.100s). Compare descriptor identity and ABI requirements with the host's contract; code defect not yet established.",result[0]?result:"not_recorded");
+ else if(strstr(line," AUTHORIZE_REJECT "))
+  snprintf(out,cap,"Core denied module activation authorization (result=%.100s). Investigate authorization inputs and policy decision; denial is not evidence of a module source defect.",result[0]?result:"not_recorded");
+ else if(strstr(line," STOP_FAILED "))
+  snprintf(out,cap,"Module stop callback failed (result=%.100s). Inspect cleanup paths and reproduce the failure with module-local tests; precise cause remains unverified.",result[0]?result:"not_recorded");
+ else
+  snprintf(out,cap,"Module lifecycle failure recorded (reason=%.120s result=%.100s). Inspect the related lifecycle events and implementation before assigning a code defect.",reason[0]?reason:"not_recorded",result[0]?result:"not_recorded");
+}
 static stnlabz_module_result_t diagnose_command(
  const stnlabz_module_command_t *command,
  stnlabz_module_command_reply_fn reply,void *reply_context,void *context){
@@ -314,13 +347,14 @@ static stnlabz_module_result_t diagnose_command(
  char file[128]={0},lineno[24]={0},reason[256],message[1024],term[128]={0};
  char candidate_id[64],candidate_module[64],source_location[1200]={0},assessment[800]={0},route[128]={0},analysis[600]={0};
  unsigned long matches=0;
- int found=0,last_request=0;
+ int found=0,last_request=0,module_failures=0;
  const char *args;
  (void)context;
  if(!command||!reply)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  args=command->arguments;
  while(*args==' ')args++;
  if(!strcmp(args,"my last request")||!strcmp(args,"last")){last_request=1;args="";}
+ if(!strcmp(args,"module failures")||!strcmp(args,"modules")||!strcmp(args,"module failure")){module_failures=1;args="";}
  if(*args){
   size_t n=strlen(args);
   if(n>=sizeof term)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
@@ -338,7 +372,9 @@ static stnlabz_module_result_t diagnose_command(
    int c;while((c=fgetc(log))!='\n'&&c!=EOF){}
    continue; /* No truncated or fabricated evidence. */
   }
-  if(last_request){
+  if(module_failures){
+   if(source!=1||!module_failure_event(line))continue;
+  }else if(last_request){
    if(!strstr(line,"ROUTER DISPATCH")||strstr(line,"route=/diagnose "))continue;
   }else if(term[0]){
    if(!strstr(line,term))continue;
@@ -346,7 +382,7 @@ static stnlabz_module_result_t diagnose_command(
   matches=last_request?1:matches+1;
   /* For last-request selection, append order in digit.log is authoritative.
      Timestamp seconds alone cannot distinguish consecutive console commands. */
-  if(last_request||!found||strncmp(line,selected,20)>0){
+  if(last_request||module_failures||!found||strncmp(line,selected,20)>0){
    (void)snprintf(selected,sizeof selected,"%s",line);
    found=1;
   }
@@ -408,7 +444,10 @@ static stnlabz_module_result_t diagnose_command(
   (void)snprintf(message,sizeof message,"Code: not_recorded (no source location in log)");
  }
  if(!emit(reply,reply_context,message))return STNLABZ_MODULE_ERR_INVALID_STATE;
- if(!strcmp(module,"router")&&strstr(selected,"outcome=2")){
+ if(module_failures){
+  lifecycle_assessment(selected,assessment,sizeof assessment);
+  (void)snprintf(message,sizeof message,"Finding: %.950s",assessment);
+ }else if(!strcmp(module,"router")&&strstr(selected,"outcome=2")){
   (void)snprintf(message,sizeof message,"Finding: %.950s",assessment);
  }else if(file[0]&&lineno[0]) (void)snprintf(message,sizeof message,
   "Finding: %.950s",assessment);
@@ -487,7 +526,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=3;d.version_patch=8;
+ d.version_major=0;d.version_minor=3;d.version_patch=9;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
