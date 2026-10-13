@@ -4,9 +4,9 @@
 static int record(const char *event,const char *status){
  return digit_log_event("BOOTSTRAP",event,status)&&digit_log_sync();
 }
-int digit_bootstrap_start(digit_bootstrap_t *b,stnlabz_module_registry_t *registry,
+int digit_bootstrap_start_two_routes(digit_bootstrap_t *b,stnlabz_module_registry_t *registry,
  const stnlabz_module_host_t *host,const digit_policy_request_t *policy,
- const char *path,const char *service){
+ const char *path,const char *service,const char *second_path,const char *second_service){
  stnlabz_module_descriptor_t d;
  const stnlabz_module_record_t *existing;
  if(!b||!registry||b->ready||!digit_log_is_open())return 0;
@@ -20,6 +20,8 @@ int digit_bootstrap_start(digit_bootstrap_t *b,stnlabz_module_registry_t *regist
  if(existing)return 0; /* No implicit adoption or reactivation. */
  digit_router_reset();
  if(!digit_router_bind(path,service))return 0;
+ if((second_path||second_service)&&
+ (!second_path||!second_service||!digit_router_bind(second_path,second_service)))goto fail;
  d=digit_router_descriptor();
  if(stnlabz_module_registry_discover(registry,&d)!=STNLABZ_MODULE_OK)goto fail;
  if(stnlabz_module_registry_verify(registry,"router")!=STNLABZ_MODULE_OK)goto fail;
@@ -37,6 +39,11 @@ fail:
  digit_router_reset();
  (void)record("FAILED","status=start_rejected");
  return 0;
+}
+int digit_bootstrap_start(digit_bootstrap_t *b,stnlabz_module_registry_t *registry,
+ const stnlabz_module_host_t *host,const digit_policy_request_t *policy,
+ const char *path,const char *service){
+ return digit_bootstrap_start_two_routes(b,registry,host,policy,path,service,NULL,NULL);
 }
 digit_route_status_t digit_bootstrap_handoff(const digit_bootstrap_t *b,
  const digit_router_request_t *request,void *response,size_t capacity,
