@@ -793,25 +793,15 @@ static int documented_integration_drift(const char *root,char *alert,size_t cap)
   snprintf(implementation_detail,sizeof implementation_detail,"Implementation evidence: analyze_c contains fork() at modules/code_reference/src/code_reference.c:%u (source only; execution not established)\n",fork_line);
  else snprintf(implementation_detail,sizeof implementation_detail,"Implementation evidence: fork() call not established\n");
  snprintf(alert,cap,
-  "DSD DOCUMENTATION DRIFT\nModule: code_reference\n"
-  "Evidence: README claims 'No Core changes or DSD integration.'; "
-  "DSD calls 'code_reference.analyze' and Code Reference registers that service.\n"
-  "Consumer: modules/dsd/src/dsd.c:%u\n"
-  "Provider: modules/code_reference/src/code_reference.c:%u\n"
-  "Provider handler: %s (registered callback, execution not established)\n"
-  "Handler definition: modules/code_reference/src/code_reference.c:%u\n\n"
-  "%s"
-  "Callee definition: %s\n"
-  "%s"
-  "Document: modules/code_reference/README.md\n"
-  "Recommended Markdown change: Replace 'No Core changes or DSD integration.' "
-  "with 'DSD invokes the independently registered code_reference.analyze service "
-  "through the Core-mediated ABI interface.' "
-  "Registration and invocation establish an interface relationship, not runtime activation. "
-  "No documentation was modified.",call_line,registration_line,handler,definition_line,
-  internal_call_line?"Internal call: analyze_c (lexically present; execution not established)\n":"Internal call: not established\n",
-  callee_detail,
-  implementation_detail);
+  "DSD — Engineering Finding\n"
+  "Project: Code Reference\n"
+  "Issue: Documentation is inconsistent with the current implementation.\n"
+  "Finding: The README claims no DSD integration, but DSD invokes the service registered by Code Reference.\n"
+  "Assessment: Documentation is outdated. No software malfunction has been established.\n"
+  "Recommended correction: Update the README to describe the existing service relationship.\n"
+  "Status: Investigation complete. No files modified.\n\n"
+  "Authorization requested: May I correct the affected Markdown documentation?\n"
+  "Awaiting authorized operator decision.");
  return 1;
 }
 static int documentation_drift(const char *root,char *alert,size_t capacity,unsigned issue){
@@ -834,10 +824,16 @@ static int documentation_drift(const char *root,char *alert,size_t capacity,unsi
   if(sscanf(first,label,&dm,&dn,&dp)!=3)continue;
   if(major==dm&&minor==dn&&patch==dp)continue;
   snprintf(alert,capacity,
-   "DSD DOCUMENTATION DRIFT\nModule: %s\nEvidence: source descriptor declares %u.%u.%u; README heading declares %u.%u.%u.\nCode: modules/%s/%s\nDocument: modules/%s/README.md\nRecommended Markdown change: Replace heading '# %s %u.%u.%u' with '# %s %u.%u.%u' after validating the module release metadata. Review remaining README claims against current source; no documentation was modified.",
-   modules[i],major,minor,patch,dm,dn,dp,modules[i],sources[i],modules[i],
-   i==0?"Code Reference":"DSD",dm,dn,dp,
-   i==0?"Code Reference":"DSD",major,minor,patch);
+   "DSD — Engineering Finding\n"
+   "Project: %s\n"
+   "Issue: Module documentation version is inconsistent with the source.\n"
+   "Finding: The README declares %u.%u.%u; the source descriptor declares %u.%u.%u.\n"
+   "Assessment: Documentation version mismatch confirmed; no runtime malfunction established.\n"
+   "Recommended correction: Review release metadata, then update the README heading to %u.%u.%u.\n"
+   "Status: Investigation complete. No files modified.\n\n"
+   "Authorization requested: May I correct the affected Markdown documentation?\n"
+   "Awaiting authorized operator decision.",
+   i==0?"Code Reference":"DSD",dm,dn,dp,major,minor,patch,major,minor,patch);
   return 1;
  }
  return issue==2?documented_integration_drift(root,alert,capacity):0;
@@ -910,11 +906,19 @@ static stnlabz_module_result_t dsd_watch_poll(const void *request,size_t request
   }
   if(result.status==CODE_REFERENCE_SOURCE_INVALID){
    snprintf(out->text,sizeof out->text,
-    "DSD DEVELOPMENT ALERT\nStatus: COMPILER-CONFIRMED SOURCE ERROR\nCode: %.310s\nFinding: %.1000s\nRecommended fix: %s\nNo source changes were made.",
+    "DSD — Engineering Finding\n"
+    "Project: %.160s\n"
+    "Issue: Compiler-confirmed source error.\n"
+    "Finding: %.850s\n"
+    "Assessment: The C11 frontend rejected the source. Intended behavior is not established.\n"
+    "Recommended action: %s\n"
+    "Status: Investigation complete. No files modified.\n\n"
+    "Authorization requested: May I prepare a proposed repair for review?\n"
+    "Awaiting authorized operator decision.",
     entry->path,result.diagnostics,
     strstr(result.diagnostics,"Repair candidate (")?
-    "Review the compiler-validated repair candidate in the finding, confirm intended behavior, then rebuild and test.":
-    "No uniquely supported repair established. Inspect the compiler error and intended behavior before patching.");
+    "Review the compiler-validated repair candidate against intended behavior.":
+    "Investigate the compiler diagnostic to establish a supported repair.");
    return STNLABZ_MODULE_OK;
   }
  }
@@ -955,7 +959,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=4;d.version_patch=0;
+ d.version_major=0;d.version_minor=4;d.version_patch=1;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
