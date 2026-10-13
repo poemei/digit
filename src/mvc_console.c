@@ -1,168 +1,155 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "mvc_console.h"
+#include "router.h"
 #include "core_activation.h"
+#include "core_discovery.h"
 #include "logging.h"
-#include "bootstrap.h"
-#include "model_expression.h"
-#include "rendering.h"
-#include "dsd.h"
 #include "stnlabz_abi/module_loader.h"
 #include "stnlabz_abi/module_discovery.h"
 
-typedef struct {const char *name;stnlabz_module_service_handler_fn handler;void *context;} service_t;
-static service_t services[8];
-static size_t service_count;
-static int add_service(const char *name,stnlabz_module_service_handler_fn handler,void *context){
- size_t i;
- if(!name||!handler||service_count>=8)return 0;
- for(i=0;i<service_count;i++)if(!strcmp(services[i].name,name))return 0;
- services[service_count].name=name;services[service_count].handler=handler;
- services[service_count++].context=context;return 1;
+typedef struct {
+ char name[STNLABZ_MODULE_COMMAND_NAME_MAX];
+ stnlabz_module_command_handler_fn handler;
+ void *context;
+} command_entry_t;
+static command_entry_t commands[DIGIT_ROUTER_MAX_ROUTES];
+static size_t command_count;
+static int reply(void *context,const char *message){
+ (void)context;
+ if(!message)return 0;
+ puts(message);fflush(stdout);return 1;
 }
-static int remove_service(const char *name,void *context){
+static int register_command(const char *name,stnlabz_module_command_handler_fn handler,void *context){
+ char path[DIGIT_ROUTER_PATH_MAX],service[STNLABZ_MODULE_SERVICE_NAME_MAX];
  size_t i;
- for(i=0;i<service_count;i++)if(!strcmp(services[i].name,name)&&services[i].context==context){
-  for(;i+1<service_count;i++)services[i]=services[i+1];
-  --service_count;return 1;
+ if(!name||!name[0]||strlen(name)>DIGIT_ROUTER_PATH_MAX-2||
+ !handler||command_count>=DIGIT_ROUTER_MAX_ROUTES)return 0;
+ for(i=0;i<command_count;i++)if(!strcmp(commands[i].name,name))return 0;
+ (void)snprintf(path,sizeof path,"/%s",name);
+ (void)snprintf(service,sizeof service,"command.%s",name);
+ if(!digit_router_bind(path,service))return 0;
+ (void)snprintf(commands[command_count].name,sizeof commands[command_count].name,"%s",name);
+ commands[command_count].handler=handler;
+ commands[command_count++].context=context;
+ return 1;
+}
+static int unregister_command(const char *name,void *context){
+ size_t i;
+ for(i=0;i<command_count;i++)if(!strcmp(commands[i].name,name)&&commands[i].context==context){
+  commands[i].handler=NULL;return 1;
  }
  return 0;
 }
-static stnlabz_module_result_t call_service(const char *name,const void *request,size_t request_size,
- void *response,size_t response_size,size_t *response_used){
+static stnlabz_module_result_t invoke(const char *service,const void *request,size_t size,
+ void *response,size_t capacity,size_t *used){
  size_t i;
- if(!name||!response_used)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
- for(i=0;i<service_count;i++)if(!strcmp(services[i].name,name))
-  return services[i].handler(request,request_size,response,response_size,response_used,services[i].context);
+ (void)response;(void)capacity;
+ if(used)*used=0;
+ if(!service||!request||size!=sizeof(stnlabz_module_command_t)||!used)
+ return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ for(i=0;i<command_count;i++)if(commands[i].handler&&
+ !strncmp(service,"command.",8)&&!strcmp(commands[i].name,service+8))
+ return commands[i].handler((const stnlabz_module_command_t *)request,reply,NULL,commands[i].context);
  return STNLABZ_MODULE_ERR_NOT_FOUND;
 }
-static const stnlabz_module_host_t host={
- NULL,NULL,NULL,NULL,add_service,remove_service,call_service
-};
-static int activate(stnlabz_module_registry_t *reg,stnlabz_module_descriptor_t descriptor,
- digit_policy_request_t *policy){
- if(stnlabz_module_registry_discover(reg,&descriptor)!=STNLABZ_MODULE_OK||
-    stnlabz_module_registry_verify(reg,descriptor.id)!=STNLABZ_MODULE_OK||
-    stnlabz_module_registry_qualify(reg,descriptor.id)!=STNLABZ_MODULE_OK)return 0;
- policy->module_id=descriptor.id;
- return digit_core_authorize(reg,descriptor.id,policy)==STNLABZ_MODULE_OK &&
- digit_core_activate(reg,descriptor.id,&host,policy)==STNLABZ_MODULE_OK;
+static stnlabz_module_service_handler_fn reserved_handler;
+static const char *reserved_name;
+static void *reserved_context;
+static int register_service(const char *name,stnlabz_module_service_handler_fn handler,void *ctx){
+ if(!name||!handler||reserved_handler)return 0;
+ reserved_name=name;reserved_handler=handler;reserved_context=ctx;return 1;
 }
+static int unregister_service(const char *name,void *ctx){
+ if(!reserved_handler||strcmp(name,reserved_name)||ctx!=reserved_context)return 0;
+ reserved_handler=NULL;reserved_name=NULL;reserved_context=NULL;return 1;
+}
+static const stnlabz_module_host_t host={
+ NULL,NULL,register_command,unregister_command,register_service,unregister_service,invoke
+};
 int digit_mvc_console(void){
  stnlabz_module_registry_t registry;
- digit_bootstrap_t bootstrap={0};
  stnlabz_module_loader_t loader;
- stnlabz_module_discovery_report_t discovery={0};
- const stnlabz_module_record_t *dsd_record;
- char module_dir[1024];
- int dsd_ready=0;
- digit_policy_request_t policy={"local-console","mvc-development","module.activate",NULL,
-  1,1,1,1,NULL,"explicit-local-cli-development-mode",1};
- digit_expression_request_t expression;
- digit_expression_response_t model;
- digit_render_request_t view_input;
- digit_render_response_t rendered;
- digit_dsd_trace_t trace={0};
- digit_dsd_report_t diagnostic;
- digit_router_result_t diagnostic_route;
- char diagnostic_view[2048];
- digit_router_request_t request;
- char line[256];
- size_t seq=0,used;
- int ok=1;
- stnlabz_module_registry_init(&registry);stnlabz_module_loader_init(&loader);service_count=0;
- if(!digit_log_open()){fputs("MVC: mandatory log unavailable\n",stderr);return 1;}
- if(!digit_log_event("MVC","START","mode=explicit_local_development authentication=not_provided")||
- !digit_log_sync()){ok=0;goto done;}
- /* Local opt-in development proof only. This fixture context is NOT an identity validator. */
- if(!activate(&registry,digit_expression_descriptor(),&policy)||
- !activate(&registry,digit_rendering_descriptor(),&policy)){ok=0;goto done;}
- /* The existing ABI loader obtains DSD exclusively from installed module files. */
- if(stnlabz_module_discovery_get_path(module_dir,sizeof module_dir)==STNLABZ_MODULE_OK &&
-    stnlabz_module_discovery_scan(&registry,&loader,module_dir,&discovery)==STNLABZ_MODULE_OK){
-  dsd_record=stnlabz_module_registry_find(&registry,"dsd");
-  if(dsd_record&&stnlabz_module_registry_verify(&registry,"dsd")==STNLABZ_MODULE_OK &&
-     stnlabz_module_registry_qualify(&registry,"dsd")==STNLABZ_MODULE_OK){
-   policy.module_id="dsd";
-   dsd_ready=digit_core_authorize(&registry,"dsd",&policy)==STNLABZ_MODULE_OK &&
-     digit_core_activate(&registry,"dsd",&host,&policy)==STNLABZ_MODULE_OK;
+ stnlabz_module_discovery_report_t discovered;
+ digit_policy_request_t policy={"local-console","console","module.activate",NULL,
+  1,1,1,1,NULL,"trusted-local-console",1};
+ char directory[1024],line[512];
+ size_t seq=0,i;
+ int good=1,router_active=0;
+ stnlabz_module_registry_init(&registry);
+ stnlabz_module_loader_init(&loader);
+ digit_router_reset();command_count=0;
+ if(!digit_log_open()){fputs("Digit: mandatory log unavailable\n",stderr);return 1;}
+ if(!digit_log_event("CONSOLE","START","mode=local")||!digit_log_sync()){good=0;goto done;}
+ if(stnlabz_module_discovery_get_path(directory,sizeof directory)!=STNLABZ_MODULE_OK ||
+ !digit_core_discover(&registry,&loader,directory,&discovered) ||
+ !digit_core_verify(&registry)||!digit_core_qualify(&registry)){good=0;goto done;}
+ /* Module capabilities register their own commands at authorized activation.
+    Router receives the resulting generic bindings; there are no module names here. */
+ for(i=0;i<registry.count;i++){
+  const char *id=registry.modules[i].descriptor.id;
+  if(registry.modules[i].state!=STNLABZ_MODULE_STATE_QUALIFIED)continue;
+  policy.module_id=id;
+  if(digit_core_authorize(&registry,id,&policy)!=STNLABZ_MODULE_OK ||
+     digit_core_activate(&registry,id,&host,&policy)!=STNLABZ_MODULE_OK)
+   (void)digit_log_event("CONSOLE","MODULE_UNAVAILABLE",id);
+ }
+ /* Router is infrastructure controlled by Digit; no Bootstrap intermediary. */
+ {
+  stnlabz_module_descriptor_t router=digit_router_descriptor();
+  policy.module_id="router";
+  if(stnlabz_module_registry_discover(&registry,&router)!=STNLABZ_MODULE_OK ||
+     stnlabz_module_registry_verify(&registry,"router")!=STNLABZ_MODULE_OK ||
+     stnlabz_module_registry_qualify(&registry,"router")!=STNLABZ_MODULE_OK ||
+     digit_core_authorize(&registry,"router",&policy)!=STNLABZ_MODULE_OK ||
+     digit_core_activate(&registry,"router",&host,&policy)!=STNLABZ_MODULE_OK){
+   good=0;goto done;
   }
+  router_active=1;
  }
- policy.module_id="router";
- if(!digit_bootstrap_start_with_diagnostics(&bootstrap,&registry,&host,&policy,
- "/lookup","expression.lookup",dsd_ready?"dsd.report":NULL)){
-  ok=0;goto done;
- }
- puts("STN-LABZ Digit | MVC local development console");
- puts("Modules ACTIVE: router, expression, rendering (local development mode)");
- puts(dsd_ready?"DSD ACTIVE: installed independent dsd.so":"DSD UNAVAILABLE: module not installed or not activated");
- puts("Enter an expression; /diagnose for last request; /quit to stop. This console does not authenticate users.");
+ puts("STN-LABZ Digit | interactive console");
+ puts("Module commands are registered on activation. /quit exits.");
  fflush(stdout);
  while(fgets(line,sizeof line,stdin)){
-  size_t len=strlen(line);
+  stnlabz_module_command_t command={0};
+  digit_router_request_t request={0};
+  digit_router_result_t result={0};
+  char word[STNLABZ_MODULE_COMMAND_NAME_MAX];
+  size_t j=0,start=0,len=strlen(line);
   if(len&&!strchr(line,'\n')&&!feof(stdin)){
    int c;while((c=getchar())!='\n'&&c!=EOF){}
-   puts("Invalid input: too long.");continue;
+   puts("Input too long.");continue;
   }
   while(len&&(line[len-1]=='\n'||line[len-1]=='\r'))line[--len]=0;
-  if(!strcmp(line,"/quit"))break;
-  if(!strncmp(line,"/diagnose",9)||!strncmp(line,"diagnose ",9)){
-   if(!dsd_ready){puts("DSD unavailable.");continue;}
-   if(!trace.request_id[0]){puts("No previous request available.");continue;}
-   memset(&request,0,sizeof request);
-   (void)snprintf(request.request_id,sizeof request.request_id,"console-%zu",++seq);
-   (void)snprintf(request.path,sizeof request.path,"/diagnose");
-   request.core_authorized=1;
-   request.payload=&trace;request.payload_size=sizeof trace;
-   if(digit_bootstrap_handoff(&bootstrap,&request,&diagnostic,sizeof diagnostic,&diagnostic_route)!=DIGIT_ROUTE_OK ||
-      digit_rendering_diagnostic(&diagnostic,diagnostic_view,sizeof diagnostic_view)!=STNLABZ_MODULE_OK){
-    puts("Diagnostic request failed.");continue;
-   }
-   fputs(diagnostic_view,stdout);fflush(stdout);continue;
-  }
-  memset(&expression,0,sizeof expression);
-  if(len>=sizeof expression.expression){puts("Invalid expression.");continue;}
-  memcpy(expression.expression,line,len+1);
-  memset(&request,0,sizeof request);
+  if(!strcmp(line,"/quit")||!strcmp(line,"quit"))break;
+  while(line[start]==' '||line[start]=='/')start++;
+  while(line[start+j]&&line[start+j]!=' '&&j<sizeof word-1){word[j]=line[start+j];j++;}
+  word[j]=0;
+  if(!j){continue;}
+  if(line[start+j]&&line[start+j]!=' '){puts("Invalid command.");continue;}
+  (void)snprintf(command.sender,sizeof command.sender,"local-console");
+  (void)snprintf(command.account,sizeof command.account,"local");
+  (void)snprintf(command.name,sizeof command.name,"%s",word);
+  if(line[start+j]==' ') (void)snprintf(command.arguments,sizeof command.arguments,"%s",line+start+j+1);
   (void)snprintf(request.request_id,sizeof request.request_id,"console-%zu",++seq);
-  (void)snprintf(request.path,sizeof request.path,"/lookup");
-  request.core_authorized=1; /* Trusted in-process development adapter only. */
-  request.payload=&expression;request.payload_size=sizeof expression;
-  memset(&model,0,sizeof model);memset(&view_input,0,sizeof view_input);
-  view_input.route.status=digit_bootstrap_handoff(&bootstrap,&request,&model,sizeof model,&view_input.route);
-  if(view_input.route.status==DIGIT_ROUTE_OK){
-   view_input.model=model;view_input.model_present=1;
+  (void)snprintf(request.path,sizeof request.path,"/%s",word);
+  request.core_authorized=1; /* Local in-process adapter, not remote authentication. */
+  request.payload=&command;request.payload_size=sizeof command;
+  switch(digit_router_dispatch(&request,NULL,0,&result)){
+   case DIGIT_ROUTE_OK:break;
+   case DIGIT_ROUTE_UNKNOWN:puts("Unknown command.");break;
+   case DIGIT_ROUTE_UNAVAILABLE:puts("Module unavailable.");break;
+   case DIGIT_ROUTE_DENIED:puts("Request denied.");break;
+   default:puts("Command failed; inspect logs/digit.log.");break;
   }
-  if(call_service("rendering.render",&view_input,sizeof view_input,
-   &rendered,sizeof rendered,&used)!=STNLABZ_MODULE_OK){ok=0;break;}
-  memset(&trace,0,sizeof trace);
-  (void)snprintf(trace.request_id,sizeof trace.request_id,"%s",request.request_id);
-  trace.count=2;
-  (void)snprintf(trace.observations[0].component,sizeof trace.observations[0].component,"ROUTER");
-  (void)snprintf(trace.observations[0].decision,sizeof trace.observations[0].decision,"%s",
-   view_input.route.status==DIGIT_ROUTE_OK?"ROUTED":"FAILED");
-  (void)snprintf(trace.observations[0].reason,sizeof trace.observations[0].reason,"route_status=%d",(int)view_input.route.status);
-  if(view_input.route.status==DIGIT_ROUTE_OK){
-   (void)snprintf(trace.observations[1].component,sizeof trace.observations[1].component,"EXPRESSION");
-   (void)snprintf(trace.observations[1].decision,sizeof trace.observations[1].decision,"%s",
-    model.status==DIGIT_EXPRESSION_INVALID?"FAILED":model.status==DIGIT_EXPRESSION_UNKNOWN?"UNKNOWN":"KNOWN");
-   (void)snprintf(trace.observations[1].reason,sizeof trace.observations[1].reason,"model_status=%d",(int)model.status);
-   (void)snprintf(trace.observations[1].file,sizeof trace.observations[1].file,"%s",model.source_file);
-   (void)snprintf(trace.observations[1].function,sizeof trace.observations[1].function,"%s",model.source_function);
-   trace.observations[1].line=model.source_line;
-  }else trace.count=1;
-  printf("%s\n",rendered.text);fflush(stdout);
+  fflush(stdout);
  }
 done:
- if(bootstrap.ready&&!digit_bootstrap_stop(&bootstrap))ok=0;
- if(!digit_core_stop_all(&registry))ok=0;
- if(!digit_log_event("MVC",ok?"STOPPED":"FAILED","mode=explicit_local_development")||
- !digit_log_sync())ok=0;
- if(ok){
-  stnlabz_module_registry_destroy(&registry);
-  stnlabz_module_loader_unload_all(&loader);
- } /* On stop failure retain module handles until process exit. */
+ if(router_active&&!digit_core_stop(&registry,"router"))good=0;
+ if(!digit_core_stop_all(&registry))good=0;
+ if(!digit_log_event("CONSOLE",good?"STOPPED":"FAILED","mode=local")||!digit_log_sync())good=0;
+ if(good)digit_core_discovery_cleanup(&registry,&loader);
  digit_log_close();
- if(!ok)fputs("MVC local console failed; inspect logs/digit.log\n",stderr);
- return ok?0:1;
+ return good?0:1;
 }
