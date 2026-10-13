@@ -11,9 +11,9 @@ all: $(TARGET)
 $(TARGET): src/dsd.c include/dsd.h $(CODE_REFERENCE_INCLUDE)/code_reference.h
 	mkdir -p bin
 	$(CC) $(CFLAGS) -Iinclude -I$(CODE_REFERENCE_INCLUDE) -I$(ROOT)/include -I$(ROOT)/include/stnlabz_abi -shared src/dsd.c -o $@
-bin/test_dsd: tests/test_dsd.c src/dsd.c include/dsd.h
+bin/test_dsd: tests/test_dsd.c src/dsd.c include/dsd.h $(CODE_REFERENCE_INCLUDE)/code_reference.h
 	mkdir -p bin
-	$(CC) $(CFLAGS) -Iinclude -I$(ROOT)/include -I$(ROOT)/include/stnlabz_abi tests/test_dsd.c src/dsd.c -o $@
+	$(CC) $(CFLAGS) -Iinclude -I$(CODE_REFERENCE_INCLUDE) -I$(ROOT)/include -I$(ROOT)/include/stnlabz_abi tests/test_dsd.c src/dsd.c -o $@
 test: $(TARGET) bin/test_dsd
 	@echo '-----------'
 	@echo 'DSD MODULE TESTS'
