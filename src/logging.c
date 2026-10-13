@@ -99,8 +99,11 @@ int digit_log_event(const char *component,const char *event,const char *detail)
         }else{
             module_identity(detail,id,sizeof id,version,sizeof version);
             module_sequence++;
-            written=fprintf(destination,"%s MODULE %s sequence=%lu module=%s%s%s\n",
-                stamp,event,module_sequence,id,version[0]?" version=":"",version);
+            int failure=strstr(event,"FAILED")||strstr(event,"REJECT")||
+                strstr(event,"DENIED")||strstr(event,"ERROR");
+            written=fprintf(destination,"%s MODULE %s sequence=%lu module=%s%s%s%s%s\n",
+                stamp,event,module_sequence,id,version[0]?" version=":"",version,
+                failure&&detail?" evidence=":"",failure&&detail?detail:"");
         }
     }else{
         written=fprintf(destination,"%s %s %s%s%s\n",
