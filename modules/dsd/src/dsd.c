@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include "dsd.h"
+#include "code_reference.h"
 
 static const stnlabz_module_host_t *dsd_host;
 /* Bounded evidence search. Never infer source locations absent from logs. */
@@ -177,6 +178,55 @@ static int inspect_recorded_code(const char *relative,const char *number,
  snprintf(finding,fcap,"Verified source line: %.500s. This corroborates the recorded location, not the runtime cause. Inspect surrounding control flow and matching runtime evidence before authorizing repair.",last);
  return 1;
 }
+/* Invoke the independently activated language service through Core's ABI.
+   Missing services and incomplete translation units are reported explicitly. */
+static void analyze_source(const char *relative,char *report,size_t capacity){
+ const char *root=getenv("DIGIT_SOURCE_ROOT");
+ code_reference_request_t request={0};
+ code_reference_response_t response={0};
+ char path[1024];
+ FILE *fp;
+ size_t n,used=0;
+ stnlabz_module_result_t result;
+ if(!root||!*root)root="/home/stnchain/digit";
+ if(!relative||!*relative||relative[0]=='/'||strstr(relative,"..")){
+  snprintf(report,capacity,"Code Reference: source path rejected");return;
+ }
+ if(snprintf(path,sizeof path,"%s/%s",root,relative)>=(int)sizeof path){
+  snprintf(report,capacity,"Code Reference: source path exceeds bounds");return;
+ }
+ fp=fopen(path,"rb");
+ if(!fp){snprintf(report,capacity,"Code Reference: source unreadable");return;}
+ n=fread(request.source,1,sizeof request.source-1,fp);
+ if(ferror(fp)||!feof(fp)||memchr(request.source,0,n)){
+  fclose(fp);snprintf(report,capacity,"Code Reference: complete translation unit unavailable (size or content)");return;
+ }
+ fclose(fp);
+ request.source[n]=0;
+ request.contract_version=CODE_REFERENCE_CONTRACT_VERSION;
+ snprintf(request.language,sizeof request.language,"c");
+ snprintf(request.source_name,sizeof request.source_name,"%s",relative);
+ if(!dsd_host||!dsd_host->invoke_service){
+  snprintf(report,capacity,"Code Reference: Core service interface unavailable");return;
+ }
+ result=dsd_host->invoke_service("code_reference.analyze",
+  &request,sizeof request,&response,sizeof response,&used);
+ if(result!=STNLABZ_MODULE_OK){
+  snprintf(report,capacity,"Code Reference: service unavailable (ABI result=%d)",(int)result);return;
+ }
+ if(used!=sizeof response||response.contract_version!=CODE_REFERENCE_CONTRACT_VERSION||
+    !memchr(response.diagnostics,0,sizeof response.diagnostics)||
+    !memchr(response.analyzer,0,sizeof response.analyzer)){
+  snprintf(report,capacity,"Code Reference: invalid service response");return;
+ }
+ if(response.status==CODE_REFERENCE_ANALYZED)
+  snprintf(report,capacity,"Code Reference: C11 frontend accepted translation unit; this does not establish behavioral correctness.");
+ else if(response.status==CODE_REFERENCE_SOURCE_INVALID)
+  snprintf(report,capacity,"Code Reference: C11 frontend found translation-unit errors: %.350s",response.diagnostics);
+ else
+  snprintf(report,capacity,"Code Reference: analysis unavailable or incomplete (status=%d): %.320s",
+   (int)response.status,response.diagnostics);
+}
 static stnlabz_module_result_t diagnose_command(
  const stnlabz_module_command_t *command,
  stnlabz_module_command_reply_fn reply,void *reply_context,void *context){
@@ -185,7 +235,7 @@ static stnlabz_module_result_t diagnose_command(
  size_t source;
  char line[DSD_LOG_LINE],selected[DSD_LOG_LINE]={0},module[64]={0};
  char file[128]={0},lineno[24]={0},reason[256],message[1024],term[128]={0};
- char candidate_id[64],candidate_module[64],source_location[1200]={0},assessment[800]={0},route[128]={0};
+ char candidate_id[64],candidate_module[64],source_location[1200]={0},assessment[800]={0},route[128]={0},analysis[600]={0};
  unsigned long matches=0;
  int found=0,last_request=0;
  const char *args;
@@ -265,6 +315,10 @@ static stnlabz_module_result_t diagnose_command(
  if(!emit(reply,reply_context,message))return STNLABZ_MODULE_ERR_INVALID_STATE;
  (void)snprintf(message,sizeof message,"Log: %s",selected);
  if(!emit(reply,reply_context,message))return STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(file[0]&&lineno[0]){
+  analyze_source(file,analysis,sizeof analysis);
+  if(!emit(reply,reply_context,analysis))return STNLABZ_MODULE_ERR_INVALID_STATE;
+ }
  if(!strcmp(module,"router")&&strstr(selected,"outcome=2")){
   (void)inspect_route(route,source_location,sizeof source_location,assessment,sizeof assessment);
   (void)snprintf(message,sizeof message,"Code: %.950s",source_location);
@@ -356,7 +410,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=3;d.version_patch=6;
+ d.version_major=0;d.version_minor=3;d.version_patch=7;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
