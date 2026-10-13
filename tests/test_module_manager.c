@@ -15,8 +15,8 @@ static void check(int result, const char *name) {
     if (!result) { ++failed; fprintf(stderr, "FAIL module management: %s\n", name); }
 }
 int main(void) {
-    char logfile[] = "/tmp/digit-module-log-XXXXXX";
-    int fd = mkstemp(logfile);
+    char directory[] = "/tmp/digit-module-log-XXXXXX";
+    char logfile[512], modulefile[512];
     FILE *logread;
     char line[512];
     int saw_register = 0, saw_reject = 0, saw_activate = 0, saw_stop = 0;
@@ -25,8 +25,9 @@ int main(void) {
     digit_module_callbacks_t cb = {start_ok, stop_ok, NULL};
     digit_module_qualification_t bad = {1, 1, 0, 0, 0};
     digit_module_qualification_t good = {1, 1, 0, 1, 1};
-    if (fd < 0) return 1;
-    close(fd);
+    if (!mkdtemp(directory)) return 1;
+    (void)snprintf(logfile, sizeof logfile, "%s/digit.log", directory);
+    (void)snprintf(modulefile, sizeof modulefile, "%s/modules.log", directory);
     digit_module_manager_init(&m);
     memset(&d, 0, sizeof(d));
     strcpy(d.id, "mock");
@@ -34,7 +35,7 @@ int main(void) {
     check(digit_module_register(&m, &d, &cb) == DIGIT_MODULE_CALLBACK_FAILED,
           "registration denied without audit log");
     check(m.count == 0, "unaudited registration does not change registry");
-    if (!digit_log_open_path(logfile)) { unlink(logfile); return 1; }
+    if (!digit_log_open_path(logfile)) { rmdir(directory); return 1; }
     digit_module_manager_init(&m);
     check(m.count == 0, "zero modules at initialization");
     memset(&d, 0, sizeof(d));
@@ -102,7 +103,7 @@ int main(void) {
           "registration denied once logger closes");
     check(digit_module_authorize(&m, "mock", 1) == DIGIT_MODULE_CALLBACK_FAILED,
           "authorization denied once logger closes");
-    logread = fopen(logfile, "r");
+    logread = fopen(modulefile, "r");
     check(logread != NULL, "module event log readable");
     if (logread) {
         while (fgets(line, sizeof line, logread)) {
@@ -118,6 +119,8 @@ int main(void) {
     check(saw_activate, "activation logged");
     check(saw_stop, "stop logged");
     unlink(logfile);
+    unlink(modulefile);
+    rmdir(directory);
     printf("Core module-manager tests: %u executed, %u failed\n", tests, failed);
     return failed != 0;
 }
