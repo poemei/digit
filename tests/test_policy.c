@@ -101,6 +101,12 @@ int main(int argc, char **argv)
               STNLABZ_MODULE_OK, "qualify");
     }
     check(reg.count == 48, "dynamic registry");
+    request.context_verified = 0;
+    check(digit_core_authorize(&reg, "policy-000", &request) ==
+          STNLABZ_MODULE_ERR_NOT_AUTHORIZED, "unverified provenance cannot authorize");
+    check(!reg.modules[0].activation_authorized,
+          "unverified provenance leaves authorization unset");
+    request.context_verified = 1;
     request.authority_granted = 0;
     check(digit_core_authorize(&reg, "policy-000", &request) ==
           STNLABZ_MODULE_ERR_NOT_AUTHORIZED, "Core blocks unauthorized activation");
