@@ -1,1 +1,5 @@
 Ask 0.1.3: /ask remains the sole public conversation route. An in-memory 128-bit server-issued token scopes the previous request per chat. Ask delegates 'diagnose my last request' to DSD dsd.scoped. No shared log search or administrative privilege. Unsupported intent remains unsupported. Build: make -C modules/ask clean all test. Verify independent sessions and denied invalid tokens. Operator acceptance pending.
+
+## Corpus-backed factual answers (0.1.4)
+
+Ask recognizes `what is <term>?`, strips trailing question punctuation, and invokes `corpus.lookup` via the existing host ABI. Corpus owns deterministic retrieval from `/opt/digit/corpus/corpus.tsv`; Ask returns the exact matched record text with record ID and source attribution. No hardcoded STN-LABZ definition, TSV modifications, Core, Router, or IRC changes. Missing records and unavailable Corpus explicitly report their limitations. Answer length is bounded by the transport response capacity; overlong entries are not silently truncated into invented summaries.
