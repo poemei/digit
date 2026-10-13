@@ -931,7 +931,8 @@ static stnlabz_module_result_t repair_doc_command(
  const char *root=getenv("DIGIT_SOURCE_ROOT");
  static const char before[]="No Core changes or DSD integration.";
  static const char after[]="DSD invokes the independently registered code_reference.analyze service through the Core-mediated ABI interface.";
- char path[1024],data[8192],result[8192],*at;
+ char path[1024],tmp[1100],data[8192],result[8192],*at;
+ int fd;
  FILE *fp;size_t n,head,tail;struct stat st;
  (void)unused;
  if(!cmd||!reply)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
@@ -962,11 +963,22 @@ static stnlabz_module_result_t repair_doc_command(
  memcpy(result,data,head);memcpy(result+head,after,strlen(after));
  memcpy(result+head+strlen(after),at+strlen(before),tail);
  n=head+strlen(after)+tail;
- fp=fopen(path,"wb");
- if(!fp){emit(reply,ctx,"REPAIR DENIED: no document write access.");return STNLABZ_MODULE_OK;}
- if(fwrite(result,1,n,fp)!=n||fclose(fp)!=0){
-  emit(reply,ctx,"REPAIR FAILED: write error; inspect document before retrying.");
-  return STNLABZ_MODULE_OK;
+ if(snprintf(tmp,sizeof tmp,"%s/modules/code_reference/.README-repair-XXXXXX",root)>=(int)sizeof tmp){
+  emit(reply,ctx,"REPAIR DENIED: temporary path exceeds limit.");return STNLABZ_MODULE_OK;
+ }
+ fd=mkstemp(tmp);
+ if(fd<0){emit(reply,ctx,"REPAIR DENIED: no document write access.");return STNLABZ_MODULE_OK;}
+ if(fchmod(fd,st.st_mode&0777)!=0||(fp=fdopen(fd,"wb"))==NULL){
+  close(fd);unlink(tmp);
+  emit(reply,ctx,"REPAIR FAILED: cannot prepare replacement.");return STNLABZ_MODULE_OK;
+ }
+ if(fwrite(result,1,n,fp)!=n||fflush(fp)!=0||fsync(fileno(fp))!=0){
+  fclose(fp);unlink(tmp);
+  emit(reply,ctx,"REPAIR FAILED: original document retained.");return STNLABZ_MODULE_OK;
+ }
+ if(fclose(fp)!=0||rename(tmp,path)!=0){
+  unlink(tmp);
+  emit(reply,ctx,"REPAIR FAILED: replacement not committed.");return STNLABZ_MODULE_OK;
  }
  emit(reply,ctx,"REPAIR APPLIED: Code Reference README claim corrected. No Core files modified.");
  return STNLABZ_MODULE_OK;
