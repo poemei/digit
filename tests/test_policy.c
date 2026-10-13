@@ -23,7 +23,7 @@ int main(int argc, char **argv)
     stnlabz_module_descriptor_t descriptor;
     digit_policy_request_t request = {
         "operator", "mission-core", "module.activate", "policy-000",
-        1, 1, 1, 1, NULL
+        1, 1, 1, 1, NULL, "core-test-fixture", 1
     };
     digit_policy_result_t result;
     unsigned i, allows = 0, denies = 0, escalations = 0, reports_pending = 0, reports_unavailable = 0;
@@ -34,6 +34,16 @@ int main(int argc, char **argv)
     stnlabz_module_registry_init(&reg);
     check(digit_core_policy_evaluate(&request, &result) &&
           result.decision == DIGIT_POLICY_ALLOW, "valid authorized request");
+    request.context_verified = 0;
+    check(digit_core_policy_evaluate(&request, &result) &&
+          result.decision == DIGIT_POLICY_DENY,
+          "forged authority flags without verified context denied");
+    request.context_verified = 1;
+    request.verification_source = NULL;
+    check(digit_core_policy_evaluate(&request, &result) &&
+          result.decision == DIGIT_POLICY_DENY,
+          "missing provenance source denied");
+    request.verification_source = "core-test-fixture";
     request.within_mission = 0;
     check(digit_core_policy_evaluate(&request, &result) &&
           result.decision == DIGIT_POLICY_DENY &&
