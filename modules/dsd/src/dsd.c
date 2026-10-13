@@ -924,6 +924,53 @@ static stnlabz_module_result_t dsd_watch_poll(const void *request,size_t request
  }
  return STNLABZ_MODULE_OK;
 }
+/* Operator-approved local documentation correction; never writes Core. */
+static stnlabz_module_result_t repair_doc_command(
+ const stnlabz_module_command_t *cmd,
+ stnlabz_module_command_reply_fn reply,void *ctx,void *unused){
+ const char *root=getenv("DIGIT_SOURCE_ROOT");
+ static const char before[]="No Core changes or DSD integration.";
+ static const char after[]="DSD invokes the independently registered code_reference.analyze service through the Core-mediated ABI interface.";
+ char path[1024],data[8192],result[8192],*at;
+ FILE *fp;size_t n,head,tail;struct stat st;
+ (void)unused;
+ if(!cmd||!reply)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ if(strcmp(cmd->sender,"local-console")||strcmp(cmd->account,"local")||
+    strcmp(cmd->arguments,"approve code_reference README")){
+  emit(reply,ctx,"REPAIR DENIED: explicit local operator approval required. No files modified.");
+  return STNLABZ_MODULE_OK;
+ }
+ if(!root||root[0]!='/'||strstr(root,"..")||
+    snprintf(path,sizeof path,"%s/modules/code_reference/README.md",root)>=(int)sizeof path||
+    lstat(path,&st)||!S_ISREG(st.st_mode)||st.st_nlink!=1||st.st_size<0||
+    st.st_size>=(off_t)sizeof data){
+  emit(reply,ctx,"REPAIR DENIED: workspace or target verification failed.");
+  return STNLABZ_MODULE_OK;
+ }
+ fp=fopen(path,"rb");
+ if(!fp){emit(reply,ctx,"REPAIR DENIED: document inaccessible.");return STNLABZ_MODULE_OK;}
+ n=fread(data,1,sizeof data-1,fp);fclose(fp);data[n]=0;
+ at=strstr(data,before);
+ if(!at||strstr(at+strlen(before),before)||memchr(data,0,n)){
+  emit(reply,ctx,"REPAIR NOT APPLIED: documented claim does not match expected evidence.");
+  return STNLABZ_MODULE_OK;
+ }
+ head=(size_t)(at-data);tail=n-head-strlen(before);
+ if(head+strlen(after)+tail>=sizeof result){
+  emit(reply,ctx,"REPAIR DENIED: document exceeds supported size.");return STNLABZ_MODULE_OK;
+ }
+ memcpy(result,data,head);memcpy(result+head,after,strlen(after));
+ memcpy(result+head+strlen(after),at+strlen(before),tail);
+ n=head+strlen(after)+tail;
+ fp=fopen(path,"wb");
+ if(!fp){emit(reply,ctx,"REPAIR DENIED: no document write access.");return STNLABZ_MODULE_OK;}
+ if(fwrite(result,1,n,fp)!=n||fclose(fp)!=0){
+  emit(reply,ctx,"REPAIR FAILED: write error; inspect document before retrying.");
+  return STNLABZ_MODULE_OK;
+ }
+ emit(reply,ctx,"REPAIR APPLIED: Code Reference README claim corrected. No Core files modified.");
+ return STNLABZ_MODULE_OK;
+}
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q){
  if(!q)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(q,0,sizeof(*q));q->tests_executed=q->tests_passed=STNLABZ_MODULE_MIN_TESTS;
@@ -944,11 +991,18 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
   (void)h->unregister_service("dsd.report",NULL);
   return STNLABZ_MODULE_ERR_START_FAILED;
  }
+ if(!h->register_command("repair-doc",repair_doc_command,NULL)){
+  (void)h->unregister_command("diagnose",NULL);
+  (void)h->unregister_service("dsd.watch",NULL);
+  (void)h->unregister_service("dsd.report",NULL);
+  return STNLABZ_MODULE_ERR_START_FAILED;
+ }
  dsd_host=h;
  return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t stop(void){
  if(!dsd_host)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(!dsd_host->unregister_command("repair-doc",NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
  if(!dsd_host->unregister_command("diagnose",NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
  if(!dsd_host->unregister_service("dsd.watch",NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
  if(!dsd_host->unregister_service("dsd.report",NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
@@ -959,7 +1013,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=4;d.version_patch=1;
+ d.version_major=0;d.version_minor=4;d.version_patch=2;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
