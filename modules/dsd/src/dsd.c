@@ -691,10 +691,33 @@ static unsigned handler_definition_line(const char *path,const char *handler){
  }
  fclose(fp);return 0;
 }
+/* Trace the next verified intra-handler call for the Code Reference C11
+   analysis path. Require the call to appear after the handler definition
+   and within its bounded lexical body; do not infer execution. */
+static unsigned handler_analyze_call_line(const char *path,unsigned start){
+ FILE *fp;char line[2048];unsigned number=0,found=0;
+ int depth=0,entered=0;
+ if(!start)return 0;
+ fp=fopen(path,"r");if(!fp)return 0;
+ while(fgets(line,sizeof line,fp)){
+  const char *p;number++;
+  if(number<start)continue;
+  if(number>start+120)break;
+  for(p=line;*p;p++){
+   if(*p=='{'){entered=1;depth++;}
+   else if(*p=='}'&&entered)depth--;
+  }
+  if(entered&&depth>=1&&
+     strstr(line,"analyze_c(request,response)")&&
+     !strstr(line,"//")){found=number;break;}
+  if(entered&&depth<=0)break;
+ }
+ fclose(fp);return found;
+}
 static int documented_integration_drift(const char *root,char *alert,size_t cap){
  char readme[1024],dsd[1024],provider[1024],line[2048];
  FILE *fp;int claim=0;unsigned number=0,call_line=0,registration_line=0;
- char handler[96]={0};unsigned definition_line=0;
+ char handler[96]={0};unsigned definition_line=0,internal_call_line=0;
  if(snprintf(readme,sizeof readme,"%s/modules/code_reference/README.md",root)>=(int)sizeof readme||
     snprintf(dsd,sizeof dsd,"%s/modules/dsd/src/dsd.c",root)>=(int)sizeof dsd||
     snprintf(provider,sizeof provider,"%s/modules/code_reference/src/code_reference.c",root)>=(int)sizeof provider)return 0;
@@ -738,6 +761,7 @@ static int documented_integration_drift(const char *root,char *alert,size_t cap)
  if(!registration_line)return 0;
  definition_line=handler_definition_line(provider,handler);
  if(!definition_line)return 0;
+ internal_call_line=handler_analyze_call_line(provider,definition_line);
  snprintf(alert,cap,
   "DSD DOCUMENTATION DRIFT\nModule: code_reference\n"
   "Evidence: README claims 'No Core changes or DSD integration.'; "
@@ -746,12 +770,14 @@ static int documented_integration_drift(const char *root,char *alert,size_t cap)
   "Provider: modules/code_reference/src/code_reference.c:%u\n"
   "Provider handler: %s (registered callback, execution not established)\n"
   "Handler definition: modules/code_reference/src/code_reference.c:%u\n"
+  "%s"
   "Document: modules/code_reference/README.md\n"
   "Recommended Markdown change: Replace 'No Core changes or DSD integration.' "
   "with 'DSD invokes the independently registered code_reference.analyze service "
   "through the Core-mediated ABI interface.' "
   "Registration and invocation establish an interface relationship, not runtime activation. "
-  "No documentation was modified.",call_line,registration_line,handler,definition_line);
+  "No documentation was modified.",call_line,registration_line,handler,definition_line,
+  internal_call_line?"Internal call: analyze_c (lexically present; execution not established)\n":"Internal call: not established\n");
  return 1;
 }
 static int documentation_drift(const char *root,char *alert,size_t capacity,unsigned issue){
@@ -895,7 +921,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=3;d.version_patch=22;
+ d.version_major=0;d.version_minor=3;d.version_patch=23;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
