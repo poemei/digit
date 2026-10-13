@@ -124,6 +124,11 @@ int digit_mvc_console(void){
  digit_router_reset();command_count=0;service_count=0;
  if(!digit_log_open()){fputs("Digit: mandatory log unavailable\n",stderr);return 1;}
  if(!digit_log_event("CONSOLE","START","mode=local")||!digit_log_sync()){good=0;goto done;}
+ if(!stnlabz_agent_root_validate(stnlabz_agent_root_identity())){
+  fputs("Digit: Agent Root authority validation failed\n",stderr);
+  (void)digit_log_event("CONSOLE","ROOT_REJECTED","authority_rule_invalid");
+  good=0;goto done;
+ }
  if(stnlabz_module_discovery_get_path(directory,sizeof directory)!=STNLABZ_MODULE_OK ||
  !digit_core_discover(&registry,&loader,directory,&discovered) ||
  !digit_core_verify(&registry)||!digit_core_qualify(&registry)){good=0;goto done;}
