@@ -27,6 +27,13 @@ fi
 if [ ! -e "$PREFIX/logs/modules.log" ]; then
  install -m 0640 /dev/null "$PREFIX/logs/modules.log"
 fi
-chown -R "$OWNER:$GROUP" "$PREFIX"
-printf 'Installed Digit to %s/bin/digit; owner=%s:%s\n' "$PREFIX" "$OWNER" "$GROUP"
+# Digit runs as OWNER but must not own its Core executable, launcher,
+# or their parent directories. Only root may install/replace Core.
+# Existing logs and module directories remain writable by the runtime account.
+chown -R "$OWNER:$GROUP" "$PREFIX/logs" "$PREFIX/modules"
+chown root:root "$PREFIX" "$PREFIX/bin" "$PREFIX/bin/digit" "$PREFIX/run"
+chmod 0755 "$PREFIX" "$PREFIX/bin" "$PREFIX/bin/digit" "$PREFIX/run"
+chmod 0750 "$PREFIX/logs" "$PREFIX/modules"
+# The launcher and Core must not be reachable through an unsafe writable directory.
+printf 'Installed Digit Core to %s/bin/digit; Core owner=root:root, runtime=%s:%s\n' "$PREFIX" "$OWNER" "$GROUP"
 printf 'Use %s/run to ensure logs are written to %s/logs/digit.log\n' "$PREFIX" "$PREFIX"
