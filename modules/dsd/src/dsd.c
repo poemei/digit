@@ -717,7 +717,7 @@ static unsigned handler_analyze_call_line(const char *path,unsigned start){
 static int documented_integration_drift(const char *root,char *alert,size_t cap){
  char readme[1024],dsd[1024],provider[1024],line[2048];
  FILE *fp;int claim=0;unsigned number=0,call_line=0,registration_line=0;
- char handler[96]={0};unsigned definition_line=0,internal_call_line=0,callee_definition_line=0;
+ char handler[96]={0},callee_detail[180];unsigned definition_line=0,internal_call_line=0,callee_definition_line=0;
  if(snprintf(readme,sizeof readme,"%s/modules/code_reference/README.md",root)>=(int)sizeof readme||
     snprintf(dsd,sizeof dsd,"%s/modules/dsd/src/dsd.c",root)>=(int)sizeof dsd||
     snprintf(provider,sizeof provider,"%s/modules/code_reference/src/code_reference.c",root)>=(int)sizeof provider)return 0;
@@ -763,6 +763,9 @@ static int documented_integration_drift(const char *root,char *alert,size_t cap)
  if(!definition_line)return 0;
  internal_call_line=handler_analyze_call_line(provider,definition_line);
  if(internal_call_line)callee_definition_line=handler_definition_line(provider,"analyze_c");
+ if(callee_definition_line)
+  snprintf(callee_detail,sizeof callee_detail,"analyze_c at modules/code_reference/src/code_reference.c:%u (lexically located; execution not established)",callee_definition_line);
+ else snprintf(callee_detail,sizeof callee_detail,"not established");
  snprintf(alert,cap,
   "DSD DOCUMENTATION DRIFT\nModule: code_reference\n"
   "Evidence: README claims 'No Core changes or DSD integration.'; "
@@ -772,7 +775,6 @@ static int documented_integration_drift(const char *root,char *alert,size_t cap)
   "Provider handler: %s (registered callback, execution not established)\n"
   "Handler definition: modules/code_reference/src/code_reference.c:%u\n\n"
   "%s"
-  "%s"
   "Callee definition: %s\n"
   "Document: modules/code_reference/README.md\n"
   "Recommended Markdown change: Replace 'No Core changes or DSD integration.' "
@@ -781,8 +783,7 @@ static int documented_integration_drift(const char *root,char *alert,size_t cap)
   "Registration and invocation establish an interface relationship, not runtime activation. "
   "No documentation was modified.",call_line,registration_line,handler,definition_line,
   internal_call_line?"Internal call: analyze_c (lexically present; execution not established)\n":"Internal call: not established\n",
-  internal_call_line?"Call evidence: source text only; execution not established\n":"Call evidence: unavailable\n",
-  callee_definition_line?"analyze_c (see source definition; execution not established)":"not established");
+  callee_detail);
  return 1;
 }
 static int documentation_drift(const char *root,char *alert,size_t capacity,unsigned issue){
