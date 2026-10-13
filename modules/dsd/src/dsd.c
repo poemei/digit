@@ -742,7 +742,7 @@ static stnlabz_module_result_t dsd_watch_poll(const void *request,size_t request
  read_ledger();
  /* Rotate independent documentation findings. A stale version must not
     prevent another supported claim mismatch from being reported. */
- if(watch_ticks%12==1){
+ {
   static unsigned long reported[3];
   static unsigned cursor;
   unsigned item;
@@ -835,7 +835,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=3;d.version_patch=18;
+ d.version_major=0;d.version_minor=3;d.version_patch=19;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
