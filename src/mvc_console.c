@@ -23,16 +23,23 @@ static int reply(void *context,const char *message){
 }
 static int register_command(const char *name,stnlabz_module_command_handler_fn handler,void *context){
  char path[DIGIT_ROUTER_PATH_MAX],service[STNLABZ_MODULE_SERVICE_NAME_MAX];
- size_t i;
- if(!name||!name[0]||strlen(name)>DIGIT_ROUTER_PATH_MAX-2||
- !handler||command_count>=DIGIT_ROUTER_MAX_ROUTES)return 0;
- for(i=0;i<command_count;i++)if(!strcmp(commands[i].name,name))return 0;
+ size_t i,slot=DIGIT_ROUTER_MAX_ROUTES;
+ if(!name||!name[0]||strlen(name)>DIGIT_ROUTER_PATH_MAX-2||!handler)return 0;
+ for(i=0;i<command_count;i++){
+  if(commands[i].handler&&!strcmp(commands[i].name,name))return 0;
+  if(!commands[i].handler&&slot==DIGIT_ROUTER_MAX_ROUTES)slot=i;
+ }
+ if(slot==DIGIT_ROUTER_MAX_ROUTES){
+  if(command_count>=DIGIT_ROUTER_MAX_ROUTES)return 0;
+  slot=command_count;
+ }
  (void)snprintf(path,sizeof path,"/%s",name);
  (void)snprintf(service,sizeof service,"command.%s",name);
  if(!digit_router_bind(path,service))return 0;
- (void)snprintf(commands[command_count].name,sizeof commands[command_count].name,"%s",name);
- commands[command_count].handler=handler;
- commands[command_count++].context=context;
+ (void)snprintf(commands[slot].name,sizeof commands[slot].name,"%s",name);
+ commands[slot].handler=handler;
+ commands[slot].context=context;
+ if(slot==command_count)command_count++;
  return 1;
 }
 static int unregister_command(const char *name,void *context){
