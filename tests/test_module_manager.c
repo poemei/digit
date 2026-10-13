@@ -114,6 +114,16 @@ int main(void) {
         }
         fclose(logread);
     }
+    if (!saw_register || !saw_reject || !saw_activate || !saw_stop) {
+        FILE *evidence = fopen(modulefile, "r");
+        fprintf(stderr, "MODULE LOG EVIDENCE (%s):\n", modulefile);
+        if (evidence) {
+            while (fgets(line, sizeof line, evidence)) fputs(line, stderr);
+            fclose(evidence);
+        } else {
+            perror("module log evidence unavailable");
+        }
+    }
     check(saw_register, "registration logged");
     check(saw_reject, "qualification rejection logged");
     check(saw_activate, "activation logged");
