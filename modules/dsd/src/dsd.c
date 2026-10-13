@@ -48,30 +48,32 @@ static void component_name(const char *line,char *out,size_t cap){
 }
 /* Inspect the actual Router decision in the operator's source checkout.
    Source discovery is read-only; line numbers come from the file being read. */
-static int router_source(const char *event,char *location,size_t capacity){
+static int find_source(const char *root,const char *file,const char *token,char *out,size_t cap){
+ char path[1024],line[2048];unsigned long n=0;FILE *f;
+ if(snprintf(path,sizeof path,"%s/%s",root,file)>=(int)sizeof path)return 0;
+ f=fopen(path,"r");if(!f)return 0;
+ while(fgets(line,sizeof line,f)){n++;if(strstr(line,token)){snprintf(out,cap,"%s:%lu",path,n);fclose(f);return 1;}}
+ fclose(f);return 0;
+}
+static int inspect_route(const char *route,char *location,size_t cap,char *finding,size_t fcap){
  const char *root=getenv("DIGIT_SOURCE_ROOT");
- const char *needle=NULL;
- char path[1024],text[2048];
- FILE *source;
- unsigned long line=0;
- if(!root||!root[0])root="/home/stnchain/digit";
- if(strstr(event,"outcome=2"))needle="outcome=DIGIT_ROUTE_UNKNOWN";
- else if(strstr(event,"outcome=3"))needle="outcome=DIGIT_ROUTE_UNAVAILABLE";
- else if(strstr(event,"outcome=1"))needle="outcome=DIGIT_ROUTE_DENIED";
- else if(strstr(event,"outcome=5"))needle="outcome=DIGIT_ROUTE_FAILED";
- if(!needle||snprintf(path,sizeof path,"%s/src/router.c",root)>=(int)sizeof path)return 0;
- source=fopen(path,"r");
- if(!source)return 0;
- while(fgets(text,sizeof text,source)){
-  ++line;
-  if(strstr(text,needle)){
-   (void)snprintf(location,capacity,"%s:%lu",path,line);
-   (void)fclose(source);
-   return 1;
-  }
- }
- (void)fclose(source);
+ char parse[1024],bind[1024],lookup[1024],reject[1024],registration[1024],key[160];
+ const char *name=route&&route[0]=='/'?route+1:"";
+ if(!root||!*root)root="/home/stnchain/digit";
+ if(!find_source(root,"src/mvc_console.c","while(line[start+j]",parse,sizeof parse)||
+ !find_source(root,"src/mvc_console.c","digit_router_bind(path,service)",bind,sizeof bind)||
+ !find_source(root,"src/router.c","strcmp(bindings[i].path,request->path)",lookup,sizeof lookup)||
+ !find_source(root,"src/router.c","if(i==binding_count)",reject,sizeof reject)){
+ snprintf(location,cap,"SOURCE ACCESS FAILED: %s/src/{mvc_console.c,router.c}",root);
+ snprintf(finding,fcap,"Unable to inspect required checkout source; diagnosis incomplete. Check source path and read permissions.");
  return 0;
+ }
+ snprintf(location,cap,"parse=%s; bind=%s; lookup=%s; reject=%s",parse,bind,lookup,reject);
+ snprintf(key,sizeof key,"register_command(\"%.80s\"",name);
+ if(find_source(root,"modules/dsd/src/dsd.c",key,registration,sizeof registration))
+ snprintf(finding,fcap,"Source confirms /%.80s is registered by DSD at %s, but Router logged no binding. Examine module activation/registration evidence before deciding on repair.",name,registration);
+ else snprintf(finding,fcap,"Source confirms console parses /%.80s as a command, activated modules register routes, and Router rejects unbound paths. No DSD registration for that command was verified. A missing route is not proof of defective source; investigate intended module registration.",name);
+ return 1;
 }
 static stnlabz_module_result_t diagnose_command(
  const stnlabz_module_command_t *command,
@@ -151,6 +153,7 @@ static stnlabz_module_result_t diagnose_command(
  if(strstr(selected,"ROUTER DISPATCH")){
   (void)snprintf(module,sizeof module,"router");
   extract_token(selected,"route=",route,sizeof route);
+  extract_token(selected,"route=",route,sizeof route);
   if(strstr(selected,"outcome=2"))(void)snprintf(reason,sizeof reason,"no_registered_route");
   else if(strstr(selected,"outcome=3"))(void)snprintf(reason,sizeof reason,"service_unavailable");
   else if(strstr(selected,"outcome=1"))(void)snprintf(reason,sizeof reason,"request_denied");
@@ -161,20 +164,10 @@ static stnlabz_module_result_t diagnose_command(
  if(!emit(reply,reply_context,message))return STNLABZ_MODULE_ERR_INVALID_STATE;
  (void)snprintf(message,sizeof message,"Log: %s",selected);
  if(!emit(reply,reply_context,message))return STNLABZ_MODULE_ERR_INVALID_STATE;
- if(!strcmp(module,"router")&&router_source(selected,source_location,sizeof source_location)){
+ if(!strcmp(module,"router")&&strstr(selected,"outcome=2")&&inspect_route(route,source_location,sizeof source_location,assessment,sizeof assessment)){
   (void)snprintf(message,sizeof message,"Code: %.1000s",source_location);
- }else if(file[0]&&lineno[0]){
-  (void)snprintf(message,sizeof message,"Code: %s:%s",file,lineno);
- }else if(file[0]){
-  (void)snprintf(message,sizeof message,"Code: %s (line not recorded)",file);
- }else{
-  (void)snprintf(message,sizeof message,"Code: not_recorded (no source location in log)");
- }
- if(!emit(reply,reply_context,message))return STNLABZ_MODULE_ERR_INVALID_STATE;
- if(!strcmp(module,"router")&&strstr(selected,"outcome=2")){
-  (void)snprintf(message,sizeof message,
-   "Finding: Router found no registered command for %.120s. This is a dispatch rejection, not proof of a source-code defect. Source decision %s; inspect module command registration if the command was expected.",
-   route[0]?route:"unknown",source_location[0]?"verified in checkout":"not verified (source unavailable)");
+ }else if(!strcmp(module,"router")&&strstr(selected,"outcome=2")){
+  (void)snprintf(message,sizeof message,"Finding: %.950s",assessment);
  }else if(reason[0]) (void)snprintf(message,sizeof message,
   "Finding: Recorded event indicates %s; reason=%s. Matched events: %lu.",
   term[0]?"the requested condition":"a failure",reason,matches);
@@ -250,7 +243,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=3;d.version_patch=3;
+ d.version_major=0;d.version_minor=3;d.version_patch=4;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
