@@ -1,18 +1,9 @@
-# Interface 0.1.2
+# Interface 0.1.3
 
-Independent ABI 1.5 transport module. Listens on TCP port 8081 and accepts TLS handshakes using existing credentials:
+Independent ABI 1.5 TLS transport module on TCP 8081 using existing credentials at `/opt/digit/state/auth/interface-cert.pem` and `/opt/digit/state/auth/interface-key.pem`. TLS 1.2 minimum; certificate validation remains with the HTTPS client.
 
-- `/opt/digit/state/auth/interface-cert.pem`
-- `/opt/digit/state/auth/interface-key.pem`
+This revision accepts only bounded `POST /ask` with `Content-Length` 1–512 and `text/plain` UTF-8 body. It calls the existing `router.dispatch` service with `core_authorized=0`. The Router explicitly permits anonymous requests **only** to the module-owned `route./ask` service. No other route gains anonymous authority; the Interface cannot execute commands, interpret intent, or access SA functions. Responses are `{"answer":"..."}` JSON. No authentication UI or token is used. A client should not treat transport success as a grant for other actions.
 
-OpenSSL TLS 1.2 or newer; certificate/private key must both be readable by the Digit runtime account and match. The module never creates, modifies, or stores credentials.
+Ask 0.1.0 currently provides bounded responses and a truthful not-yet-supported answer for general natural-language requests; **this is not an LLM or general intent engine**. No persistent history is provided. Connection handling is single threaded, with a three-second per-client socket timeout. No concurrency claims.
 
-**Transport only:** accepts TLS and closes the session. It does not parse application data, accept HTTP requests, route commands, or implement MCP, Slack, IRC, or Ask. Application protocols and routing require separately authorized integration; a successful TLS connection is not an application endpoint.
-
-Failure to load credentials or bind port 8081 fails module activation. The listener stops cleanly on module deactivation. Single-threaded handshake processing, with a two-second socket timeout, limits capacity; no production concurrency claim is made.
-
-Build: `make -C modules/interface clean && make -C modules/interface && make -C modules/interface test`.
-Install: `sudo make -C modules/interface install`.
-Operator test: restart Digit and inspect concise `modules.log` for `QUALIFICATION_GREEN` and `HOTLOAD_ACTIVE` for `interface`; then run `openssl s_client -connect 127.0.0.1:8081 -servername digit.stn-labz.com -brief` from the host. TLS handshake should succeed, then close without an HTTP response. Wrong/missing credentials or a port conflict must prevent activation.
-
-On successful TLS listener startup the module emits `MODULE MESSAGE [INTERFACE] TLS listener active on port 8081; TLS required` through the Core-provided module message callback. Startup errors emit an `INTERFACE` failure message; the module does not claim success if the message cannot be recorded.
+Build: `make -C modules/interface clean all test` and `make -C modules/ask clean all test`. Install both modules along with the Core host changes, restart Digit, and issue `curl -i https://digit.stn-labz.com:8081/ask -H 'Content-Type: text/plain' --data-binary 'hello'`. Expect HTTP 200 and a JSON answer, once the operator confirms installation and qualification.
