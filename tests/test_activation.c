@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "core_activation.h"
+#include "core_policy.h"
 #include "core_discovery.h"
 #include "logging.h"
 static unsigned checks, failures, starts, stops;
@@ -32,6 +33,8 @@ int main(int argc, char **argv) {
     FILE *f;
     char line[1024];
     unsigned i, activated = 0, stopped = 0, denials = 0;
+    digit_policy_request_t policy = { "operator", "core-validation",
+        "module.activate", NULL, 1, 1, 1, 1, NULL };
     if (argc != 2) return 2;
     if (!digit_log_open_path(argv[1])) return 3;
     stnlabz_module_registry_init(&reg);
@@ -46,7 +49,7 @@ int main(int argc, char **argv) {
         check(stnlabz_module_registry_discover(&reg, &d) == STNLABZ_MODULE_OK, "register");
         check(stnlabz_module_registry_verify(&reg, d.id) == STNLABZ_MODULE_OK, "verify");
     }
-    check(digit_core_authorize(&reg, "active-000") == STNLABZ_MODULE_ERR_NOT_QUALIFIED,
+    check(digit_core_authorize(&reg, "active-000", &(digit_policy_request_t){ "operator", "core-validation", "module.activate", "active-000", 1, 1, 1, 1, NULL }) == STNLABZ_MODULE_ERR_NOT_QUALIFIED,
           "unqualified authorization denied");
     check(digit_core_activate(&reg, "active-000", NULL) == STNLABZ_MODULE_ERR_NOT_QUALIFIED,
           "unqualified activation denied");
@@ -58,7 +61,7 @@ int main(int argc, char **argv) {
     for (i = 0; i < 48; ++i) {
         char id[64];
         snprintf(id, sizeof id, "active-%03u", i);
-        check(digit_core_authorize(&reg, id) == STNLABZ_MODULE_OK, "explicit authorization");
+        check((policy.module_id = id, digit_core_authorize(&reg, id, &policy)) == STNLABZ_MODULE_OK, "explicit authorization");
         check(digit_core_activate(&reg, id, NULL) == STNLABZ_MODULE_OK, "explicit activation");
     }
     check(starts == 48, "48 starts executed exactly once");
@@ -90,7 +93,7 @@ int main(int argc, char **argv) {
     check(stnlabz_module_registry_discover(&reg, &d) == STNLABZ_MODULE_OK, "start failure setup");
     check(stnlabz_module_registry_verify(&reg, d.id) == STNLABZ_MODULE_OK, "start failure verify");
     check(digit_core_qualify(&reg), "start failure qualify");
-    check(digit_core_authorize(&reg, d.id) == STNLABZ_MODULE_OK, "start failure authorize");
+    check((policy.module_id = d.id, digit_core_authorize(&reg, d.id, &policy)) == STNLABZ_MODULE_OK, "start failure authorize");
     start_failure = 1;
     check(digit_core_activate(&reg, d.id, NULL) == STNLABZ_MODULE_ERR_START_FAILED,
           "start failure propagated");
