@@ -84,6 +84,22 @@ stnlabz_module_result_t digit_core_activate(stnlabz_module_registry_t *registry,
     return rc;
 }
 
+int digit_core_stop(stnlabz_module_registry_t *registry, const char *module_id)
+{
+    const stnlabz_module_record_t *record;
+    stnlabz_module_result_t rc;
+    if (!registry || !module_id || !digit_log_is_open()) return 0;
+    record = stnlabz_module_registry_find(registry, module_id);
+    if (!record || record->state != STNLABZ_MODULE_STATE_ACTIVE) return 0;
+    if (!audit("STOP_REQUEST", module_id, STNLABZ_MODULE_OK, record))
+        return 0;
+    rc = stnlabz_module_abi_stop(registry, module_id);
+    if (!audit(rc == STNLABZ_MODULE_OK ? "STOP_PASS" : "STOP_FAILED",
+               module_id, rc, stnlabz_module_registry_find(registry, module_id)))
+        return 0;
+    return rc == STNLABZ_MODULE_OK;
+}
+
 int digit_core_stop_all(stnlabz_module_registry_t *registry)
 {
     size_t i;
@@ -91,15 +107,8 @@ int digit_core_stop_all(stnlabz_module_registry_t *registry)
     if (!registry || !digit_log_is_open()) return 0;
     for (i = registry->count; i > 0; --i) {
         stnlabz_module_record_t *record = &registry->modules[i - 1];
-        stnlabz_module_result_t rc;
         if (record->state != STNLABZ_MODULE_STATE_ACTIVE) continue;
-        if (!audit("STOP_REQUEST", record->descriptor.id, STNLABZ_MODULE_OK, record))
-            return 0;
-        rc = stnlabz_module_abi_stop(registry, record->descriptor.id);
-        if (!audit(rc == STNLABZ_MODULE_OK ? "STOP_PASS" : "STOP_FAILED",
-                   record->descriptor.id, rc, record))
-            return 0;
-        if (rc != STNLABZ_MODULE_OK) good = 0;
+        if (!digit_core_stop(registry, record->descriptor.id)) good = 0;
     }
     return good;
 }
