@@ -24,6 +24,9 @@ int main(void){
  check(!digit_log_open_path(core),"second open denied");
  check(digit_log_event("CORE","START","test=true"),"Core recorded");
  check(digit_log_event("MODULE","QUALIFICATION_GREEN","module=expression version=0.2.1"),"module recorded");
+ check(digit_log_event("MODULE","VERIFY_PASS","module=expression"),"routine verified");
+ check(digit_log_event("MODULE","HOTLOAD_ACTIVE","module=expression version=0.2.1 result=OK"),"active recorded");
+ check(digit_log_event("MODULE","MESSAGE","[EXPRESSION] Ready"),"module message recorded");
  check(digit_log_event("ROUTER","DISPATCH","request=1"),"router recorded");
  check(digit_log_sync(),"both logs synced");
  digit_log_close();
@@ -39,8 +42,12 @@ int main(void){
  f=fopen(module,"r");
  check(f!=NULL,"module file exists");
  if(f){
-  check(fgets(line,sizeof line,f)&&strstr(line,"MODULE QUALIFICATION_GREEN module=expression"),"qualification in modules.log");
-  check(fgets(line,sizeof line,f)==NULL,"no Core traffic in modules.log");
+  check(fgets(line,sizeof line,f)&&strstr(line,"MODULE QUALIFICATION_GREEN sequence=")&&strstr(line,"module=expression version=0.2.1"),"qualification in modules.log");
+  check(fgets(line,sizeof line,f)&&strstr(line,"MODULE HOTLOAD_ACTIVE sequence=")&&
+        strstr(line,"module=expression version=0.2.1"),"concise activation");
+  check(fgets(line,sizeof line,f)&&strstr(line,"MODULE MESSAGE [EXPRESSION] Ready"),
+        "operator module message");
+  check(fgets(line,sizeof line,f)==NULL,"routine verification hidden; no Core traffic in modules.log");
   fclose(f);
  }
  unlink(core);unlink(module);rmdir(directory);
