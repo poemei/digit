@@ -47,7 +47,7 @@ int digit_initialize(void)
     digit_module_manager_shutdown(&modules);
     if (!digit_log_event("CORE", "STOPPED", "reason=signal") || !digit_log_sync()) goto log_failure;
     digit_log_close();
-    puts("[CORE] Stopped.");
+    printf("[CORE] Stopped. Shutdown recorded in %s\n", DIGIT_LOG_PATH);
     return 0;
 
 log_failure:
