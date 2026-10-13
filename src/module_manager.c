@@ -17,6 +17,16 @@ static digit_module_result_t recorded(const char *event, const char *id,
     return result;
 }
 
+/* Admission gate: reject malformed evidence before changing module state. */
+static int valid_qualification(const digit_module_qualification_t *q)
+{
+    return q && q->tests_executed >= DIGIT_MODULE_MIN_TESTS &&
+        q->tests_failed == 0 &&
+        q->tests_passed == q->tests_executed &&
+        q->negative_test_executed == 1 &&
+        q->negative_test_passed == 1;
+}
+
 static int valid_id(const char *s)
 {
     size_t i;
@@ -70,14 +80,13 @@ digit_module_result_t digit_module_qualify(digit_module_manager_t *m,
 {
     digit_module_record_t *r = find_mut(m, id);
     if (!r) return recorded("QUALIFY", id, DIGIT_MODULE_NOT_FOUND);
-    if (!q || r->state != DIGIT_MODULE_REGISTERED ||
-        q->tests_executed < DIGIT_MODULE_MIN_TESTS ||
-        q->tests_failed != 0 || q->tests_passed != q->tests_executed ||
-        !q->negative_test_executed || !q->negative_test_passed)
+    if (r->state != DIGIT_MODULE_REGISTERED || !valid_qualification(q))
         return recorded("QUALIFY", id, DIGIT_MODULE_UNQUALIFIED);
+    if (recorded("QUALIFY", id, DIGIT_MODULE_OK) != DIGIT_MODULE_OK)
+        return DIGIT_MODULE_CALLBACK_FAILED;
     r->qualification = *q;
     r->state = DIGIT_MODULE_QUALIFIED;
-    return recorded("QUALIFY", id, DIGIT_MODULE_OK);
+    return DIGIT_MODULE_OK;
 }
 digit_module_result_t digit_module_authorize(digit_module_manager_t *m,
     const char *id, int operator_authorized)
@@ -86,16 +95,24 @@ digit_module_result_t digit_module_authorize(digit_module_manager_t *m,
     if (!r) return recorded("AUTHORIZE", id, DIGIT_MODULE_NOT_FOUND);
     if (r->state != DIGIT_MODULE_QUALIFIED && r->state != DIGIT_MODULE_STOPPED)
         return recorded("AUTHORIZE", id, DIGIT_MODULE_UNQUALIFIED);
-    r->activation_authorized = operator_authorized == 1;
-    return recorded("AUTHORIZE", id,
-        r->activation_authorized ? DIGIT_MODULE_OK : DIGIT_MODULE_UNQUALIFIED);
+    if (operator_authorized != 1) {
+        r->activation_authorized = 0;
+        return recorded("AUTHORIZE", id, DIGIT_MODULE_UNQUALIFIED);
+    }
+    if (!valid_qualification(&r->qualification))
+        return recorded("AUTHORIZE", id, DIGIT_MODULE_UNQUALIFIED);
+    if (recorded("AUTHORIZE", id, DIGIT_MODULE_OK) != DIGIT_MODULE_OK)
+        return DIGIT_MODULE_CALLBACK_FAILED;
+    r->activation_authorized = 1;
+    return DIGIT_MODULE_OK;
 }
 digit_module_result_t digit_module_activate(digit_module_manager_t *m, const char *id)
 {
     digit_module_record_t *r = find_mut(m, id);
     if (!r) return recorded("ACTIVATE", id, DIGIT_MODULE_NOT_FOUND);
     if ((r->state != DIGIT_MODULE_QUALIFIED && r->state != DIGIT_MODULE_STOPPED) ||
-        !r->activation_authorized) return recorded("ACTIVATE", id, DIGIT_MODULE_UNQUALIFIED);
+        !valid_qualification(&r->qualification) || !r->activation_authorized)
+        return recorded("ACTIVATE", id, DIGIT_MODULE_UNQUALIFIED);
     if (!r->callbacks.start(r->callbacks.context)) return recorded("ACTIVATE", id, DIGIT_MODULE_CALLBACK_FAILED);
     r->state = DIGIT_MODULE_ACTIVE;
     return recorded("ACTIVATE", id, DIGIT_MODULE_OK);
