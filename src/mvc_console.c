@@ -52,8 +52,9 @@ int digit_mvc_console(void){
  stnlabz_module_registry_t registry;
  digit_bootstrap_t bootstrap={0};
  stnlabz_module_loader_t loader;
- const stnlabz_module_descriptor_t *dsd_descriptor=NULL;
- char module_dir[1024],module_file[1200];
+ stnlabz_module_discovery_report_t discovery={0};
+ const stnlabz_module_record_t *dsd_record;
+ char module_dir[1024];
  int dsd_ready=0;
  digit_policy_request_t policy={"local-console","mvc-development","module.activate",NULL,
   1,1,1,1,NULL,"explicit-local-cli-development-mode",1};
@@ -78,16 +79,14 @@ int digit_mvc_console(void){
  !activate(&registry,digit_rendering_descriptor(),&policy)){ok=0;goto done;}
  /* The existing ABI loader obtains DSD exclusively from installed module files. */
  if(stnlabz_module_discovery_get_path(module_dir,sizeof module_dir)==STNLABZ_MODULE_OK &&
-    snprintf(module_file,sizeof module_file,"%s/dsd/bin/dsd.so",module_dir)>0 &&
-    strlen(module_file)<sizeof module_file &&
-    stnlabz_module_loader_load(&loader,"dsd",module_file,&dsd_descriptor)==STNLABZ_MODULE_LOADER_OK &&
-    dsd_descriptor &&
-    stnlabz_module_registry_discover(&registry,dsd_descriptor)==STNLABZ_MODULE_OK &&
-    stnlabz_module_registry_verify(&registry,"dsd")==STNLABZ_MODULE_OK &&
-    stnlabz_module_registry_qualify(&registry,"dsd")==STNLABZ_MODULE_OK){
-  policy.module_id="dsd";
-  dsd_ready=digit_core_authorize(&registry,"dsd",&policy)==STNLABZ_MODULE_OK &&
-    digit_core_activate(&registry,"dsd",&host,&policy)==STNLABZ_MODULE_OK;
+    stnlabz_module_discovery_scan(&registry,&loader,module_dir,&discovery)==STNLABZ_MODULE_OK){
+  dsd_record=stnlabz_module_registry_find(&registry,"dsd");
+  if(dsd_record&&stnlabz_module_registry_verify(&registry,"dsd")==STNLABZ_MODULE_OK &&
+     stnlabz_module_registry_qualify(&registry,"dsd")==STNLABZ_MODULE_OK){
+   policy.module_id="dsd";
+   dsd_ready=digit_core_authorize(&registry,"dsd",&policy)==STNLABZ_MODULE_OK &&
+     digit_core_activate(&registry,"dsd",&host,&policy)==STNLABZ_MODULE_OK;
+  }
  }
  policy.module_id="router";
  if(!digit_bootstrap_start_with_diagnostics(&bootstrap,&registry,&host,&policy,
