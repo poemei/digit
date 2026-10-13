@@ -8,6 +8,8 @@
  */
 
 #include <string.h>
+#include <stdlib.h>
+#include <stdint.h>
 
 #include "module_registry.h"
 
@@ -115,6 +117,28 @@ stnlabz_module_registry_init(
 }
 
 
+void stnlabz_module_registry_destroy(stnlabz_module_registry_t *registry)
+{
+    if (!registry) return;
+    free(registry->modules);
+    memset(registry, 0, sizeof(*registry));
+}
+
+static int stnlabz_module_registry_reserve(stnlabz_module_registry_t *registry)
+{
+    size_t capacity;
+    stnlabz_module_record_t *expanded;
+    if (registry->count < registry->capacity) return 1;
+    if (registry->capacity > SIZE_MAX / 2) return 0;
+    capacity = registry->capacity ? registry->capacity * 2 : 16;
+    if (capacity > SIZE_MAX / sizeof(*expanded)) return 0;
+    expanded = realloc(registry->modules, capacity * sizeof(*expanded));
+    if (!expanded) return 0;
+    registry->modules = expanded;
+    registry->capacity = capacity;
+    return 1;
+}
+
 stnlabz_module_result_t
 stnlabz_module_registry_discover(
     stnlabz_module_registry_t *registry,
@@ -163,10 +187,7 @@ stnlabz_module_registry_discover(
     }
 
 
-    if (
-        registry->count >=
-        STNLABZ_MODULE_REGISTRY_MAX
-    )
+    if (!stnlabz_module_registry_reserve(registry))
     {
         return
             STNLABZ_MODULE_ERR_REGISTRY_FULL;
