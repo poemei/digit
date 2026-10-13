@@ -87,7 +87,8 @@ digit_module_result_t digit_module_authorize(digit_module_manager_t *m,
     if (r->state != DIGIT_MODULE_QUALIFIED && r->state != DIGIT_MODULE_STOPPED)
         return recorded("AUTHORIZE", id, DIGIT_MODULE_UNQUALIFIED);
     r->activation_authorized = operator_authorized == 1;
-    return r->activation_authorized ? DIGIT_MODULE_OK : DIGIT_MODULE_UNQUALIFIED;
+    return recorded("AUTHORIZE", id,
+        r->activation_authorized ? DIGIT_MODULE_OK : DIGIT_MODULE_UNQUALIFIED);
 }
 digit_module_result_t digit_module_activate(digit_module_manager_t *m, const char *id)
 {
