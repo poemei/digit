@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include "core_activation.h"
 #include "logging.h"
 
@@ -16,14 +17,28 @@ static int audit(const char *event, const char *id,
 }
 
 stnlabz_module_result_t digit_core_authorize(stnlabz_module_registry_t *registry,
-    const char *module_id)
+    const char *module_id, const digit_policy_request_t *request)
 {
     stnlabz_module_result_t rc;
+    digit_policy_result_t decision;
     if (!registry || !module_id || !digit_log_is_open())
         return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
     if (!audit("AUTHORIZE_REQUEST", module_id, STNLABZ_MODULE_OK,
                stnlabz_module_registry_find(registry, module_id)))
         return STNLABZ_MODULE_ERR_INVALID_STATE;
+    /* No authority may be inferred from qualification or module presence.
+       Only trusted Core callers may supply verified request context. */
+    if (!request || !request->operation || !request->module_id ||
+        strcmp(request->operation, "module.activate") != 0 ||
+        strcmp(request->module_id, module_id) != 0 ||
+        !digit_core_policy_evaluate(request, &decision))
+        return STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
+    if (decision.decision != DIGIT_POLICY_ALLOW) {
+        if (!audit("AUTHORIZE_REJECT", module_id, STNLABZ_MODULE_ERR_NOT_AUTHORIZED,
+                   stnlabz_module_registry_find(registry, module_id)))
+            return STNLABZ_MODULE_ERR_INVALID_STATE;
+        return STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
+    }
     rc = stnlabz_module_registry_authorize_activation(registry, module_id);
     if (!audit(rc == STNLABZ_MODULE_OK ? "AUTHORIZE_GRANTED" : "AUTHORIZE_REJECT",
                module_id, rc, stnlabz_module_registry_find(registry, module_id)))
