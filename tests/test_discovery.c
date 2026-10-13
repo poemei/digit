@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 #include "core_discovery.h"
 #include "logging.h"
 static unsigned count, failed;
@@ -21,6 +22,7 @@ int main(int argc, char **argv)
     FILE *f;
     char line[1024];
     int saw_rejection = 0, saw_pass = 0, saw_verification_reject = 0;
+    int saw_created = 0, saw_dir_failure = 0;
     if (argc != 5) return 2;
     if (!digit_log_open_path(argv[4])) return 3;
     stnlabz_module_registry_init(&registry);
@@ -41,6 +43,16 @@ int main(int argc, char **argv)
     check(digit_core_verify(&registry), "empty registry verification");
     check(digit_core_discover(&registry, &loader, argv[3], &report),
           "missing directory does not prevent Core");
+    {
+        struct stat st;
+        check(stat(argv[3], &st) == 0 && S_ISDIR(st.st_mode),
+              "missing modules directory created");
+        check(digit_core_discover(&registry, &loader, argv[3], &report),
+              "existing directory reused");
+        check(report.modules_discovered == 0, "empty directory scan");
+        check(!digit_core_discover(&registry, &loader, argv[4], &report),
+              "ordinary file is not a modules directory");
+    }
     check(registry.count == 0 && loader.count == 0, "no retained modules");
     stnlabz_module_registry_init(&registry);
     stnlabz_module_loader_init(&loader);
@@ -74,12 +86,17 @@ int main(int argc, char **argv)
             if (strstr(line, "DISCOVERY VERIFY_REJECT") &&
                 strstr(line, "id=bad-abi") &&
                 strstr(line, "result=INCOMPATIBLE")) saw_verification_reject = 1;
+            if (strstr(line, "DISCOVERY DIRECTORY_CREATED")) saw_created = 1;
+            if (strstr(line, "DISCOVERY DIRECTORY_FAILED") &&
+                strstr(line, "not_a_directory")) saw_dir_failure = 1;
         }
         fclose(f);
     }
     check(saw_rejection, "rejection stage recorded");
     check(saw_pass, "successful verification audited");
     check(saw_verification_reject, "incompatible ABI rejection audited");
+    check(saw_created, "directory creation audited");
+    check(saw_dir_failure, "invalid directory target audited");
     printf("Core discovery tests: %u executed, %u failed\n", count, failed);
     return failed != 0;
 }
