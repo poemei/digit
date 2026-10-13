@@ -105,6 +105,9 @@ After operator acceptance of Core and explicit authorization, implement minimal 
 
 ### Phase 3 — Model contracts and minimal capability
 
+**Implementation submitted for operator qualification:** Expression Model 0.1.0 defines an ABI 1.5 `expression.lookup` contract, request/result status, explicit fixture evidence and responsible source decision line. A dedicated test harness runs the complete Core-policy-admitted Model with Bootstrap and Router, and checks known `purrs`, unknown `puurs`, invalid input, denial, and clean lifecycle. This is a small static test fixture, not a learned vocabulary or general language understanding. No automatic production Model activation was introduced. Accepted baseline: 22 suites, 1,460 assertions. Current target: 23 suites, subject to operator build/testing and explicit acceptance.
+
+
 - [ ] Define the narrow Model interface: inputs, outputs, errors, provenance, actual decision location, and qualification tests.
 - [ ] Select **one** minimum viable capability (e.g. recognized/unknown expression lookup) and implement it independently.
 - [ ] Ensure the Model never changes Digit's identity, Core policy, routing ownership, or the next module.
