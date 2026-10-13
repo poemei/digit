@@ -27,6 +27,13 @@ int main(void) {
     digit_module_qualification_t good = {1, 1, 0, 1, 1};
     if (fd < 0) return 1;
     close(fd);
+    digit_module_manager_init(&m);
+    memset(&d, 0, sizeof(d));
+    strcpy(d.id, "mock");
+    d.abi_major = DIGIT_MODULE_ABI_MAJOR;
+    check(digit_module_register(&m, &d, &cb) == DIGIT_MODULE_CALLBACK_FAILED,
+          "registration denied without audit log");
+    check(m.count == 0, "unaudited registration does not change registry");
     if (!digit_log_open_path(logfile)) { unlink(logfile); return 1; }
     digit_module_manager_init(&m);
     check(m.count == 0, "zero modules at initialization");
@@ -91,6 +98,10 @@ int main(void) {
     check(stops == 2, "no extra stop callback on failed mock");
     check(digit_log_sync(), "module event log synchronized");
     digit_log_close();
+    check(digit_module_register(&m, &d, &cb) == DIGIT_MODULE_CALLBACK_FAILED,
+          "registration denied once logger closes");
+    check(digit_module_authorize(&m, "mock", 1) == DIGIT_MODULE_CALLBACK_FAILED,
+          "authorization denied once logger closes");
     logread = fopen(logfile, "r");
     check(logread != NULL, "module event log readable");
     if (logread) {
