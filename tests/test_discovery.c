@@ -15,7 +15,7 @@ int main(int argc, char **argv)
     stnlabz_module_discovery_report_t report;
     FILE *f;
     char line[1024];
-    int saw_rejection = 0;
+    int saw_rejection = 0, saw_pass = 0, saw_verification_reject = 0;
     if (argc != 5) return 2;
     if (!digit_log_open_path(argv[4])) return 3;
     stnlabz_module_registry_init(&registry);
@@ -24,14 +24,39 @@ int main(int argc, char **argv)
     check(registry.count == 1 && loader.count == 1, "candidate discovered");
     check(registry.modules[0].state == STNLABZ_MODULE_STATE_DISCOVERED &&
           !registry.modules[0].activation_authorized, "no admission or authority");
+    check(digit_core_verify(&registry), "valid ABI verification");
+    check(registry.modules[0].state == STNLABZ_MODULE_STATE_UNVERIFIED &&
+          !registry.modules[0].activation_authorized,
+          "verified descriptor remains unqualified");
     digit_core_discovery_cleanup(&registry, &loader);
-    check(registry.count == 0 && loader.count == 0, "candidate cleanup");
+    check(registry.count == 0 && loader.count == 0, "verified candidate cleanup");
     check(digit_core_discover(&registry, &loader, argv[2], &report), "invalid manifest scan");
     check(report.modules_rejected == 1 && registry.count == 0,
           "malformed manifest rejected");
+    check(digit_core_verify(&registry), "empty registry verification");
     check(digit_core_discover(&registry, &loader, argv[3], &report),
           "missing directory does not prevent Core");
     check(registry.count == 0 && loader.count == 0, "no retained modules");
+    stnlabz_module_registry_init(&registry);
+    stnlabz_module_loader_init(&loader);
+    {
+        stnlabz_module_descriptor_t descriptor;
+        memset(&descriptor, 0, sizeof descriptor);
+        strcpy(descriptor.id, "bad-abi");
+        strcpy(descriptor.name, "Unsupported ABI");
+        descriptor.required_core_api_major = STNLABZ_MODULE_API_MAJOR + 1;
+        /* Discovery API enforces callback presence, verification only checks ABI. */
+        descriptor.qualify = NULL; /* verification does not invoke qualification */
+        check(stnlabz_module_registry_discover(&registry, &descriptor) ==
+              STNLABZ_MODULE_OK, "register incompatible mock descriptor");
+        check(digit_core_verify(&registry), "reject candidate without stopping Core");
+        check(registry.modules[0].state == STNLABZ_MODULE_STATE_FAILED,
+              "ABI mismatch fails verification");
+        check(!registry.modules[0].activation_authorized,
+              "failed candidate has no authority");
+        digit_core_discovery_cleanup(&registry, &loader);
+        check(registry.count == 0, "failed verification cleanup");
+    }
     check(digit_log_sync(), "logging synchronized");
     digit_log_close();
     f = fopen(argv[4], "r");
@@ -39,9 +64,16 @@ int main(int argc, char **argv)
         while (fgets(line, sizeof line, f))
             if (strstr(line, "DISCOVERY REJECTED_LAST") &&
                 strstr(line, "stage=manifest")) saw_rejection = 1;
+            if (strstr(line, "DISCOVERY VERIFY_PASS") &&
+                strstr(line, "id=mock")) saw_pass = 1;
+            if (strstr(line, "DISCOVERY VERIFY_REJECT") &&
+                strstr(line, "id=bad-abi") &&
+                strstr(line, "result=INCOMPATIBLE")) saw_verification_reject = 1;
         fclose(f);
     }
     check(saw_rejection, "rejection stage recorded");
+    check(saw_pass, "successful verification audited");
+    check(saw_verification_reject, "incompatible ABI rejection audited");
     printf("Core discovery tests: %u executed, %u failed\n", count, failed);
     return failed != 0;
 }
