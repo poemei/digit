@@ -7,7 +7,7 @@
 
 static int audit(const char *event, const char *detail)
 {
-    return digit_log_event("DISCOVERY", event, detail) && digit_log_sync();
+    return digit_log_event("MODULE", event, detail) && digit_log_sync();
 }
 
 int digit_core_discover(stnlabz_module_registry_t *registry,
@@ -117,14 +117,16 @@ int digit_core_qualify(stnlabz_module_registry_t *registry)
         if (!audit("QUALIFY_ATTEMPT", detail)) return 0;
         result = stnlabz_module_registry_qualify(registry, r->descriptor.id);
         (void)snprintf(detail, sizeof detail,
-            "id=%.63s result=%s state=%s executed=%u passed=%u failed=%u negative_executed=%d negative_passed=%d authorized=%d",
-            r->descriptor.id, stnlabz_module_result_string(result),
+            "module=%.63s version=%u.%u.%u result=%s state=%s executed=%u passed=%u failed=%u negative_executed=%d negative_passed=%d authorized=%d",
+            r->descriptor.id, r->descriptor.version_major,
+            r->descriptor.version_minor, r->descriptor.version_patch,
+            stnlabz_module_result_string(result),
             stnlabz_module_state_string(r->state),
             r->qualification.tests_executed, r->qualification.tests_passed,
             r->qualification.tests_failed,
             r->qualification.negative_test_executed,
             r->qualification.negative_test_passed, r->activation_authorized);
-        if (!audit(result == STNLABZ_MODULE_OK ? "QUALIFY_PASS" : "QUALIFY_REJECT",
+        if (!audit(result == STNLABZ_MODULE_OK ? "QUALIFICATION_GREEN" : "QUALIFICATION_FAILED",
                    detail)) return 0;
     }
     return 1;
