@@ -83,5 +83,8 @@ void digit_core_discovery_cleanup(stnlabz_module_registry_t *registry,
         (void)stnlabz_module_registry_fail(registry, r->descriptor.id);
         (void)stnlabz_module_registry_unregister(registry, r->descriptor.id);
     }
-    if (registry->count == 0) stnlabz_module_loader_unload_all(loader);
+    if (registry->count == 0) {
+        stnlabz_module_loader_unload_all(loader);
+        stnlabz_module_registry_destroy(registry);
+    }
 }
