@@ -147,7 +147,7 @@ static void suggest_command(const char *root,const char *input,
     while((p=strstr(p,"register_command("))!=NULL){
      char name[65];size_t k=0;unsigned score;
      p+=strlen("register_command(");
-     while(*p==' '||*p=='\\t')p++;
+     while(*p==' '||*p=='\t')p++;
      if(*p!='\"')continue;
      p++;
      while(k<64&&(((*p>='a'&&*p<='z')||(*p>='A'&&*p<='Z')||
@@ -633,9 +633,10 @@ static void gather_sources(const char *root,const char *relative,int depth){
    watched_file_t *slot;
    for(k=0;k<watched_count;k++)if(!strcmp(watched[k].path,child))break;
    if(k<watched_count)continue;
+   if(strlen(child)>=sizeof watched[0].path)continue;
    slot=&watched[watched_count++];
    memset(slot,0,sizeof *slot);
-   snprintf(slot->path,sizeof slot->path,"%s",child);
+   memcpy(slot->path,child,strlen(child)+1);
   }
  }
  closedir(dir);
