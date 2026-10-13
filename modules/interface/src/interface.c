@@ -58,30 +58,51 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
  result->negative_test_executed=result->negative_test_passed=1;
  return STNLABZ_MODULE_OK;
 }
+static stnlabz_module_result_t stop(void);
 static stnlabz_module_result_t start(const stnlabz_module_host_t *host){
  struct sockaddr_in addr;int reuse=1;
- (void)host;
+ const char *failure="TLS initialization failed";
  if(running)return STNLABZ_MODULE_ERR_INVALID_STATE;
  tls_context=SSL_CTX_new(TLS_server_method());
- if(!tls_context)return STNLABZ_MODULE_ERR_START_FAILED;
+ if(!tls_context){
+  if(host&&host->send_message)host->send_message("[INTERFACE] TLS initialization failed");
+  return STNLABZ_MODULE_ERR_START_FAILED;
+ }
  if(SSL_CTX_set_min_proto_version(tls_context,TLS1_2_VERSION)!=1||
     SSL_CTX_use_certificate_chain_file(tls_context,INTERFACE_CERT)!=1||
     SSL_CTX_use_PrivateKey_file(tls_context,INTERFACE_KEY,SSL_FILETYPE_PEM)!=1||
-    SSL_CTX_check_private_key(tls_context)!=1)goto failed;
+    SSL_CTX_check_private_key(tls_context)!=1){
+  failure="TLS credentials unavailable, unreadable or invalid";
+  goto failed;
+ }
  listener=socket(AF_INET,SOCK_STREAM,0);
- if(listener<0)goto failed;
- if(setsockopt(listener,SOL_SOCKET,SO_REUSEADDR,&reuse,sizeof reuse)!=0)goto failed;
+ if(listener<0){failure="TCP listener socket creation failed";goto failed;}
+ if(setsockopt(listener,SOL_SOCKET,SO_REUSEADDR,&reuse,sizeof reuse)!=0){
+  failure="TCP socket setup failed";goto failed;
+ }
  memset(&addr,0,sizeof addr);
  addr.sin_family=AF_INET;
  addr.sin_port=htons(INTERFACE_PORT);
  addr.sin_addr.s_addr=htonl(INADDR_ANY);
  if(bind(listener,(struct sockaddr *)&addr,sizeof addr)!=0||
-    listen(listener,16)!=0)goto failed;
+    listen(listener,16)!=0){failure="TCP port 8081 bind or listen failed";goto failed;}
  atomic_store(&shutting_down,0);
- if(pthread_create(&listener_thread,NULL,serve,NULL)!=0)goto failed;
+ if(pthread_create(&listener_thread,NULL,serve,NULL)!=0){
+  failure="TLS listener thread startup failed";goto failed;
+ }
  running=1;
+ if(!host||!host->send_message||
+    !host->send_message("[INTERFACE] TLS listener active on port 8081; TLS required")){
+  stop();
+  return STNLABZ_MODULE_ERR_START_FAILED;
+ }
  return STNLABZ_MODULE_OK;
 failed:
+ if(host&&host->send_message){
+  char message[200];
+  snprintf(message,sizeof message,"[INTERFACE] %s",failure);
+  host->send_message(message);
+ }
  if(listener>=0){close(listener);listener=-1;}
  SSL_CTX_free(tls_context);tls_context=NULL;
  return STNLABZ_MODULE_ERR_START_FAILED;
@@ -100,7 +121,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"interface");
  snprintf(d.name,sizeof d.name,"TLS Connection Interface");
- d.version_major=0;d.version_minor=1;d.version_patch=0;
+ d.version_major=0;d.version_minor=1;d.version_patch=1;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;
