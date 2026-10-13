@@ -34,7 +34,7 @@ int main(int argc, char **argv) {
     char line[1024];
     unsigned i, activated = 0, stopped = 0, denials = 0;
     digit_policy_request_t policy = { "operator", "core-validation",
-        "module.activate", NULL, 1, 1, 1, 1, NULL };
+        "module.activate", NULL, 1, 1, 1, 1, NULL, "core-test-fixture", 1 };
     if (argc != 2) return 2;
     if (!digit_log_open_path(argv[1])) return 3;
     stnlabz_module_registry_init(&reg);
@@ -50,7 +50,7 @@ int main(int argc, char **argv) {
         check(stnlabz_module_registry_verify(&reg, d.id) == STNLABZ_MODULE_OK, "verify");
     }
     policy.module_id = "active-000";
-    check(digit_core_authorize(&reg, "active-000", &(digit_policy_request_t){ "operator", "core-validation", "module.activate", "active-000", 1, 1, 1, 1, NULL }) == STNLABZ_MODULE_ERR_NOT_QUALIFIED,
+    check(digit_core_authorize(&reg, "active-000", &(digit_policy_request_t){ "operator", "core-validation", "module.activate", "active-000", 1, 1, 1, 1, NULL, "core-test-fixture", 1 }) == STNLABZ_MODULE_ERR_NOT_QUALIFIED,
           "unqualified authorization denied");
     check(digit_core_activate(&reg, "active-000", NULL, &policy) == STNLABZ_MODULE_ERR_NOT_QUALIFIED,
           "unqualified activation denied");
@@ -67,6 +67,11 @@ int main(int argc, char **argv) {
         check(digit_core_activate(&reg, id, NULL, &policy) == STNLABZ_MODULE_OK, "explicit activation");
     }
     check(starts == 48, "48 starts executed exactly once");
+    policy.module_id = "active-000";
+    policy.context_verified = 0;
+    check(digit_core_activate(&reg, "active-000", NULL, &policy) == STNLABZ_MODULE_ERR_NOT_QUALIFIED,
+          "active module remains non-reentrant with forged claims");
+    policy.context_verified = 1;
     check(digit_core_activate(&reg, "active-000", NULL, &policy) == STNLABZ_MODULE_ERR_NOT_QUALIFIED,
           "duplicate activation denied");
     check(starts == 48, "duplicate start callback suppressed");
