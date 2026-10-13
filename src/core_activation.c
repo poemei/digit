@@ -2,7 +2,6 @@
 #include <string.h>
 #include "core_activation.h"
 #include "logging.h"
-#include "core_trace.h"
 
 static int audit(const char *event, const char *id,
                  stnlabz_module_result_t result,
@@ -14,9 +13,7 @@ static int audit(const char *event, const char *id,
         id ? id : "unknown", stnlabz_module_result_string(result),
         record ? stnlabz_module_state_string(record->state) : "NOT_FOUND",
         record ? record->activation_authorized : 0);
-    return digit_log_event("ACTIVATION", event, detail) && digit_log_sync() &&
-        DIGIT_TRACE("ACTIVATION", event, result == STNLABZ_MODULE_OK ? "ALLOW" : "DENY",
-            stnlabz_module_result_string(result), "see_activation_event");
+    return digit_log_event("ACTIVATION", event, detail) && digit_log_sync();
 }
 
 stnlabz_module_result_t digit_core_authorize(stnlabz_module_registry_t *registry,
