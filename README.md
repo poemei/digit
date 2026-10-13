@@ -34,6 +34,12 @@ Launch with `sudo -u digit /opt/digit/run`, or `sudo -u digit /opt/digit/run --m
 
 Every module remains independently buildable. To build/install only DSD: `make -C modules/dsd` and `sudo make -C modules/dsd install`. The root install target delegates to each present `modules/*/module.conf` module Makefile. Discovery and qualification do not imply activation. No Core source or ABI changes are required to add a module.
 
+## Installed DSD Router integration (pending operator acceptance)
+
+The explicit local `/opt/digit/run --mvc` console now uses the **existing ABI 1.5 module.conf directory scanner** to find the independently installed DSD binary, checks its registry descriptor, verifies and qualifies it, and uses Core's existing authorization/activation API. Bootstrap configures Router with `/lookup → expression.lookup` and `/diagnose → dsd.report` only when DSD activated. A diagnostic request is dispatched through Router, not invoked directly by the console; the Rendering View presents the result. The source of DSD remains exclusively under `modules/dsd/`, with a separate Makefile and `module.conf`. No Core or ABI source changes are made.
+
+To test after `sudo make install`, run `sudo -u digit /opt/digit/run --mvc`, then enter `puuurrrs`, `diagnose my last request`, and `/quit`. The diagnostic covers the most recent request only, using recorded Router and Model observations; it does not inspect arbitrary prior sessions, infer unknown causes, or replay the previous Model call. Use `make clean && make && make test` to run the new 26th suite, which builds an independent DSD shared object and exercises it in an isolated executable installation. **Pending operator runtime testing and acceptance.**
+
 ## Governing architecture
 
 **Core → Bootstrap → Router → relevant Module → Rendering**
