@@ -119,6 +119,9 @@ After operator acceptance of Core and explicit authorization, implement minimal 
 
 ### Phase 4 — Rendering: the View
 
+**Implementation under operator qualification:** Rendering View 0.1.0 supplies a presentation-only ABI 1.5 service, with bounded immutable-copy input combining Router decision and optional Model result. The added 24th suite demonstrates the complete MVC fixture execution path through the standalone View and guards against View invocation of Models or invented evidence. This phase has **not** been accepted or activated in the production runtime; the 23-suite, 1,486-assertion accepted baseline remains unchanged pending the operator's test evidence.
+
+
 - [ ] Define a presentation-neutral result contract emitted by Router.
 - [ ] Implement a Rendering module that formats successes, clarification prompts, denials, and diagnostics without deciding authority or routing.
 - [ ] Add tests proving Rendering cannot modify the Controller's decision or fabricate evidence.
