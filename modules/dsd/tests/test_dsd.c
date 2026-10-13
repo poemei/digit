@@ -194,7 +194,7 @@ int main(void){
      memset(&report,0,sizeof report);watch_used=0;
      if(watch_service(&watch_version,sizeof watch_version,&report,sizeof report,&watch_used,NULL)!=STNLABZ_MODULE_OK)break;
      if(strstr(report.text,"No Core changes or DSD integration.")&&
-        strstr(report.text,"Provider: modules/code_reference/src/code_reference.c:2")&&
+        strstr(report.text,"Provider: modules/code_reference/src/code_reference.c:6")&&
         strstr(report.text,"Provider handler: code_reference_analyze")&&
         strstr(report.text,"Handler definition: modules/code_reference/src/code_reference.c:2")){detected=1;break;}
     }
