@@ -2,7 +2,7 @@ CC ?= cc
 CFLAGS ?= -std=c11 -Wall -Wextra -Wpedantic -O2
 CPPFLAGS += -Iinclude -Iinclude/stnlabz_abi -Imodules/dsd/include
 
-.PHONY: all test clean install install-modules module-dsd module-expression
+.PHONY: all test clean install install-modules module-dsd module-expression module-corpus
 all: bin/digit bin/test_agent_root bin/test_runtime bin/test_module_manager bin/test_logging bin/test_abi_compat bin/test_loader bin/test_discovery bin/test_registry_growth bin/test_loader_growth bin/test_qualification bin/test_activation bin/test_inventory bin/test_policy bin/test_provenance bin/test_escalation bin/test_lifecycle_isolation bin/test_core_failure bin/test_authority_boundary bin/test_router bin/test_bootstrap bin/test_model_expression bin/test_rendering
 
 bin:
@@ -73,6 +73,9 @@ module-dsd:
 
 module-expression:
 	@$(MAKE) -C modules/expression
+
+module-corpus:
+	@$(MAKE) -C modules/corpus
 
 test: all bin/loader_valid.so bin/loader_legacy.so module-dsd module-expression
 	@sh tests/run_all.sh
