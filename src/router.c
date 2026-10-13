@@ -40,9 +40,12 @@ digit_route_status_t digit_router_dispatch(const digit_router_request_t *request
  (request->payload_size&&!request->payload)||
  (capacity&&!response))goto done;
  (void)snprintf(result->request_id,sizeof result->request_id,"%s",request->request_id);
- if(request->core_authorized!=1){outcome=DIGIT_ROUTE_DENIED;goto done;}
  for(i=0;i<binding_count;++i)if(!strcmp(bindings[i].path,request->path))break;
  if(i==binding_count){outcome=DIGIT_ROUTE_UNKNOWN;goto done;}
+ /* Explicitly public, read-only conversation route; never grant remote authority. */
+ if(request->core_authorized!=1 &&
+    !(request->core_authorized==0 && !strcmp(request->path,"/ask") &&
+      !strcmp(bindings[i].service,"route./ask"))){outcome=DIGIT_ROUTE_DENIED;goto done;}
  (void)snprintf(result->selected_service,sizeof result->selected_service,"%s",bindings[i].service);
  if(!router_host||!router_host->invoke_service){outcome=DIGIT_ROUTE_UNAVAILABLE;goto done;}
  result->service_result=router_host->invoke_service(bindings[i].service,
