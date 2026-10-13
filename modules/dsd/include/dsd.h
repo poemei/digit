@@ -25,5 +25,9 @@ typedef struct {
 /* Observations supplied by their actual decision points; DSD only reports them. */
 stnlabz_module_result_t digit_dsd_report(const void *request,size_t request_size,
  void *response,size_t response_size,size_t *response_used,void *context);
+/* Core-mediated, read-only surveillance tick: output contains an alert only
+   when a new compiler-confirmed defect is found. */
+#define DSD_WATCH_TEXT_MAX 2048
+typedef struct { unsigned int contract_version; char text[DSD_WATCH_TEXT_MAX]; } digit_dsd_watch_response_t;
 stnlabz_module_descriptor_t digit_dsd_descriptor(void);
 #endif
