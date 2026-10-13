@@ -101,6 +101,20 @@ static int unregister_service(const char *name,void *ctx){
  }
  return 0;
 }
+/* Read-only Core identity projection; no Root mutation or authority grant. */
+static stnlabz_module_result_t core_identity_service(const void *request,size_t size,
+ void *response,size_t capacity,size_t *used,void *context){
+ const stnlabz_agent_root_t *root=stnlabz_agent_root_identity();
+ int n;
+ (void)context;
+ if(!request||size!=1||*(const char *)request!=0||!response||!used||
+    !stnlabz_agent_root_validate(root))return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ n=snprintf(response,capacity,
+  "I am %s, the STN-LABZ %s. My role is defined by my Core.",
+  root->agent_name,root->lineage);
+ if(n<0||(size_t)n>=capacity)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ *used=(size_t)n+1;return STNLABZ_MODULE_OK;
+}
 static int module_message(const char *message){
  return message&&digit_log_event("MODULE","MESSAGE",message)&&digit_log_sync();
 }
@@ -139,6 +153,7 @@ int digit_mvc_console(void){
  stnlabz_module_registry_init(&registry);
  stnlabz_module_loader_init(&loader);
  digit_router_reset();command_count=0;service_count=0;
+ if(!register_service("core.identity.read",core_identity_service,NULL))return 1;
  if(!digit_log_open()){fputs("Digit: mandatory log unavailable\n",stderr);return 1;}
  if(!digit_log_event("CONSOLE","START","mode=local")||!digit_log_sync()){good=0;goto done;}
  if(!stnlabz_agent_root_validate(stnlabz_agent_root_identity())){
