@@ -666,6 +666,7 @@ static int version_from_source(const char *path,unsigned *major,unsigned *minor,
 static int documented_integration_drift(const char *root,char *alert,size_t cap){
  char readme[1024],dsd[1024],provider[1024],line[2048];
  FILE *fp;int claim=0;unsigned number=0,call_line=0,registration_line=0;
+ char handler[96]={0};
  if(snprintf(readme,sizeof readme,"%s/modules/code_reference/README.md",root)>=(int)sizeof readme||
     snprintf(dsd,sizeof dsd,"%s/modules/dsd/src/dsd.c",root)>=(int)sizeof dsd||
     snprintf(provider,sizeof provider,"%s/modules/code_reference/src/code_reference.c",root)>=(int)sizeof provider)return 0;
@@ -689,7 +690,21 @@ static int documented_integration_drift(const char *root,char *alert,size_t cap)
   const char *call=strstr(line,"h->register_service(");
   const char *name=call?strstr(call,"\"code_reference.analyze\""):NULL;
   number++;
-  if(call&&name&&strchr(line,'"')==name){registration_line=number;break;}
+  if(call&&name&&strchr(line,'"')==name){
+   const char *after=name+strlen("\"code_reference.analyze\"");
+   unsigned k=0;
+   while(*after==' '||*after=='\t')after++;
+   if(*after++!=',')continue;
+   while(*after==' '||*after=='\t')after++;
+   if(!((*after>='a'&&*after<='z')||(*after>='A'&&*after<='Z')||*after=='_'))continue;
+   while(((*after>='a'&&*after<='z')||(*after>='A'&&*after<='Z')||
+          (*after>='0'&&*after<='9')||*after=='_')&&k+1<sizeof handler)
+    handler[k++]=*after++;
+   handler[k]=0;
+   while(*after==' '||*after=='\t')after++;
+   if(*after!=','){handler[0]=0;continue;}
+   registration_line=number;break;
+  }
  }
  fclose(fp);
  if(!registration_line)return 0;
@@ -699,12 +714,13 @@ static int documented_integration_drift(const char *root,char *alert,size_t cap)
   "DSD calls 'code_reference.analyze' and Code Reference registers that service.\n"
   "Consumer: modules/dsd/src/dsd.c:%u\n"
   "Provider: modules/code_reference/src/code_reference.c:%u\n"
+  "Provider handler: %s (registered callback, execution not established)\n"
   "Document: modules/code_reference/README.md\n"
   "Recommended Markdown change: Replace 'No Core changes or DSD integration.' "
   "with 'DSD invokes the independently registered code_reference.analyze service "
   "through the Core-mediated ABI interface.' "
   "Registration and invocation establish an interface relationship, not runtime activation. "
-  "No documentation was modified.",call_line,registration_line);
+  "No documentation was modified.",call_line,registration_line,handler);
  return 1;
 }
 static int documentation_drift(const char *root,char *alert,size_t capacity,unsigned issue){
@@ -848,7 +864,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=3;d.version_patch=20;
+ d.version_major=0;d.version_minor=3;d.version_patch=21;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
