@@ -51,7 +51,7 @@ int digit_initialize(void)
     return 0;
 
 log_failure:
-    digit_module_manager_shutdown(&modules);
+    (void)digit_log_event("MODULE", "MANAGER_SHUTDOWN", "id=unknown result=0");
     digit_log_close();
     fputs("[CORE] Mandatory logging failed.\n", stderr);
     return 1;
