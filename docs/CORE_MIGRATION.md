@@ -200,3 +200,12 @@ Digit's host wrapper logs each verification attempt (candidate identity, semanti
 **Security limitation:** Linux `dlopen()` may execute library constructors during discovery **before** verification; this milestone does not provide a secure untrusted-code sandbox or cryptographic signature verification. Do not place untrusted binaries in the operational module directory. Operator approval and qualification remain separate.
 
 **Test:** `git pull && make clean && make && make test`. The discovery suite now includes a valid descriptor's UNVERIFIED/no-authority state, incompatible-major FAILED state, non-blocking rejection, verified and rejected audit evidence, and cleanup. Expect eight suites. Run `./bin/digit`, stop with Ctrl+C and inspect `tail -n 25 logs/digit.log` for discovery, shutdown and, where candidates exist, per-candidate verification. With no modules directory, `SCAN_ABSENT` remains normal. Automated passing checks do not imply operator acceptance.
+
+
+## Dynamic module capacity prerequisite (operator-authorized)
+
+The fixed 32-entry caps in the upstream STN-LABZ ABI module registry, platform loaders, catalog, and qualification inventory have been replaced with dynamically growing containers. Digit vendors the updated upstream registry and Linux loader unchanged. Module ABI 1.5 descriptor layout, export symbol, lifecycle operations, and qualification threshold remain intact, but the **Core host container structures change layout** and must be recompiled as a matched revision.
+
+Digit adds regression suites `registry_growth` and `loader_growth`. These exercise 128 registrations, multiple expansions, qualification/authority retention, duplicate denial, removal/reuse, injected registry allocation failure/recovery, and 48 distinct Linux mock shared libraries. No production module qualification or activation is enabled.
+
+Run `git pull && make clean && make && make test` and inspect the reported suite/assertion totals. Test `./bin/digit`, Ctrl+C, and `tail -n 25 logs/digit.log`. Confirm zero-module discovery, runtime continuity, and complete shutdown logging. Upstream Windows loader, catalog, and inventory tests/builds are **not** verified by Digit's Linux suite and remain independently pending. Do not claim unlimited physical memory or full multi-platform qualification.
