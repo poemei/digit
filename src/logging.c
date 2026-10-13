@@ -9,6 +9,7 @@
 
 static FILE *digit_log_stream;
 static FILE *module_log_stream;
+static unsigned long module_sequence;
 
 static int open_pair(const char *core_path,const char *module_path)
 {
@@ -47,6 +48,37 @@ static int is_module_component(const char *component)
     return !strcmp(component,"MODULE")||!strcmp(component,"DISCOVERY")||
         !strcmp(component,"ACTIVATION");
 }
+/* Operator module log contract: meaningful lifecycle transitions and messages.
+   Routine inspection/request/stop chatter is not an operator-facing finding. */
+static int routine_module_event(const char *event){
+ static const char *const names[]={
+  "VERIFY_ATTEMPT","VERIFY_PASS","QUALIFY_ATTEMPT",
+  "AUTHORIZE_REQUEST","AUTHORIZE_GRANTED","ACTIVATE_REQUEST",
+  "STOP_REQUEST","STOP_PASS","SCAN_START","SCAN_COMPLETE",
+  "DIRECTORY_CREATED","MANAGER_SHUTDOWN"
+ };
+ size_t i;
+ for(i=0;i<sizeof names/sizeof names[0];i++)if(!strcmp(event,names[i]))return 1;
+ return 0;
+}
+static void module_identity(const char *detail,char *id,size_t id_size,
+ char *version,size_t version_size){
+ const char *p;size_t n;
+ snprintf(id,id_size,"unknown");version[0]=0;
+ if(!detail)return;
+ p=strstr(detail,"module=");
+ if(!p)p=strstr(detail,"id=");
+ if(p){
+  p+=p[0]=='m'?7:3;
+  n=strcspn(p," \r\n");
+  if(n>0&&n<id_size){memcpy(id,p,n);id[n]=0;}
+ }
+ p=strstr(detail,"version=");
+ if(p){
+  p+=8;n=strcspn(p," \r\n");
+  if(n>0&&n<version_size){memcpy(version,p,n);version[n]=0;}
+ }
+}
 int digit_log_event(const char *component,const char *event,const char *detail)
 {
     time_t now;
@@ -59,8 +91,21 @@ int digit_log_event(const char *component,const char *event,const char *detail)
     now=time(NULL);
     if(now==(time_t)-1||!gmtime_r(&now,&utc)||
        !strftime(stamp,sizeof stamp,"%Y-%m-%dT%H:%M:%SZ",&utc))return 0;
-    written=fprintf(destination,"%s %s %s%s%s\n",
-        stamp,component,event,detail&&*detail?" ":"",detail&&*detail?detail:"");
+    if(destination==module_log_stream){
+        char id[80],version[48];
+        if(routine_module_event(event))return 1;
+        if(!strcmp(event,"MESSAGE")){
+            written=fprintf(destination,"%s MODULE MESSAGE %s\n",stamp,detail?detail:"");
+        }else{
+            module_identity(detail,id,sizeof id,version,sizeof version);
+            module_sequence++;
+            written=fprintf(destination,"%s MODULE %s sequence=%lu module=%s%s%s\n",
+                stamp,event,module_sequence,id,version[0]?" version=":"",version);
+        }
+    }else{
+        written=fprintf(destination,"%s %s %s%s%s\n",
+            stamp,component,event,detail&&*detail?" ":"",detail&&*detail?detail:"");
+    }
     return written>0&&!ferror(destination);
 }
 int digit_log_sync(void)
