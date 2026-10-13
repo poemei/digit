@@ -86,11 +86,11 @@ int main(int argc, char **argv)
             if (strstr(line, "MODULE REJECTED_LAST") &&
                 strstr(line, "stage=manifest")) saw_rejection = 1;
             if (strstr(line, "MODULE VERIFY_PASS") &&
-                strstr(line, "id=mock")) saw_pass = 1;
+                strstr(line, "module=mock")) saw_pass = 1;
             if (strstr(line, "MODULE VERIFY_REJECT") &&
-                strstr(line, "id=bad-abi") &&
+                strstr(line, "module=bad-abi") &&
                 strstr(line, "result=INCOMPATIBLE")) saw_verification_reject = 1;
-            if (strstr(line, "MODULE DIRECTORY_CREATED")) saw_created = 1;
+            if (strstr(line, "MODULE SCAN_COMPLETE")) saw_created = 1;
             if (strstr(line, "MODULE DIRECTORY_FAILED") &&
                 strstr(line, "not_a_directory")) saw_dir_failure = 1;
         }
