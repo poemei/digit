@@ -73,7 +73,7 @@ int main(void){
  stnlabz_module_host_t host={0};
  stnlabz_module_qualification_result_t qualification;
  check(!strcmp(desc.id,"dsd"),"module identity");
- check(desc.version_major==0&&desc.version_minor==3&&desc.version_patch==16,"module version");
+ check(desc.version_major==0&&desc.version_minor==3&&desc.version_patch==17,"module version");
  check(desc.qualify(&qualification)==STNLABZ_MODULE_OK&&qualification.tests_failed==0,"qualifies");
  check(mkdtemp(directory)!=NULL,"fixture directory");
  if(!getcwd(cwd,sizeof cwd)||chdir(directory)!=0)return 2;
@@ -175,7 +175,7 @@ int main(void){
    check(strstr(report.text,"README heading declares 0.1.0")!=NULL,"cites actual README version");
    check(strstr(report.text,"Replace heading '# Code Reference 0.1.0' with '# Code Reference 0.9.2'")!=NULL,
     "proposes source-evidenced exact Markdown change");
-   /* With versions aligned, check a stale integration claim against source. */
+   /* Version remains mismatched: both independent issues must surface. */
    {
     char dsdmodule[1400],dsdsrc[1500],dsdfile[1600];
     unsigned poll;int detected=0;
@@ -186,14 +186,14 @@ int main(void){
     fp=fopen(dsdfile,"w");if(!fp)return 2;
     fputs("void call(void){ invoke_service(\"code_reference.analyze\"); }\n",fp);fclose(fp);
     fp=fopen(docreadme,"w");if(!fp)return 2;
-    fputs("# Code Reference 0.9.2\nNo Core changes or DSD integration.\n",fp);fclose(fp);
+    fputs("# Code Reference 0.1.0\nNo Core changes or DSD integration.\n",fp);fclose(fp);
     for(poll=0;poll<24;poll++){
      memset(&report,0,sizeof report);watch_used=0;
      if(watch_service(&watch_version,sizeof watch_version,&report,sizeof report,&watch_used,NULL)!=STNLABZ_MODULE_OK)break;
      if(strstr(report.text,"No Core changes or DSD integration.")&&
         strstr(report.text,"Core-mediated ABI service interface")){detected=1;break;}
     }
-    check(detected,"stale integration claim detected from DSD source");
+    check(detected,"integration claim surfaces despite unresolved README version drift");
     unlink(dsdfile);rmdir(dsdsrc);rmdir(dsdmodule);
    }
    unlink(docreadme);unlink(docsrc);rmdir(docsr);rmdir(docdir);
