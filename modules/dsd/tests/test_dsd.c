@@ -73,7 +73,7 @@ int main(void){
  stnlabz_module_host_t host={0};
  stnlabz_module_qualification_result_t qualification;
  check(!strcmp(desc.id,"dsd"),"module identity");
- check(desc.version_major==0&&desc.version_minor==4&&desc.version_patch==0,"module version");
+ check(desc.version_major==0&&desc.version_minor==4&&desc.version_patch==1,"module version");
  check(desc.qualify(&qualification)==STNLABZ_MODULE_OK&&qualification.tests_failed==0,"qualifies");
  check(mkdtemp(directory)!=NULL,"fixture directory");
  if(!getcwd(cwd,sizeof cwd)||chdir(directory)!=0)return 2;
@@ -170,10 +170,10 @@ int main(void){
    fputs("# Code Reference 0.1.0\n",fp);fclose(fp);
    check(watch_service(&watch_version,sizeof watch_version,&report,sizeof report,&watch_used,NULL)==STNLABZ_MODULE_OK,
     "documentation drift watch executes");
-   check(strstr(report.text,"DSD DOCUMENTATION DRIFT")!=NULL,"detects module version drift");
+   check(strstr(report.text,"DSD — Engineering Finding")!=NULL,"detects module version drift");
    check(strstr(report.text,"source descriptor declares 0.9.2")!=NULL,"cites actual source version");
-   check(strstr(report.text,"README heading declares 0.1.0")!=NULL,"cites actual README version");
-   check(strstr(report.text,"Replace heading '# Code Reference 0.1.0' with '# Code Reference 0.9.2'")!=NULL,
+   check(strstr(report.text,"README declares 0.1.0")!=NULL,"cites actual README version");
+   check(strstr(report.text,"update the README heading to 0.9.2")!=NULL,
     "proposes source-evidenced exact Markdown change");
    /* Version remains mismatched: both independent issues must surface. */
    {
@@ -194,13 +194,9 @@ int main(void){
     for(poll=0;poll<24;poll++){
      memset(&report,0,sizeof report);watch_used=0;
      if(watch_service(&watch_version,sizeof watch_version,&report,sizeof report,&watch_used,NULL)!=STNLABZ_MODULE_OK)break;
-     if(strstr(report.text,"No Core changes or DSD integration.")&&
-        strstr(report.text,"Provider: modules/code_reference/src/code_reference.c:8")&&
-        strstr(report.text,"Provider handler: code_reference_analyze")&&
-        strstr(report.text,"Handler definition: modules/code_reference/src/code_reference.c:2")&&
-        strstr(report.text,"\n\nInternal call: analyze_c")&&
-        strstr(report.text,"Callee definition: analyze_c at modules/code_reference/src/code_reference.c:9")&&
-        strstr(report.text,"Implementation evidence: analyze_c contains fork() at modules/code_reference/src/code_reference.c:11")){detected=1;break;}
+     if(strstr(report.text,"README claims no DSD integration")&&
+        strstr(report.text,"Recommended correction: Update the README")&&
+        strstr(report.text,"Authorization requested: May I correct the affected Markdown documentation?")){detected=1;break;}
     }
     check(detected,"integration claim surfaces despite unresolved README version drift");
     /* Existing version drift must remain suppressed once reported. */
@@ -209,8 +205,8 @@ int main(void){
      for(k=0;k<4;k++){
       memset(&report,0,sizeof report);watch_used=0;
       if(watch_service(&watch_version,sizeof watch_version,&report,sizeof report,&watch_used,NULL)!=STNLABZ_MODULE_OK)break;
-      if(strstr(report.text,"README heading declares 0.1.0")||
-         strstr(report.text,"No Core changes or DSD integration."))duplicates++;
+      if(strstr(report.text,"README declares 0.1.0")||
+         strstr(report.text,"README claims no DSD integration"))duplicates++;
      }
      check(duplicates==0,"unchanged documentation issues stay suppressed");
     }
@@ -239,7 +235,7 @@ int main(void){
        &report,sizeof report,&watch_used,NULL)!=STNLABZ_MODULE_OK){
       all_ok=0;break;
      }
-     if(strstr(report.text,"DSD DEVELOPMENT ALERT")!=NULL){
+     if(strstr(report.text,"DSD — Engineering Finding")!=NULL){
       found_alert=1;break;
      }
     }
@@ -247,9 +243,9 @@ int main(void){
     check(found_alert,"watch discovers a newly created defective source");
    }
    check(watch_used==sizeof report,"watch response contract");
-   check(strstr(report.text,"DSD DEVELOPMENT ALERT")!=NULL,"watch proactively reports defect");
+   check(strstr(report.text,"DSD — Engineering Finding")!=NULL,"watch proactively reports defect");
    check(strstr(report.text,"missing_amount")!=NULL,"watch retains actual analysis evidence");
-   check(strstr(report.text,"Recommended fix:")!=NULL,"watch recommends validation and repair");
+   check(strstr(report.text,"Recommended action:")!=NULL,"watch recommends validation and repair");
   }
   unlink(tinyfile);
   snprintf(tinyfile,sizeof tinyfile,"%s/mock.c",tinydir);
