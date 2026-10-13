@@ -4,6 +4,7 @@
 #include "logging.h"
 #include "core_discovery.h"
 #include "core_activation.h"
+#include "core_inventory.h"
 #include "stnlabz_abi/module_registry.h"
 #include "stnlabz_abi/module_loader.h"
 #include "runtime.h"
@@ -41,6 +42,7 @@ int digit_initialize(void)
         goto log_failure;
     if (!digit_core_verify(&modules)) goto log_failure;
     if (!digit_core_qualify(&modules)) goto log_failure;
+    if (!digit_core_inventory_log(&modules)) goto log_failure;
     if (!digit_log_event("CORE", "MODULE_MANAGER_READY", "status=discovery_complete")) goto log_failure;
 
     printf("%s\n", DIGIT_NAME);
@@ -60,6 +62,7 @@ int digit_initialize(void)
         return 1;
     }
     if (!digit_core_stop_all(&modules)) goto stop_failure;
+    if (!digit_core_inventory_log(&modules)) goto log_failure;
     digit_core_discovery_cleanup(&modules, &loader);
     (void)digit_log_event("MODULE", "MANAGER_SHUTDOWN", "id=unknown result=0");
     if (!digit_log_event("CORE", "STOPPED", "reason=signal") || !digit_log_sync()) goto log_failure;
