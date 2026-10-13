@@ -59,6 +59,15 @@ int main(int argc, char **argv) {
     check(digit_core_activate(&reg, "active-000", NULL, &policy) == STNLABZ_MODULE_ERR_NOT_AUTHORIZED,
           "qualified alone does not activate");
     check(starts == 0, "qualified callback not started");
+    policy.context_verified = 0;
+    check(digit_core_authorize(&reg, "active-000", &policy) ==
+          STNLABZ_MODULE_ERR_NOT_AUTHORIZED,
+          "forged caller flags cannot grant authorization");
+    check(digit_core_activate(&reg, "active-000", NULL, &policy) ==
+          STNLABZ_MODULE_ERR_NOT_AUTHORIZED,
+          "forged caller flags cannot start qualified module");
+    check(starts == 0, "forged authority invokes no callback");
+    policy.context_verified = 1;
     for (i = 0; i < 48; ++i) {
         char id[64];
         snprintf(id, sizeof id, "active-%03u", i);
