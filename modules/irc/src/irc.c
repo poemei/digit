@@ -14,6 +14,7 @@
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include "stnlabz_abi/module.h"
+#include "router.h"
 
 typedef struct {char server[256],port[8],nick[64],channel[128],account[128],password[256];} irc_config_t;
 static irc_config_t config;
@@ -64,6 +65,46 @@ static int sasl_payload(char *out,size_t cap){
  OPENSSL_cleanse(plain,sizeof plain);
  return strlen(out)<=400; /* IRC AUTHENTICATE chunk bound */
 }
+/* Only explicitly addressed conversation, never arbitrary IRC commands. */
+static void chat_message(SSL *tls,const char *line){
+ const char *sep,*body,*prefix;char sender[64]={0},target[128]={0},message[513];
+ char answer[1024],wire[512];size_t n=0,used=0,i;
+ digit_router_request_t req={0};
+ static unsigned long sequence;
+ if(!host||!host->invoke_service||line[0]!=':')return;
+ sep=strstr(line," PRIVMSG ");if(!sep)return;
+ prefix=line+1;while(prefix[n]&&prefix+n<sep&&prefix[n]!='!'&&n<sizeof sender-1)n++;
+ if(!n||n>=sizeof sender||n==strlen(config.nick)&&!strncasecmp(prefix,config.nick,n))return;
+ memcpy(sender,prefix,n);
+ body=sep+9;{const char *space=strchr(body,' ');size_t width;
+  if(!space)return;width=(size_t)(space-body);if(!width||width>=sizeof target)return;
+  memcpy(target,body,width);target[width]=0;body=space+1;
+ }
+ if(*body==':')body++;
+ if(!strcasecmp(target,config.nick)){
+  if(strncasecmp(body,"!ask ",5))return;
+  body+=5;
+ }else if(!strcasecmp(target,config.channel)){
+  size_t nick_len=strlen(config.nick);
+  if(strncasecmp(body,config.nick,nick_len)||body[nick_len]!=':')return;
+  body+=nick_len+1;while(*body==' ')body++;
+ }else return;
+ if(!*body||strlen(body)>512||strchr(body,'\r')||strchr(body,'\n'))return;
+ snprintf(req.request_id,sizeof req.request_id,"irc-%lu",++sequence);
+ snprintf(req.path,sizeof req.path,"/ask");req.core_authorized=0;
+ req.payload=body;req.payload_size=strlen(body)+1;
+ if(host->invoke_service("router.dispatch",&req,sizeof req,answer,sizeof answer,&used)!=STNLABZ_MODULE_OK||
+   !used||used>sizeof answer||!memchr(answer,0,used))return;
+ /* One bounded IRC line. Never forward newline, control, or unverified long output. */
+ for(i=0;answer[i]&&i<350;i++){
+  if(answer[i]=='\r'||answer[i]=='\n'||(unsigned char)answer[i]<32)break;
+  message[i]=answer[i];
+ }
+ message[i]=0;
+ if(!message[0])return;
+ if(snprintf(wire,sizeof wire,"PRIVMSG %s :%s",!strcasecmp(target,config.nick)?sender:config.channel,message)>=(int)sizeof wire)return;
+ (void)send_line(tls,wire);
+}
 static int handle_line(SSL *tls,const char *line,int *authenticated,int *joined){
  char cmd[513],payload[513];const char *p;
  if(!strncmp(line,"PING ",5))return send_line(tls,line[0]=='P'&&line[5]==':'?
@@ -87,7 +128,7 @@ static int handle_line(SSL *tls,const char *line,int *authenticated,int *joined)
  }
  /* Incoming channel messages are observational only; they confer no command authority. */
  p=strstr(line," PRIVMSG ");
- if(p&&strstr(p,config.channel))return 1;
+ if(p&&*authenticated){chat_message(tls,line);return 1;}
  return 1;
 }
 static void run_connection(void){
