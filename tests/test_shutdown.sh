@@ -44,7 +44,6 @@ fi
 pid=
 log="$tmp/logs/digit.log"
 for event in 'RUNTIME STOP reason=stop_requested' \
-             'MODULE MANAGER_SHUTDOWN id=unknown result=0' \
              'CORE STOPPED reason=signal'; do
     if ! grep -Fq "$event" "$log"; then
         echo "FAIL shutdown: missing $event" >&2
@@ -52,6 +51,7 @@ for event in 'RUNTIME STOP reason=stop_requested' \
         exit 1
     fi
 done
+if ! grep -Fq 'MODULE MANAGER_SHUTDOWN id=unknown result=0' "$tmp/logs/modules.log"; then echo 'FAIL shutdown: module manager shutdown missing' >&2; exit 1; fi
 if [ "$(grep -c 'CORE STOPPED reason=signal' "$log")" -ne 1 ]; then
     echo "FAIL shutdown: expected exactly one final shutdown record" >&2
     exit 1
