@@ -21,11 +21,12 @@ if ! wait "$pid"; then pid=; echo "FAIL core integration: nonzero shutdown" >&2;
 pid=
 log="$tmp/logs/digit.log"
 count=0
-for event in 'CORE ROOT_VERIFIED agent=digit' 'DISCOVERY SCAN_COMPLETE examined=0 loaded=0 discovered=0 rejected=0' 'INVENTORY SNAPSHOT count=0' 'CORE RUNNING verification=complete qualification=complete activation=disabled' 'RUNTIME START status=running' 'RUNTIME STOP reason=stop_requested' 'CORE STOPPED reason=signal'; do
+for event in 'CORE ROOT_VERIFIED agent=digit' 'INVENTORY SNAPSHOT count=0' 'CORE RUNNING verification=complete qualification=complete activation=disabled' 'RUNTIME START status=running' 'RUNTIME STOP reason=stop_requested' 'CORE STOPPED reason=signal'; do
   if ! grep -Fq "$event" "$log"; then echo "FAIL core integration: missing $event" >&2; exit 1; fi
   count=$((count+1))
 done
 if grep -Eq 'ACTIVATION ACTIVATE_PASS|TRACE RECORD|ESCALATION REPORT' "$log"; then echo 'FAIL core integration: unexpected behavior' >&2; exit 1; fi
+if ! grep -Fq 'MODULE SCAN_COMPLETE examined=0 loaded=0 discovered=0 rejected=0' "$tmp/logs/modules.log"; then echo 'FAIL core integration: missing module scan' >&2; exit 1; fi
 count=$((count+1))
 if ! grep -Fq '0 registered modules' "$tmp/stdout"; then echo 'FAIL core integration: console mismatch' >&2; exit 1; fi
 count=$((count+1))
