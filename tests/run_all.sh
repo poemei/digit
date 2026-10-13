@@ -7,7 +7,7 @@ failed=0
 suites=0
 suite_failures=0
 
-for name in agent_root runtime module_manager logging abi_compat loader registry_growth loader_growth discovery qualification activation inventory policy shutdown provenance escalation lifecycle_isolation core_failure authority_boundary core_integration router bootstrap model_expression rendering mvc_console dsd_integration; do
+for name in agent_root runtime module_manager logging abi_compat loader registry_growth loader_growth discovery qualification activation inventory policy shutdown provenance escalation lifecycle_isolation core_failure authority_boundary core_integration router bootstrap model_expression rendering mvc_console dsd_integration corpus_store; do
     suites=$((suites + 1))
     if [ "$name" = core_integration ]; then
         command="sh tests/test_core_integration.sh"
