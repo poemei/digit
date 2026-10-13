@@ -83,15 +83,18 @@ int main(void)
     r = stnlabz_module_registry_find(&registry, d.id);
     check(r && r->state == STNLABZ_MODULE_STATE_FAILED,
           "failed qualification cannot become active");
+    stnlabz_module_registry_destroy(&registry);
     stnlabz_module_registry_init(&registry);
     d.qualify = qualified;
     d.required_core_api_minor = STNLABZ_MODULE_API_MINOR + 1;
     check(stnlabz_module_abi_prepare(&registry, &d) ==
           STNLABZ_MODULE_ERR_INCOMPATIBLE, "reject unsupported ABI minor");
+    stnlabz_module_registry_destroy(&registry);
     stnlabz_module_registry_init(&registry);
     d.required_core_api_minor = STNLABZ_MODULE_API_MINOR;
     check(stnlabz_module_abi_prepare(&registry, &d) ==
           STNLABZ_MODULE_OK, "new revision requalifies");
+    stnlabz_module_registry_destroy(&registry);
     printf("Core ABI compatibility tests: %u executed, %u failed\n", tests, failed);
     return failed != 0;
 }
