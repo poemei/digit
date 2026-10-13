@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include "dsd.h"
+#include "ask_context.h"
 #include "code_reference.h"
 
 static const stnlabz_module_host_t *dsd_host;
@@ -988,6 +989,22 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  memset(q,0,sizeof(*q));q->tests_executed=q->tests_passed=STNLABZ_MODULE_MIN_TESTS;
  q->negative_test_executed=q->negative_test_passed=1;return STNLABZ_MODULE_OK;
 }
+/* No log search: report only the observation supplied by the current conversation. */
+static stnlabz_module_result_t scoped_report(const void *req,size_t length,
+ void *out,size_t capacity,size_t *used,void *ctx){
+ const digit_scoped_diagnostic_t *d=req;int n;
+ (void)ctx;
+ if(!d||length!=sizeof *d||!out||!used||
+    !memchr(d->request_id,0,sizeof d->request_id)||
+    !memchr(d->route,0,sizeof d->route)||
+    !memchr(d->service,0,sizeof d->service)||!d->request_id[0])
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ n=snprintf(out,capacity,
+  "DSD SCOPED REPORT\\nRequest: %s\\nRoute: %s\\nService: %s\\nOutcome: %d\\nService result: %d\\nFinding: Recorded dispatch outcome only; no root cause established.",
+  d->request_id,d->route,d->service,d->outcome,d->service_result);
+ if(n<0||(size_t)n>=capacity)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ *used=(size_t)n+1;return STNLABZ_MODULE_OK;
+}
 static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
  if(dsd_host||!h||!h->register_service||!h->unregister_service||
  !h->register_command||!h->unregister_command)
@@ -995,6 +1012,11 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
  if(!h->register_service("dsd.report",digit_dsd_report,NULL))
  return STNLABZ_MODULE_ERR_START_FAILED;
  if(!h->register_service("dsd.watch",dsd_watch_poll,NULL)){
+  (void)h->unregister_service("dsd.report",NULL);
+  return STNLABZ_MODULE_ERR_START_FAILED;
+ }
+ if(!h->register_service("dsd.scoped",scoped_report,NULL)){
+  (void)h->unregister_service("dsd.watch",NULL);
   (void)h->unregister_service("dsd.report",NULL);
   return STNLABZ_MODULE_ERR_START_FAILED;
  }
@@ -1016,6 +1038,7 @@ static stnlabz_module_result_t stop(void){
  if(!dsd_host)return STNLABZ_MODULE_ERR_INVALID_STATE;
  if(!dsd_host->unregister_command("repair-doc",NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
  if(!dsd_host->unregister_command("diagnose",NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
+ if(!dsd_host->unregister_service("dsd.scoped",NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
  if(!dsd_host->unregister_service("dsd.watch",NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
  if(!dsd_host->unregister_service("dsd.report",NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
  dsd_host=NULL;
@@ -1025,7 +1048,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=4;d.version_patch=2;
+ d.version_major=0;d.version_minor=4;d.version_patch=3;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
