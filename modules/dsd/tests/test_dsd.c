@@ -184,7 +184,7 @@ int main(void){
     snprintf(dsdfile,sizeof dsdfile,"%s/dsd.c",dsdsrc);
     if(mkdir(dsdmodule,0700)!=0||mkdir(dsdsrc,0700)!=0)return 2;
     fp=fopen(dsdfile,"w");if(!fp)return 2;
-    fputs("void call(void){ invoke_service(\"code_reference.analyze\"); }\n",fp);fclose(fp);
+    fputs("void call(void){ dsd_host->invoke_service(\"code_reference.analyze\"); }\n",fp);fclose(fp);
     fp=fopen(docreadme,"w");if(!fp)return 2;
     fputs("# Code Reference 0.1.0\nNo Core changes or DSD integration.\n",fp);fclose(fp);
     for(poll=0;poll<24;poll++){
