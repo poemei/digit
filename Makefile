@@ -3,7 +3,7 @@ CFLAGS ?= -std=c11 -Wall -Wextra -Wpedantic -O2
 CPPFLAGS += -Iinclude -Iinclude/stnlabz_abi
 
 .PHONY: all test clean
-all: bin/digit bin/test_agent_root bin/test_runtime bin/test_module_manager bin/test_logging bin/test_abi_compat bin/test_loader bin/test_discovery bin/test_registry_growth bin/test_loader_growth bin/test_qualification bin/test_activation bin/test_inventory bin/test_policy bin/test_provenance bin/test_escalation bin/test_lifecycle_isolation bin/test_core_failure bin/test_authority_boundary bin/test_router
+all: bin/digit bin/test_agent_root bin/test_runtime bin/test_module_manager bin/test_logging bin/test_abi_compat bin/test_loader bin/test_discovery bin/test_registry_growth bin/test_loader_growth bin/test_qualification bin/test_activation bin/test_inventory bin/test_policy bin/test_provenance bin/test_escalation bin/test_lifecycle_isolation bin/test_core_failure bin/test_authority_boundary bin/test_router bin/test_bootstrap
 
 bin:
 	mkdir -p bin
@@ -80,3 +80,6 @@ bin/test_authority_boundary: tests/test_authority_boundary.c src/core_activation
 
 bin/test_router: tests/test_router.c src/router.c src/logging.c src/stnlabz_abi/module_registry.c include/router.h | bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_router.c src/router.c src/logging.c src/stnlabz_abi/module_registry.c -o $@
+
+bin/test_bootstrap: tests/test_bootstrap.c src/bootstrap.c src/router.c src/core_activation.c src/core_policy.c src/agent_root.c src/identity_digit.c src/stnlabz_abi/abi.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/logging.c include/bootstrap.h include/router.h | bin
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_bootstrap.c src/bootstrap.c src/router.c src/core_activation.c src/core_policy.c src/agent_root.c src/identity_digit.c src/stnlabz_abi/abi.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/module.c src/logging.c -o $@
