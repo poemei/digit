@@ -25,11 +25,15 @@ static int unreg_command(const char *name,void *ctx){
 }
 static int reg_service(const char *name,stnlabz_module_service_handler_fn fn,void *ctx){
  (void)ctx;if(!strcmp(name,"dsd.watch")){watch_service=fn;return 1;}
- if(strcmp(name,"dsd.report"))return 0;service=fn;return 1;
+ if(strcmp(name,"dsd.report"))return 0;
+ service=fn;
+ return 1;
 }
 static int unreg_service(const char *name,void *ctx){
  (void)ctx;if(!strcmp(name,"dsd.watch")){watch_service=NULL;return 1;}
- if(strcmp(name,"dsd.report"))return 0;service=NULL;return 1;
+ if(strcmp(name,"dsd.report"))return 0;
+ service=NULL;
+ return 1;
 }
 static stnlabz_module_result_t invoke_analysis(const char *name,const void *input,
  size_t size,void *output,size_t capacity,size_t *response_used){
@@ -151,7 +155,7 @@ int main(void){
   check(strstr(output,"Module: mock")!=NULL,"diagnostic retains module");
   /* Synthetic source/README mismatch: source-derived evidence, no document write. */
   {
-   char docdir[1400],docsr[1400],docsrc[1500],docreadme[1500];
+   char docdir[1400],docsr[1500],docsrc[1600],docreadme[1600];
    unsigned int watch_version=1U;digit_dsd_watch_response_t report={0};
    size_t watch_used=0;
    snprintf(docdir,sizeof docdir,"%s/modules/code_reference",tinyroot);
@@ -181,8 +185,24 @@ int main(void){
    unsigned int watch_version=1U;
    digit_dsd_watch_response_t report={0};
    size_t watch_used=0;
-   check(watch_service(&watch_version,sizeof watch_version,
-     &report,sizeof report,&watch_used,NULL)==STNLABZ_MODULE_OK,"automatic watch invoked");
+   {
+    unsigned poll;
+    int found_alert=0,all_ok=1;
+    /* Source inventory is refreshed periodically; the new file is created
+       after the first poll, so let reconciliation discover it. */
+    for(poll=0;poll<48;poll++){
+     watch_used=0;
+     if(watch_service(&watch_version,sizeof watch_version,
+       &report,sizeof report,&watch_used,NULL)!=STNLABZ_MODULE_OK){
+      all_ok=0;break;
+     }
+     if(strstr(report.text,"DSD DEVELOPMENT ALERT")!=NULL){
+      found_alert=1;break;
+     }
+    }
+    check(all_ok,"automatic watch invokes successfully");
+    check(found_alert,"watch discovers a newly created defective source");
+   }
    check(watch_used==sizeof report,"watch response contract");
    check(strstr(report.text,"DSD DEVELOPMENT ALERT")!=NULL,"watch proactively reports defect");
    check(strstr(report.text,"missing_amount")!=NULL,"watch retains actual analysis evidence");
