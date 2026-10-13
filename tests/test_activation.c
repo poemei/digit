@@ -49,23 +49,25 @@ int main(int argc, char **argv) {
         check(stnlabz_module_registry_discover(&reg, &d) == STNLABZ_MODULE_OK, "register");
         check(stnlabz_module_registry_verify(&reg, d.id) == STNLABZ_MODULE_OK, "verify");
     }
+    policy.module_id = "active-000";
     check(digit_core_authorize(&reg, "active-000", &(digit_policy_request_t){ "operator", "core-validation", "module.activate", "active-000", 1, 1, 1, 1, NULL }) == STNLABZ_MODULE_ERR_NOT_QUALIFIED,
           "unqualified authorization denied");
-    check(digit_core_activate(&reg, "active-000", NULL) == STNLABZ_MODULE_ERR_NOT_QUALIFIED,
+    check(digit_core_activate(&reg, "active-000", NULL, &policy) == STNLABZ_MODULE_ERR_NOT_QUALIFIED,
           "unqualified activation denied");
     check(starts == 0, "unauthorized callback never executed");
     check(digit_core_qualify(&reg), "batch qualification");
-    check(digit_core_activate(&reg, "active-000", NULL) == STNLABZ_MODULE_ERR_NOT_AUTHORIZED,
+    check(digit_core_activate(&reg, "active-000", NULL, &policy) == STNLABZ_MODULE_ERR_NOT_AUTHORIZED,
           "qualified alone does not activate");
     check(starts == 0, "qualified callback not started");
     for (i = 0; i < 48; ++i) {
         char id[64];
         snprintf(id, sizeof id, "active-%03u", i);
         check((policy.module_id = id, digit_core_authorize(&reg, id, &policy)) == STNLABZ_MODULE_OK, "explicit authorization");
-        check(digit_core_activate(&reg, id, NULL) == STNLABZ_MODULE_OK, "explicit activation");
+        policy.module_id = id;
+        check(digit_core_activate(&reg, id, NULL, &policy) == STNLABZ_MODULE_OK, "explicit activation");
     }
     check(starts == 48, "48 starts executed exactly once");
-    check(digit_core_activate(&reg, "active-000", NULL) == STNLABZ_MODULE_ERR_NOT_QUALIFIED,
+    check(digit_core_activate(&reg, "active-000", NULL, &policy) == STNLABZ_MODULE_ERR_NOT_QUALIFIED,
           "duplicate activation denied");
     check(starts == 48, "duplicate start callback suppressed");
     check(digit_core_stop_all(&reg), "stop all active modules");
@@ -79,11 +81,12 @@ int main(int argc, char **argv) {
               r->qualification.tests_passed == STNLABZ_MODULE_MIN_TESTS,
               "stopped state retains qualification without authority");
     }
-    check(digit_core_activate(&reg, "active-000", NULL) == STNLABZ_MODULE_ERR_NOT_AUTHORIZED,
+    check(digit_core_activate(&reg, "active-000", NULL, &policy) == STNLABZ_MODULE_ERR_NOT_AUTHORIZED,
           "stopped module requires reauthorization");
     check((policy.module_id = "active-000", digit_core_authorize(&reg, "active-000", &policy)) == STNLABZ_MODULE_OK,
           "explicit reauthorization");
-    check(digit_core_activate(&reg, "active-000", NULL) == STNLABZ_MODULE_OK,
+    policy.module_id = "active-000";
+    check(digit_core_activate(&reg, "active-000", NULL, &policy) == STNLABZ_MODULE_OK,
           "explicit reactivation");
     check(digit_core_stop_all(&reg), "reauthorized module stopped");
     check(stops == 49, "reactivation stop callback ran");
@@ -95,7 +98,8 @@ int main(int argc, char **argv) {
     check(digit_core_qualify(&reg), "start failure qualify");
     check((policy.module_id = d.id, digit_core_authorize(&reg, d.id, &policy)) == STNLABZ_MODULE_OK, "start failure authorize");
     start_failure = 1;
-    check(digit_core_activate(&reg, d.id, NULL) == STNLABZ_MODULE_ERR_START_FAILED,
+    policy.module_id = d.id;
+    check(digit_core_activate(&reg, d.id, NULL, &policy) == STNLABZ_MODULE_ERR_START_FAILED,
           "start failure propagated");
     r = stnlabz_module_registry_find(&reg, d.id);
     check(r && r->state == STNLABZ_MODULE_STATE_FAILED && !r->activation_authorized,
@@ -107,7 +111,7 @@ int main(int argc, char **argv) {
     check(stnlabz_module_registry_verify(&reg, d.id) == STNLABZ_MODULE_OK, "stop failure verify");
     check(digit_core_qualify(&reg), "stop failure qualify");
     check((policy.module_id = d.id, digit_core_authorize(&reg, d.id, &policy)) == STNLABZ_MODULE_OK, "stop failure authorize");
-    check(digit_core_activate(&reg, d.id, NULL) == STNLABZ_MODULE_OK, "stop failure activated");
+    check(digit_core_activate(&reg, d.id, NULL, &policy) == STNLABZ_MODULE_OK, "stop failure activated");
     stop_failure = 1;
     check(!digit_core_stop_all(&reg), "stop failure reported");
     r = stnlabz_module_registry_find(&reg, d.id);
