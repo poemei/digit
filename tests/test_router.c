@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "router.h"
+#include "stnlabz_abi/module_registry.h"
 #include "logging.h"
 static unsigned checks,failures,calls,registrations,unregistrations;
 static stnlabz_module_service_handler_fn service_handler;
@@ -25,6 +26,7 @@ static int unregister_service(const char *name,void *context){
 int main(int argc,char **argv){
  stnlabz_module_host_t host={0};
  stnlabz_module_descriptor_t descriptor;
+ stnlabz_module_registry_t registry;
  stnlabz_module_qualification_result_t q;
  digit_router_request_t req={"req-1","/ask",1,"question",8};
  digit_router_result_t result;
@@ -33,6 +35,10 @@ int main(int argc,char **argv){
  if(argc!=2||!digit_log_open_path(argv[1]))return 2;
  digit_router_reset();
  descriptor=digit_router_descriptor();
+ stnlabz_module_registry_init(&registry);
+ check(stnlabz_module_registry_discover(&registry,&descriptor)==STNLABZ_MODULE_OK,"Core ABI discovers router");
+ check(stnlabz_module_registry_verify(&registry,"router")==STNLABZ_MODULE_OK,"Core ABI verifies router");
+ check(stnlabz_module_registry_qualify(&registry,"router")==STNLABZ_MODULE_OK,"Core ABI qualifies router");
  check(!strcmp(descriptor.id,"router")&&descriptor.version_major==0&&descriptor.version_minor==1,"versioned ABI descriptor");
  check(descriptor.required_core_api_major==STNLABZ_MODULE_API_MAJOR&&
  descriptor.required_core_api_minor==STNLABZ_MODULE_API_MINOR,"ABI 1.5 match");
@@ -73,7 +79,7 @@ int main(int argc,char **argv){
  check(unregistrations==1&&service_handler==NULL,"service unregistered");
  check(digit_router_dispatch(&req,output,sizeof output,&result)==DIGIT_ROUTE_UNAVAILABLE,"stopped router unavailable");
  check(descriptor.stop()==STNLABZ_MODULE_ERR_INVALID_STATE,"duplicate stop rejected");
- digit_router_reset();digit_log_close();
+ digit_router_reset();stnlabz_module_registry_destroy(&registry);digit_log_close();
  printf("Core router tests: %u executed, %u failed\n",checks,failures);
  return failures!=0;
 }
