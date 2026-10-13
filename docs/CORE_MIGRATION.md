@@ -154,3 +154,17 @@ Authorized Core-only step: review qualification/admission evidence trust and pre
 **Open risk:** caller-supplied test counts can still be fabricated by a trusted or compromised caller; authenticating them requires a separately approved trusted evidence source/contract. This step addresses audit integrity, not evidence provenance. Production authority identity and persistent qualification verification remain outside this change.
 
 **Operator gate:** `git pull && make clean && make && make test`; check the fifth shutdown integration suite, updated module-manager suite, and overall PASS. Run `./bin/digit`, stop with Ctrl+C and confirm the shutdown events in `tail -n 20 logs/digit.log`. Report failures exactly; no passing server test or acceptance is presumed from commits.
+
+## Shared STN-LABZ ABI 1.5 Core integration (2026-10-12)
+
+**Operator-authorized compatibility stage.** Reference: `stnlabz/ABI` default branch as read for this integration. The governing common module contract is ABI **1.5** (`STNLABZ_MODULE_API_MAJOR=1`, `STNLABZ_MODULE_API_MINOR=5`, `STNLABZ_MODULE_MIN_TESTS=10`). These shared ABI sources were copied **unchanged** to `include/stnlabz_abi/` and `src/stnlabz_abi/`; the upstream repository was not altered.
+
+- `src/digit.c` initializes the common ABI's `stnlabz_module_registry_t` for **zero-module Core startup**. The prior Digit-local `digit_module_manager_t` is no longer linked into `bin/digit`.
+- `Makefile` links the shared lifecycle implementation (`module.c`, `module_registry.c`, `abi.c`) to Core and adds a dedicated compatibility test binary.
+- `tests/test_abi_compat.c` covers ABI version/minimum test count, descriptor qualification callback, denied unauthorized activation, authorized start, stop and cleared authority, unregister/replacement, fresh qualification, rejected insufficient tests, and incompatible ABI minor.
+- `tests/run_all.sh` includes the compatibility suite alongside previous Core and shutdown suites.
+- The historical standalone Digit-local manager and its tests remain as migration comparison material, **not a second active runtime lifecycle controller**. A later explicit operator-authorized cleanup decision is needed before deleting or replacing those tests and files.
+
+**Limits:** no dynamic loader, module discovery, or hot replacement filesystem watcher is enabled. The shared ABI registry currently has no live modules. Common ABI qualification callbacks return evidence supplied by module code and do not by themselves attest binary provenance or human approval. Production actor authentication, secure evidence provenance, and an audited activation boundary remain separate work. The exact descriptor export required by the established loader is `stnlabz_module_get_descriptor`; it has not been changed.
+
+**Operator acceptance:** run `git pull && make clean && make && make test`, verify **6** suites and aggregate PASS, then launch `./bin/digit`, stop with Ctrl+C, and inspect `tail -n 20 logs/digit.log`. Expect zero modules and shutdown records `RUNTIME STOP`, `MODULE MANAGER_SHUTDOWN`, and `CORE STOPPED`. The ABI compatibility suite runs mock callbacks only; no real module is activated. Do not infer host test success from GitHub commits.
