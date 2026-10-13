@@ -81,7 +81,7 @@ int main(int argc, char **argv) {
     }
     check(digit_core_activate(&reg, "active-000", NULL) == STNLABZ_MODULE_ERR_NOT_AUTHORIZED,
           "stopped module requires reauthorization");
-    check(digit_core_authorize(&reg, "active-000") == STNLABZ_MODULE_OK,
+    check((policy.module_id = "active-000", digit_core_authorize(&reg, "active-000", &policy)) == STNLABZ_MODULE_OK,
           "explicit reauthorization");
     check(digit_core_activate(&reg, "active-000", NULL) == STNLABZ_MODULE_OK,
           "explicit reactivation");
@@ -106,7 +106,7 @@ int main(int argc, char **argv) {
     check(stnlabz_module_registry_discover(&reg, &d) == STNLABZ_MODULE_OK, "stop failure setup");
     check(stnlabz_module_registry_verify(&reg, d.id) == STNLABZ_MODULE_OK, "stop failure verify");
     check(digit_core_qualify(&reg), "stop failure qualify");
-    check(digit_core_authorize(&reg, d.id) == STNLABZ_MODULE_OK, "stop failure authorize");
+    check((policy.module_id = d.id, digit_core_authorize(&reg, d.id, &policy)) == STNLABZ_MODULE_OK, "stop failure authorize");
     check(digit_core_activate(&reg, d.id, NULL) == STNLABZ_MODULE_OK, "stop failure activated");
     stop_failure = 1;
     check(!digit_core_stop_all(&reg), "stop failure reported");
