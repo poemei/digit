@@ -95,7 +95,7 @@ int main(void){
  check(strstr(output,"No defective source line")==NULL,"does not fabricate known defect");
  snprintf(path,sizeof path,"%s/modules.log",logs);
  fp=fopen(path,"a");if(!fp)return 2;
- fputs("2026-10-13T20:01:00Z MODULE ACTIVATE_REJECT module=unseen version=0.1.0 result=STNLABZ_MODULE_ERR_START_FAILED state=FAILED authorized=1\\n",fp);
+ fputs("2026-10-13T20:01:00Z MODULE ACTIVATE_REJECT module=unseen version=0.1.0 result=STNLABZ_MODULE_ERR_START_FAILED state=FAILED authorized=1\n",fp);
  fclose(fp);
  diagnose("module failures");
  check(strstr(output,"ACTIVATE_REJECT")!=NULL,"latest lifecycle failure selected");
