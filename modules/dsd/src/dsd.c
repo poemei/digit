@@ -113,7 +113,12 @@ static int inspect_route(const char *route,char *location,size_t cap,char *findi
  return 0;
  }
  found=scan_module_commands(root,name,registration,sizeof registration,&incomplete);
- snprintf(location,cap,"parse=%s; bind=%s; lookup=%s; reject=%s",parse,bind,lookup,reject);
+ if(strlen(parse)>250||strlen(bind)>250||strlen(lookup)>250||strlen(reject)>250){
+  snprintf(location,cap,"SOURCE LOCATION TOO LONG: cannot report complete route evidence");
+  snprintf(finding,fcap,"Source references exceed diagnostic bounds; investigation incomplete.");
+  return 0;
+ }
+ snprintf(location,cap,"parse=%.250s; bind=%.250s; lookup=%.250s; reject=%.250s",parse,bind,lookup,reject);
  if(found){
   snprintf(finding,fcap,"Source registration for /%.60s located at %.450s. Router has no active binding: inspect that module's discovery, qualification, activation and registration errors in modules.log before proposing a fix.",name,registration);
  }else if(incomplete){
