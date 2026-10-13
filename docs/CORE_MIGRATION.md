@@ -297,3 +297,9 @@ The provenance contract is a **caller assertion only**. Because the present Core
 Architecture review: src/module_manager.c is a legacy fixed-capacity alternate implementation compiled by bin/test_module_manager but **not** linked into production bin/digit. Production uses the dynamic shared ABI module registry. Retain the legacy implementation only as existing historical test infrastructure until separately authorized for removal; do not use it as an alternative production authorization or activation entrypoint.
 
 Testing: operator runs git pull; make clean && make && make test; ./bin/digit; Ctrl+C; tail -n 30 logs/digit.log. No changes to Bootstrap, Router, DSD, external identity, or ABI 1.5 were made. Acceptance awaits operator's actual build/runtime evidence.
+
+## Core 20-suite qualification gate — operator-authorized
+
+Six new independent suites extend the original fourteen without repartitioning existing assertions: provenance, escalation, lifecycle_isolation, core_failure, authority_boundary, and core_integration. Five are independent C test executables and the sixth is a separate process-level shell integration harness. Temporary test logs are isolated. The aggregate tests/run_all.sh now invokes twenty distinct named suites, verifies each summary and exit status, and fails on any assertion, suite, or report error. The added suites target existing Core behavior rather than new capabilities.
+
+Expected aggregate on passing tests: 20 suites and more than the accepted 1,347 baseline assertions, with zero failures. The requirement is not marked satisfied by committing tests: server compilation, the aggregate output, Core console run, logs/digit.log and explicit operator acceptance remain necessary. ABI 1.5, Core policy implementation, DSD boundary, Bootstrap and Router are unchanged.
