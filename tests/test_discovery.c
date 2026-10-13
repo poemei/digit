@@ -21,8 +21,8 @@ int main(int argc, char **argv)
     stnlabz_module_discovery_report_t report;
     FILE *f;
     char line[1024];
-    int saw_rejection = 0, saw_pass = 0, saw_verification_reject = 0;
-    int saw_created = 0, saw_dir_failure = 0;
+    int saw_rejection = 0, saw_pass = 1, saw_verification_reject = 0;
+    int saw_created = 1, saw_dir_failure = 0;
     if (argc != 5) return 2;
     if (!digit_log_open_path(argv[4])) return 3;
     stnlabz_module_registry_init(&registry);
@@ -86,20 +86,20 @@ int main(int argc, char **argv)
             if (strstr(line, "MODULE REJECTED_LAST") &&
                 strstr(line, "stage=manifest")) saw_rejection = 1;
             if (strstr(line, "MODULE VERIFY_PASS") &&
-                strstr(line, "module=mock")) saw_pass = 1;
+                strstr(line, "module=mock")) saw_pass = 0;
             if (strstr(line, "MODULE VERIFY_REJECT") &&
                 strstr(line, "module=bad-abi") &&
                 strstr(line, "result=INCOMPATIBLE")) saw_verification_reject = 1;
-            if (strstr(line, "MODULE SCAN_COMPLETE")) saw_created = 1;
+            if (strstr(line, "MODULE DIRECTORY_CREATED")) saw_created = 0;
             if (strstr(line, "MODULE DIRECTORY_FAILED") &&
                 strstr(line, "not_a_directory")) saw_dir_failure = 1;
         }
         fclose(f);
     }
     check(saw_rejection, "rejection stage recorded");
-    check(saw_pass, "successful verification audited");
+    check(saw_pass, "routine successful verification omitted");
     check(saw_verification_reject, "incompatible ABI rejection audited");
-    check(saw_created, "directory creation audited");
+    check(saw_created, "routine directory creation omitted");
     check(saw_dir_failure, "invalid directory target audited");
     printf("Core discovery tests: %u executed, %u failed\n", count, failed);
     return failed != 0;
