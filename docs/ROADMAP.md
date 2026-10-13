@@ -134,6 +134,10 @@ The operator authorized integration of the accepted MVC components into the runn
 
 ### Phase 5 — DSD: observe the actual path
 
+**Runtime integration repair awaiting operator acceptance:** The `--mvc` adapter discovers independently deployed DSD through existing `module.conf` discovery, verifies/qualifies/activates through existing Core gates, and configures Router to dispatch `/diagnose` to `dsd.report`. Rendering presents the returned report; no direct console→DSD calls. A new suite runs the executable against a separately built shared library in an isolated installation. The accepted 25-suite baseline is preserved; actual 26-suite results and installed runtime evidence are required. Neither Core nor ABI implementation was edited for this fix.
+
+
+
 **Corrected module boundary, pending operator verification:** DSD source, `module.conf`, and independent build now reside in `modules/dsd/`. The existing Core dynamic discovery scans deployed module directories next to the executable, reads the manifest, and loads the ABI 1.5 shared object. The DSD-specific Bootstrap, Rendering, and local console integration was reverted. The module remains unactivated until an authorized Router and host-service configuration makes `/diagnose` available; no Core modification is justified by adding this capability. The accepted 25-suite baseline must be retested.
 
 - [ ] Implement DSD as a diagnostic capability, not an execution controller.
