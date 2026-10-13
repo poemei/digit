@@ -85,12 +85,17 @@ static int register_service(const char *name,stnlabz_module_service_handler_fn h
  if(!name||!name[0]||strlen(name)>=sizeof services[0].name||!handler||service_count>=32)return 0;
  for(i=0;i<service_count;i++)if(!strcmp(services[i].name,name))return 0;
  (void)snprintf(services[service_count].name,sizeof services[0].name,"%s",name);
- services[service_count].handler=handler;services[service_count++].context=ctx;return 1;
+ services[service_count].handler=handler;services[service_count++].context=ctx;
+ if(!strncmp(name,"route.",6)&&!digit_router_bind(name+6,name)){
+  --service_count;memset(&services[service_count],0,sizeof services[0]);return 0;
+ }
+ return 1;
 }
 static int unregister_service(const char *name,void *ctx){
  size_t i;
  if(!name)return 0;
  for(i=0;i<service_count;i++)if(!strcmp(services[i].name,name)&&services[i].context==ctx){
+  if(!strncmp(name,"route.",6)&&!digit_router_unbind(name+6,name))return 0;
   if(i+1<service_count)memmove(&services[i],&services[i+1],(service_count-i-1)*sizeof services[0]);
   --service_count;memset(&services[service_count],0,sizeof services[0]);return 1;
  }
