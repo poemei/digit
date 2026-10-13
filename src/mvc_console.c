@@ -4,7 +4,8 @@
 #include <sys/select.h>
 #include <unistd.h>
 #include <errno.h>
-#include "dsd.h"
+/* Opaque Core-mediated service response; no DSD linkage or dependency. */
+typedef struct {unsigned int contract_version;char text[2048];} console_dsd_alert_t;
 #include "mvc_console.h"
 #include "router.h"
 #include "core_activation.h"
@@ -96,7 +97,7 @@ static const stnlabz_module_host_t host={
  NULL,NULL,register_command,unregister_command,register_service,unregister_service,invoke
 };
 static void console_dsd_watch(void){
- unsigned int version=1U;digit_dsd_watch_response_t result={0};
+ unsigned int version=1U;console_dsd_alert_t result={0};
  size_t used=0;
  if(invoke("dsd.watch",&version,sizeof version,&result,sizeof result,&used)==STNLABZ_MODULE_OK&&
     used==sizeof result&&result.contract_version==1U&&
