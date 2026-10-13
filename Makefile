@@ -42,7 +42,7 @@ bin/test_registry_growth: tests/test_registry_growth.c src/stnlabz_abi/module_re
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_registry_growth.c src/stnlabz_abi/module_registry.c -Wl,--wrap=realloc -o $@
 
 bin/test_loader_growth: tests/test_loader_growth.c src/stnlabz_abi/loader_linux.c | bin
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_loader_growth.c src/stnlabz_abi/loader_linux.c -ldl -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_loader_growth.c src/stnlabz_abi/loader_linux.c -ldl -Wl,--wrap=realloc -o $@
 
 test: all bin/loader_valid.so bin/loader_legacy.so
 	@sh tests/run_all.sh
