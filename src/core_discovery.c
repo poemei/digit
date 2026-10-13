@@ -42,6 +42,33 @@ int digit_core_discover(stnlabz_module_registry_t *registry,
     return 1;
 }
 
+int digit_core_verify(stnlabz_module_registry_t *registry)
+{
+    size_t i;
+    char detail[320];
+    if (!registry || !digit_log_is_open()) return 0;
+    for (i = 0; i < registry->count; ++i) {
+        stnlabz_module_record_t *r = &registry->modules[i];
+        stnlabz_module_result_t result;
+        if (r->state != STNLABZ_MODULE_STATE_DISCOVERED) continue;
+        (void)snprintf(detail, sizeof detail,
+            "id=%.63s version=%u.%u.%u abi=%u.%u",
+            r->descriptor.id, r->descriptor.version_major,
+            r->descriptor.version_minor, r->descriptor.version_patch,
+            r->descriptor.required_core_api_major,
+            r->descriptor.required_core_api_minor);
+        if (!audit("VERIFY_ATTEMPT", detail)) return 0;
+        result = stnlabz_module_registry_verify(registry, r->descriptor.id);
+        (void)snprintf(detail, sizeof detail,
+            "id=%.63s result=%s state=%s",
+            r->descriptor.id, stnlabz_module_result_string(result),
+            stnlabz_module_state_string(r->state));
+        if (!audit(result == STNLABZ_MODULE_OK ? "VERIFY_PASS" : "VERIFY_REJECT",
+                   detail)) return 0;
+    }
+    return 1;
+}
+
 void digit_core_discovery_cleanup(stnlabz_module_registry_t *registry,
     stnlabz_module_loader_t *loader)
 {
@@ -49,7 +76,10 @@ void digit_core_discovery_cleanup(stnlabz_module_registry_t *registry,
     /* Unload only never-activated discovered candidates. */
     while (registry->count) {
         stnlabz_module_record_t *r = &registry->modules[registry->count - 1];
-        if (r->state != STNLABZ_MODULE_STATE_DISCOVERED) break;
+        if (r->state != STNLABZ_MODULE_STATE_DISCOVERED &&
+            r->state != STNLABZ_MODULE_STATE_UNVERIFIED &&
+            r->state != STNLABZ_MODULE_STATE_FAILED &&
+            r->state != STNLABZ_MODULE_STATE_QUARANTINED) break;
         (void)stnlabz_module_registry_fail(registry, r->descriptor.id);
         (void)stnlabz_module_registry_unregister(registry, r->descriptor.id);
     }
