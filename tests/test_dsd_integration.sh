@@ -9,8 +9,8 @@ cp "$root/modules/dsd/bin/dsd.so" "$tmp/bin/modules/dsd/bin/dsd.so"
 cp "$root/modules/dsd/module.conf" "$tmp/bin/modules/dsd/module.conf"
 cd "$tmp"
 mkdir -p logs
-printf '2026-10-13T03:51:47Z MODULE FAILED id=dsd file=modules/dsd/src/dsd.c line=42 reason=fixture_failure\\n' >logs/digit.log
-printf 'diagnose fixture_failure\ndiagnose no_such_record\n/quit\n' | ./bin/digit >out.txt 2>err.txt
+printf '2026-10-13T03:51:47Z MODULE FAILED id=dsd file=modules/dsd/src/dsd.c line=42 reason=fixture_failure\n' >logs/digit.log
+printf 'diagnose fixture_failure\ndiagnose no_such_record\npuuurs\ndiagnose my last request\n/quit\n' | ./bin/digit >out.txt 2>err.txt
 checks=0;failures=0
 expect(){
  checks=$((checks+1))
@@ -26,6 +26,10 @@ expect 'Code: modules/dsd/src/dsd.c:42' out.txt
 expect 'Finding: Recorded event indicates the requested condition; reason=fixture_failure.' out.txt
 expect 'Log: no matching recorded event' out.txt
 expect 'Code: not_recorded' out.txt
+expect 'Module: router' out.txt
+expect 'reason=no_registered_route' out.txt
+expect 'route=/puuurs' out.txt
+expect 'ROUTER DISPATCH request=console-3 route=/puuurs service=none outcome=2' logs/digit.log
 expect 'ROUTER DISPATCH request=console-1 route=/diagnose service=command.diagnose outcome=0' logs/digit.log
 expect 'ACTIVATION ACTIVATE_PASS id=dsd' logs/digit.log
 expect 'ACTIVATION STOP_PASS id=dsd' logs/digit.log
