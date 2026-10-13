@@ -14,8 +14,8 @@
 #include "stnlabz_abi/module.h"
 
 #define INTERFACE_PORT 8081
-#define INTERFACE_CERT "/opt/digit/state/interface-cert.pem"
-#define INTERFACE_KEY "/opt/digit/state/interface-key.pem"
+#define INTERFACE_CERT "/opt/digit/state/auth/interface-cert.pem"
+#define INTERFACE_KEY "/opt/digit/state/auth/interface-key.pem"
 
 static SSL_CTX *tls_context;
 static int listener=-1;
@@ -121,7 +121,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"interface");
  snprintf(d.name,sizeof d.name,"TLS Connection Interface");
- d.version_major=0;d.version_minor=1;d.version_patch=1;
+ d.version_major=0;d.version_minor=1;d.version_patch=2;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;
