@@ -112,7 +112,7 @@ int digit_mvc_console(void){
   policy.module_id=id;
   if(digit_core_authorize(&registry,id,&policy)!=STNLABZ_MODULE_OK ||
      digit_core_activate(&registry,id,&host,&policy)!=STNLABZ_MODULE_OK)
-   (void)digit_log_event("CONSOLE","MODULE_UNAVAILABLE",id);
+   (void)digit_log_event("MODULE","UNAVAILABLE",id);
  }
  /* Router is infrastructure controlled by Digit; no Bootstrap intermediary. */
  {
