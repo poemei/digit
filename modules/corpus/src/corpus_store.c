@@ -5,6 +5,7 @@
 #include <string.h>
 #include <strings.h>
 #include <sys/types.h>
+#include <unistd.h>
 #include "corpus_store.h"
 static int copy(char *dst,size_t cap,const char *src){
  size_t n=strlen(src);
@@ -56,4 +57,55 @@ int digit_corpus_find(const char *path,const char *term,digit_corpus_record_t *o
  free(line);
  if(ferror(f)){fclose(f);return -1;}
  fclose(f);return found;
+}
+
+/* Every count below is backed by an executed assertion; production data is untouched. */
+stnlabz_module_result_t digit_corpus_selftest(stnlabz_module_qualification_result_t *q){
+ char name[]="/tmp/digit-qual-XXXXXX";
+ digit_corpus_record_t r;
+ FILE *f;
+ int fd,rc;
+ unsigned int passed=0,negative=0;
+ if(!q)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ memset(q,0,sizeof *q);
+ fd=mkstemp(name);
+ if(fd<0)return STNLABZ_MODULE_ERR_QUALIFICATION;
+ f=fdopen(fd,"w");
+ if(!f){close(fd);unlink(name);return STNLABZ_MODULE_ERR_QUALIFICATION;}
+ if(fputs("Q-01\tRULE\tqualification\tThe cobalt engine remains stable.\n"
+          "Q-02\tENGINEERING\ttest-source\tA quiet engine emits a tone.\n"
+          "bad line without tabs\n",f)==EOF||fclose(f)!=0){
+  /* A failed fixture is a failed qualification; never report PASS. */
+  unlink(name);return STNLABZ_MODULE_ERR_QUALIFICATION;
+ }
+#define CHECK(v) do{q->tests_executed++;if(v)passed++;else q->tests_failed++;}while(0)
+ rc=digit_corpus_find(name,"cobalt",&r);
+ CHECK(rc==1);
+ CHECK(rc==1&&!strcmp(r.id,"Q-01"));
+ CHECK(rc==1&&!strcmp(r.category,"RULE"));
+ CHECK(rc==1&&!strcmp(r.source,"qualification"));
+ CHECK(rc==1&&!strcmp(r.text,"The cobalt engine remains stable."));
+ rc=digit_corpus_find(name,"Q-02",&r);
+ CHECK(rc==1&&!strcmp(r.id,"Q-02"));
+ CHECK(rc==1&&!strcmp(r.source,"test-source"));
+ rc=digit_corpus_find(name,"ENGINE",&r);
+ CHECK(rc==1&&!strcmp(r.id,"Q-01"));
+ rc=digit_corpus_find(name,"cobal",&r);
+ CHECK(rc==0);
+ negative=(unsigned int)(rc==0);
+ rc=digit_corpus_find(name,"ABSENT",&r);
+ CHECK(rc==0);
+ rc=digit_corpus_find(name,"",&r);
+ CHECK(rc==-2);
+ rc=digit_corpus_find(name,"bad\tquery",&r);
+ CHECK(rc==-2);
+ unlink(name);
+ rc=digit_corpus_find(name,"cobalt",&r);
+ CHECK(rc==-1);
+ q->tests_passed=passed;
+ q->negative_test_executed=1;
+ q->negative_test_passed=(int)negative;
+#undef CHECK
+ return q->tests_executed>=STNLABZ_MODULE_MIN_TESTS&&q->tests_failed==0&&
+ q->negative_test_passed?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_QUALIFICATION;
 }
