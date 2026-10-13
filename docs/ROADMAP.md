@@ -89,7 +89,7 @@ Implement only the independent Core.
 
 ### Phase 2 — Bootstrap and Router: initialization and single-route dispatch
 
-**Current implementation status:** Router 0.1.0 source and standalone ABI-service test harness committed, **awaiting operator verification/acceptance**. Router is configured explicitly before start and dispatches a single registered service through the ABI host; it never selects a chain of models. No Bootstrap handoff or production Router activation was introduced by this Router-only authorization. The previously accepted 20 Core suites remain baseline; the Router suite is additional. No Phase 2 exit is claimed before the test harness establishes an accepted Core/Router/mock-module execution path.
+**Current implementation status:** Router 0.1.0 **operator accepted**, with 21/21 suites and 1,441/1,441 assertions passing. Bootstrap initialization and handoff harness now implemented, **awaiting operator verification and acceptance**. Router is configured explicitly before start and dispatches a single registered service through the ABI host; it never selects a chain of models. Bootstrap now admits, verifies, qualifies, Core-authorizes and activates Router in its explicit test harness, then hands off exactly one request. The production Core runtime still autoactivates no modules; no external interface or application capability is implemented. The previously accepted 20 Core suites remain baseline; the Router suite is additional. No Phase 2 exit is claimed before the test harness establishes an accepted Core/Router/mock-module execution path.
 
 After operator acceptance of Core and explicit authorization, implement minimal Bootstrap initialization/handoff and Router's direct route mapping.
 
