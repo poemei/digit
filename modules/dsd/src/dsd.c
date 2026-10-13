@@ -164,9 +164,18 @@ static stnlabz_module_result_t diagnose_command(
  if(!emit(reply,reply_context,message))return STNLABZ_MODULE_ERR_INVALID_STATE;
  (void)snprintf(message,sizeof message,"Log: %s",selected);
  if(!emit(reply,reply_context,message))return STNLABZ_MODULE_ERR_INVALID_STATE;
- if(!strcmp(module,"router")&&strstr(selected,"outcome=2")&&inspect_route(route,source_location,sizeof source_location,assessment,sizeof assessment)){
-  (void)snprintf(message,sizeof message,"Code: %.1000s",source_location);
- }else if(!strcmp(module,"router")&&strstr(selected,"outcome=2")){
+ if(!strcmp(module,"router")&&strstr(selected,"outcome=2")){
+  (void)inspect_route(route,source_location,sizeof source_location,assessment,sizeof assessment);
+  (void)snprintf(message,sizeof message,"Code: %.950s",source_location);
+ }else if(file[0]&&lineno[0]){
+  (void)snprintf(message,sizeof message,"Code: %s:%s",file,lineno);
+ }else if(file[0]){
+  (void)snprintf(message,sizeof message,"Code: %s (line not recorded)",file);
+ }else{
+  (void)snprintf(message,sizeof message,"Code: not_recorded (no source location in log)");
+ }
+ if(!emit(reply,reply_context,message))return STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(!strcmp(module,"router")&&strstr(selected,"outcome=2")){
   (void)snprintf(message,sizeof message,"Finding: %.950s",assessment);
  }else if(reason[0]) (void)snprintf(message,sizeof message,
   "Finding: Recorded event indicates %s; reason=%s. Matched events: %lu.",
