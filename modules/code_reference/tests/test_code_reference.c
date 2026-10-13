@@ -20,7 +20,7 @@ int main(void){
  size_t used=0;
  h.register_service=register_service;h.unregister_service=unregister_service;
  check(!strcmp(d->id,"code_reference"),"module id");
- check(d->version_major==0&&d->version_minor==1,"module version");
+ check(d->version_major==0&&d->version_minor==1&&d->version_patch==1,"module version");
  check(d->qualify(&q)==STNLABZ_MODULE_OK&&q.tests_failed==0,"qualification");
  check(d->start(&h)==STNLABZ_MODULE_OK,"start");
  check(service!=NULL,"service published");
@@ -33,6 +33,13 @@ int main(void){
  check(service(&req,sizeof req,&res,sizeof res,&used,NULL)==STNLABZ_MODULE_OK,"invalid C request");
  check(res.status==CODE_REFERENCE_SOURCE_INVALID,"compiler detects undeclared identifier");
  check(strstr(res.diagnostics,"missing_identifier")!=NULL,"actual diagnostic identifies symbol");
+ strcpy(req.source_name,"src/digit.c");
+ strcpy(req.source,"#include \"agent_root.h\"\nint test_context(void){return 1;}\n");
+ check(service(&req,sizeof req,&res,sizeof res,&used,NULL)==STNLABZ_MODULE_OK,"project header analysis");
+ check(res.status==CODE_REFERENCE_ANALYZED,"project header resolves via configured include directory");
+ strcpy(req.source,"#include \"intentionally_nonexistent_header_65438.h\"\nint f(void){return 1;}\n");
+ check(service(&req,sizeof req,&res,sizeof res,&used,NULL)==STNLABZ_MODULE_OK,"missing header analysis");
+ check(res.status==CODE_REFERENCE_ANALYSIS_INCOMPLETE,"missing header is context error not proven source defect");
  strcpy(req.language,"go");
  check(service(&req,sizeof req,&res,sizeof res,&used,NULL)==STNLABZ_MODULE_OK,"future language request");
  check(res.status==CODE_REFERENCE_LANGUAGE_UNSUPPORTED,"Go not falsely supported");
