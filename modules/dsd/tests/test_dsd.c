@@ -8,6 +8,7 @@
 #include "code_reference.h"
 
 static stnlabz_module_command_handler_fn handler;
+static stnlabz_module_command_handler_fn repair_handler;
 static stnlabz_module_service_handler_fn service;
 static char output[8192];
 static size_t used;
@@ -18,10 +19,12 @@ static void check(int ok,const char *name){
  ++tests;if(!ok){++failures;fprintf(stderr,"FAIL DSD: %s\n",name);}
 }
 static int reg_command(const char *name,stnlabz_module_command_handler_fn fn,void *ctx){
- (void)ctx;if(strcmp(name,"diagnose"))return 0;handler=fn;return 1;
+ (void)ctx;if(!strcmp(name,"repair-doc")){repair_handler=fn;return 1;}
+ if(strcmp(name,"diagnose"))return 0;handler=fn;return 1;
 }
 static int unreg_command(const char *name,void *ctx){
- (void)ctx;if(strcmp(name,"diagnose"))return 0;handler=NULL;return 1;
+ (void)ctx;if(!strcmp(name,"repair-doc")){repair_handler=NULL;return 1;}
+ if(strcmp(name,"diagnose"))return 0;handler=NULL;return 1;
 }
 static int reg_service(const char *name,stnlabz_module_service_handler_fn fn,void *ctx){
  (void)ctx;if(!strcmp(name,"dsd.watch")){watch_service=fn;return 1;}
@@ -73,7 +76,7 @@ int main(void){
  stnlabz_module_host_t host={0};
  stnlabz_module_qualification_result_t qualification;
  check(!strcmp(desc.id,"dsd"),"module identity");
- check(desc.version_major==0&&desc.version_minor==4&&desc.version_patch==1,"module version");
+ check(desc.version_major==0&&desc.version_minor==4&&desc.version_patch==2,"module version");
  check(desc.qualify(&qualification)==STNLABZ_MODULE_OK&&qualification.tests_failed==0,"qualifies");
  check(mkdtemp(directory)!=NULL,"fixture directory");
  if(!getcwd(cwd,sizeof cwd)||chdir(directory)!=0)return 2;
@@ -91,7 +94,7 @@ int main(void){
  host.register_service=reg_service;host.unregister_service=unreg_service;
  host.invoke_service=invoke_analysis;
  check(desc.start(&host)==STNLABZ_MODULE_OK,"starts");
- check(handler!=NULL&&service!=NULL,"ABI registrations");
+ check(handler!=NULL&&service!=NULL&&repair_handler!=NULL,"ABI registrations");
  check(watch_service!=NULL,"autonomous watch service registered");
  /* A logged loader rejection must outrank unrelated Router command errors. */
  snprintf(path,sizeof path,"%s/modules.log",logs);
@@ -210,6 +213,27 @@ int main(void){
      }
      check(duplicates==0,"unchanged documentation issues stay suppressed");
     }
+    /* Explicit approval is required; only the known README can be altered. */
+    {
+     stnlabz_module_command_t cmd={0};
+     char line[2048]={0};FILE *readback;
+     snprintf(cmd.name,sizeof cmd.name,"repair-doc");
+     snprintf(cmd.sender,sizeof cmd.sender,"remote");
+     snprintf(cmd.account,sizeof cmd.account,"local");
+     snprintf(cmd.arguments,sizeof cmd.arguments,"approve code_reference README");
+     check(repair_handler(&cmd,capture,NULL,NULL)==STNLABZ_MODULE_OK,"remote repair request handled");
+     readback=fopen(docreadme,"r");if(!readback)return 2;
+     fread(line,1,sizeof line-1,readback);fclose(readback);
+     check(strstr(line,"No Core changes or DSD integration.")!=NULL,"remote repair denied without changes");
+     snprintf(cmd.sender,sizeof cmd.sender,"local-console");
+     check(repair_handler(&cmd,capture,NULL,NULL)==STNLABZ_MODULE_OK,"authorized local repair handled");
+     memset(line,0,sizeof line);
+     readback=fopen(docreadme,"r");if(!readback)return 2;
+     fread(line,1,sizeof line-1,readback);fclose(readback);
+     check(strstr(line,"DSD invokes the independently registered code_reference.analyze service")!=NULL,"approved documentation correction applied");
+     check(strstr(line,"No Core changes or DSD integration.")==NULL,"outdated statement removed");
+     check(repair_handler(&cmd,capture,NULL,NULL)==STNLABZ_MODULE_OK,"repeat repair handled");
+    }
     unlink(dsdfile);rmdir(dsdsrc);rmdir(dsdmodule);
    }
    unlink(docreadme);unlink(docsrc);rmdir(docsr);rmdir(docdir);
@@ -297,7 +321,7 @@ int main(void){
  diagnose("nonexistent_record");
  check(strstr(output,"no matching recorded event")!=NULL,"negative evidence handled");
  check(desc.stop()==STNLABZ_MODULE_OK,"stops");
- check(handler==NULL&&service==NULL,"ABI unregistrations");
+ check(handler==NULL&&service==NULL&&repair_handler==NULL,"ABI unregistrations");
  check(watch_service==NULL,"watch service unregistered");
  if(chdir(cwd)!=0)return 2;
  snprintf(path,sizeof path,"%s/digit.log",logs);unlink(path);
