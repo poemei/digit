@@ -135,13 +135,17 @@ int main(int argc, char **argv) {
     /* This is a mock callback; no runtime is retained. */
     digit_core_discovery_cleanup(&reg, &loader);
     digit_log_close();
-    f = fopen(argv[1], "r");
+    char module_path[2048];
+    snprintf(module_path,sizeof module_path,"%s",argv[1]);
+    char *slash=strrchr(module_path,'/');
+    if(slash)strcpy(slash+1,"modules.log");
+    f = fopen(module_path, "r");
     if (f) {
         while (fgets(line, sizeof line, f)) {
-            if (strstr(line, "ACTIVATION ACTIVATE_PASS")) ++activated;
-            if (strstr(line, "ACTIVATION STOP_PASS")) ++stopped;
-            if (strstr(line, "ACTIVATION ACTIVATE_REJECT") ||
-                strstr(line, "ACTIVATION AUTHORIZE_REJECT")) ++denials;
+            if (strstr(line, "MODULE HOTLOAD_ACTIVE")) ++activated;
+            if (strstr(line, "MODULE STOP_PASS")) ++stopped;
+            if (strstr(line, "MODULE ACTIVATE_REJECT") ||
+                strstr(line, "MODULE AUTHORIZE_REJECT")) ++denials;
         }
         fclose(f);
     }
