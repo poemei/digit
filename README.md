@@ -81,6 +81,12 @@ Preserve proven behavior and useful tests without preserving unnecessary couplin
 
 The new standalone integration test exercises **Core admission/authorization → Bootstrap → Router → one Model**, including failed/denied paths, exactly one invocation per allowed request, and stop/revocation. Production Digit remains zero-module until a later, separately authorized integration. The previously accepted **22 suites / 1,460 assertions** remain the regression baseline; the new Model suite is suite 23. Compilation and operator acceptance are still pending.
 
+## Phase 4 Rendering View (pending operator acceptance)
+
+`include/rendering.h` and `src/rendering.c` define Rendering View 0.1.0 under ABI 1.5. The independent `rendering.render` service receives an already-decided Router result and, for successful expression lookups only, a bounded Model result. The View formats success with supplied evidence, unknown/invalid expressions, route denial, unknown route, unavailability, and failure; it does not issue routing decisions, authorize actions, call Models, or synthesize evidence. A successful route without valid Model evidence is rejected.
+
+The new `tests/test_rendering.c` suite demonstrates Core admission → Bootstrap → Router → Expression Model → Rendering using an isolated fixture host. It asserts exactly one Model invocation per authorized request and that rendering denial/unknown cases cannot cause extra Model invocations. Existing 23 operator-accepted suites remain baseline; **24 suites** are targeted for operator qualification. The production runtime still starts with zero activated modules; no interface or DSD has been added.
+
 ## Status
 
 **Phase 1 Core foundation qualification COMPLETE AND OPERATOR ACCEPTED.** Accepted source baseline: [`bee0d22`](https://github.com/poemei/digit/commit/bee0d2297889c14d7794ed533baa72fcbc14755c). The operator reported **20/20 suites**, **1,410/1,410 assertions passed**, **0 failed assertions**, and **0 suite/report errors**. Digit independently started with zero modules, verified Agent Root revision 1, entered RUNNING, and shut down normally on SIGINT. The supplied `./logs/digit.log` session spans **2026-10-13 02:43:30–02:43:33 UTC** and records the Core lifecycle and shutdown. The operator explicitly accepted the result.
