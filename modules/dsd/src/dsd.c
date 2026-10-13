@@ -50,6 +50,8 @@ static stnlabz_module_result_t diagnose_command(
  const stnlabz_module_command_t *command,
  stnlabz_module_command_reply_fn reply,void *reply_context,void *context){
  FILE *log;
+ const char *paths[]={"./logs/digit.log","./logs/modules.log"};
+ size_t source;
  char line[DSD_LOG_LINE],selected[DSD_LOG_LINE]={0},module[64]={0};
  char file[128]={0},lineno[24]={0},reason[256],message[1024],term[128]={0};
  char candidate_id[64],candidate_module[64];
@@ -66,12 +68,13 @@ static stnlabz_module_result_t diagnose_command(
   if(n>=sizeof term)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
   memcpy(term,args,n+1);
  }
- log=fopen("./logs/digit.log","r");
- if(!log){
-  return emit(reply,reply_context,"DSD: operational log unavailable.")?
-   STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
- }
- while(fgets(line,sizeof line,log)){
+ for(source=0;source<sizeof paths/sizeof paths[0];source++){
+  log=fopen(paths[source],"r");
+  if(!log){
+   return emit(reply,reply_context,"DSD: operational log unavailable.")?
+    STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
+  }
+  while(fgets(line,sizeof line,log)){
   size_t len=strlen(line);
   if(len&&!strchr(line,'\n')&&!feof(log)){
    int c;while((c=fgetc(log))!='\n'&&c!=EOF){}
@@ -83,10 +86,15 @@ static stnlabz_module_result_t diagnose_command(
    if(!strstr(line,term))continue;
   }else if(!evidence_problem(line))continue;
   matches++;
-  (void)snprintf(selected,sizeof selected,"%s",line);
-  found=1;
+  /* Both logs use UTC ISO-8601 timestamps. Do not infer ordering within
+     the same second; retain the first encountered matching event. */
+  if(!found||strncmp(line,selected,20)>0){
+   (void)snprintf(selected,sizeof selected,"%s",line);
+   found=1;
+  }
+  }
+  fclose(log);
  }
- fclose(log);
  if(!emit(reply,reply_context,"DSD DIAGNOSTIC REPORT"))
   return STNLABZ_MODULE_ERR_INVALID_STATE;
  if(!found){
@@ -208,7 +216,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=3;d.version_patch=1;
+ d.version_major=0;d.version_minor=3;d.version_patch=2;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
