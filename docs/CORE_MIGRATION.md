@@ -104,3 +104,16 @@ Production Core logging uses `./logs/digit.log` relative to Digit's **current wo
 The operator has selected the Core build, `make test` aggregate pass/fail output, standalone console startup/shutdown, and local `./logs/digit.log` records as the current foundation-stage evidence. There is no new Windows APP or Slack connection for this rebuilt Digit. Successful automated checks are not operator acceptance; stop and await explicit acceptance plus next named step authorization under `AGENTS.md`.
 
 The canonical **current development** logging location is `./logs/digit.log` relative to the process working directory; earlier historical `/opt/digit/logs` instructions in this record have been superseded by the local logging adjustment above. Router (formerly called Dispatcher in legacy material) is not yet implemented, and Bootstrap/Router names and responsibilities follow the current roadmap. SA remains outside Core.
+
+## Core event logging instrumentation (2026-10-12)
+
+**Authorized scope:** extend the existing Core logger to record module-manager operations and runtime state changes. No functional modules, Router, Bootstrap, SA module, or transport has been added.
+
+- `src/module_manager.c` records manager initialization/shutdown and registration, qualification, authorization, activation, rejection, stop, and shutdown-stop outcomes through `digit_log_event`, including the module identifier and result code.
+- `src/runtime.c` records initialization, runtime entry/exit, Core fault/preservation transition and authorized human-release outcomes.
+- `tests/test_module_manager.c` now opens a private log and asserts that key registration, rejection, activation, and stop records are actually present.
+- `Makefile` links `src/logging.c` to runtime and module-manager component test executables.
+
+**Limitations:** An external actor-verification mechanism for authorization has not been implemented. Test runners use a private log rather than claiming production activation. Some invalid/null argument paths cannot safely supply an identifiable module and may not emit diagnostic records. The module-management interface is still an in-process foundation only. The source and tests have been committed but have **not** yet been compiled or run on the operator's host.
+
+**Required operator check:** `git pull && make clean && make && make test`, then `./bin/digit`, stop with Ctrl+C, and inspect `tail -n 30 logs/digit.log` for Core and Runtime entries. The operator reviews the aggregate test report and runtime log before deciding acceptance under `AGENTS.md`. This work does not authorize a next development step.
