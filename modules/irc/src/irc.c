@@ -15,6 +15,8 @@
 #include <openssl/evp.h>
 #include "stnlabz_abi/module.h"
 #include "router.h"
+#include "ask_context.h"
+#include <time.h>
 
 typedef struct {char server[256],port[8],nick[64],channel[128],account[128],password[256];} irc_config_t;
 static irc_config_t config;
@@ -65,11 +67,36 @@ static int sasl_payload(char *out,size_t cap){
  OPENSSL_cleanse(plain,sizeof plain);
  return strlen(out)<=400; /* IRC AUTHENTICATE chunk bound */
 }
+
+#define IRC_HISTORY_SLOTS 64
+#define IRC_HISTORY_TTL 1800
+typedef struct {char sender[64],target[128];digit_scoped_diagnostic_t previous;time_t seen;int valid;} irc_history_t;
+static irc_history_t history[IRC_HISTORY_SLOTS];
+static irc_history_t *history_for(const char *sender,const char *target){
+ time_t now=time(NULL);irc_history_t *slot=NULL;size_t i;
+ for(i=0;i<IRC_HISTORY_SLOTS;i++){
+  irc_history_t *h=&history[i];
+  if(h->valid&&now>=h->seen&&now-h->seen<IRC_HISTORY_TTL){
+   if(!strcasecmp(h->sender,sender)&&!strcasecmp(h->target,target)){h->seen=now;return h;}
+  }else if(!slot)slot=h;
+ }
+ if(!slot)return NULL;
+ memset(slot,0,sizeof *slot);
+ snprintf(slot->sender,sizeof slot->sender,"%s",sender);
+ snprintf(slot->target,sizeof slot->target,"%s",target);
+ slot->seen=now;slot->valid=1;return slot;
+}
+static int diagnostic_question(const char *text){
+ return !strcasecmp(text,"diagnose my last request")||
+ !strcasecmp(text,"diagnose last request")||!strcasecmp(text,"diagnose");
+}
 /* Only explicitly addressed conversation, never arbitrary IRC commands. */
 static void chat_message(SSL *tls,const char *line){
  const char *sep,*body,*prefix;char sender[64]={0},target[128]={0},message[513];
  char answer[1024],wire[512];size_t n=0,used=0,i;
  digit_router_request_t req={0};
+ digit_ask_context_t context={0};irc_history_t *conversation;
+ stnlabz_module_result_t dispatch_result;
  static unsigned long sequence;
  if(!host||!host->invoke_service||line[0]!=':')return;
  sep=strstr(line," PRIVMSG ");if(!sep)return;
@@ -90,11 +117,30 @@ static void chat_message(SSL *tls,const char *line){
   body+=nick_len+1;while(*body==' ')body++;
  }else return;
  if(!*body||strlen(body)>512||strchr(body,'\r')||strchr(body,'\n'))return;
+ conversation=history_for(sender,target);
+ if(!conversation)return;
  snprintf(req.request_id,sizeof req.request_id,"irc-%lu",++sequence);
  snprintf(req.path,sizeof req.path,"/ask");req.core_authorized=0;
- req.payload=body;req.payload_size=strlen(body)+1;
- if(host->invoke_service("router.dispatch",&req,sizeof req,answer,sizeof answer,&used)!=STNLABZ_MODULE_OK||
-   !used||used>sizeof answer||!memchr(answer,0,used))return;
+ context.magic=DIGIT_ASK_CONTEXT_MAGIC;
+ snprintf(context.question,sizeof context.question,"%s",body);
+ if(conversation->previous.request_id[0]){
+  context.has_previous=1;
+  memcpy(context.previous_request,conversation->previous.request_id,sizeof context.previous_request);
+  memcpy(context.previous_route,conversation->previous.route,sizeof context.previous_route);
+  memcpy(context.previous_service,conversation->previous.service,sizeof context.previous_service);
+  context.previous_outcome=conversation->previous.outcome;
+  context.previous_service_result=conversation->previous.service_result;
+ }
+ req.payload=&context;req.payload_size=sizeof context;
+ dispatch_result=host->invoke_service("router.dispatch",&req,sizeof req,answer,sizeof answer,&used);
+ if(!diagnostic_question(body)){
+  snprintf(conversation->previous.request_id,sizeof conversation->previous.request_id,"%s",req.request_id);
+  snprintf(conversation->previous.route,sizeof conversation->previous.route,"%s",req.path);
+  snprintf(conversation->previous.service,sizeof conversation->previous.service,"route./ask");
+  conversation->previous.outcome=dispatch_result==STNLABZ_MODULE_OK?0:5;
+  conversation->previous.service_result=(int)dispatch_result;
+ }
+ if(dispatch_result!=STNLABZ_MODULE_OK||!used||used>sizeof answer||!memchr(answer,0,used))return;
  /* One bounded IRC line. Never forward newline, control, or unverified long output. */
  for(i=0;answer[i]&&i<350;i++){
   if(answer[i]=='\r'||answer[i]=='\n'||(unsigned char)answer[i]<32)break;
@@ -192,6 +238,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
  if(!load_config()){notice("[IRC] Missing/invalid DIGIT_IRC_* configuration; not connecting");host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;}
  atomic_store(&stopping,0);
  if(pthread_create(&worker,NULL,thread_main,NULL)!=0){host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;}
+ memset(history,0,sizeof history);
  active=1;return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t stop(void){
@@ -202,7 +249,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"irc");snprintf(d.name,sizeof d.name,"Digit IRC Transport");
- d.version_major=0;d.version_minor=1;d.version_patch=0;
+ d.version_major=0;d.version_minor=1;d.version_patch=1;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
