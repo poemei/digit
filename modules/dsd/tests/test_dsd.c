@@ -5,11 +5,13 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include "dsd.h"
+#include "code_reference.h"
 
 static stnlabz_module_command_handler_fn handler;
 static stnlabz_module_service_handler_fn service;
 static char output[8192];
 static size_t used;
+static unsigned analysis_calls;
 static unsigned tests, failures;
 static void check(int ok,const char *name){
  ++tests;if(!ok){++failures;fprintf(stderr,"FAIL DSD: %s\n",name);}
@@ -25,6 +27,21 @@ static int reg_service(const char *name,stnlabz_module_service_handler_fn fn,voi
 }
 static int unreg_service(const char *name,void *ctx){
  (void)ctx;if(strcmp(name,"dsd.report"))return 0;service=NULL;return 1;
+}
+static stnlabz_module_result_t invoke_analysis(const char *name,const void *input,
+ size_t size,void *output,size_t capacity,size_t *response_used){
+ const code_reference_request_t *request=input;
+ code_reference_response_t *response=output;
+ if(strcmp(name,"code_reference.analyze"))return STNLABZ_MODULE_ERR_NOT_FOUND;
+ ++analysis_calls;
+ if(size!=sizeof *request||capacity<sizeof *response)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ memset(response,0,sizeof *response);
+ response->contract_version=CODE_REFERENCE_CONTRACT_VERSION;
+ response->status=CODE_REFERENCE_ANALYZED;
+ snprintf(response->analyzer,sizeof response->analyzer,"fixture");
+ snprintf(response->diagnostics,sizeof response->diagnostics,"fixture evidence only");
+ *response_used=sizeof *response;
+ return STNLABZ_MODULE_OK;
 }
 static int capture(void *ctx,const char *s){
  size_t n=strlen(s);(void)ctx;
@@ -46,7 +63,7 @@ int main(void){
  stnlabz_module_host_t host={0};
  stnlabz_module_qualification_result_t qualification;
  check(!strcmp(desc.id,"dsd"),"module identity");
- check(desc.version_major==0&&desc.version_minor==3&&desc.version_patch==6,"module version");
+ check(desc.version_major==0&&desc.version_minor==3&&desc.version_patch==7,"module version");
  check(desc.qualify(&qualification)==STNLABZ_MODULE_OK&&qualification.tests_failed==0,"qualifies");
  check(mkdtemp(directory)!=NULL,"fixture directory");
  if(!getcwd(cwd,sizeof cwd)||chdir(directory)!=0)return 2;
@@ -62,6 +79,7 @@ int main(void){
  fclose(fp);
  host.register_command=reg_command;host.unregister_command=unreg_command;
  host.register_service=reg_service;host.unregister_service=unreg_service;
+ host.invoke_service=invoke_analysis;
  check(desc.start(&host)==STNLABZ_MODULE_OK,"starts");
  check(handler!=NULL&&service!=NULL,"ABI registrations");
  diagnose("fixture_failure");
@@ -76,6 +94,37 @@ int main(void){
  diagnose("stale_trace");
  check(strstr(output,"SOURCE LINE NOT PRESENT")!=NULL,"stale line rejected");
  check(strstr(output,"diagnosis unresolved")!=NULL,"stale source does not establish cause");
+ /* Analyze a complete, independently prepared translation unit through
+    the Core-mediated ABI callback rather than loading Code Reference. */
+ {
+  char tinyroot[1200],tinydir[1300],tinyfile[1400],oldroot[1100];
+  const char *before=getenv("DIGIT_SOURCE_ROOT");
+  snprintf(oldroot,sizeof oldroot,"%s",before?before:"");
+  snprintf(tinyroot,sizeof tinyroot,"%s/source",directory);
+  snprintf(tinydir,sizeof tinydir,"%s/modules",tinyroot);
+  if(mkdir(tinyroot,0700)!=0||mkdir(tinydir,0700)!=0)return 2;
+  snprintf(tinydir,sizeof tinydir,"%s/modules/mock",tinyroot);
+  if(mkdir(tinydir,0700)!=0)return 2;
+  snprintf(tinydir,sizeof tinydir,"%s/modules/mock/src",tinyroot);
+  if(mkdir(tinydir,0700)!=0)return 2;
+  snprintf(tinyfile,sizeof tinyfile,"%s/mock.c",tinydir);
+  fp=fopen(tinyfile,"w");if(!fp)return 2;
+  fputs("int answer(void){return 42;}\\n",fp);fclose(fp);
+  snprintf(path,sizeof path,"%s/modules.log",logs);
+  fp=fopen(path,"a");if(!fp)return 2;
+  fputs("2026-10-13T18:00:00Z MODULE FAILED id=mock file=modules/mock/src/mock.c line=1 reason=fixture_analysis\\n",fp);
+  fclose(fp);
+  setenv("DIGIT_SOURCE_ROOT",tinyroot,1);
+  diagnose("fixture_analysis");
+  check(analysis_calls>0,"Core-mediated analysis invoked");
+  check(strstr(output,"Code Reference: C11 frontend accepted")!=NULL,"analysis evidence included");
+  check(strstr(output,"Module: mock")!=NULL,"diagnostic retains module");
+  if(before)setenv("DIGIT_SOURCE_ROOT",oldroot,1);else unsetenv("DIGIT_SOURCE_ROOT");
+  unlink(tinyfile);rmdir(tinydir);
+  snprintf(tinydir,sizeof tinydir,"%s/modules/mock",tinyroot);rmdir(tinydir);
+  snprintf(tinydir,sizeof tinydir,"%s/modules",tinyroot);rmdir(tinydir);
+  rmdir(tinyroot);
+ }
  diagnose("my last request");
  check(strstr(output,"Module: router")!=NULL,"identifies router");
  check(strstr(output,"route=/Digit,")!=NULL,"preserves route evidence");
