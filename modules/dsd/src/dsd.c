@@ -739,7 +739,7 @@ static unsigned analyze_c_fork_line(const char *path,unsigned start){
 static int documented_integration_drift(const char *root,char *alert,size_t cap){
  char readme[1024],dsd[1024],provider[1024],line[2048];
  FILE *fp;int claim=0;unsigned number=0,call_line=0,registration_line=0;
- char handler[96]={0},callee_detail[180];unsigned definition_line=0,internal_call_line=0,callee_definition_line=0,fork_line=0;
+ char handler[96]={0},callee_detail[180],implementation_detail[240];unsigned definition_line=0,internal_call_line=0,callee_definition_line=0,fork_line=0;
  if(snprintf(readme,sizeof readme,"%s/modules/code_reference/README.md",root)>=(int)sizeof readme||
     snprintf(dsd,sizeof dsd,"%s/modules/dsd/src/dsd.c",root)>=(int)sizeof dsd||
     snprintf(provider,sizeof provider,"%s/modules/code_reference/src/code_reference.c",root)>=(int)sizeof provider)return 0;
@@ -789,6 +789,9 @@ static int documented_integration_drift(const char *root,char *alert,size_t cap)
  if(callee_definition_line)
   snprintf(callee_detail,sizeof callee_detail,"analyze_c at modules/code_reference/src/code_reference.c:%u (lexically located; execution not established)",callee_definition_line);
  else snprintf(callee_detail,sizeof callee_detail,"not established");
+ if(fork_line)
+  snprintf(implementation_detail,sizeof implementation_detail,"Implementation evidence: analyze_c contains fork() at modules/code_reference/src/code_reference.c:%u (source only; execution not established)\n",fork_line);
+ else snprintf(implementation_detail,sizeof implementation_detail,"Implementation evidence: fork() call not established\n");
  snprintf(alert,cap,
   "DSD DOCUMENTATION DRIFT\nModule: code_reference\n"
   "Evidence: README claims 'No Core changes or DSD integration.'; "
@@ -808,7 +811,7 @@ static int documented_integration_drift(const char *root,char *alert,size_t cap)
   "No documentation was modified.",call_line,registration_line,handler,definition_line,
   internal_call_line?"Internal call: analyze_c (lexically present; execution not established)\n":"Internal call: not established\n",
   callee_detail,
-  fork_line?"Implementation evidence: analyze_c contains a fork() call (source only; execution not established)\n":"Implementation evidence: fork() call not established\n");
+  implementation_detail);
  return 1;
 }
 static int documentation_drift(const char *root,char *alert,size_t capacity,unsigned issue){
@@ -952,7 +955,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=3;d.version_patch=25;
+ d.version_major=0;d.version_minor=4;d.version_patch=0;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
