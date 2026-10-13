@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 #include "stnlabz_abi/module.h"
 static const stnlabz_module_host_t *host;
 static stnlabz_module_result_t answer(const void *request,size_t length,void *response,size_t capacity,size_t *used,void *context){
@@ -9,7 +10,9 @@ static stnlabz_module_result_t answer(const void *request,size_t length,void *re
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  if(!s[0])return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  /* Ask only handles conversation. It cannot confer authority or dispatch commands. */
- if(!strcmp(s,"hello")||!strcmp(s,"Hello")||!strcmp(s,"hi")||!strcmp(s,"Hi"))
+ if(!strcasecmp(s,"hello")||!strcasecmp(s,"hi")||
+    !strcasecmp(s,"hello digit")||!strcasecmp(s,"hi digit")||
+    !strcasecmp(s,"hello digit!")||!strcasecmp(s,"hi digit!"))
   reply="Hello. I'm Digit. What would you like to discuss?";
  else
   reply="I received your message. General language interpretation is not connected yet; I cannot give a grounded answer to that request.";
@@ -35,7 +38,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
- d.version_major=0;d.version_minor=1;d.version_patch=0;
+ d.version_major=0;d.version_minor=1;d.version_patch=1;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
