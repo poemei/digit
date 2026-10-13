@@ -37,15 +37,45 @@ int main(void) {
     check(digit_module_register(&m, &d, &cb) == DIGIT_MODULE_DUPLICATE, "reject duplicate");
     check(digit_module_activate(&m, "mock") == DIGIT_MODULE_UNQUALIFIED, "deny activation before qualification");
     check(digit_module_qualify(&m, "mock", &bad) == DIGIT_MODULE_UNQUALIFIED, "negative test required");
+    {
+        digit_module_qualification_t invalid = good;
+        invalid.tests_executed = 0;
+        check(digit_module_qualify(&m, "mock", &invalid) == DIGIT_MODULE_UNQUALIFIED,
+              "zero tests cannot qualify");
+        invalid = good;
+        invalid.tests_passed = 0;
+        check(digit_module_qualify(&m, "mock", &invalid) == DIGIT_MODULE_UNQUALIFIED,
+              "partial pass cannot qualify");
+        invalid = good;
+        invalid.negative_test_passed = 2;
+        check(digit_module_qualify(&m, "mock", &invalid) == DIGIT_MODULE_UNQUALIFIED,
+              "nonboolean negative test evidence denied");
+        check(digit_module_find(&m, "mock")->state == DIGIT_MODULE_REGISTERED,
+              "invalid evidence leaves module unqualified");
+    }
     check(digit_module_qualify(&m, "mock", &good) == DIGIT_MODULE_OK, "qualify with evidence");
+    check(digit_module_qualify(&m, "mock", &good) == DIGIT_MODULE_UNQUALIFIED,
+          "qualification cannot be replayed in qualified state");
     check(digit_module_activate(&m, "mock") == DIGIT_MODULE_UNQUALIFIED, "deny activation without authorization");
     check(digit_module_authorize(&m, "mock", 0) == DIGIT_MODULE_UNQUALIFIED, "deny unauthorized activation");
     check(digit_module_authorize(&m, "mock", 1) == DIGIT_MODULE_OK, "record operator authorization flag");
     check(digit_module_activate(&m, "mock") == DIGIT_MODULE_OK, "activate mock");
     check(starts == 1, "start called");
+    check(digit_module_authorize(&m, "mock", 1) == DIGIT_MODULE_UNQUALIFIED,
+          "active module cannot be reauthorized");
+    check(digit_module_qualify(&m, "mock", &good) == DIGIT_MODULE_UNQUALIFIED,
+          "active module cannot be requalified");
     check(digit_module_stop(&m, "mock") == DIGIT_MODULE_OK, "stop mock");
     check(stops == 1, "stop called");
     check(digit_module_activate(&m, "mock") == DIGIT_MODULE_UNQUALIFIED, "re-authorization required after stop");
+    check(digit_module_authorize(&m, "mock", 1) == DIGIT_MODULE_OK,
+          "stopped qualified module can be reauthorized");
+    check(digit_module_activate(&m, "mock") == DIGIT_MODULE_OK,
+          "stopped qualified module can be reactivated");
+    check(starts == 2, "reactivation starts callback again");
+    check(digit_module_stop(&m, "mock") == DIGIT_MODULE_OK,
+          "reactivated module can stop");
+    check(stops == 2, "second stop callback executed");
     d.abi_major++;
     strcpy(d.id, "incompatible");
     check(digit_module_register(&m, &d, &cb) == DIGIT_MODULE_INVALID, "reject ABI mismatch");
@@ -58,7 +88,7 @@ int main(void) {
     check(digit_module_activate(&m, "failed-start") == DIGIT_MODULE_CALLBACK_FAILED, "contain callback failure");
     check(digit_module_find(&m, "failed-start")->state != DIGIT_MODULE_ACTIVE, "failed mock not active");
     digit_module_manager_shutdown(&m);
-    check(stops == 1, "no extra stop callback on failed mock");
+    check(stops == 2, "no extra stop callback on failed mock");
     check(digit_log_sync(), "module event log synchronized");
     digit_log_close();
     logread = fopen(logfile, "r");
