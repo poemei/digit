@@ -1,0 +1,56 @@
+#include <stdio.h>
+#include <string.h>
+#include "core_policy.h"
+#include "logging.h"
+
+static int valid(const char *s)
+{
+    return s && s[0] && strlen(s) < STNLABZ_ROOT_TEXT_MAX;
+}
+int digit_core_policy_evaluate(const digit_policy_request_t *request,
+    digit_policy_result_t *result)
+{
+    char detail[640];
+    const char *decision;
+    const stnlabz_agent_root_t *root = stnlabz_agent_root_identity();
+    if (!result || !digit_log_is_open()) return 0;
+    result->decision = DIGIT_POLICY_DENY;
+    result->policy_id = "CORE.GO2";
+    result->reason = "missing_or_invalid_verified_context";
+    if (!stnlabz_agent_root_validate(root)) {
+        result->policy_id = "CORE.ROOT";
+        result->reason = "invalid_agent_root";
+    } else if (request && valid(request->actor) && valid(request->mission) &&
+               valid(request->operation) && valid(request->module_id)) {
+        if (!request->within_mission) {
+            result->policy_id = "CORE.GO1";
+            result->reason = "outside_assigned_mission";
+        } else if (!request->complies_with_policy || !request->instruction_authorized) {
+            result->policy_id = "CORE.GO2";
+            result->reason = "policy_or_instruction_not_authorized";
+        } else if (!request->authority_granted) {
+            result->policy_id = "CORE.GO3";
+            result->reason = "outside_delegated_authority";
+        } else {
+            result->decision = DIGIT_POLICY_ALLOW;
+            result->policy_id = "CORE.GO1_GO2_GO3";
+            result->reason = "within_mission_policy_and_authority";
+        }
+        if (result->decision != DIGIT_POLICY_ALLOW &&
+            valid(request->escalation_target)) {
+            result->decision = DIGIT_POLICY_ESCALATE;
+        }
+    }
+    decision = result->decision == DIGIT_POLICY_ALLOW ? "ALLOW" :
+        result->decision == DIGIT_POLICY_ESCALATE ? "ESCALATE" : "DENY";
+    (void)snprintf(detail, sizeof detail,
+        "actor=%.127s mission=%.127s operation=%.127s module=%.63s decision=%s policy=%s reason=%s escalation=%.127s",
+        request && valid(request->actor) ? request->actor : "unknown",
+        request && valid(request->mission) ? request->mission : "unknown",
+        request && valid(request->operation) ? request->operation : "unknown",
+        request && valid(request->module_id) ? request->module_id : "unknown",
+        decision, result->policy_id, result->reason,
+        request && valid(request->escalation_target) ?
+            request->escalation_target : "unknown");
+    return digit_log_event("POLICY", decision, detail) && digit_log_sync();
+}
