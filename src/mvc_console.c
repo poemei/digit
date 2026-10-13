@@ -4,6 +4,8 @@
 #include <sys/select.h>
 #include <unistd.h>
 #include <errno.h>
+#include <sys/stat.h>
+#include "runtime.h"
 /* Opaque Core-mediated service response; no DSD linkage or dependency. */
 typedef struct {unsigned int contract_version;char text[2048];} console_dsd_alert_t;
 #include "mvc_console.h"
@@ -113,6 +115,13 @@ static void console_dsd_watch(void){
   fflush(stdout);
  }
 }
+/* systemd StandardInput=null is /dev/null; scripted console pipes must remain interactive. */
+static int unattended_service_input(void){
+ struct stat input,devnull;
+ return fstat(STDIN_FILENO,&input)==0 && stat("/dev/null",&devnull)==0 &&
+        S_ISCHR(input.st_mode) && S_ISCHR(devnull.st_mode) &&
+        input.st_rdev==devnull.st_rdev;
+}
 int digit_mvc_console(void){
  stnlabz_module_registry_t registry;
  stnlabz_module_loader_t loader;
@@ -163,6 +172,13 @@ int digit_mvc_console(void){
  puts(stnlabz_agent_root_identity()->core_modification_rule);
  puts("Module commands are registered on activation. /quit exits.");
  fflush(stdout);
+ if(unattended_service_input()){
+  digit_runtime_t runtime;
+  digit_runtime_init(&runtime);
+  if(!digit_log_event("CORE","SERVICE_READY","mode=unattended")||
+     !digit_log_sync()||!digit_runtime_run(&runtime))good=0;
+  goto done;
+ }
  console_dsd_watch();
  for(;;){
   fd_set readfds;struct timeval timeout;
