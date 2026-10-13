@@ -46,6 +46,33 @@ static void component_name(const char *line,char *out,size_t cap){
  else if(!strcmp(out,"ACTIVATION"))(void)snprintf(out,cap,"activation");
  else if(!strcmp(out,"ROUTER"))(void)snprintf(out,cap,"router");
 }
+/* Inspect the actual Router decision in the operator's source checkout.
+   Source discovery is read-only; line numbers come from the file being read. */
+static int router_source(const char *event,char *location,size_t capacity){
+ const char *root=getenv("DIGIT_SOURCE_ROOT");
+ const char *needle=NULL;
+ char path[1024],text[2048];
+ FILE *source;
+ unsigned long line=0;
+ if(!root||!root[0])root="/home/stnchain/digit";
+ if(strstr(event,"outcome=2"))needle="outcome=DIGIT_ROUTE_UNKNOWN";
+ else if(strstr(event,"outcome=3"))needle="outcome=DIGIT_ROUTE_UNAVAILABLE";
+ else if(strstr(event,"outcome=1"))needle="outcome=DIGIT_ROUTE_DENIED";
+ else if(strstr(event,"outcome=5"))needle="outcome=DIGIT_ROUTE_FAILED";
+ if(!needle||snprintf(path,sizeof path,"%s/src/router.c",root)>=(int)sizeof path)return 0;
+ source=fopen(path,"r");
+ if(!source)return 0;
+ while(fgets(text,sizeof text,source)){
+  ++line;
+  if(strstr(text,needle)){
+   (void)snprintf(location,capacity,"%s:%lu",path,line);
+   (void)fclose(source);
+   return 1;
+  }
+ }
+ (void)fclose(source);
+ return 0;
+}
 static stnlabz_module_result_t diagnose_command(
  const stnlabz_module_command_t *command,
  stnlabz_module_command_reply_fn reply,void *reply_context,void *context){
@@ -54,7 +81,7 @@ static stnlabz_module_result_t diagnose_command(
  size_t source;
  char line[DSD_LOG_LINE],selected[DSD_LOG_LINE]={0},module[64]={0};
  char file[128]={0},lineno[24]={0},reason[256],message[1024],term[128]={0};
- char candidate_id[64],candidate_module[64];
+ char candidate_id[64],candidate_module[64],source_location[1200]={0},route[128]={0};
  unsigned long matches=0;
  int found=0,last_request=0;
  const char *args;
@@ -123,6 +150,7 @@ static stnlabz_module_result_t diagnose_command(
  extract_token(selected,"reason=",reason,sizeof reason);
  if(strstr(selected,"ROUTER DISPATCH")){
   (void)snprintf(module,sizeof module,"router");
+  extract_token(selected,"route=",route,sizeof route);
   if(strstr(selected,"outcome=2"))(void)snprintf(reason,sizeof reason,"no_registered_route");
   else if(strstr(selected,"outcome=3"))(void)snprintf(reason,sizeof reason,"service_unavailable");
   else if(strstr(selected,"outcome=1"))(void)snprintf(reason,sizeof reason,"request_denied");
@@ -133,7 +161,9 @@ static stnlabz_module_result_t diagnose_command(
  if(!emit(reply,reply_context,message))return STNLABZ_MODULE_ERR_INVALID_STATE;
  (void)snprintf(message,sizeof message,"Log: %s",selected);
  if(!emit(reply,reply_context,message))return STNLABZ_MODULE_ERR_INVALID_STATE;
- if(file[0]&&lineno[0]){
+ if(!strcmp(module,"router")&&router_source(selected,source_location,sizeof source_location)){
+  (void)snprintf(message,sizeof message,"Code: %.1000s",source_location);
+ }else if(file[0]&&lineno[0]){
   (void)snprintf(message,sizeof message,"Code: %s:%s",file,lineno);
  }else if(file[0]){
   (void)snprintf(message,sizeof message,"Code: %s (line not recorded)",file);
@@ -141,7 +171,11 @@ static stnlabz_module_result_t diagnose_command(
   (void)snprintf(message,sizeof message,"Code: not_recorded (no source location in log)");
  }
  if(!emit(reply,reply_context,message))return STNLABZ_MODULE_ERR_INVALID_STATE;
- if(reason[0]) (void)snprintf(message,sizeof message,
+ if(!strcmp(module,"router")&&strstr(selected,"outcome=2")){
+  (void)snprintf(message,sizeof message,
+   "Finding: Router found no registered command for %.120s. This is a dispatch rejection, not proof of a source-code defect. Source decision %s; inspect module command registration if the command was expected.",
+   route[0]?route:"unknown",source_location[0]?"verified in checkout":"not verified (source unavailable)");
+ }else if(reason[0]) (void)snprintf(message,sizeof message,
   "Finding: Recorded event indicates %s; reason=%s. Matched events: %lu.",
   term[0]?"the requested condition":"a failure",reason,matches);
  else (void)snprintf(message,sizeof message,
@@ -216,7 +250,7 @@ stnlabz_module_descriptor_t digit_dsd_descriptor(void){
  stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"dsd");
  (void)snprintf(d.name,sizeof d.name,"Digit Diagnostic System");
- d.version_major=0;d.version_minor=3;d.version_patch=2;
+ d.version_major=0;d.version_minor=3;d.version_patch=3;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return d;
