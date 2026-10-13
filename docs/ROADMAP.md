@@ -3,7 +3,7 @@
 **Repository:** `poemei/digit`  
 **Reference source:** [`stnlabz/digit`](https://github.com/stnlabz/digit)  
 **Architecture:** ChAoS MVC — **Core → Bootstrap → Router → relevant Module → Rendering**  
-**Status:** Core Phase 1 in progress; later phases not yet implemented or authorized.
+**Status:** Phase 1 Core foundation qualification COMPLETE AND OPERATOR ACCEPTED at revision `bee0d22`; subsequent phases not yet implemented or authorized.
 
 ## 1. Non-negotiable design rules
 
@@ -182,5 +182,5 @@ For each candidate capability from `stnlabz/digit`:
 
 ## 6. Current milestone
 
-**CURRENT: Phase 1 Core foundation.** Earlier operator-reported Core tests and startup/log demonstrations passed for their tested revisions; full Core-phase acceptance remains pending.  
+**CURRENT: Phase 1 Core foundation qualification COMPLETE AND OPERATOR ACCEPTED.** The operator's accepted baseline is revision [`bee0d22`](https://github.com/poemei/digit/commit/bee0d2297889c14d7794ed533baa72fcbc14755c), **20 of 20 suites**, **1,410 of 1,410 assertions**, **0 failures**, and **0 suite/report errors**. Core started and stopped normally with zero modules. The operator's recorded session on 2026-10-13 ran from 02:43:30 to 02:43:33 UTC, with mandatory `logs/digit.log` evidence and explicit acceptance. The checklist above remains the original planned requirements; the controlling qualification outcome is this operator-accepted evidence. Core owns essential operational audit; detailed diagnostic trace/correlation belongs to a future DSD module. Generic ABI bypass, caller authentication and actual escalation notification delivery are tracked as future integration limits, not new Core qualification suites.  
 No Bootstrap, Router, Models, Views, or transport integration work is authorized by this roadmap alone. Work proceeds only under operator direction and after the applicable gate is met.
