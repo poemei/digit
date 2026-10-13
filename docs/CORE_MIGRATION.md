@@ -130,3 +130,13 @@ The canonical **current development** logging location is `./logs/digit.log` rel
 **Limits:** these checks validate the supplied evidence structure, **not its authenticity**; verified actor authorization, qualification persistence, and dynamic module loading are still outstanding. `DIGIT_MODULE_MIN_TESTS` remains unchanged in this step. Source changes are committed; compilation, test success, and operator acceptance have not yet been established for this revision.
 
 **Operator procedure:** run `git pull && make clean && make && make test`, confirm aggregate `OVERALL RESULT: PASS` and zero suite/report errors; run `./bin/digit`, stop it with Ctrl+C, and inspect `tail -n 20 logs/digit.log`. Expected: module-manager tests pass including the added negative and restart checks; Digit still starts with zero registered modules and emits startup/stop events. No functional module activation should occur in the running Core.
+
+## Shutdown log verification regression (2026-10-12)
+
+An operator reported shutdown missing from `digit.log` despite clean console exit. A prior log excerpt contained a complete shutdown sequence from an earlier run, but did not establish the result of the newer run. Source inspection found that the current normal shutdown path already writes and synchronizes `RUNTIME STOP` and `CORE STOPPED`; the reported failure's precise cause is not confirmed.
+
+- New `tests/test_shutdown.sh` runs `bin/digit` in a fresh temporary working directory, waits for its logged running state, requests SIGTERM, waits for successful exit, and checks the **same run's** `RUNTIME STOP`, `MODULE MANAGER_SHUTDOWN`, and `CORE STOPPED` records; also rejects duplicate Core stop entries.
+- `tests/run_all.sh` includes this fifth integration suite in `make test` and treats a missing record or unexpected exit as a test failure.
+- `src/digit.c` displays the log path in the successful shutdown confirmation, only after shutdown records are written and synchronized.
+
+This is a regression guard and improved verification, not a claim that the historical failure's cause has been reproduced. Changes committed to GitHub only; no operator-host compilation or runtime results are asserted. Operator: `git pull && make clean && make && make test`, then `./bin/digit`, Ctrl+C, and `tail -n 20 logs/digit.log`. The fifth suite must pass and the current invocation must have its own shutdown records. Await explicit operator acceptance.
