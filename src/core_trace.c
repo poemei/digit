@@ -11,7 +11,10 @@ uint64_t digit_trace_current(void) { return current_trace; }
 uint64_t digit_trace_begin(void)
 {
     uint64_t previous = current_trace;
-    if (!previous) current_trace = atomic_fetch_add(&next_trace, 1);
+    if (!previous) {
+        current_trace = atomic_fetch_add(&next_trace, 1);
+        if (!current_trace) current_trace = atomic_fetch_add(&next_trace, 1);
+    }
     return previous;
 }
 void digit_trace_end(uint64_t previous) { current_trace = previous; }
