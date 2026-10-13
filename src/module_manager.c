@@ -8,12 +8,12 @@ static digit_module_result_t recorded(const char *event, const char *id,
     digit_module_result_t result)
 {
     char detail[160];
-    if (digit_log_is_open()) {
-        (void)snprintf(detail, sizeof detail, "id=%s result=%d",
-                       id ? id : "unknown", (int)result);
-        if (!digit_log_event("MODULE", event, detail) || !digit_log_sync())
-            return DIGIT_MODULE_CALLBACK_FAILED;
-    }
+    /* No admission or lifecycle decision may succeed without its audit trail. */
+    if (!digit_log_is_open()) return DIGIT_MODULE_CALLBACK_FAILED;
+    (void)snprintf(detail, sizeof detail, "id=%s result=%d",
+                   id ? id : "unknown", (int)result);
+    if (!digit_log_event("MODULE", event, detail) || !digit_log_sync())
+        return DIGIT_MODULE_CALLBACK_FAILED;
     return result;
 }
 
@@ -68,12 +68,14 @@ digit_module_result_t digit_module_register(digit_module_manager_t *m,
         d->abi_minor > DIGIT_MODULE_ABI_MINOR) return recorded("REGISTER", d ? d->id : NULL, DIGIT_MODULE_INVALID);
     if (find_mut(m, d->id)) return recorded("REGISTER", d ? d->id : NULL, DIGIT_MODULE_DUPLICATE);
     if (m->count >= DIGIT_MODULE_MAX) return recorded("REGISTER", d ? d->id : NULL, DIGIT_MODULE_FULL);
+    if (recorded("REGISTER", d->id, DIGIT_MODULE_OK) != DIGIT_MODULE_OK)
+        return DIGIT_MODULE_CALLBACK_FAILED;
     r = &m->modules[m->count++];
     memset(r, 0, sizeof(*r));
     r->descriptor = *d;
     r->callbacks = *cb;
     r->state = DIGIT_MODULE_REGISTERED;
-    return recorded("REGISTER", d ? d->id : NULL, DIGIT_MODULE_OK);
+    return DIGIT_MODULE_OK;
 }
 digit_module_result_t digit_module_qualify(digit_module_manager_t *m,
     const char *id, const digit_module_qualification_t *q)
@@ -113,6 +115,8 @@ digit_module_result_t digit_module_activate(digit_module_manager_t *m, const cha
     if ((r->state != DIGIT_MODULE_QUALIFIED && r->state != DIGIT_MODULE_STOPPED) ||
         !valid_qualification(&r->qualification) || !r->activation_authorized)
         return recorded("ACTIVATE", id, DIGIT_MODULE_UNQUALIFIED);
+    if (recorded("ACTIVATE_ATTEMPT", id, DIGIT_MODULE_OK) != DIGIT_MODULE_OK)
+        return DIGIT_MODULE_CALLBACK_FAILED;
     if (!r->callbacks.start(r->callbacks.context)) return recorded("ACTIVATE", id, DIGIT_MODULE_CALLBACK_FAILED);
     r->state = DIGIT_MODULE_ACTIVE;
     return recorded("ACTIVATE", id, DIGIT_MODULE_OK);
@@ -122,6 +126,8 @@ digit_module_result_t digit_module_stop(digit_module_manager_t *m, const char *i
     digit_module_record_t *r = find_mut(m, id);
     if (!r) return recorded("STOP", id, DIGIT_MODULE_NOT_FOUND);
     if (r->state != DIGIT_MODULE_ACTIVE) return recorded("STOP", id, DIGIT_MODULE_INVALID);
+    if (recorded("STOP_ATTEMPT", id, DIGIT_MODULE_OK) != DIGIT_MODULE_OK)
+        return DIGIT_MODULE_CALLBACK_FAILED;
     r->callbacks.stop(r->callbacks.context);
     r->state = DIGIT_MODULE_STOPPED;
     r->activation_authorized = 0;
