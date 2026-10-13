@@ -73,7 +73,7 @@ int main(void){
  stnlabz_module_host_t host={0};
  stnlabz_module_qualification_result_t qualification;
  check(!strcmp(desc.id,"dsd"),"module identity");
- check(desc.version_major==0&&desc.version_minor==3&&desc.version_patch==25,"module version");
+ check(desc.version_major==0&&desc.version_minor==4&&desc.version_patch==0,"module version");
  check(desc.qualify(&qualification)==STNLABZ_MODULE_OK&&qualification.tests_failed==0,"qualifies");
  check(mkdtemp(directory)!=NULL,"fixture directory");
  if(!getcwd(cwd,sizeof cwd)||chdir(directory)!=0)return 2;
@@ -200,7 +200,7 @@ int main(void){
         strstr(report.text,"Handler definition: modules/code_reference/src/code_reference.c:2")&&
         strstr(report.text,"\n\nInternal call: analyze_c")&&
         strstr(report.text,"Callee definition: analyze_c at modules/code_reference/src/code_reference.c:9")&&
-        strstr(report.text,"Implementation evidence: analyze_c contains a fork() call")){detected=1;break;}
+        strstr(report.text,"Implementation evidence: analyze_c contains fork() at modules/code_reference/src/code_reference.c:11")){detected=1;break;}
     }
     check(detected,"integration claim surfaces despite unresolved README version drift");
     /* Existing version drift must remain suppressed once reported. */
