@@ -7,10 +7,12 @@ failed=0
 suites=0
 suite_failures=0
 
-for name in agent_root runtime module_manager logging abi_compat shutdown; do
+for name in agent_root runtime module_manager logging abi_compat loader shutdown; do
     suites=$((suites + 1))
     if [ "$name" = shutdown ]; then
         command="sh tests/test_shutdown.sh"
+    elif [ "$name" = loader ]; then
+        command="./bin/test_loader ./bin/loader_valid.so ./bin/loader_legacy.so ./bin/no-such-module.so"
     else
         command="./bin/test_$name"
     fi
