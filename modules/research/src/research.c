@@ -127,10 +127,10 @@ static void process_tag(text_sink_t *sink){
  while(*p==' ')p++;
  if(*p=='/'){closing=1;p++;}
  for(i=0;p[i];i++)p[i]=(char)tolower((unsigned char)p[i]);
- if(!strncmp(p,"script",6)&&(!p[6]||isspace((unsigned char)p[6])))sink->suppress=closing?0:1;
- else if(!strncmp(p,"style",5)&&(!p[5]||isspace((unsigned char)p[5])))sink->suppress=closing?0:1;
- else if(!strncmp(p,"head",4)&&(!p[4]||isspace((unsigned char)p[4])))sink->suppress=closing?0:1;
- else if(!strncmp(p,"nav",3)&&(!p[3]||isspace((unsigned char)p[3])))sink->suppress=closing?0:1;
+ if(!strncmp(p,"script",6)&&(!p[6]||isspace((unsigned char)p[6])))sink->suppress=closing?(sink->suppress&~2):(sink->suppress|2);
+ else if(!strncmp(p,"style",5)&&(!p[5]||isspace((unsigned char)p[5])))sink->suppress=closing?(sink->suppress&~4):(sink->suppress|4);
+ else if(!strncmp(p,"head",4)&&(!p[4]||isspace((unsigned char)p[4])))sink->suppress=closing?(sink->suppress&~8):(sink->suppress|8);
+ else if(!strncmp(p,"nav",3)&&(!p[3]||isspace((unsigned char)p[3])))sink->suppress=closing?(sink->suppress&~16):(sink->suppress|16);
  if(!sink->suppress&&(!strncmp(p,"p",1)&&(!p[1]||isspace((unsigned char)p[1]))||
      !strncmp(p,"div",3)&&(!p[3]||isspace((unsigned char)p[3]))||
      !strncmp(p,"li",2)&&(!p[2]||isspace((unsigned char)p[2]))||
