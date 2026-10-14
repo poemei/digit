@@ -11,6 +11,7 @@ typedef struct {
  int previous_outcome;
  int previous_service_result;
  int has_previous;
+ int intel_report_authorized; /* Set only by trusted transport authorization. */
 } digit_ask_context_t;
 typedef struct {
  char request_id[64];
