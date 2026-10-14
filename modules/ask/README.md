@@ -11,3 +11,9 @@ Ask recognizes `version`, `version?`, `digit version`, `what version are you?`, 
 ## Interpretation integration (0.1.5)
 
 When Ask's existing exact operations do not match, it invokes the independent `interpretation.classify` ABI service. A capabilities intent produces an accurate bounded summary of Ask's public operations; a knowledge intent extracts a subject and performs read-only `corpus.lookup`. Unknown intent explicitly requests clarification. Neither the classifier nor Ask grants privileges or exposes Corpus writes. The initial Interpretation 0.1.0 classifier is lexical and bounded, **not** general language-model reasoning; validate novel phrasings and negative inputs before acceptance. If Interpretation is inactive, Ask reports it unavailable.
+
+## Research request integration — Ask 0.1.7 (pending operator acceptance)
+
+Public conversations may request `research https://www.php.net/releases/` or `research PHP`. Ask invokes `research.retrieve` via the existing Core ABI, returning a bounded source excerpt with URL and retrieval timestamp. PHP topic requests currently use one hardcoded official release-notes source. This is source retrieval, not autonomous search, vulnerability validation or conclusions. If source discovery is unavailable, the reply states the limitation instead of inventing results. No research requests grant authority to execute software, edit GitHub, modify production, or write Corpus.
+
+Build and test: `make -C modules/ask clean all test` and `make -C modules/research clean all test`. Install and restart only after successful checks, then test on the actual operator-selected Slack/IRC interface. A live source retrieval must also be reflected in `/opt/digit/research/research.log`. Formal operator acceptance remains pending.
