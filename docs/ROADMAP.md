@@ -14,13 +14,13 @@ The phase narrative below retains historical qualification snapshots and is **no
 | IRC per-sender conversation and DSD report framing | IRC 0.1.1 | **ACCEPTED** after STN_Boss/PoeMei scoped diagnostic transcripts, with multiline IRC reports |
 | Ask factual question to read-only Corpus | Ask 0.1.4 + Corpus 0.1.2 | **ACCEPTED** after a Corpus-backed organizational answer with record and source |
 | Interpretation service and Ask integration | Interpretation 0.1.0 + Ask 0.1.5 | **ACCEPTED** after varied capability and knowledge questions through IRC |
-| Native-console Corpus learning | Corpus 0.1.3 | **IMPLEMENTED / SOURCE COMMITTED**, but explicit end-to-end operator acceptance **NOT RECORDED** |
+| Native-console Corpus learning | Corpus 0.1.3 | **OPERATOR ACCEPTED — 2026-10-13** |
 
 **Demonstrated:** `what can you tell me?` and `what are your capabilities?` produce an accurate bounded capability description; `tell me about the Chaos Foundation`, `describe Sentinel`, and `describe the Chaos MVC` resolve through Corpus with record IDs and source attribution. This establishes useful supported phrasing families—not unrestricted semantic interpretation, unknown-intent coverage, factual validation of stored claims, or independent operator authentication.
 
 **Architecture and authority:** Digit Core → Router → Ask, with Ask calling read-only `interpretation.classify` and `corpus.lookup` services when needed. Router does not interpret, learn, or make capability decisions. IRC and Windows remain transport clients, not command-authority sources. `learn` is a native console command and no public write service is registered. Current local-console identity metadata is not a cryptographic gate.
 
-**Pending verification, without new authorization:** Corpus 0.1.3 CLI `learn` build, deployed append/readback and negative interface tests, plus explicit operator acceptance. Interpretation unknown/ambiguous-intent behavior and adversarial language inputs were not included in the accepted IRC transcripts. No unrequested refactor or phase progression is authorized by these notes.
+**Operator acceptance recorded:** Corpus 0.1.3 CLI `learn` was explicitly accepted on 2026-10-13. Build logs, deployed append/readback transcripts, and negative interface test results were not supplied in this conversation, so those details are not independently documented. Interpretation unknown/ambiguous-intent behavior and adversarial language inputs were not included in the accepted IRC transcripts. No unrequested refactor or phase progression is authorized by these notes.
 
 ## 1. Non-negotiable design rules
 
