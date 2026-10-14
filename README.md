@@ -4,7 +4,26 @@ Digit is an STN-LABZ modular autonomous-agent project. This repository is a **cl
 
 The existing [stnlabz/digit](https://github.com/stnlabz/digit) repository is the **reference implementation**: it provides source material and previously developed functionality, not an architecture to copy wholesale. Working features may be migrated only after being realigned with the design and qualification requirements here.
 
-## Current operator-directed runtime (pending operator acceptance)
+## Current operational milestones — 2026-10-13
+
+Digit follows **Core → Router → independent capability module**, with thin IRC and Windows GUI interfaces. Core retains identity and authority; Router selects the responsible registered service. Ask may request bounded supporting services through Core's ABI, without giving Interpretation or Corpus authority over routing.
+
+| Component | Version | Operator status |
+| --- | --- | --- |
+| IRC transport | 0.1.1 | **ACCEPTED** — addressed conversation and per-sender/target scoped DSD with multiline output observed |
+| Ask + Corpus read path | Ask 0.1.4 / Corpus 0.1.2 | **ACCEPTED** — grounded `what is ...?` response with record ID and source |
+| Interpretation + Ask | Interpretation 0.1.0 / Ask 0.1.5 | **ACCEPTED** — capability questions and supported paraphrased Corpus inquiries over IRC |
+| Corpus CLI `learn` | Corpus 0.1.3 | Source committed; **operator acceptance not recorded** |
+
+**Behavior:** Ask handles greetings, Core identity, scoped DSD follow-ups, and Corpus-backed factual requests; Interpretation 0.1.0 classifies bounded capability/knowledge intent. `what can you tell me?`, `what are your capabilities?`, `tell me about the Chaos Foundation`, and `describe Sentinel` were demonstrated through IRC. Source text is returned with Corpus identifier and provenance; language synthesis/rephrasing is not part of the accepted implementation. Interpretation remains lexical, **not** general language-model understanding. Unsupported or missing knowledge is not fabricated.
+
+**Corpus:** `/opt/digit/corpus/corpus.tsv` is the deployed `id<TAB>category<TAB>source<TAB>text` store; runtime records are not part of GitHub source. `corpus.lookup` is read-only. The separate CLI-only `learn CATEGORY | SOURCE | TEXT` code appends records, requires local-console context, and is **pending direct operator acceptance**. IRC/Windows GUI/public `/ask` do not expose learning. The current console-context check is not cryptographic user authentication.
+
+**Build modules individually:** `make -C modules/irc clean all test`, `make -C modules/corpus clean all test`, `make -C modules/interpretation clean all test`, and `make -C modules/ask clean all test`. Install each with `sudo make -C modules/<name> install` after checks, then restart the authorized Digit runtime. These commands are procedures, not claims of tests executed by this documentation update.
+
+See [CHANGELOG.md](CHANGELOG.md) for scenario-level acceptance evidence and [docs/ROADMAP.md](docs/ROADMAP.md) for outstanding gates. Older sections below retain historical rebuild design and qualification context, and must not be read as a newer operational status.
+
+## Historical operator-directed runtime (earlier qualification snapshot)
 
 **Digit → Router → Module.** Run `sudo -u digit /opt/digit/run` (or `cd /opt/digit && sudo -u digit ./bin/digit`) to open the native console without `--mvc`. The console scans installed modules through `module.conf`, verifies and qualifies them using existing Core APIs, and makes authorized activation requests. Each activated module registers its own commands through the frozen ABI 1.5 `register_command` callback; the generic Router automatically binds those commands and removes their routes on unregistration. No module-specific Router edits or Bootstrap involvement are needed.
 
@@ -56,9 +75,9 @@ The explicit local `/opt/digit/run --mvc` console now uses the **existing ABI 1.
 
 To test after `sudo make install`, run `sudo -u digit /opt/digit/run --mvc`, then enter `puuurrrs`, `diagnose my last request`, and `/quit`. The diagnostic covers the most recent request only, using recorded Router and Model observations; it does not inspect arbitrary prior sessions, infer unknown causes, or replay the previous Model call. Use `make clean && make && make test` to run the new 26th suite, which builds an independent DSD shared object and exercises it in an isolated executable installation. **Pending operator runtime testing and acceptance.**
 
-## Governing architecture
+## Governing architecture (current path and historical design)
 
-**Core → Bootstrap → Router → relevant Module → Rendering**
+**Current production path: Core → Router → relevant Module → response/transport.** Historical/bootstrap test pathways are described below; Bootstrap is not a prerequisite for the current console.
 
 - **Core** is the foundation. It owns module lifecycle, registration, service contracts, qualification gates, and the infrastructure that enforces established policies and authority boundaries. Build and verify Core first; expand outward.
 - **Bootstrap** initializes the application and hands off to Router; it does not run capabilities.
@@ -104,7 +123,7 @@ Rebuild decisions:
 
 - **Do not migrate OAuth or ChatGPT-specific interface integration.** Those integrations are excluded from this rebuild.
 - **Leave the existing Slack integration alone**; do not casually rewrite it as part of the Interface cleanup.
-- **IRC is a possible future adapter**, not an implemented or committed capability.
+- **IRC 0.1.1 is implemented and operator accepted** for the demonstrated message and scoped diagnostic scenarios.
 - Other required transports should remain narrow adapters with a common request contract rather than expand into a monolithic Interface module.
 
 Transport-specific authentication and permissions must continue to respect the established Core authority boundaries.
