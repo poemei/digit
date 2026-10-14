@@ -921,9 +921,44 @@ static uint64_t report_fingerprint(const char *p){
  while(*p){h^=(unsigned char)*p++;h*=UINT64_C(1099511628211);}
  return h;
 }
+/* Delivery record is independent of historical investigation and threat state.
+ * Never rewrite or reset any existing intelligence evidence JSON files. */
+#define DELIVERY_STATE "/opt/digit/intel/delivery-state.txt"
+#define DELIVERY_PERIOD 43200
+static int read_delivery(time_t *slack_at,time_t *irc_at,unsigned long *findings){
+ FILE *fp;long long a=0,b=0;unsigned long f=0;
+ if(!is_private(DELIVERY_STATE))return 0;
+ fp=fopen(DELIVERY_STATE,"r");if(!fp)return 0;
+ if(fscanf(fp,"%lld %lld %lu",&a,&b,&f)!=3||a<0||b<0){
+  fclose(fp);return 0;
+ }
+ fclose(fp);*slack_at=(time_t)a;*irc_at=(time_t)b;*findings=f;return 1;
+}
+static int write_delivery(time_t slack_at,time_t irc_at,unsigned long findings){
+ char tmp[256];FILE *fp;int fd,ok=0;
+ if(!secure_directory(INTEL_ROOT))return 0;
+ if(snprintf(tmp,sizeof tmp,"%s.tmp.%ld",DELIVERY_STATE,(long)getpid())>=(int)sizeof tmp)return 0;
+ fd=open(tmp,O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW,0600);
+ if(fd<0)return 0;
+ fp=fdopen(fd,"w");if(!fp){close(fd);unlink(tmp);return 0;}
+ if(fprintf(fp,"%lld %lld %lu\n",(long long)slack_at,(long long)irc_at,findings)>0&&
+    fflush(fp)==0&&fsync(fileno(fp))==0)ok=1;
+ if(fclose(fp)!=0)ok=0;
+ if(ok&&rename(tmp,DELIVERY_STATE)!=0)ok=0;
+ if(!ok)unlink(tmp);
+ return ok;
+}
+static unsigned long current_findings(const char *report){
+ const char *p=strstr(report,"Investigations:");
+ unsigned long active=0,opened=0,added=0;
+ if(p&&sscanf(p,"Investigations: %lu active; %lu opened; %lu distinct evidence IDs added",
+               &active,&opened,&added)==3)return opened+added;
+ return 0;
+}
 static void *collector_main(void *unused){
- uint64_t last_slack=0,last_irc=0;
  time_t last_slack_at=0,last_irc_at=0;
+ unsigned long prior_findings=0;
+ int has_state=read_delivery(&last_slack_at,&last_irc_at,&prior_findings);
  (void)unused;
  while(!atomic_load(&stopping)){
   digit_intel_request_t request={0};
@@ -940,24 +975,39 @@ static void *collector_main(void *unused){
    if(!persisted&&owner&&owner->send_message)
     (void)owner->send_message("[INTEL] Intelligence report persistence failed");
    if(persisted){
-    char summary[440];
-    int slack_ok=1,irc_ok=1;
-    uint64_t slack_hash=report_fingerprint(result.report),irc_hash;
-    time_t now=time(NULL);
+    char summary[440];time_t now=time(NULL);
+    unsigned long findings=current_findings(result.report);
+    int changed=0;
     brief_irc(&result,summary,sizeof summary);
-    irc_hash=report_fingerprint(summary);
-    if(slack_hash!=last_slack||now-last_slack_at>=21600){
-     slack_ok=deliver(DIGIT_INTEL_SLACK_SERVICE,result.report);
-     if(slack_ok){last_slack=slack_hash;last_slack_at=now;}
-     if(!audit_line(slack_ok?"SLACK_DELIVERED":"SLACK_FAILED",result.sources_ok,result.sources_failed)&&owner&&owner->send_message)
-      (void)owner->send_message("[INTEL] Slack audit failure");
+    /* Send scheduled briefs no more than every twelve hours even on restart.
+     * A missing delivery record permits the first regular briefing. */
+    if(!last_slack_at||now-last_slack_at>=DELIVERY_PERIOD){
+     if(deliver(DIGIT_INTEL_SLACK_SERVICE,result.report)){
+      last_slack_at=now;changed=1;
+      (void)audit_line("SLACK_DELIVERED",result.sources_ok,result.sources_failed);
+     }else (void)audit_line("SLACK_FAILED",result.sources_ok,result.sources_failed);
     }
-    if(irc_hash!=last_irc||now-last_irc_at>=21600){
-     irc_ok=deliver(DIGIT_INTEL_IRC_SERVICE,summary);
-     if(irc_ok){last_irc=irc_hash;last_irc_at=now;}
-     if(!audit_line(irc_ok?"IRC_QUEUED":"IRC_FAILED",result.sources_ok,result.sources_failed)&&owner&&owner->send_message)
-      (void)owner->send_message("[INTEL] IRC audit failure");
+    if(!last_irc_at||now-last_irc_at>=DELIVERY_PERIOD){
+     if(deliver(DIGIT_INTEL_IRC_SERVICE,summary)){
+      last_irc_at=now;changed=1;
+      (void)audit_line("IRC_QUEUED",result.sources_ok,result.sources_failed);
+     }else (void)audit_line("IRC_FAILED",result.sources_ok,result.sources_failed);
     }
+    /* Initial collection establishes a baseline, not an alert. Further
+     * findings notify briefly, not with another full intelligence dump. */
+    if(has_state&&findings>prior_findings){
+     char alert[220];
+     snprintf(alert,sizeof alert,"Digit Intel: %lu new investigation evidence/case changes observed. Request a current intelligence report for details.",
+              findings-prior_findings);
+     if(deliver(DIGIT_INTEL_SLACK_SERVICE,alert)){
+      (void)audit_line("SLACK_FINDING_ALERT",result.sources_ok,result.sources_failed);
+     }
+    }
+    prior_findings=findings;
+    has_state=1;
+    if(changed||has_state)
+     if(!write_delivery(last_slack_at,last_irc_at,prior_findings)&&owner&&owner->send_message)
+      (void)owner->send_message("[INTEL] Delivery state persistence failed");
    }
   }else{
    (void)audit_line("COLLECTION_FAILED",0,0);
@@ -1003,7 +1053,7 @@ static stnlabz_module_result_t stop(void){
  curl_global_cleanup();return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
- "intel","Digit Intelligence",0,1,1,STNLABZ_MODULE_API_MAJOR,
+ "intel","Digit Intelligence",0,1,2,STNLABZ_MODULE_API_MAJOR,
  STNLABZ_MODULE_API_MINOR,qualify,start,stop
 };
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){return &descriptor;}
