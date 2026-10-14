@@ -1,11 +1,61 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 #include "stnlabz_abi/module.h"
 #include "ask_context.h"
 #include "corpus_lookup.h"
 #include "interpretation.h"
+#include "research_contract.h"
 static const stnlabz_module_host_t *host;
+static stnlabz_module_result_t research_answer(const char *subject,
+ void *response,size_t capacity,size_t *used){
+ digit_research_request_t query={0};
+ digit_research_result_t *found;
+ stnlabz_module_result_t rc;
+ const char *url=NULL,*mission="Operator-requested public research";
+ size_t n=0,i;int written;
+ char excerpt[320];size_t count=0;
+ if(!subject||!response||!used||capacity<2)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ while(*subject==' ')subject++;
+ if(!strncasecmp(subject,"https://",8))url=subject;
+ else if(!strcasecmp(subject,"PHP")||!strncasecmp(subject,"PHP ",4))
+  url="https://www.php.net/releases/";
+ if(!url)return STNLABZ_MODULE_ERR_NOT_FOUND;
+ if(strlen(url)>=sizeof query.url)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ found=calloc(1,sizeof *found);
+ if(!found)return STNLABZ_MODULE_ERR_START_FAILED;
+ query.version=DIGIT_RESEARCH_CONTRACT_VERSION;
+ snprintf(query.url,sizeof query.url,"%s",url);
+ snprintf(query.mission,sizeof query.mission,"%s",mission);
+ rc=!host||!host->invoke_service?STNLABZ_MODULE_ERR_NOT_FOUND:
+  host->invoke_service(DIGIT_RESEARCH_SERVICE,&query,sizeof query,
+                       found,sizeof *found,&n);
+ if(rc!=STNLABZ_MODULE_OK||n!=sizeof *found||
+    found->version!=DIGIT_RESEARCH_CONTRACT_VERSION||
+    !memchr(found->excerpt,0,sizeof found->excerpt)||
+    !memchr(found->url,0,sizeof found->url)){
+  const char *message="Research source retrieval unavailable; no findings verified.";
+  if(strlen(message)+1>capacity){free(found);return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;}
+  strcpy(response,message);*used=strlen(message)+1;
+  free(found);return STNLABZ_MODULE_OK;
+ }
+ for(i=0;found->excerpt[i]&&count<sizeof excerpt-1;i++){
+  unsigned char ch=(unsigned char)found->excerpt[i];
+  if(ch=='\r'||ch=='\n'||ch=='\t')ch=' ';
+  if(ch<32||ch>126)continue;
+  excerpt[count++]=(char)ch;
+ }
+ excerpt[count]=0;
+ written=snprintf(response,capacity,
+  "Retrieved source: %s\nUTC: %s\nHTTP: %d\nUnverified source excerpt: %.260s\n"
+  "This is retrieved text, not a vulnerability assessment.",
+  found->url,found->retrieved_at,found->http_status,excerpt);
+ free(found);
+ if(written<0||(size_t)written>=capacity)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ *used=(size_t)written+1;
+ return STNLABZ_MODULE_OK;
+}
 static stnlabz_module_result_t answer(const void *request,size_t length,
  void *response,size_t capacity,size_t *used,void *context){
  const char *s=request;char *out=response;const char *reply;
@@ -24,6 +74,12 @@ static stnlabz_module_result_t answer(const void *request,size_t length,
     !strcasecmp(s,"hello digit")||!strcasecmp(s,"hi digit")||
     !strcasecmp(s,"hello digit!")||!strcasecmp(s,"hi digit!"))
   reply="Hello. I'm Digit. What would you like to discuss?";
+ else if(!strncasecmp(s,"research ",9)){
+  return research_answer(s+9,response,capacity,used);
+ }
+ else if(!strncasecmp(s,"research: ",10)){
+  return research_answer(s+10,response,capacity,used);
+ }
  else if(!strcasecmp(s,"version")||!strcasecmp(s,"version?")||
          !strcasecmp(s,"what version are you?")||
          !strcasecmp(s,"what is your version?")||
@@ -156,7 +212,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
- d.version_major=0;d.version_minor=1;d.version_patch=6;
+ d.version_major=0;d.version_minor=1;d.version_patch=7;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
