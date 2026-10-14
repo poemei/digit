@@ -1,4 +1,4 @@
-# Digit Research 0.1.1 — mission-directed public document retrieval
+# Digit Research 0.1.2 — mission-directed public document retrieval
 
 Standalone ABI 1.5 module. The Core-owned host registers `research.retrieve` (contract in `include/research_contract.h`). Authorized capability consumers supply an explicit mission label and a public HTTPS URL. Research returns a bounded **raw excerpt**, source URL, retrieval timestamp, HTTP status and content type. It **does not** claim to understand the page or verify the truth of the material. Consumers must evaluate, corroborate, and cite sources. Public Slack/IRC messages do not register a Research command.
 
@@ -20,3 +20,7 @@ Then `make -C modules/research clean all test`; if tests succeed install with `s
 Negative tests must reject unsafe URLs and missing mission metadata; no public input route or code execution is registered. For an integration test, an authorized internal consumer must invoke `research.retrieve` through Core and show the source, timestamp and audit record. Build success, qualification and hotload do not establish end-to-end acceptance.
 
 No Core, Router, Slack, IRC, Intel or Corpus implementation changes.
+
+## 0.1.2 text extraction (operator acceptance pending)
+
+The public HTTPS response body is processed incrementally. Basic HTML tags, script/style/head/navigation content and common entities are converted to a bounded plain-text excerpt before passing it to Ask. Source URL, timestamp, HTTP status, audit and truncation flags remain intact. This is deliberately basic extraction, not full HTML5 parsing or evidence interpretation; malformed HTML, dynamic JavaScript content and non-HTML responses may produce incomplete or inaccurate excerpts. No source discovery or autonomous vulnerability assessment is introduced.
