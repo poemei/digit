@@ -4,6 +4,7 @@
 #include "ask_context.h"
 #include "corpus_lookup.h"
 #include "interpretation.h"
+#include "research_contract.h"
 extern const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void);
 static stnlabz_module_service_handler_fn handler;
 static int identity_calls;
@@ -26,6 +27,19 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
    return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
   memcpy(reply,version,strlen(version)+1);*used=strlen(version)+1;
   return STNLABZ_MODULE_OK;
+ }
+ if(!strcmp(name,DIGIT_RESEARCH_SERVICE)){
+  const digit_research_request_t *q=req;
+  digit_research_result_t *r=reply;
+  if(size!=sizeof *q||cap<sizeof *r||q->version!=DIGIT_RESEARCH_CONTRACT_VERSION)
+   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+  memset(r,0,sizeof *r);
+  r->version=DIGIT_RESEARCH_CONTRACT_VERSION;
+  r->http_status=200;
+  strcpy(r->retrieved_at,"2026-10-14T00:00:00Z");
+  snprintf(r->url,sizeof r->url,"%s",q->url);
+  strcpy(r->excerpt,"TEST SOURCE ONLY: release notes");
+  *used=sizeof *r;return STNLABZ_MODULE_OK;
  }
  if(!strcmp(name,"corpus.lookup")){
   const digit_corpus_lookup_request_t *q=req;
@@ -58,7 +72,7 @@ int main(void){
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return 1;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"Hello"))return 1;
  if(handler("Hi digit",9,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"Hello"))return 1;
- if(d->version_patch!=6)return 1;
+ if(d->version_patch!=7)return 1;
  if(handler("what version are you?",22,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      strcmp(out,"Digit 1.0.0"))return 1;
  if(handler("version",8,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
@@ -79,6 +93,12 @@ int main(void){
      !strstr(out,"Corpus"))return 1;
  if(handler("tell me about STN-Labz",23,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"engineering research organization"))return 1;
+ if(handler("research PHP",sizeof("research PHP"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     !strstr(out,"https://www.php.net/releases/")||
+     !strstr(out,"Unverified source excerpt"))return 1;
+ if(handler("research https://www.php.net/releases/",sizeof("research https://www.php.net/releases/"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     !strstr(out,"Retrieved source:"))return 1;
+ if(handler("research unknown subject",sizeof("research unknown subject"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_ERR_NOT_FOUND)return 1;
  if(handler("delete all the records",23,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"cannot determine"))return 1;
  if(handler("",1,out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK)return 1;
