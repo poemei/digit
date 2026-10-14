@@ -17,3 +17,7 @@ When Ask's existing exact operations do not match, it invokes the independent `i
 Public conversations may request `research https://www.php.net/releases/` or `research PHP`. Ask invokes `research.retrieve` via the existing Core ABI, returning a bounded source excerpt with URL and retrieval timestamp. PHP topic requests currently use one hardcoded official release-notes source. This is source retrieval, not autonomous search, vulnerability validation or conclusions. If source discovery is unavailable, the reply states the limitation instead of inventing results. No research requests grant authority to execute software, edit GitHub, modify production, or write Corpus.
 
 Build and test: `make -C modules/ask clean all test` and `make -C modules/research clean all test`. Install and restart only after successful checks, then test on the actual operator-selected Slack/IRC interface. A live source retrieval must also be reflected in `/opt/digit/research/research.log`. Formal operator acceptance remains pending.
+
+## Ask 0.1.8 — on-demand Intel brief (pending acceptance)
+
+`report intel` or `intel report` requests the latest stored Intel brief through Core's `intel.report.read` service. The request is accepted only when the trusted transport marks its user as the configured operator; anonymous/non-operator requests receive an authorization response. The default unstructured console and other clients are not granted report authority by this change. Full brief output is bounded by the existing Intel report storage size.
