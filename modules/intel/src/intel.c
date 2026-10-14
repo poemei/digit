@@ -1034,6 +1034,40 @@ static stnlabz_module_result_t read_brief(const void *request,size_t size,
  memcpy(response,&out,sizeof out);*used=sizeof out;
  return STNLABZ_MODULE_OK;
 }
+/* Explicit operator-requested report generation is independent of the
+ * five-minute collector and the twice-daily publication gate. */
+static stnlabz_module_result_t generate_brief(const void *request,size_t size,
+ void *response,size_t capacity,size_t *used,void *ctx){
+ const digit_intel_report_request_t *req=request;
+ digit_intel_report_response_t *out=response;
+ digit_intel_request_t collection={0};
+ digit_intel_result_t *fresh;
+ size_t produced=0;
+ stnlabz_module_result_t result;
+ (void)ctx;
+ if(used)*used=0;
+ if(!req||size!=sizeof *req||req->version!=DIGIT_INTEL_REPORT_VERSION||
+    !out||capacity<sizeof *out||!used)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ fresh=calloc(1,sizeof *fresh);
+ if(!fresh)return STNLABZ_MODULE_ERR_START_FAILED;
+ snprintf(collection.command,sizeof collection.command,"internal.collect");
+ snprintf(collection.actor,sizeof collection.actor,"digit:intel:on-demand");
+ result=execute(&collection,sizeof collection,fresh,sizeof *fresh,&produced,NULL);
+ if(result!=STNLABZ_MODULE_OK||produced!=sizeof *fresh){
+  free(fresh);return STNLABZ_MODULE_ERR_NOT_FOUND;
+ }
+ if(!memchr(fresh->report,0,sizeof fresh->report)||!fresh->report[0]){
+  free(fresh);return STNLABZ_MODULE_ERR_INVALID_STATE;
+ }
+ /* Do not touch delivery timers or republish to other channels. The
+  * periodic collector owns its own persistent case / evidence process. */
+ memset(out,0,sizeof *out);
+ out->version=DIGIT_INTEL_REPORT_VERSION;
+ memcpy(out->report,fresh->report,strlen(fresh->report)+1);
+ *used=sizeof *out;
+ free(fresh);
+ return STNLABZ_MODULE_OK;
+}
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q){
  unsigned int passed=0;settings_t v={0};char text[32];
  if(!q)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
@@ -1062,7 +1096,12 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
  if(!h->register_service(DIGIT_INTEL_REPORT_SERVICE,read_brief,NULL)){
   owner=NULL;curl_global_cleanup();return STNLABZ_MODULE_ERR_START_FAILED;
  }
+ if(!h->register_service("intel.report.generate",generate_brief,NULL)){
+  (void)h->unregister_service(DIGIT_INTEL_REPORT_SERVICE,NULL);
+  owner=NULL;curl_global_cleanup();return STNLABZ_MODULE_ERR_START_FAILED;
+ }
  if(pthread_create(&collector,NULL,collector_main,NULL)){
+  (void)h->unregister_service("intel.report.generate",NULL);
   (void)h->unregister_service(DIGIT_INTEL_REPORT_SERVICE,NULL);
   owner=NULL;curl_global_cleanup();return STNLABZ_MODULE_ERR_START_FAILED;
  }
@@ -1071,12 +1110,15 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
 static stnlabz_module_result_t stop(void){
  if(!running)return STNLABZ_MODULE_ERR_INVALID_STATE;
  atomic_store(&stopping,1);pthread_join(collector,NULL);
- if(owner&&owner->unregister_service)(void)owner->unregister_service(DIGIT_INTEL_REPORT_SERVICE,NULL);
+ if(owner&&owner->unregister_service){
+  (void)owner->unregister_service("intel.report.generate",NULL);
+  (void)owner->unregister_service(DIGIT_INTEL_REPORT_SERVICE,NULL);
+ }
  running=0;owner=NULL;memset(&settings,0,sizeof settings);
  curl_global_cleanup();return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
- "intel","Digit Intelligence",0,1,2,STNLABZ_MODULE_API_MAJOR,
+ "intel","Digit Intelligence",0,1,3,STNLABZ_MODULE_API_MAJOR,
  STNLABZ_MODULE_API_MINOR,qualify,start,stop
 };
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){return &descriptor;}
