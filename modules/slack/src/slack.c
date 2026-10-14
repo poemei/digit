@@ -219,6 +219,16 @@ int digit_slack_seen_message(const char *workspace,const char *channel,const cha
  snprintf(message_keys[message_cursor++%128],sizeof message_keys[0],"%s",key);
  return 0;
 }
+/* Single receive admission point, shared by live Socket Mode and tests.
+ * Event deliveries with different event IDs but the same source message
+ * may only pass once. Missing source identity fails closed. */
+int digit_slack_admit_message(const char *event_id,const char *workspace,
+                             const char *channel,const char *message_ts){
+ if(!event_id||!*event_id||!workspace||!*workspace||
+    !channel||!*channel||!message_ts||!*message_ts)return 0;
+ if(seen(event_id))return 0;
+ return !digit_slack_seen_message(workspace,channel,message_ts);
+}
 static int diagnostic(const char *s){
  return !strcmp(s,"diagnose")||!strcmp(s,"diagnose my last request")||
         !strcmp(s,"diagnose last request");
@@ -267,8 +277,8 @@ static void process(struct json_object *root){
   text=addressed;
  }
  while(*text&&isspace((unsigned char)*text))text++;
- if(!*text||strlen(text)>512||strchr(text,'\r')||strchr(text,'\n')||seen(event_id)||
-    digit_slack_seen_message(team,channel,message_ts))return;
+ if(!*text||strlen(text)>512||strchr(text,'\r')||strchr(text,'\n')||
+    !digit_slack_admit_message(event_id,team,channel,message_ts))return;
  h=conversation(user,channel);
  ctx.magic=DIGIT_ASK_CONTEXT_MAGIC;
  snprintf(ctx.question,sizeof ctx.question,"%s",text);
@@ -405,7 +415,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"slack");
  snprintf(d.name,sizeof d.name,"Digit Slack Transport");
- d.version_major=0;d.version_minor=1;d.version_patch=6;
+ d.version_major=0;d.version_minor=1;d.version_patch=7;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
