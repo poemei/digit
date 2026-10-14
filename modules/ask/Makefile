@@ -20,5 +20,6 @@ install: $(TARGET)
 	@install -m 0640 module.conf "$(PREFIX)/modules/ask/module.conf"
 	@install -m 0750 "$(TARGET)" "$(PREFIX)/modules/ask/bin/ask.so"
 	@chown -R "$(OWNER):$(GROUP)" "$(PREFIX)/modules/ask"
+	@printf "ASK INSTALLED: $(PREFIX)/modules/ask/bin/ask.so (module restart/activation required)\\n"
 clean:
 	rm -rf bin
