@@ -199,7 +199,7 @@ int digit_mvc_console(void){
   }
   router_active=1;
  }
- printf("STN-LABZ Digit %s | interactive console\\n",DIGIT_VERSION_STRING);
+ printf("STN-LABZ Digit %s | interactive console\n",DIGIT_VERSION_STRING);
  puts("CORE AUTHORITY RULE:");
  puts(stnlabz_agent_root_identity()->core_modification_rule);
  puts("Module commands are registered on activation. /quit exits.");
@@ -233,7 +233,7 @@ int digit_mvc_console(void){
   while(len&&(line[len-1]=='\n'||line[len-1]=='\r'))line[--len]=0;
   if(!strcmp(line,"/quit")||!strcmp(line,"quit"))break;
   if(!strcmp(line,"version")||!strcmp(line,"/version")){
-   printf("Digit %s\\n",DIGIT_VERSION_STRING);fflush(stdout);continue;
+   printf("Digit %s\n",DIGIT_VERSION_STRING);fflush(stdout);continue;
   }
   while(line[start]==' '||line[start]=='/')start++;
   while(line[start+j]&&line[start+j]!=' '&&j<sizeof word-1){word[j]=line[start+j];j++;}
