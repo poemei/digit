@@ -3,11 +3,23 @@
 #include "stnlabz_abi/module.h"
 #include "ask_context.h"
 #include "corpus_lookup.h"
+#include "interpretation.h"
 extern const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void);
 static stnlabz_module_service_handler_fn handler;
 static int identity_calls;
 static stnlabz_module_result_t invoke(const char *name,const void *req,size_t size,void *reply,size_t cap,size_t *used){
  const char *msg="I am Digit, the STN-LABZ foundational autonomous agent.";
+ if(!strcmp(name,"interpretation.classify")){
+  const digit_interpret_request_t *q=req;
+  digit_interpret_response_t *v=reply;
+  if(size!=sizeof *q||cap<sizeof *v)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+  memset(v,0,sizeof *v);v->version=DIGIT_INTERPRETATION_VERSION;
+  if(!strcmp(q->text,"what can you tell me?"))v->intent=DIGIT_INTENT_CAPABILITIES;
+  else if(!strcmp(q->text,"tell me about STN-Labz")){
+   v->intent=DIGIT_INTENT_KNOWLEDGE;strcpy(v->subject,"STN-Labz");
+  }
+  *used=sizeof *v;return STNLABZ_MODULE_OK;
+ }
  if(!strcmp(name,"corpus.lookup")){
   const digit_corpus_lookup_request_t *q=req;
   digit_corpus_lookup_response_t *result=reply;
@@ -39,7 +51,7 @@ int main(void){
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return 1;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"Hello"))return 1;
  if(handler("Hi digit",9,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"Hello"))return 1;
- if(d->version_patch!=4)return 1;
+ if(d->version_patch!=5)return 1;
  if(handler("who are you?",13,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"foundational autonomous agent")||identity_calls!=1)return 1;
  {digit_ask_context_t context={0};context.magic=DIGIT_ASK_CONTEXT_MAGIC;
   strcpy(context.question,"diagnose my last request");
@@ -52,6 +64,12 @@ int main(void){
      !strstr(out,"fixture-corpus"))return 1;
  if(handler("what is unlisted?",18,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"no matching knowledge record"))return 1;
+ if(handler("what can you tell me?",22,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     !strstr(out,"Corpus"))return 1;
+ if(handler("tell me about STN-Labz",23,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     !strstr(out,"engineering research organization"))return 1;
+ if(handler("delete all the records",23,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     !strstr(out,"cannot determine"))return 1;
  if(handler("",1,out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK)return 1;
  if(handler("hello",6,out,2,&used,NULL)==STNLABZ_MODULE_OK)return 1;
  if(d->stop()!=STNLABZ_MODULE_OK)return 1;
