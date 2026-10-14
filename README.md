@@ -4,6 +4,10 @@ Digit is an STN-LABZ modular autonomous-agent project. This repository is a **cl
 
 The existing [stnlabz/digit](https://github.com/stnlabz/digit) repository is the **reference implementation**: it provides source material and previously developed functionality, not an architecture to copy wholesale. Working features may be migrated only after being realigned with the design and qualification requirements here.
 
+## Agent version
+
+**Digit 1.0.0** is the operator-designated unified agent version, without an RC suffix. Core owns `DIGIT_VERSION_STRING` in `include/digit_version.h`, independent of module ABI and individual module versions. The native console shows the version on startup and through `version` or `/version`. Public conversational clients (IRC and Windows GUI) can ask `version` or `what version are you?`; Ask 0.1.6 reads `core.version.read`, so the answer comes from the running Core binary. Deployment and operator acceptance of this version-reporting change remain unverified.
+
 ## Current operational milestones — 2026-10-13
 
 Digit follows **Core → Router → independent capability module**, with thin IRC and Windows GUI interfaces. Core retains identity and authority; Router selects the responsible registered service. Ask may request bounded supporting services through Core's ABI, without giving Interpretation or Corpus authority over routing.
