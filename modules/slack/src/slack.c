@@ -33,6 +33,8 @@ static char bot_id[64];
 static history_t history[HISTORY_SIZE];
 static char event_ids[128][128];
 static unsigned int event_cursor;
+static char message_keys[128][192];
+static unsigned int message_cursor;
 static unsigned long request_sequence;
 static void erase(void *p,size_t n){volatile unsigned char *q=p;while(n--)*q++=0;}
 static void log_status(const char *message){if(host&&host->send_message)(void)host->send_message(message);}
@@ -207,6 +209,16 @@ static int seen(const char *id){
  snprintf(event_ids[event_cursor++%128],sizeof event_ids[0],"%s",id);
  return 0;
 }
+/* Different Slack event deliveries can represent the same source message. */
+int digit_slack_seen_message(const char *workspace,const char *channel,const char *ts){
+ char key[192];size_t i;int n;
+ if(!workspace||!channel||!ts||!*workspace||!*channel||!*ts)return 1;
+ n=snprintf(key,sizeof key,"%s/%s/%s",workspace,channel,ts);
+ if(n<0||(size_t)n>=sizeof key)return 1;
+ for(i=0;i<128;i++)if(!strcmp(message_keys[i],key))return 1;
+ snprintf(message_keys[message_cursor++%128],sizeof message_keys[0],"%s",key);
+ return 0;
+}
 static int diagnostic(const char *s){
  return !strcmp(s,"diagnose")||!strcmp(s,"diagnose my last request")||
         !strcmp(s,"diagnose last request");
@@ -241,7 +253,7 @@ static void process(struct json_object *root){
  const char *type=field(event,"type"),*user=field(event,"user");
  const char *channel=field(event,"channel"),*raw=field(event,"text");
  const char *subtype=field(event,"subtype"),*bot=field(event,"bot_id");
- const char *ts=field(event,"thread_ts");
+ const char *ts=field(event,"thread_ts"),*message_ts=field(event,"ts");
  const char *kind=field(event,"channel_type"),*text=raw;
  int dm;char addressed[513]={0},answer[1024]={0};
  digit_router_request_t request={0};digit_ask_context_t ctx={0};
@@ -255,7 +267,8 @@ static void process(struct json_object *root){
   text=addressed;
  }
  while(*text&&isspace((unsigned char)*text))text++;
- if(!*text||strlen(text)>512||strchr(text,'\r')||strchr(text,'\n')||seen(event_id))return;
+ if(!*text||strlen(text)>512||strchr(text,'\r')||strchr(text,'\n')||seen(event_id)||
+    digit_slack_seen_message(team,channel,message_ts))return;
  h=conversation(user,channel);
  ctx.magic=DIGIT_ASK_CONTEXT_MAGIC;
  snprintf(ctx.question,sizeof ctx.question,"%s",text);
@@ -367,6 +380,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
  if(res)json_object_put(res);
  if(!bot_id[0]){log_status("[SLACK] Bot identity verification failed");erase(&cfg,sizeof cfg);host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;}
  memset(history,0,sizeof history);memset(event_ids,0,sizeof event_ids);
+ memset(message_keys,0,sizeof message_keys);message_cursor=0;
  request_sequence=0;event_cursor=0;
  atomic_store(&stopping,0);
  if(pthread_create(&worker,NULL,run,NULL)){erase(&cfg,sizeof cfg);host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;}
@@ -391,7 +405,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"slack");
  snprintf(d.name,sizeof d.name,"Digit Slack Transport");
- d.version_major=0;d.version_minor=1;d.version_patch=5;
+ d.version_major=0;d.version_minor=1;d.version_patch=6;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
