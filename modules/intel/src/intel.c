@@ -14,6 +14,7 @@
 #include <time.h>
 #include <unistd.h>
 #include "intel.h"
+#include "intel_delivery.h"
 #include <pthread.h>
 #include <stdatomic.h>
 #define CONFIG_PATH "/opt/digit/auth/intel/intel.conf"
@@ -278,7 +279,7 @@ static int intel_state(const char *raw,char *out,size_t cap,const char *path){
  if(lstat(path,&st)==0){
   if(!is_private(path)){append(out,cap,"Change tracking: UNSAFE STATE FILE\n");goto done;}
   old=json_object_from_file(path);
-  if(!old){append(out,cap,"Change tracking: CORRUPT PRIOR STATE\n");goto done;}
+  if(!old){append(out,cap,"Change tracking: PRIOR STATE JSON READER FAILED; baseline preserved\n");goto done;}
   oldstats=json_member_object(old,"stats");
   if(!json_u64(oldstats,"total_threats",&previous)){
    append(out,cap,"Change tracking: INVALID PRIOR BASELINE\n");goto done;
@@ -795,7 +796,7 @@ static stnlabz_module_result_t execute(const void *request,size_t req_size,void 
  /* Render the collected intelligence as a sectioned Slack brief. */
  {
   char ordered[sizeof(r.report)]={0};
-  char *cases=strstr(record_section,"\n*Investigation 1*");
+  char *cases=strstr(record_section,"*Investigation 1*");
   char *cross=strstr(record_section,"Rictus overlap:");
   char *assessment=cross?strstr(cross,"Assessment:"):NULL;
   if(!assessment&&cross)assessment=strstr(cross,"Assessment limited:");
@@ -870,7 +871,7 @@ static int audit_line(const char *outcome,unsigned int ok,unsigned int failed){
  fd=open(INTEL_AUDIT,O_WRONLY|O_CREAT|O_APPEND|O_NOFOLLOW,0600);
  if(fd<0)return 0;
  fp=fdopen(fd,"a");if(!fp){close(fd);return 0;}
- if(fprintf(fp,"%lld collection=%s sources_ok=%u sources_failed=%u\\n",
+ if(fprintf(fp,"%lld collection=%s sources_ok=%u sources_failed=%u\n",
            (long long)now,outcome,ok,failed)>0&&fflush(fp)==0&&fsync(fileno(fp))==0)
   success=1;
  if(fclose(fp)!=0)success=0;
@@ -891,6 +892,28 @@ static int publish_report(const char *body){
  if(!ok)unlink(tmp);
  return ok;
 }
+/* An outbound attempt is not confirmed delivery until the transport reports success.
+ * The brief remains stored locally irrespective of transport availability. */
+static int deliver(const char *service,const char *message){
+ digit_intel_delivery_t *request=calloc(1,sizeof *request);
+ int confirmed=0;size_t used=0;stnlabz_module_result_t rc;
+ if(!request||!owner||!owner->invoke_service||!message){
+  free(request);return 0;
+ }
+ if(strlen(message)>=sizeof request->message){free(request);return 0;}
+ request->version=DIGIT_INTEL_DELIVERY_VERSION;
+ memcpy(request->message,message,strlen(message)+1);
+ rc=owner->invoke_service(service,request,sizeof *request,&confirmed,sizeof confirmed,&used);
+ free(request);
+ return rc==STNLABZ_MODULE_OK&&used==sizeof confirmed&&confirmed==1;
+}
+static void brief_irc(const digit_intel_result_t *r,char *out,size_t capacity){
+ const char *p=strstr(r->report,"Investigations:");
+ size_t cases=0,opened=0,added=0;
+ if(p)(void)sscanf(p,"Investigations: %zu active; %zu opened; %zu distinct evidence IDs added",&cases,&opened,&added);
+ (void)snprintf(out,capacity,"Digit Intel: %zu active cases; %zu new cases; %zu new evidence IDs; sources %u OK/%u failed. Full brief in Slack #intel.",
+                cases,opened,added,r->sources_ok,r->sources_failed);
+}
 static void *collector_main(void *unused){
  (void)unused;
  while(!atomic_load(&stopping)){
@@ -907,6 +930,17 @@ static void *collector_main(void *unused){
     (void)owner->send_message("[INTEL] Mandatory collection audit failed");
    if(!persisted&&owner&&owner->send_message)
     (void)owner->send_message("[INTEL] Intelligence report persistence failed");
+   if(persisted){
+    char summary[440];
+    int slack_ok,irc_ok;
+    brief_irc(&result,summary,sizeof summary);
+    slack_ok=deliver(DIGIT_INTEL_SLACK_SERVICE,result.report);
+    irc_ok=deliver(DIGIT_INTEL_IRC_SERVICE,summary);
+    if(!audit_line(slack_ok?"SLACK_DELIVERED":"SLACK_FAILED",result.sources_ok,result.sources_failed)&&owner&&owner->send_message)
+     (void)owner->send_message("[INTEL] Slack audit failure");
+    if(!audit_line(irc_ok?"IRC_QUEUED":"IRC_FAILED",result.sources_ok,result.sources_failed)&&owner&&owner->send_message)
+     (void)owner->send_message("[INTEL] IRC audit failure");
+   }
   }else{
    (void)audit_line("COLLECTION_FAILED",0,0);
    if(owner&&owner->send_message)(void)owner->send_message("[INTEL] Collection failure");
@@ -951,7 +985,7 @@ static stnlabz_module_result_t stop(void){
  curl_global_cleanup();return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
- "intel","Digit Intelligence",0,1,0,STNLABZ_MODULE_API_MAJOR,
+ "intel","Digit Intelligence",0,1,1,STNLABZ_MODULE_API_MAJOR,
  STNLABZ_MODULE_API_MINOR,qualify,start,stop
 };
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){return &descriptor;}
