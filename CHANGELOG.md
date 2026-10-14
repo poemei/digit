@@ -2,6 +2,13 @@
 
 This log distinguishes committed source, operator-observed runtime behavior, and explicit operator acceptance. Historical development records in the roadmap remain evidence of earlier stages; they do not override the following accepted milestones.
 
+## 2026-10-13 — Agent version implementation (operator-designated 1.0.0)
+
+- Designated **Digit 1.0.0**, without release-candidate suffix, independently of individual module versions.
+- Core version constant in `include/digit_version.h`; native CLI banner and `version` command; Core read-only `core.version.read` service.
+- Ask 0.1.6 exposes `version` / `what version are you?` through the same read-only service so IRC and Windows GUI report the running Core version.
+- Source committed; compilation, installed runtime and end-to-end operator acceptance remain to be established.
+
 ## 2026-10-13 — Accepted operator demonstrations
 
 ### Interpretation 0.1.0 and Ask 0.1.5 — ACCEPTED
