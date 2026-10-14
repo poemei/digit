@@ -44,3 +44,7 @@ Build all three changed modules with `make -C modules/{intel,slack,irc} clean al
 Collection continues every ~300 seconds and refreshes `/opt/digit/intel/latest-brief.md`. Routine *outbound* full briefs to Slack and concise IRC summaries are time-gated to no more than once every 12 hours per transport; timing is persisted in `/opt/digit/intel/delivery-state.txt` (private 0600) so restarting Digit does not replay routine briefs. This new delivery file must not replace or reset existing investigation evidence JSON.
 
 New investigation evidence/case changes may trigger a short Slack alert between briefs; the initial sample is treated as a baseline. The Core ABI service `intel.report.read` returns the latest stored bounded brief. Ask 0.1.8 exposes `report intel` only when the trusted Slack transport identifies the configured operator user. No collection command is exposed publicly. This is a read of the latest brief, not an unscheduled full collection.
+
+## Architecture repair note (2026-10-14)
+
+Intel remains an independent collection and reporting module. Its local `intel.report.read` service is a module-published read-only capability, not a Core-specific modification. The prior Ask-level on-demand report integration was withdrawn to restore the original shared Ask context ABI. Until a module-local route is separately qualified, `@Digit report intel` is **not** an accepted supported user command.
