@@ -2,12 +2,13 @@
 
 This log distinguishes committed source, operator-observed runtime behavior, and explicit operator acceptance. Historical development records in the roadmap remain evidence of earlier stages; they do not override the following accepted milestones.
 
-## 2026-10-13 — Agent version implementation (operator-designated 1.0.0)
+## 2026-10-13 — Digit 1.0.0 version reporting — OPERATOR ACCEPTED
 
 - Designated **Digit 1.0.0**, without release-candidate suffix, independently of individual module versions.
 - Core version constant in `include/digit_version.h`; native CLI banner and `version` command; Core read-only `core.version.read` service.
 - Ask 0.1.6 exposes `version` / `what version are you?` through the same read-only service so IRC and Windows GUI report the running Core version.
-- Source committed; compilation, installed runtime and end-to-end operator acceptance remain to be established.
+- **Operator acceptance recorded 2026-10-13** after native-console `version?` → `Digit 1.0.0` and IRC `<STN_Boss> digit-bot: version?` → `<digit-bot> Digit 1.0.0`. No RC suffix.
+- Prior aggregate Core test: 26 suites / 1,548 assertions, one console-banner assertion failed; expected banner corrected in `tests/test_mvc_console.sh`. No later aggregate PASS report supplied. Windows GUI version reporting not separately tested.
 
 ## 2026-10-13 — Accepted operator demonstrations
 
