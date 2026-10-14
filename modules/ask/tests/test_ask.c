@@ -20,6 +20,13 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
   }
   *used=sizeof *v;return STNLABZ_MODULE_OK;
  }
+ if(!strcmp(name,"core.version.read")){
+  const char *version="1.0.0";
+  if(size!=1||*(const char *)req!=0||cap<strlen(version)+1)
+   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+  memcpy(reply,version,strlen(version)+1);*used=strlen(version)+1;
+  return STNLABZ_MODULE_OK;
+ }
  if(!strcmp(name,"corpus.lookup")){
   const digit_corpus_lookup_request_t *q=req;
   digit_corpus_lookup_response_t *result=reply;
@@ -51,7 +58,11 @@ int main(void){
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return 1;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"Hello"))return 1;
  if(handler("Hi digit",9,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"Hello"))return 1;
- if(d->version_patch!=5)return 1;
+ if(d->version_patch!=6)return 1;
+ if(handler("what version are you?",22,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     strcmp(out,"Digit 1.0.0"))return 1;
+ if(handler("version",8,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     strcmp(out,"Digit 1.0.0"))return 1;
  if(handler("who are you?",13,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"foundational autonomous agent")||identity_calls!=1)return 1;
  {digit_ask_context_t context={0};context.magic=DIGIT_ASK_CONTEXT_MAGIC;
   strcpy(context.question,"diagnose my last request");
