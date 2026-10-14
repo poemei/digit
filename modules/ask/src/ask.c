@@ -7,6 +7,7 @@
 #include "corpus_lookup.h"
 #include "interpretation.h"
 #include "research_contract.h"
+#include "intel_report.h"
 static const stnlabz_module_host_t *host;
 static stnlabz_module_result_t research_answer(const char *subject,
  void *response,size_t capacity,size_t *used){
@@ -79,6 +80,29 @@ static stnlabz_module_result_t answer(const void *request,size_t length,
     !strcasecmp(s,"hello digit")||!strcasecmp(s,"hi digit")||
     !strcasecmp(s,"hello digit!")||!strcasecmp(s,"hi digit!"))
   reply="Hello. I'm Digit. What would you like to discuss?";
+ else if(!strcasecmp(s,"report intel")||!strcasecmp(s,"intel report")){
+  digit_intel_report_request_t q={DIGIT_INTEL_REPORT_VERSION};
+  digit_intel_report_response_t *r;
+  size_t n=0,length_out;
+  if(!c||!c->intel_report_authorized)
+   reply="Intel report access requires an authorized operator conversation.";
+  else {
+   r=calloc(1,sizeof *r);
+   if(!r)return STNLABZ_MODULE_ERR_START_FAILED;
+   if(!host||!host->invoke_service||
+      host->invoke_service(DIGIT_INTEL_REPORT_SERVICE,&q,sizeof q,
+                           r,sizeof *r,&n)!=STNLABZ_MODULE_OK||
+      n!=sizeof *r||r->version!=DIGIT_INTEL_REPORT_VERSION||
+      !memchr(r->report,0,sizeof r->report)){
+    free(r);reply="Intel report is unavailable.";
+   }else{
+    length_out=strlen(r->report);
+    if(length_out+1>capacity){free(r);return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;}
+    memcpy(out,r->report,length_out+1);*used=length_out+1;
+    free(r);return STNLABZ_MODULE_OK;
+   }
+  }
+ }
  else if(!strncasecmp(s,"research ",9)){
   return research_answer(s+9,response,capacity,used);
  }
@@ -217,7 +241,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
- d.version_major=0;d.version_minor=1;d.version_patch=7;
+ d.version_major=0;d.version_minor=1;d.version_patch=8;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
