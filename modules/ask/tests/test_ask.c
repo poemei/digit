@@ -5,7 +5,6 @@
 #include "corpus_lookup.h"
 #include "interpretation.h"
 #include "research_contract.h"
-#include "intel_report.h"
 extern const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void);
 static stnlabz_module_service_handler_fn handler;
 static int identity_calls;
@@ -42,12 +41,6 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
   strcpy(r->excerpt,"TEST SOURCE ONLY: release notes");
   *used=sizeof *r;return STNLABZ_MODULE_OK;
  }
- if(!strcmp(name,DIGIT_INTEL_REPORT_SERVICE)){
-  digit_intel_report_response_t *r=reply;
-  if(size!=sizeof(digit_intel_report_request_t)||cap<sizeof *r)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
-  memset(r,0,sizeof *r);r->version=DIGIT_INTEL_REPORT_VERSION;
-  strcpy(r->report,"TEST INTEL BRIEF");*used=sizeof *r;return STNLABZ_MODULE_OK;
- }
  if(!strcmp(name,"corpus.lookup")){
   const digit_corpus_lookup_request_t *q=req;
   digit_corpus_lookup_response_t *result=reply;
@@ -79,7 +72,7 @@ int main(void){
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return 1;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"Hello"))return 1;
  if(handler("Hi digit",9,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"Hello"))return 1;
- if(d->version_patch!=8)return 1;
+ if(d->version_patch!=9)return 1;
  if(handler("what version are you?",22,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      strcmp(out,"Digit 1.0.0"))return 1;
  if(handler("version",8,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
@@ -106,12 +99,6 @@ int main(void){
  if(handler("research https://www.php.net/releases/",sizeof("research https://www.php.net/releases/"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"Retrieved source:"))return 1;
  if(handler("research unknown subject",sizeof("research unknown subject"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"not available"))return 1;
- {digit_ask_context_t intel={0};char full[4096];intel.magic=DIGIT_ASK_CONTEXT_MAGIC;
-  strcpy(intel.question,"report intel");
-  if(handler(&intel,sizeof intel,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"requires an authorized"))return 22;
-  intel.intel_report_authorized=1;
-  if(handler(&intel,sizeof intel,full,sizeof full,&used,NULL)!=STNLABZ_MODULE_OK||strcmp(full,"TEST INTEL BRIEF"))return 23;
- }
  if(handler("delete all the records",23,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"cannot determine"))return 1;
  if(handler("",1,out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK)return 1;
