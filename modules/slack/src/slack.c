@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
@@ -207,6 +208,31 @@ static int diagnostic(const char *s){
  return !strcmp(s,"diagnose")||!strcmp(s,"diagnose my last request")||
         !strcmp(s,"diagnose last request");
 }
+/* Accept only explicit addressing in the configured intelligence channel.
+ * A Slack mention, plain bot name, or bot name plus colon qualifies.
+ * Arbitrary channel chatter is not routed into Ask. */
+int digit_slack_addressed_text(const char *type,const char *channel,
+ const char *configured,const char *bot,const char *raw,
+ char *output,size_t capacity){
+ const char *text=raw;
+ char mention[96];size_t length;
+ if(!type||!channel||!configured||!bot||!raw||!output||
+    strcmp(channel,configured)||capacity<2)return 0;
+ if(strcmp(type,"message")&&strcmp(type,"app_mention"))return 0;
+ snprintf(mention,sizeof mention,"<@%s>",bot);
+ if(!strncmp(text,mention,strlen(mention)))text+=strlen(mention);
+ else if(!strncasecmp(text,"digit-bot",9)&&
+         (text[9]==':'||isspace((unsigned char)text[9])))
+  text+=9;
+ else if(!strncasecmp(text,"digit",5)&&
+         (text[5]==':'||isspace((unsigned char)text[5])))text+=5;
+ else return 0;
+ while(*text&&(isspace((unsigned char)*text)||*text==':'||*text==','))text++;
+ length=strlen(text);
+ if(!length||length>=capacity||length>512||strchr(text,'\n')||strchr(text,'\r'))return 0;
+ memcpy(output,text,length+1);
+ return 1;
+}
 static void process(struct json_object *root){
  struct json_object *payload=obj(root,"payload"),*event=obj(payload,"event");
  const char *event_id=field(payload,"event_id"),*team=field(payload,"team_id");
@@ -215,19 +241,17 @@ static void process(struct json_object *root){
  const char *subtype=field(event,"subtype"),*bot=field(event,"bot_id");
  const char *ts=field(event,"thread_ts"),*event_ts=field(event,"ts");
  const char *kind=field(event,"channel_type"),*text=raw;
- int dm,mention=0;char tag[96],answer[1024]={0};
+ int dm;char addressed[513]={0},answer[1024]={0};
  digit_router_request_t request={0};digit_ask_context_t ctx={0};
  history_t *h;size_t used=0;stnlabz_module_result_t status;
  if(!event||!type||!user||!channel||!raw||!team||
     strcmp(team,cfg.workspace)||subtype||bot||!strcmp(user,bot_id))return;
  dm=!strcmp(type,"message")&&kind&&!strcmp(kind,"im");
  if(!dm){
-  if(strcmp(type,"app_mention")||strcmp(channel,cfg.channel)||!bot_id[0])return;
-  snprintf(tag,sizeof tag,"<@%s>",bot_id);
-  if(strncmp(text,tag,strlen(tag)))return;
-  text+=strlen(tag);mention=1;
+  if(!bot_id[0]||!digit_slack_addressed_text(type,channel,cfg.channel,
+                                                bot_id,raw,addressed,sizeof addressed))return;
+  text=addressed;
  }
- (void)mention;
  while(*text&&isspace((unsigned char)*text))text++;
  if(!*text||strlen(text)>512||strchr(text,'\r')||strchr(text,'\n')||seen(event_id))return;
  h=conversation(user,channel);
@@ -365,7 +389,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"slack");
  snprintf(d.name,sizeof d.name,"Digit Slack Transport");
- d.version_major=0;d.version_minor=1;d.version_patch=2;
+ d.version_major=0;d.version_minor=1;d.version_patch=3;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
