@@ -5,9 +5,9 @@
 **Current operator-directed operational architecture:** **Digit → Router → Module**; no Bootstrap in the production console path  
 **Status:** See the 2026-10-13 accepted operational record below. Historical phase record: Phase 1 Core foundation qualification COMPLETE AND OPERATOR ACCEPTED at revision `bee0d22`; Phase 2 Router module 0.1.0 implemented under separate operator authorization, awaiting build/test acceptance. Bootstrap and later stages are not authorized.
 
-## Agent-level release version — awaiting runtime verification
+## Agent-level release version — OPERATOR ACCEPTED (2026-10-13)
 
-**Digit 1.0.0** is the operator-designated stable agent version (no RC). Implementation adds a Core-owned version constant and read-only version service, native CLI display, and Ask 0.1.6 public version queries for IRC and Windows GUI. Module versions remain separate. GitHub source changes alone are not proof of deployment or acceptance. Confirm the compiled Core version and both client responses before recording end-to-end acceptance.
+**Digit 1.0.0** is the operator-designated stable agent version (no RC). Implementation adds a Core-owned version constant and read-only version service, native CLI display, and Ask 0.1.6 public version queries for IRC and Windows GUI. Module versions remain separate. The operator observed `version?` → `Digit 1.0.0` in the native console and `STN_Boss: digit-bot: version?` → `digit-bot: Digit 1.0.0` over IRC, and explicitly accepted Digit 1.0.0 after the IRC test. The previously reported aggregate Core test run had 26 suites, 1,548 assertions, one failure due to the outdated console banner expectation; that expectation was patched in `tests/test_mvc_console.sh`. A subsequent clean aggregate test result was not furnished in this conversation. Windows GUI version reporting remains without a separate live-test transcript.
 
 ## Current verified operational record — 2026-10-13
 
