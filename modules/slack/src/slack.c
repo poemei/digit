@@ -155,6 +155,9 @@ int digit_slack_format_reply(const char *input,char *output,size_t capacity){
  output[j]=0;
  return 1;
 }
+const char *digit_slack_reply_thread(const char *thread_ts){
+ return thread_ts&&*thread_ts?thread_ts:NULL;
+}
 static int send_reply(const char *channel,const char *thread,const char *message){
  struct json_object *req=json_object_new_object(),*res;int ok;
  if(!req||!channel||!message){if(req)json_object_put(req);return 0;}
@@ -238,7 +241,7 @@ static void process(struct json_object *root){
  const char *type=field(event,"type"),*user=field(event,"user");
  const char *channel=field(event,"channel"),*raw=field(event,"text");
  const char *subtype=field(event,"subtype"),*bot=field(event,"bot_id");
- const char *ts=field(event,"thread_ts"),*event_ts=field(event,"ts");
+ const char *ts=field(event,"thread_ts");
  const char *kind=field(event,"channel_type"),*text=raw;
  int dm;char addressed[513]={0},answer[1024]={0};
  digit_router_request_t request={0};digit_ask_context_t ctx={0};
@@ -284,7 +287,7 @@ static void process(struct json_object *root){
   if(!digit_slack_format_reply(answer,formatted,sizeof formatted)){
    log_status("[SLACK] Reply presentation failed");return;
   }
-  if(!send_reply(channel,ts?ts:event_ts,formatted))log_status("[SLACK] Reply delivery failed");
+  if(!send_reply(channel,digit_slack_reply_thread(ts),formatted))log_status("[SLACK] Reply delivery failed");
  }
 }
 static int acknowledge(CURL *ws,const char *envelope){
@@ -388,7 +391,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"slack");
  snprintf(d.name,sizeof d.name,"Digit Slack Transport");
- d.version_major=0;d.version_minor=1;d.version_patch=4;
+ d.version_major=0;d.version_minor=1;d.version_patch=5;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
