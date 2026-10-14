@@ -281,7 +281,14 @@ static void reply_intel(const char *channel,const char *thread){
     !memchr(report->report,0,sizeof report->report)||!report->report[0])
   message="Intel report unavailable; no current stored brief was returned.";
  else message=report->report;
- if(!send_reply(channel,thread,message))log_status("[SLACK] Intel report delivery failed");
+ if(!send_reply(channel,thread,message)){
+  /* Do not silently swallow an interactive Intel request when posting the
+   * full report fails. An explicit, short failure response remains bounded. */
+  log_status("[SLACK] Intel report delivery failed");
+  if(!send_reply(channel,thread,
+       "Intel report delivery failed. The stored brief was not posted; no intelligence records were changed."))
+   log_status("[SLACK] Intel failure notice delivery failed");
+ }
  erase(report,sizeof *report);free(report);
 }
 static void process(struct json_object *root){
@@ -445,7 +452,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"slack");
  snprintf(d.name,sizeof d.name,"Digit Slack Transport");
- d.version_major=0;d.version_minor=1;d.version_patch=10;
+ d.version_major=0;d.version_minor=1;d.version_patch=11;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
