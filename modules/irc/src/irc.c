@@ -16,6 +16,7 @@
 #include "stnlabz_abi/module.h"
 #include "router.h"
 #include "ask_context.h"
+#include "intel_delivery.h"
 #include <time.h>
 
 typedef struct {char server[256],port[8],nick[64],channel[128],account[128],password[256];} irc_config_t;
@@ -24,6 +25,29 @@ static pthread_t worker;
 static atomic_int stopping;
 static int active;
 static const stnlabz_module_host_t *host;
+static pthread_mutex_t intel_lock=PTHREAD_MUTEX_INITIALIZER;
+static char intel_pending[480];
+static int intel_has_pending;
+static stnlabz_module_result_t publish_intel(const void *request,size_t length,void *out,
+ size_t capacity,size_t *used,void *context){
+ const digit_intel_delivery_t *msg=request;
+ size_t n;int queued=0;
+ (void)context;
+ if(used)*used=0;
+ if(!active||!request||length!=sizeof *msg||msg->version!=DIGIT_INTEL_DELIVERY_VERSION||
+    !memchr(msg->message,0,sizeof msg->message)||!msg->message[0]||
+    !out||capacity<sizeof(int)||!used)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ n=strlen(msg->message);
+ if(n>=sizeof intel_pending||strchr(msg->message,'\r')||strchr(msg->message,'\n'))
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ pthread_mutex_lock(&intel_lock);
+ if(!intel_has_pending){
+  memcpy(intel_pending,msg->message,n+1);intel_has_pending=1;queued=1;
+ }
+ pthread_mutex_unlock(&intel_lock);
+ memcpy(out,&queued,sizeof queued);*used=sizeof queued;
+ return queued?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_START_FAILED;
+}
 static void notice(const char *s){if(host&&host->send_message)host->send_message(s);}
 static int valid(const char *s,size_t max){size_t i,n;if(!s)return 0;n=strlen(s);if(!n||n>=max)return 0;for(i=0;i<n;i++)if((unsigned char)s[i]<33||s[i]==127)return 0;return 1;}
 static int get_setting(const char *key,char *out,size_t cap){const char *value=getenv(key);if(!valid(value,cap))return 0;memcpy(out,value,strlen(value)+1);return 1;}
@@ -54,6 +78,18 @@ static int send_line(SSL *tls,const char *line){
  if(n>510||strchr(line,'\r')||strchr(line,'\n'))return 0;
  memcpy(data,line,n);data[n++]='\r';data[n++]='\n';
  return SSL_write(tls,data,(int)n)==(int)n;
+}
+static int send_pending_intel(SSL *tls){
+ char text[480],wire[512];int ok=1;
+ pthread_mutex_lock(&intel_lock);
+ if(intel_has_pending){
+  snprintf(text,sizeof text,"%s",intel_pending);
+  if(snprintf(wire,sizeof wire,"PRIVMSG %s :%s",config.channel,text)>510)ok=0;
+  else ok=send_line(tls,wire);
+  if(ok){intel_has_pending=0;intel_pending[0]=0;}
+ }
+ pthread_mutex_unlock(&intel_lock);
+ return ok;
 }
 static int sasl_payload(char *out,size_t cap){
  unsigned char plain[640];size_t a=strlen(config.account),p=strlen(config.password),n;
@@ -211,7 +247,9 @@ static void run_connection(void){
   fd_set readset;struct timeval tv={1,0};int ready,n;size_t i;
   FD_ZERO(&readset);FD_SET(fd,&readset);
   ready=select(fd+1,&readset,NULL,NULL,&tv);
-  if(ready<0)break;if(!ready)continue;
+  if(ready<0)break;
+   if(authenticated&&joined&&!send_pending_intel(tls))break;
+   if(!ready)continue;
   n=SSL_read(tls,input,sizeof input);if(n<=0)break;
   for(i=0;i<(size_t)n;i++){
    if(input[i]=='\n'){
@@ -244,7 +282,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  q->negative_test_executed=q->negative_test_passed=1;return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
- if(active||!h||!h->send_message)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ if(active||!h||!h->send_message||!h->register_service||!h->unregister_service)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  host=h;
  if(!load_config()){notice("[IRC] Missing/invalid DIGIT_IRC_* configuration; not connecting");host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;}
  atomic_store(&stopping,0);
@@ -260,7 +298,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"irc");snprintf(d.name,sizeof d.name,"Digit IRC Transport");
- d.version_major=0;d.version_minor=1;d.version_patch=1;
+ d.version_major=0;d.version_minor=1;d.version_patch=2;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
