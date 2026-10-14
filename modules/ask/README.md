@@ -18,6 +18,6 @@ Public conversations may request `research https://www.php.net/releases/` or `re
 
 Build and test: `make -C modules/ask clean all test` and `make -C modules/research clean all test`. Install and restart only after successful checks, then test on the actual operator-selected Slack/IRC interface. A live source retrieval must also be reflected in `/opt/digit/research/research.log`. Formal operator acceptance remains pending.
 
-## Ask 0.1.8 — on-demand Intel brief (pending acceptance)
+## Ask 0.1.9 — ABI restoration (pending acceptance)
 
-`report intel` or `intel report` requests the latest stored Intel brief through Core's `intel.report.read` service. The request is accepted only when the trusted transport marks its user as the configured operator; anonymous/non-operator requests receive an authorization response. The default unstructured console and other clients are not granted report authority by this change. Full brief output is bounded by the existing Intel report storage size.
+Removed the Intel-specific Ask request-context field dependency. The shared `include/ask_context.h` layout is restored; greeting, Corpus, Research and DSD behavior remains. On-demand Intel report interpretation is deferred until a fully module-local route is designed and qualified. No Core or Router changes.
