@@ -9,3 +9,9 @@ Module-local verification (from this module directory): `make clean && make && m
 ## ABI lookup service (0.1.2)
 
 The module also publishes `corpus.lookup`, with request/response structures defined in `include/corpus_lookup.h`, for read-only consumers such as Ask. Lookup continues to use the existing deterministic `digit_corpus_find()` and `/opt/digit/corpus/corpus.tsv`, preserving record ID, source, and exact text. It does not rewrite or infer records. Its existing `corpus` command remains available.
+
+## CLI-only learn (0.1.3)
+
+The independent Corpus module registers `learn` as a command, not a network or ABI write service. From Digit's native console only, use `learn CATEGORY | SOURCE | TEXT`. The command requires the console sender and account, validates bounded TSV fields, generates a random unique-style record identifier, opens the existing `/opt/digit/corpus/corpus.tsv` with `O_APPEND|O_NOFOLLOW`, locks it, appends a single record, and synchronizes the file. It never creates or replaces the production Corpus. If the file is absent or write access fails, learning fails closed. Anonymous IRC, Windows GUI, and `/ask` can reach only read-only Ask/Corpus retrieval and cannot invoke this command through the public Router boundary. Keep filesystem write permission restricted to Digit's intended runtime identity. A successful `learn` reports the appended record ID.
+
+Do not confuse `sender=local-console` metadata with cryptographic operator authentication: the current native-console trust boundary is local process access. Module activation and runtime acceptance remain subject to AGENTS.md.
