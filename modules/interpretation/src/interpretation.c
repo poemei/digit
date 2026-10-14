@@ -12,7 +12,7 @@ static int tok(const char *s,const char *w){
  }return 0;
 }
 static int prefix(const char *s,const char *p){
- size_t i;for(i=0;p[i];i++)if(tolower((unsigned char)s[i])!=tolower((unsigned char)p[i]))return 0;
+ size_t i;for(i=0;p[i];i++)if(!s[i]||tolower((unsigned char)s[i])!=tolower((unsigned char)p[i]))return 0;
  return 1;
 }
 static void trim_subject(const char *s,char *dst,size_t cap){
