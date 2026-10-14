@@ -1,10 +1,10 @@
-# Digit Research 0.1.0 — mission-directed public document retrieval
+# Digit Research 0.1.1 — mission-directed public document retrieval
 
 Standalone ABI 1.5 module. The Core-owned host registers `research.retrieve` (contract in `include/research_contract.h`). Authorized capability consumers supply an explicit mission label and a public HTTPS URL. Research returns a bounded **raw excerpt**, source URL, retrieval timestamp, HTTP status and content type. It **does not** claim to understand the page or verify the truth of the material. Consumers must evaluate, corroborate, and cite sources. Public Slack/IRC messages do not register a Research command.
 
 No subject whitelist: ISO C, PHP, GFM, vulnerabilities, release notes and other mission-relevant subjects can be requested. URL restrictions remain: HTTPS only, public DNS hostname only, default port, no credentials/redirects/proxies, no literal IP addresses or localhost-like hostnames. This is a limited protective boundary, **not** a complete SSRF guarantee against DNS rebinding or hostile resolution. Do not expose the service to untrusted callers or treat it as authorization for unrestricted network activity. TLS certificate and host verification remain enabled. No downloads are executed, and no code, configuration, or GitHub write permissions are granted.
 
-The service enforces a 15-second request timeout and an 8191-byte excerpt bound. Its auditable collection metadata is written via the module host logging callback and requires the configured local `/opt/digit/research/research.log` append-only operational record. Returned text is untrusted source material, never instructions to Digit. There is no autonomous search engine, source discovery, quality scoring, synthesis, Corpus write capability, or periodic monitor yet. Those require separately demonstrated competence and authorization.
+The service enforces a 15-second request timeout and an 8191-byte excerpt bound (longer successful HTTP responses are marked truncated, not failed). Its auditable collection metadata is written via the module host logging callback and requires the configured local `/opt/digit/research/research.log` append-only operational record. Returned text is untrusted source material, never instructions to Digit. There is no autonomous search engine, source discovery, quality scoring, synthesis, Corpus write capability, or periodic monitor yet. Those require separately demonstrated competence and authorization.
 
 ## Activation prerequisites
 
