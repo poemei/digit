@@ -21,7 +21,7 @@
 #define CONFIG_PATH "/opt/digit/auth/slack/slack.conf"
 #define RESPONSE_MAX 65536
 #define HISTORY_SIZE 64
-typedef struct {char workspace[64],app[512],bot[512],channel[64],operator[64];int enabled;} config_t;
+typedef struct {char workspace[64],app[512],bot[512],channel[64];int enabled;} config_t;
 typedef struct {char data[RESPONSE_MAX];size_t size;} response_t;
 typedef struct {char user[64],channel[64];digit_scoped_diagnostic_t previous;time_t seen;} history_t;
 static config_t cfg;
@@ -65,7 +65,6 @@ static int configuration(void){
   else if(!strcmp(key,"app_token"))ok=copy(found.app,sizeof found.app,value);
   else if(!strcmp(key,"bot_token"))ok=copy(found.bot,sizeof found.bot,value);
   else if(!strcmp(key,"intel_channel_id"))ok=copy(found.channel,sizeof found.channel,value);
-  else if(!strcmp(key,"operator_user_id"))ok=copy(found.operator,sizeof found.operator,value);
   else ok=0;
   if(!ok)break;
  }
@@ -272,7 +271,6 @@ static void process(struct json_object *root){
     digit_slack_seen_message(team,channel,message_ts))return;
  h=conversation(user,channel);
  ctx.magic=DIGIT_ASK_CONTEXT_MAGIC;
- ctx.intel_report_authorized=cfg.operator[0]&&!strcmp(user,cfg.operator);
  snprintf(ctx.question,sizeof ctx.question,"%s",text);
  if(h->previous.request_id[0]){
   ctx.has_previous=1;
