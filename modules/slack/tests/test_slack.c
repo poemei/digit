@@ -5,6 +5,7 @@ extern const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void);
 extern int digit_slack_format_reply(const char *,char *,size_t);
 extern const char *digit_slack_reply_thread(const char *);
 extern int digit_slack_seen_message(const char *,const char *,const char *);
+extern int digit_slack_is_intel_command(const char *);
 extern int digit_slack_admit_message(const char *,const char *,const char *,const char *);
 extern int digit_slack_addressed_text(const char *,const char *,const char *,const char *,char *,size_t);
 int main(void){
@@ -47,5 +48,7 @@ int main(void){
  if(!digit_slack_admit_message("EvD","T2","C3",NULL))return 30;
  if(digit_slack_admit_message("EvD","T2","C3",NULL))return 32;
  if(!digit_slack_admit_message("EvE","T2","C4","1800.0001"))return 31;
- puts("Slack channel routing and duplicate event admission: PASS");return 0;
+ if(!digit_slack_is_intel_command("report intel")||!digit_slack_is_intel_command("REPORT INTEL")||!digit_slack_is_intel_command("intel report"))return 33;
+ if(digit_slack_is_intel_command("report intel now")||digit_slack_is_intel_command("report")||digit_slack_is_intel_command(NULL))return 34;
+ puts("Slack routing, deduplication and Intel command identification: PASS");return 0;
 }
