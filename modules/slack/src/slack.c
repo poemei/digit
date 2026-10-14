@@ -21,7 +21,7 @@
 #define CONFIG_PATH "/opt/digit/auth/slack/slack.conf"
 #define RESPONSE_MAX 65536
 #define HISTORY_SIZE 64
-typedef struct {char workspace[64],app[512],bot[512],channel[64];int enabled;} config_t;
+typedef struct {char workspace[64],app[512],bot[512],channel[64],operator[64];int enabled;} config_t;
 typedef struct {char data[RESPONSE_MAX];size_t size;} response_t;
 typedef struct {char user[64],channel[64];digit_scoped_diagnostic_t previous;time_t seen;} history_t;
 static config_t cfg;
@@ -65,6 +65,7 @@ static int configuration(void){
   else if(!strcmp(key,"app_token"))ok=copy(found.app,sizeof found.app,value);
   else if(!strcmp(key,"bot_token"))ok=copy(found.bot,sizeof found.bot,value);
   else if(!strcmp(key,"intel_channel_id"))ok=copy(found.channel,sizeof found.channel,value);
+  else if(!strcmp(key,"operator_user_id"))ok=copy(found.operator,sizeof found.operator,value);
   else ok=0;
   if(!ok)break;
  }
@@ -255,7 +256,7 @@ static void process(struct json_object *root){
  const char *subtype=field(event,"subtype"),*bot=field(event,"bot_id");
  const char *ts=field(event,"thread_ts"),*message_ts=field(event,"ts");
  const char *kind=field(event,"channel_type"),*text=raw;
- int dm;char addressed[513]={0},answer[1024]={0};
+ int dm;char addressed[513]={0},answer[4096]={0};
  digit_router_request_t request={0};digit_ask_context_t ctx={0};
  history_t *h;size_t used=0;stnlabz_module_result_t status;
  if(!event||!type||!user||!channel||!raw||!team||
@@ -271,6 +272,7 @@ static void process(struct json_object *root){
     digit_slack_seen_message(team,channel,message_ts))return;
  h=conversation(user,channel);
  ctx.magic=DIGIT_ASK_CONTEXT_MAGIC;
+ ctx.intel_report_authorized=cfg.operator[0]&&!strcmp(user,cfg.operator);
  snprintf(ctx.question,sizeof ctx.question,"%s",text);
  if(h->previous.request_id[0]){
   ctx.has_previous=1;
@@ -296,7 +298,7 @@ static void process(struct json_object *root){
   log_status("[SLACK] Ask dispatch unavailable");
   return;
  }
- {char formatted[2048];
+ {char formatted[8192];
   if(!digit_slack_format_reply(answer,formatted,sizeof formatted)){
    log_status("[SLACK] Reply presentation failed");return;
   }
