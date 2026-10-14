@@ -11,12 +11,12 @@ int main(void){
  if(d->qualify(&q)!=STNLABZ_MODULE_OK||q.tests_executed<10||q.tests_failed||!q.negative_test_passed)return 3;
  if(d->start(NULL)!=STNLABZ_MODULE_ERR_INVALID_ARGUMENT)return 4;
  if(d->stop()!=STNLABZ_MODULE_ERR_INVALID_STATE)return 5;
- if(!digit_slack_format_reply("DSD SCOPED REPORT\\\\nRequest: slack-2\\\\nRoute: /ask\\\\nFinding: recorded only.",formatted,sizeof formatted)||
-     strcmp(formatted,"*DSD SCOPED REPORT*\\nRequest: slack-2\\nRoute: /ask\\nFinding: recorded only."))return 6;
+ if(!digit_slack_format_reply("DSD SCOPED REPORT\\nRequest: slack-2\\nRoute: /ask\\nFinding: recorded only.",formatted,sizeof formatted)||
+     strcmp(formatted,"*DSD SCOPED REPORT*\nRequest: slack-2\nRoute: /ask\nFinding: recorded only."))return 6;
  if(!digit_slack_format_reply("Hello. I'm Digit.",formatted,sizeof formatted)||
      strcmp(formatted,"Hello. I'm Digit."))return 7;
- if(digit_slack_format_reply("DSD SCOPED REPORT\\\\nRequest: slack-2",formatted,8))return 8;
- if(!digit_slack_format_reply("DSD SCOPED REPORT\\nRequest: x",formatted,sizeof formatted)||
-     strcmp(formatted,"*DSD SCOPED REPORT*\\nRequest: x"))return 9;
+ if(digit_slack_format_reply("DSD SCOPED REPORT\\nRequest: slack-2",formatted,8))return 8;
+ if(!digit_slack_format_reply("DSD SCOPED REPORT\nRequest: x",formatted,sizeof formatted)||
+     strcmp(formatted,"*DSD SCOPED REPORT*\nRequest: x"))return 9;
  puts("Slack descriptor, formatting and negative tests: PASS");return 0;
 }
