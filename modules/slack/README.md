@@ -27,3 +27,9 @@ Slack converts legacy escaped `\\n` line separators in Ask/DSD output into real 
 ## Intel outbound service — Slack 0.1.2 (awaiting acceptance)
 
 Registers `slack.intel.publish` under the existing module host ABI; accepts a bounded versioned intelligence report, posts it only to the configured intelligence channel, and returns Slack API success/failure. Does not grant Slack users Intel commands or Core authority. Existing Ask and DSD conversation behavior is intended to be preserved and must be regression-tested by the operator.
+
+## 0.1.6 operator test (pending acceptance)
+
+Conversation replies remain in the originating Slack channel, and only existing threads are continued. The module suppresses repeat events for the same workspace, channel and Slack source-message timestamp, in addition to duplicate event IDs. The suppression cache is in-process and bounded (128 messages); this does not prove exactly-once delivery after process restarts.
+
+For operator-only on-demand intelligence reports, add `operator_user_id=U...` to the existing private `/opt/digit/auth/slack/slack.conf`. Use the *actual Slack member ID* shown by Slack profile, not a display name. The option is intentionally optional: when absent, no user is authorized for the Intel report command. Never publish the full report to a private DM automatically; it replies in the channel where the authorized user requested it. Membership in that channel is the visibility boundary—request sensitive briefs only in suitable channels. Other conversation functions still work for channel members.
