@@ -38,3 +38,9 @@ Intel uses Core's existing ABI 1.5 service invocation to publish full reports th
 The audit line delimiter and investigation section lookup were corrected. **Historical-state file readability/schema remains subject to live verification**. Valid JSON through `sudo` does not prove the `digit` account can read these `0600` files; verify access and ownership without replacing existing records. Absence of an investigation summary is now identified as unavailable in IRC, rather than claiming zero active cases.
 
 Build all three changed modules with `make -C modules/{intel,slack,irc} clean all test` (in a shell loop); do not deploy unless all builds and tests succeed. Versions: Intel 0.1.1, Slack 0.1.2, IRC 0.1.2. Separate acceptance required for changed transports.
+
+## Intel 0.1.2 — reporting control (pending acceptance)
+
+Collection continues every ~300 seconds and refreshes `/opt/digit/intel/latest-brief.md`. Routine *outbound* full briefs to Slack and concise IRC summaries are time-gated to no more than once every 12 hours per transport; timing is persisted in `/opt/digit/intel/delivery-state.txt` (private 0600) so restarting Digit does not replay routine briefs. This new delivery file must not replace or reset existing investigation evidence JSON.
+
+New investigation evidence/case changes may trigger a short Slack alert between briefs; the initial sample is treated as a baseline. The Core ABI service `intel.report.read` returns the latest stored bounded brief. Ask 0.1.8 exposes `report intel` only when the trusted Slack transport identifies the configured operator user. No collection command is exposed publicly. This is a read of the latest brief, not an unscheduled full collection.
