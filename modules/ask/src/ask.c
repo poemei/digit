@@ -21,7 +21,12 @@ static stnlabz_module_result_t research_answer(const char *subject,
  if(!strncasecmp(subject,"https://",8))url=subject;
  else if(!strcasecmp(subject,"PHP")||!strncasecmp(subject,"PHP ",4))
   url="https://www.php.net/releases/";
- if(!url)return STNLABZ_MODULE_ERR_NOT_FOUND;
+ if(!url){
+  const char *message="Research source discovery is not available for this topic yet. Supply a public HTTPS URL, or ask me to research PHP.";
+  if(strlen(message)+1>capacity)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+  strcpy(response,message);*used=strlen(message)+1;
+  return STNLABZ_MODULE_OK;
+ }
  if(strlen(url)>=sizeof query.url)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  found=calloc(1,sizeof *found);
  if(!found)return STNLABZ_MODULE_ERR_START_FAILED;
