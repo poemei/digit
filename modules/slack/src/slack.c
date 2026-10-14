@@ -208,16 +208,15 @@ static int diagnostic(const char *s){
  return !strcmp(s,"diagnose")||!strcmp(s,"diagnose my last request")||
         !strcmp(s,"diagnose last request");
 }
-/* Accept only explicit addressing in the configured intelligence channel.
+/* Accept only explicit addressing in workspace channels.
  * A Slack mention, plain bot name, or bot name plus colon qualifies.
  * Arbitrary channel chatter is not routed into Ask. */
 int digit_slack_addressed_text(const char *type,const char *channel,
- const char *configured,const char *bot,const char *raw,
+ const char *bot,const char *raw,
  char *output,size_t capacity){
  const char *text=raw;
  char mention[96];size_t length;
- if(!type||!channel||!configured||!bot||!raw||!output||
-    strcmp(channel,configured)||capacity<2)return 0;
+ if(!type||!channel||!*channel||!bot||!raw||!output||capacity<2)return 0;
  if(strcmp(type,"message")&&strcmp(type,"app_mention"))return 0;
  snprintf(mention,sizeof mention,"<@%s>",bot);
  if(!strncmp(text,mention,strlen(mention)))text+=strlen(mention);
@@ -248,7 +247,7 @@ static void process(struct json_object *root){
     strcmp(team,cfg.workspace)||subtype||bot||!strcmp(user,bot_id))return;
  dm=!strcmp(type,"message")&&kind&&!strcmp(kind,"im");
  if(!dm){
-  if(!bot_id[0]||!digit_slack_addressed_text(type,channel,cfg.channel,
+  if(!bot_id[0]||!digit_slack_addressed_text(type,channel,
                                                 bot_id,raw,addressed,sizeof addressed))return;
   text=addressed;
  }
@@ -389,7 +388,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"slack");
  snprintf(d.name,sizeof d.name,"Digit Slack Transport");
- d.version_major=0;d.version_minor=1;d.version_patch=3;
+ d.version_major=0;d.version_minor=1;d.version_patch=4;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
