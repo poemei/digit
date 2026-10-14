@@ -194,7 +194,7 @@ static stnlabz_module_result_t stop(void){
 }
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static const stnlabz_module_descriptor_t d={
-  "research","Digit Research",0,1,0,STNLABZ_MODULE_API_MAJOR,
+  "research","Digit Research",0,1,1,STNLABZ_MODULE_API_MAJOR,
   STNLABZ_MODULE_API_MINOR,qualify,start,stop};
  return &d;
 }
