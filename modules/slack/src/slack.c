@@ -267,7 +267,7 @@ int digit_slack_addressed_text(const char *type,const char *channel,
 /* Operator-only read from Intel's independently registered ABI service.
  * Authentication is performed at the authenticated Slack transport boundary,
  * never encoded in shared Ask/Core request contexts. */
-static int is_intel_command(const char *text){
+int digit_slack_is_intel_command(const char *text){
  return text&&(!strcasecmp(text,"report intel")||!strcasecmp(text,"intel report"));
 }
 static void reply_intel(const char *user,const char *channel,const char *thread){
@@ -313,7 +313,7 @@ static void process(struct json_object *root){
  while(*text&&isspace((unsigned char)*text))text++;
  if(!*text||strlen(text)>512||strchr(text,'\r')||strchr(text,'\n')||
     !digit_slack_admit_message(event_id,team,channel,message_ts))return;
- if(is_intel_command(text)){
+ if(digit_slack_is_intel_command(text)){
   reply_intel(user,channel,digit_slack_reply_thread(ts));return;
  }
  h=conversation(user,channel);
