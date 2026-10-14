@@ -20,10 +20,10 @@ This log distinguishes committed source, operator-observed runtime behavior, and
 - Operator demonstrated `help` followed by `diagnose my last request` from `STN_Boss`, then repeated as `PoeMei`, with distinct reported request identifiers. Explicitly accepted.
 - Accepted transport behavior does not claim resistance to nickname impersonation.
 
-### Corpus 0.1.3 — SOURCE COMMITTED; ACCEPTANCE NOT RECORDED
+### Corpus 0.1.3 — OPERATOR ACCEPTED (2026-10-13)
 - Introduced native-console `learn CATEGORY | SOURCE | TEXT` for append-only `corpus.tsv` records; not exposed as a public write service.
 - Public IRC/Windows `/ask` does not provide the CLI command. Source checks `local-console`/ `local` metadata; this is not independent operator authentication.
-- No explicit operator end-to-end acceptance of this revision is recorded in the available conversation. Preserve its testing gate.
+- The operator explicitly accepted Corpus 0.1.3 on 2026-10-13. Specific CLI append/readback and negative-interface test logs were not furnished here; acceptance is recorded without inventing test evidence.
 
 ## Record of evidence
 Operator-provided IRC transcripts constitute observed client behavior for the stated scenarios, not a full automated test-suite report or a claim about every possible input. These notes do not authorize new development.
