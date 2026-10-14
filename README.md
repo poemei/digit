@@ -6,7 +6,7 @@ The existing [stnlabz/digit](https://github.com/stnlabz/digit) repository is the
 
 ## Agent version
 
-**Digit 1.0.0** is the operator-designated unified agent version, without an RC suffix. Core owns `DIGIT_VERSION_STRING` in `include/digit_version.h`, independent of module ABI and individual module versions. The native console shows the version on startup and through `version` or `/version`. Public conversational clients (IRC and Windows GUI) can ask `version` or `what version are you?`; Ask 0.1.6 reads `core.version.read`, so the answer comes from the running Core binary. Deployment and operator acceptance of this version-reporting change remain unverified.
+**Digit 1.0.0** is the operator-designated unified agent version, without an RC suffix. Core owns `DIGIT_VERSION_STRING` in `include/digit_version.h`, independent of module ABI and individual module versions. The native console shows the version on startup and through `version` or `/version`. Public conversational clients (IRC and Windows GUI) can ask `version` or `what version are you?`; Ask 0.1.6 reads `core.version.read`, so the answer comes from the running Core binary. **Operator accepted 2026-10-13:** native-console `version?` returned `Digit 1.0.0`; in `#stn-labz`, `STN_Boss` sent `digit-bot: version?` and Digit replied `Digit 1.0.0`. These two observed client behaviors complete acceptance of agent-level version reporting. Windows GUI reporting was not separately demonstrated.
 
 ## Current operational milestones — 2026-10-13
 
