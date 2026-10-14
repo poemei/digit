@@ -23,3 +23,7 @@ No Core or Router changes. Intel collection, investigation, scheduled alerts, Sl
 ## Revision 0.1.1 — Slack response presentation
 
 Slack converts legacy escaped `\\n` line separators in Ask/DSD output into real newlines and emphasizes the DSD report heading using Slack mrkdwn. Plain conversational responses remain unchanged. The formatter is bounded and regression-tested for DSD reports, plain messages, native line breaks, and undersized buffers. No DSD, Core, Router, Intel, or authorization changes. Live Slack validation and explicit acceptance remain pending.
+
+## Intel outbound service — Slack 0.1.2 (awaiting acceptance)
+
+Registers `slack.intel.publish` under the existing module host ABI; accepts a bounded versioned intelligence report, posts it only to the configured intelligence channel, and returns Slack API success/failure. Does not grant Slack users Intel commands or Core authority. Existing Ask and DSD conversation behavior is intended to be preserved and must be regression-tested by the operator.
