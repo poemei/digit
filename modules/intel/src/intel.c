@@ -910,11 +910,20 @@ static int deliver(const char *service,const char *message){
 static void brief_irc(const digit_intel_result_t *r,char *out,size_t capacity){
  const char *p=strstr(r->report,"Investigations:");
  size_t cases=0,opened=0,added=0;
- if(p)(void)sscanf(p,"Investigations: %zu active; %zu opened; %zu distinct evidence IDs added",&cases,&opened,&added);
- (void)snprintf(out,capacity,"Digit Intel: %zu active cases; %zu new cases; %zu new evidence IDs; sources %u OK/%u failed. Full brief in Slack #intel.",
-                cases,opened,added,r->sources_ok,r->sources_failed);
+ if(p&&sscanf(p,"Investigations: %zu active; %zu opened; %zu distinct evidence IDs added",&cases,&opened,&added)==3)
+  (void)snprintf(out,capacity,"Digit Intel: %zu active cases; %zu new cases; %zu new evidence IDs; sources %u OK/%u failed. Full brief in Slack #intel.",
+                 cases,opened,added,r->sources_ok,r->sources_failed);
+ else
+  (void)snprintf(out,capacity,"Digit Intel: investigation state UNAVAILABLE; sources %u OK/%u failed. Review local collection report.",r->sources_ok,r->sources_failed);
+}
+static uint64_t report_fingerprint(const char *p){
+ uint64_t h=UINT64_C(14695981039346656037);
+ while(*p){h^=(unsigned char)*p++;h*=UINT64_C(1099511628211);}
+ return h;
 }
 static void *collector_main(void *unused){
+ uint64_t last_slack=0,last_irc=0;
+ time_t last_slack_at=0,last_irc_at=0;
  (void)unused;
  while(!atomic_load(&stopping)){
   digit_intel_request_t request={0};
@@ -932,14 +941,23 @@ static void *collector_main(void *unused){
     (void)owner->send_message("[INTEL] Intelligence report persistence failed");
    if(persisted){
     char summary[440];
-    int slack_ok,irc_ok;
+    int slack_ok=1,irc_ok=1;
+    uint64_t slack_hash=report_fingerprint(result.report),irc_hash;
+    time_t now=time(NULL);
     brief_irc(&result,summary,sizeof summary);
-    slack_ok=deliver(DIGIT_INTEL_SLACK_SERVICE,result.report);
-    irc_ok=deliver(DIGIT_INTEL_IRC_SERVICE,summary);
-    if(!audit_line(slack_ok?"SLACK_DELIVERED":"SLACK_FAILED",result.sources_ok,result.sources_failed)&&owner&&owner->send_message)
-     (void)owner->send_message("[INTEL] Slack audit failure");
-    if(!audit_line(irc_ok?"IRC_QUEUED":"IRC_FAILED",result.sources_ok,result.sources_failed)&&owner&&owner->send_message)
-     (void)owner->send_message("[INTEL] IRC audit failure");
+    irc_hash=report_fingerprint(summary);
+    if(slack_hash!=last_slack||now-last_slack_at>=21600){
+     slack_ok=deliver(DIGIT_INTEL_SLACK_SERVICE,result.report);
+     if(slack_ok){last_slack=slack_hash;last_slack_at=now;}
+     if(!audit_line(slack_ok?"SLACK_DELIVERED":"SLACK_FAILED",result.sources_ok,result.sources_failed)&&owner&&owner->send_message)
+      (void)owner->send_message("[INTEL] Slack audit failure");
+    }
+    if(irc_hash!=last_irc||now-last_irc_at>=21600){
+     irc_ok=deliver(DIGIT_INTEL_IRC_SERVICE,summary);
+     if(irc_ok){last_irc=irc_hash;last_irc_at=now;}
+     if(!audit_line(irc_ok?"IRC_QUEUED":"IRC_FAILED",result.sources_ok,result.sources_failed)&&owner&&owner->send_message)
+      (void)owner->send_message("[INTEL] IRC audit failure");
+    }
    }
   }else{
    (void)audit_line("COLLECTION_FAILED",0,0);
