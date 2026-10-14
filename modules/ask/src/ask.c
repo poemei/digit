@@ -24,6 +24,20 @@ static stnlabz_module_result_t answer(const void *request,size_t length,
     !strcasecmp(s,"hello digit")||!strcasecmp(s,"hi digit")||
     !strcasecmp(s,"hello digit!")||!strcasecmp(s,"hi digit!"))
   reply="Hello. I'm Digit. What would you like to discuss?";
+ else if(!strcasecmp(s,"version")||!strcasecmp(s,"version?")||
+         !strcasecmp(s,"what version are you?")||
+         !strcasecmp(s,"what is your version?")||
+         !strcasecmp(s,"digit version")){
+  const char empty=0;char version[32]={0};size_t n=0;int formatted;
+  if(!host||!host->invoke_service)return STNLABZ_MODULE_ERR_NOT_FOUND;
+  if(host->invoke_service("core.version.read",&empty,sizeof empty,
+      version,sizeof version,&n)!=STNLABZ_MODULE_OK||
+      n<2||n>sizeof version||!memchr(version,0,n))
+   return STNLABZ_MODULE_ERR_NOT_FOUND;
+  formatted=snprintf(out,capacity,"Digit %s",version);
+  if(formatted<0||(size_t)formatted>=capacity)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+  *used=(size_t)formatted+1;return STNLABZ_MODULE_OK;
+ }
  else if(!strcasecmp(s,"who are you?")||!strcasecmp(s,"who are you")||
          !strcasecmp(s,"what is your name?")||!strcasecmp(s,"what are you?")){
   const char empty=0;size_t n=0;
@@ -142,7 +156,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
- d.version_major=0;d.version_minor=1;d.version_patch=5;
+ d.version_major=0;d.version_minor=1;d.version_patch=6;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
