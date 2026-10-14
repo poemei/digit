@@ -48,3 +48,7 @@ New investigation evidence/case changes may trigger a short Slack alert between 
 ## Architecture repair note (2026-10-14)
 
 Intel remains an independent collection and reporting module. Its local `intel.report.read` service is a module-published read-only capability, not a Core-specific modification. The prior Ask-level on-demand report integration was withdrawn to restore the original shared Ask context ABI. Until a module-local route is separately qualified, `@Digit report intel` is **not** an accepted supported user command.
+
+## 0.1.3 — fresh on-demand reporting (operator testing pending)
+
+`intel.report.generate` is an independent Intel-owned ABI service using the existing versioned report request/response contract. Every invocation runs a new collection and analysis, independent of the twice-daily outbound publishing interval. Scheduled and on-demand collection are mutex-serialized to avoid concurrent investigation-state mutations; prior evidence is retained. The service returns a bounded fresh report without automatically publishing it to unrelated channels. Source availability and actual completion remain subject to runtime validation.
