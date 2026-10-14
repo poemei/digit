@@ -4,6 +4,7 @@
 #include "stnlabz_abi/module.h"
 #include "ask_context.h"
 #include "corpus_lookup.h"
+#include "interpretation.h"
 static const stnlabz_module_host_t *host;
 static stnlabz_module_result_t answer(const void *request,size_t length,
  void *response,size_t capacity,size_t *used,void *context){
@@ -80,8 +81,45 @@ static stnlabz_module_result_t answer(const void *request,size_t length,
     else {*used=(size_t)written+1;return STNLABZ_MODULE_OK;}
    }
   }
- }else
-  reply="I received your message. General language interpretation is not connected yet; I cannot give a grounded answer to that request.";
+ }else {
+  digit_interpret_request_t request_intent={0};
+  digit_interpret_response_t interpreted={0};
+  size_t result_used=0;
+  request_intent.version=DIGIT_INTERPRETATION_VERSION;
+  snprintf(request_intent.text,sizeof request_intent.text,"%s",s);
+  if(!host||!host->invoke_service||
+     host->invoke_service("interpretation.classify",&request_intent,sizeof request_intent,
+                          &interpreted,sizeof interpreted,&result_used)!=STNLABZ_MODULE_OK||
+     result_used!=sizeof interpreted||interpreted.version!=DIGIT_INTERPRETATION_VERSION)
+   reply="General language interpretation is unavailable.";
+  else if(interpreted.intent==DIGIT_INTENT_CAPABILITIES)
+   reply="I can answer greetings, identify myself using Core, retrieve factual records from Corpus, and report a scoped diagnosis of your previous request. Please ask about a specific subject.";
+  else if(interpreted.intent==DIGIT_INTENT_KNOWLEDGE){
+   digit_corpus_lookup_request_t query={0};
+   digit_corpus_lookup_response_t record={0};
+   size_t n=0;int written;
+   if(!memchr(interpreted.subject,0,sizeof interpreted.subject)||
+      !interpreted.subject[0])return STNLABZ_MODULE_ERR_INVALID_STATE;
+   snprintf(query.term,sizeof query.term,"%s",interpreted.subject);
+   if(host->invoke_service("corpus.lookup",&query,sizeof query,&record,sizeof record,&n)!=STNLABZ_MODULE_OK||
+      n!=sizeof record)
+    reply="Corpus service is unavailable.";
+   else if(!record.found)
+    reply="Corpus: no matching knowledge record.";
+   else if(!memchr(record.text,0,sizeof record.text)||
+           !memchr(record.id,0,sizeof record.id)||
+           !memchr(record.source,0,sizeof record.source))
+    return STNLABZ_MODULE_ERR_INVALID_STATE;
+   else {
+    written=snprintf(out,capacity,"%s [Corpus: %s; source: %s]",
+                      record.text,record.id,record.source);
+    if(written<0||(size_t)written>=capacity)
+     reply="Corpus record exceeds this interface's response limit.";
+    else {*used=(size_t)written+1;return STNLABZ_MODULE_OK;}
+   }
+  }else
+   reply="I cannot determine that request with sufficient confidence. Please specify the subject or ask what I can do.";
+ }
  if(strlen(reply)+1>capacity)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memcpy(out,reply,strlen(reply)+1);*used=strlen(reply)+1;
  return STNLABZ_MODULE_OK;
@@ -104,7 +142,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
- d.version_major=0;d.version_minor=1;d.version_patch=4;
+ d.version_major=0;d.version_minor=1;d.version_patch=5;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
