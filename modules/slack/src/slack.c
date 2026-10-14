@@ -88,7 +88,8 @@ static int success(struct json_object *o){
 }
 static size_t capture(char *bytes,size_t size,size_t count,void *ctx){
  response_t *r=ctx;size_t n;
- if(count&&size>SIZE_MAX/count)return 0;n=size*count;
+ if(count&&size>SIZE_MAX/count)return 0;
+ n=size*count;
  if(n>sizeof r->data-1-r->size)return 0;
  memcpy(r->data+r->size,bytes,n);r->size+=n;r->data[r->size]=0;return n;
 }
@@ -127,20 +128,20 @@ int digit_slack_format_reply(const char *input,char *output,size_t capacity){
  const char *prefix="DSD SCOPED REPORT";
  if(!input||!output||capacity<2)return 0;
  dsd=!strncmp(input,prefix,strlen(prefix))&&
-     (input[strlen(prefix)]==0||input[strlen(prefix)]=='\\\\'||input[strlen(prefix)]=='\\n');
+     (input[strlen(prefix)]==0||input[strlen(prefix)]=='\\'||input[strlen(prefix)]=='\n');
  if(dsd){
   if(capacity<3)return 0;
   output[j++]='*';
  }
  for(;input[i];i++){
   char ch=input[i];
-  if(ch=='\\\\'&&input[i+1]=='n'){ch='\\n';i++;}
-  else if(ch=='\\\\'&&input[i+1]=='r'){
-   ch='\\n';i++;
-   if(input[i+1]=='\\\\'&&input[i+2]=='n')i+=2;
-  }else if(ch=='\\r'){
-   ch='\\n';
-   if(input[i+1]=='\\n')i++;
+  if(ch=='\\'&&input[i+1]=='n'){ch='\n';i++;}
+  else if(ch=='\\'&&input[i+1]=='r'){
+   ch='\n';i++;
+   if(input[i+1]=='\\'&&input[i+2]=='n')i+=2;
+  }else if(ch=='\r'){
+   ch='\n';
+   if(input[i+1]=='\n')i++;
   }
   if(j+1>=capacity)return 0;
   output[j++]=ch;
@@ -160,7 +161,8 @@ static int send_reply(const char *channel,const char *thread,const char *message
  if(thread&&*thread)json_object_object_add(req,"thread_ts",json_object_new_string(thread));
  res=post("https://slack.com/api/chat.postMessage",cfg.bot,req);
  ok=success(res);
- if(res)json_object_put(res);json_object_put(req);
+ if(res)json_object_put(res);
+ json_object_put(req);
  return ok;
 }
 static history_t *conversation(const char *user,const char *channel){
