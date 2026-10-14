@@ -44,6 +44,7 @@ static const stnlabz_module_host_t *owner;
 static pthread_t collector;
 static atomic_int stopping;
 static int running;
+static pthread_mutex_t collection_lock=PTHREAD_MUTEX_INITIALIZER;
 static int is_private(const char *path){
  struct stat st;return path&&lstat(path,&st)==0&&S_ISREG(st.st_mode)&&st.st_nlink==1&&
    !(st.st_mode&077)&&(st.st_uid==0||st.st_uid==geteuid());
@@ -956,6 +957,16 @@ static unsigned long current_findings(const char *report){
                &active,&opened,&added)==3)return opened+added;
  return 0;
 }
+/* Serializes stateful intelligence collection between scheduled and
+ * on-demand requests; historical case/evidence updates are not reentrant. */
+static stnlabz_module_result_t run_collection(const void *request,size_t size,
+ void *output,size_t capacity,size_t *used){
+ stnlabz_module_result_t result;
+ pthread_mutex_lock(&collection_lock);
+ result=execute(request,size,output,capacity,used,NULL);
+ pthread_mutex_unlock(&collection_lock);
+ return result;
+}
 static void *collector_main(void *unused){
  time_t last_slack_at=0,last_irc_at=0;
  unsigned long prior_findings=0;
@@ -967,7 +978,7 @@ static void *collector_main(void *unused){
   size_t used=0;
   snprintf(request.command,sizeof request.command,"internal.collect");
   snprintf(request.actor,sizeof request.actor,"digit:intel");
-  if(execute(&request,sizeof request,&result,sizeof result,&used,NULL)==STNLABZ_MODULE_OK &&
+  if(run_collection(&request,sizeof request,&result,sizeof result,&used)==STNLABZ_MODULE_OK &&
      used==sizeof result){
    int persisted=publish_report(result.report);
    if(!audit_line(persisted?"REPORT_WRITTEN":"REPORT_FAILED",
@@ -1052,7 +1063,7 @@ static stnlabz_module_result_t generate_brief(const void *request,size_t size,
  if(!fresh)return STNLABZ_MODULE_ERR_START_FAILED;
  snprintf(collection.command,sizeof collection.command,"internal.collect");
  snprintf(collection.actor,sizeof collection.actor,"digit:intel:on-demand");
- result=execute(&collection,sizeof collection,fresh,sizeof *fresh,&produced,NULL);
+ result=run_collection(&collection,sizeof collection,fresh,sizeof *fresh,&produced);
  if(result!=STNLABZ_MODULE_OK||produced!=sizeof *fresh){
   free(fresh);return STNLABZ_MODULE_ERR_NOT_FOUND;
  }
