@@ -3,7 +3,24 @@
 **Repository:** `poemei/digit`  
 **Reference source:** [`stnlabz/digit`](https://github.com/stnlabz/digit)  
 **Current operator-directed operational architecture:** **Digit → Router → Module**; no Bootstrap in the production console path  
-**Status:** Native console and generic module-owned command routes implemented for operator verification, not accepted. Historical phase record: Phase 1 Core foundation qualification COMPLETE AND OPERATOR ACCEPTED at revision `bee0d22`; Phase 2 Router module 0.1.0 implemented under separate operator authorization, awaiting build/test acceptance. Bootstrap and later stages are not authorized.
+**Status:** See the 2026-10-13 accepted operational record below. Historical phase record: Phase 1 Core foundation qualification COMPLETE AND OPERATOR ACCEPTED at revision `bee0d22`; Phase 2 Router module 0.1.0 implemented under separate operator authorization, awaiting build/test acceptance. Bootstrap and later stages are not authorized.
+
+## Current verified operational record — 2026-10-13
+
+The phase narrative below retains historical qualification snapshots and is **not** the current installed-capability inventory. The following explicitly accepted milestones supersede older "future IRC" and "no capability implemented" descriptions where they conflict. A documented accepted scenario does not imply every planned phase exit gate is accepted.
+
+| Capability | Source version | Operator evidence and decision |
+| --- | --- | --- |
+| IRC per-sender conversation and DSD report framing | IRC 0.1.1 | **ACCEPTED** after STN_Boss/PoeMei scoped diagnostic transcripts, with multiline IRC reports |
+| Ask factual question to read-only Corpus | Ask 0.1.4 + Corpus 0.1.2 | **ACCEPTED** after a Corpus-backed organizational answer with record and source |
+| Interpretation service and Ask integration | Interpretation 0.1.0 + Ask 0.1.5 | **ACCEPTED** after varied capability and knowledge questions through IRC |
+| Native-console Corpus learning | Corpus 0.1.3 | **IMPLEMENTED / SOURCE COMMITTED**, but explicit end-to-end operator acceptance **NOT RECORDED** |
+
+**Demonstrated:** `what can you tell me?` and `what are your capabilities?` produce an accurate bounded capability description; `tell me about the Chaos Foundation`, `describe Sentinel`, and `describe the Chaos MVC` resolve through Corpus with record IDs and source attribution. This establishes useful supported phrasing families—not unrestricted semantic interpretation, unknown-intent coverage, factual validation of stored claims, or independent operator authentication.
+
+**Architecture and authority:** Digit Core → Router → Ask, with Ask calling read-only `interpretation.classify` and `corpus.lookup` services when needed. Router does not interpret, learn, or make capability decisions. IRC and Windows remain transport clients, not command-authority sources. `learn` is a native console command and no public write service is registered. Current local-console identity metadata is not a cryptographic gate.
+
+**Pending verification, without new authorization:** Corpus 0.1.3 CLI `learn` build, deployed append/readback and negative interface tests, plus explicit operator acceptance. Interpretation unknown/ambiguous-intent behavior and adversarial language inputs were not included in the accepted IRC transcripts. No unrequested refactor or phase progression is authorized by these notes.
 
 ## 1. Non-negotiable design rules
 
@@ -152,6 +169,8 @@ The operator authorized integration of the accepted MVC components into the runn
 
 ### Phase 6 — Thin transport interfaces
 
+**Operational update (2026-10-13):** IRC 0.1.1 was demonstrated and explicitly accepted for scoped diagnostics. The historical checklist below remains the original planning record; its "optional future adapter" wording is no longer an accurate current-state claim. Windows GUI existed for earlier Ask use, but this acceptance record is based on IRC demonstrations.
+
 - [ ] Establish a single transport-to-Router request contract and transport-agnostic result delivery.
 - [ ] Keep adapters limited to receiving/sending data and supplying independently verified transport identity/context.
 - [ ] Provide a minimal console path for acceptance testing.
@@ -198,7 +217,7 @@ For each candidate capability from `stnlabz/digit`:
 - Maintain explicit human authorization for changes, admission, and repair.
 - The old repository remains reference material; this repository is the authoritative rebuild.
 
-## 6. Current milestone
+## 6. Historical Core milestone
 
 **CURRENT: Phase 1 Core foundation qualification COMPLETE AND OPERATOR ACCEPTED.** The operator's accepted baseline is revision [`bee0d22`](https://github.com/poemei/digit/commit/bee0d2297889c14d7794ed533baa72fcbc14755c), **20 of 20 suites**, **1,410 of 1,410 assertions**, **0 failures**, and **0 suite/report errors**. Core started and stopped normally with zero modules. The operator's recorded session on 2026-10-13 ran from 02:43:30 to 02:43:33 UTC, with mandatory `logs/digit.log` evidence and explicit acceptance. The checklist above remains the original planned requirements; the controlling qualification outcome is this operator-accepted evidence. Core owns essential operational audit; detailed diagnostic trace/correlation belongs to a future DSD module. Generic ABI bypass, caller authentication and actual escalation notification delivery are tracked as future integration limits, not new Core qualification suites.  
 No Bootstrap, Router, Models, Views, or transport integration work is authorized by this roadmap alone. Work proceeds only under operator direction and after the applicable gate is met.
