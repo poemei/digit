@@ -45,3 +45,7 @@ An exact `report intel` or `intel report` message from the configured Slack oper
 ## Slack 0.1.10 — operator-directed removal of member-ID gate (testing pending)
 
 The `report intel` command no longer requires or checks `operator_user_id`. Slack accepts an addressed command received through its configured workspace's existing Socket Mode connection and reads Intel's latest brief through the existing `intel.report.read` module service. The response is delivered in the originating channel or DM; for threads, it remains in the existing thread. An obsolete `operator_user_id` entry in `slack.conf` is ignored, but not required. Channel membership determines who can see channel replies. This does not establish per-user access control; anyone able to address Digit in an accessible Slack conversation may request the brief. Earlier README instructions requiring a user ID are superseded by this revision. Core, Router, and Ask ABI are unchanged.
+
+## 0.1.12 — repeated operator requests (operator testing pending)
+
+Each distinct incoming Slack event containing `report intel` requests `intel.report.generate` and sends the fresh response back to the requesting conversation. Distinct Slack message timestamps are not subject to report cooldown; retries of the *same* original event remain deduplicated. Slack continues to have no operator member-ID requirement. This is not a guarantee of delivery during network outages or when Digit is stopped; failures must be reported, not represented as successful reports.
