@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include "intel.h"
 #include "intel_delivery.h"
+#include "intel_report.h"
 #include <pthread.h>
 #include <stdatomic.h>
 #define CONFIG_PATH "/opt/digit/auth/intel/intel.conf"
@@ -1017,6 +1018,22 @@ static void *collector_main(void *unused){
  }
  return NULL;
 }
+static stnlabz_module_result_t read_brief(const void *request,size_t size,
+ void *response,size_t capacity,size_t *used,void *ctx){
+ const digit_intel_report_request_t *req=request;
+ digit_intel_report_response_t out={0};FILE *fp;size_t n;
+ (void)ctx;
+ if(used)*used=0;
+ if(!req||size!=sizeof *req||req->version!=DIGIT_INTEL_REPORT_VERSION||
+    !response||capacity<sizeof out||!used)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ if(!is_private(INTEL_REPORT))return STNLABZ_MODULE_ERR_NOT_FOUND;
+ fp=fopen(INTEL_REPORT,"r");if(!fp)return STNLABZ_MODULE_ERR_NOT_FOUND;
+ n=fread(out.report,1,sizeof out.report-1,fp);
+ if(ferror(fp)){fclose(fp);return STNLABZ_MODULE_ERR_NOT_FOUND;}
+ fclose(fp);out.report[n]=0;out.version=DIGIT_INTEL_REPORT_VERSION;
+ memcpy(response,&out,sizeof out);*used=sizeof out;
+ return STNLABZ_MODULE_OK;
+}
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q){
  unsigned int passed=0;settings_t v={0};char text[32];
  if(!q)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
@@ -1036,12 +1053,17 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  return passed==10?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_QUALIFICATION;
 }
 static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
- if(running||!h||!h->send_message)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ if(running||!h||!h->send_message||!h->register_service||!h->unregister_service)
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  if(!parse_settings(CONFIG_PATH,&settings)||!settings.enabled||
     !secure_directory(INTEL_ROOT))return STNLABZ_MODULE_ERR_START_FAILED;
  if(curl_global_init(CURL_GLOBAL_DEFAULT)!=CURLE_OK)return STNLABZ_MODULE_ERR_START_FAILED;
  owner=h;atomic_store(&stopping,0);
+ if(!h->register_service(DIGIT_INTEL_REPORT_SERVICE,read_brief,NULL)){
+  owner=NULL;curl_global_cleanup();return STNLABZ_MODULE_ERR_START_FAILED;
+ }
  if(pthread_create(&collector,NULL,collector_main,NULL)){
+  (void)h->unregister_service(DIGIT_INTEL_REPORT_SERVICE,NULL);
   owner=NULL;curl_global_cleanup();return STNLABZ_MODULE_ERR_START_FAILED;
  }
  running=1;return STNLABZ_MODULE_OK;
@@ -1049,6 +1071,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
 static stnlabz_module_result_t stop(void){
  if(!running)return STNLABZ_MODULE_ERR_INVALID_STATE;
  atomic_store(&stopping,1);pthread_join(collector,NULL);
+ if(owner&&owner->unregister_service)(void)owner->unregister_service(DIGIT_INTEL_REPORT_SERVICE,NULL);
  running=0;owner=NULL;memset(&settings,0,sizeof settings);
  curl_global_cleanup();return STNLABZ_MODULE_OK;
 }
