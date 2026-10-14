@@ -30,3 +30,11 @@ The first revision **does not post to Slack or IRC**. Approved transport modules
 Build: `make -C modules/intel clean all test`. Install after tests: `sudo make -C modules/intel install`; restart only when authorized. Verify qualification, active runtime, and then collection log/report/state before operator acceptance. Network collection requires API reachability and read access to Rictus logs.
 
 No case deletion or autonomous enforcement. Human operator retains command authority.
+
+## Outbound delivery — revision 0.1.1 (awaiting acceptance)
+
+Intel uses Core's existing ABI 1.5 service invocation to publish full reports through `slack.intel.publish` and concise summaries through `irc.intel.publish`. No inbound intelligence commands, Core changes, or Router changes. Slack targets only its configured `intel_channel_id`; IRC targets its existing configured channel. Delivery attempts are appended to `collection.log`. IRC queued means accepted into the transport's volatile one-slot queue, **not confirmed on-channel delivery**. Failed deliveries are retried; unchanged successes are suppressed for six hours while the process stays active. A restart resets this in-memory deduplication, and no durable delivery outbox exists yet.
+
+The audit line delimiter and investigation section lookup were corrected. **Historical-state file readability/schema remains subject to live verification**. Valid JSON through `sudo` does not prove the `digit` account can read these `0600` files; verify access and ownership without replacing existing records. Absence of an investigation summary is now identified as unavailable in IRC, rather than claiming zero active cases.
+
+Build all three changed modules with `make -C modules/{intel,slack,irc} clean all test` (in a shell loop); do not deploy unless all builds and tests succeed. Versions: Intel 0.1.1, Slack 0.1.2, IRC 0.1.2. Separate acceptance required for changed transports.
