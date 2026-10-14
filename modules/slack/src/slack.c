@@ -22,7 +22,7 @@
 #define CONFIG_PATH "/opt/digit/auth/slack/slack.conf"
 #define RESPONSE_MAX 65536
 #define HISTORY_SIZE 64
-typedef struct {char workspace[64],app[512],bot[512],channel[64],operator_user[64];int enabled;} config_t;
+typedef struct {char workspace[64],app[512],bot[512],channel[64];int enabled;} config_t;
 typedef struct {char data[RESPONSE_MAX];size_t size;} response_t;
 typedef struct {char user[64],channel[64];digit_scoped_diagnostic_t previous;time_t seen;} history_t;
 static config_t cfg;
@@ -66,9 +66,7 @@ static int configuration(void){
   else if(!strcmp(key,"app_token"))ok=copy(found.app,sizeof found.app,value);
   else if(!strcmp(key,"bot_token"))ok=copy(found.bot,sizeof found.bot,value);
   else if(!strcmp(key,"intel_channel_id"))ok=copy(found.channel,sizeof found.channel,value);
-  else if(!strcmp(key,"operator_user_id")){ /* Legacy configuration remains accepted, but grants no authority. */
-   ok=copy(found.operator_user,sizeof found.operator_user,value);
-  }
+  else if(!strcmp(key,"operator_user_id")){ /* Ignored obsolete setting for compatibility. */ }
   else ok=0;
   if(!ok)break;
  }
@@ -264,21 +262,16 @@ int digit_slack_addressed_text(const char *type,const char *channel,
  memcpy(output,text,length+1);
  return 1;
 }
-/* Operator-only read from Intel's independently registered ABI service.
- * Authentication is performed at the authenticated Slack transport boundary,
- * never encoded in shared Ask/Core request contexts. */
+/* Read the stored Intel brief from the independently registered module service.
+ * Slack admits only addressed events from the configured workspace. */
 int digit_slack_is_intel_command(const char *text){
  return text&&(!strcasecmp(text,"report intel")||!strcasecmp(text,"intel report"));
 }
-static void reply_intel(const char *user,const char *channel,const char *thread){
+static void reply_intel(const char *channel,const char *thread){
  digit_intel_report_request_t req={DIGIT_INTEL_REPORT_VERSION};
  digit_intel_report_response_t *report;
  size_t used=0;stnlabz_module_result_t result;
  const char *message;
- if(!cfg.operator_user[0]||strcmp(user,cfg.operator_user)){
-  (void)send_reply(channel,thread,"Intel report access is restricted to the configured operator.");
-  return;
- }
  report=calloc(1,sizeof *report);
  if(!report){(void)send_reply(channel,thread,"Intel report temporarily unavailable.");return;}
  result=host->invoke_service(DIGIT_INTEL_REPORT_SERVICE,&req,sizeof req,
@@ -314,7 +307,7 @@ static void process(struct json_object *root){
  if(!*text||strlen(text)>512||strchr(text,'\r')||strchr(text,'\n')||
     !digit_slack_admit_message(event_id,team,channel,message_ts))return;
  if(digit_slack_is_intel_command(text)){
-  reply_intel(user,channel,digit_slack_reply_thread(ts));return;
+  reply_intel(channel,digit_slack_reply_thread(ts));return;
  }
  h=conversation(user,channel);
  ctx.magic=DIGIT_ASK_CONTEXT_MAGIC;
@@ -452,7 +445,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"slack");
  snprintf(d.name,sizeof d.name,"Digit Slack Transport");
- d.version_major=0;d.version_minor=1;d.version_patch=9;
+ d.version_major=0;d.version_minor=1;d.version_patch=10;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
