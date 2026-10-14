@@ -37,3 +37,7 @@ For operator-only on-demand intelligence reports, add `operator_user_id=U...` to
 ## Architecture repair note (2026-10-14)
 
 The temporary Intel-specific flag in the shared Ask context was reverted. Slack does not set or depend on it. The previously proposed `operator_user_id`-based on-demand Intel command is not operational or accepted; do not enable it as a means of Intel report authorization. Conversation message deduplication and existing channel replies remain separate behaviors pending live acceptance.
+
+## Slack 0.1.9 — on-demand Intel read (operator testing pending)
+
+An exact `report intel` or `intel report` message from the configured Slack operator is handled directly by Slack's conversational controller, invoking Intel's independently registered `intel.report.read` ABI service. This deliberately does **not** change Core, Router, shared Ask contexts, or Ask's existing greeting/research behavior. The operator identity is `operator_user_id=U...` in the private `/opt/digit/auth/slack/slack.conf`, checked against Slack's authenticated event user ID; without the configured ID, full-report requests are denied. The complete stored bounded Intel brief is returned to the originating Slack DM/channel (or the existing thread). Choose an appropriate channel because its members can read the report. Intel collection remains separate; this reads the latest persisted report. Test real Slack channel and DM delivery and denial from a different user before acceptance. No live deployment or build validation is claimed by these source commits.
