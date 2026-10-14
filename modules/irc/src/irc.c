@@ -282,18 +282,39 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  q->negative_test_executed=q->negative_test_passed=1;return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
- if(active||!h||!h->send_message||!h->register_service||!h->unregister_service)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ if(active||!h||!h->send_message||!h->register_service||!h->unregister_service)
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  host=h;
- if(!load_config()){notice("[IRC] Missing/invalid DIGIT_IRC_* configuration; not connecting");host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;}
+ if(!load_config()){
+  notice("[IRC] Missing/invalid DIGIT_IRC_* configuration; not connecting");
+  host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
+ }
+ pthread_mutex_lock(&intel_lock);
+ intel_has_pending=0;intel_pending[0]=0;
+ pthread_mutex_unlock(&intel_lock);
  atomic_store(&stopping,0);
- if(pthread_create(&worker,NULL,thread_main,NULL)!=0){host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;}
  memset(history,0,sizeof history);
- active=1;return STNLABZ_MODULE_OK;
+ active=1;
+ if(!host->register_service(DIGIT_INTEL_IRC_SERVICE,publish_intel,NULL)){
+  active=0;host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
+ }
+ if(pthread_create(&worker,NULL,thread_main,NULL)!=0){
+  (void)host->unregister_service(DIGIT_INTEL_IRC_SERVICE,NULL);
+  active=0;host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
+ }
+ return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t stop(void){
  if(!active)return STNLABZ_MODULE_ERR_INVALID_STATE;
- atomic_store(&stopping,1);pthread_join(worker,NULL);
- active=0;OPENSSL_cleanse(&config,sizeof config);host=NULL;return STNLABZ_MODULE_OK;
+ atomic_store(&stopping,1);
+ pthread_join(worker,NULL);
+ if(host&&host->unregister_service)
+  (void)host->unregister_service(DIGIT_INTEL_IRC_SERVICE,NULL);
+ pthread_mutex_lock(&intel_lock);
+ intel_has_pending=0;intel_pending[0]=0;
+ pthread_mutex_unlock(&intel_lock);
+ active=0;OPENSSL_cleanse(&config,sizeof config);host=NULL;
+ return STNLABZ_MODULE_OK;
 }
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
