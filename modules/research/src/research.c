@@ -81,19 +81,91 @@ static int config_ok(void){
  if(ferror(fp))valid=0;
  fclose(fp);return valid&&enabled;
 }
+/* Streaming HTML text extraction. The response remains a bounded, untrusted excerpt. */
+typedef struct {
+ digit_research_result_t *result;
+ int html,tag,entity,suppress,space;
+ char tagbuf[80],entitybuf[16];
+ size_t taglen,entitylen,used;
+} text_sink_t;
+static void append_text(text_sink_t *sink,unsigned char c){
+ char *out=sink->result->excerpt;
+ if(c=='\r'||c=='\n'||c=='\t')c=' ';
+ if(c<32||c>126)c=' ';
+ if(c==' '){
+  if(!sink->used||sink->space)return;
+  sink->space=1;
+ }else sink->space=0;
+ if(sink->used+1>=DIGIT_RESEARCH_EXCERPT_MAX){
+  sink->result->source_truncated=1;return;
+ }
+ out[sink->used++]=(char)c;
+ out[sink->used]=0;
+}
+static void flush_entity(text_sink_t *sink){
+ unsigned char c=0;
+ sink->entitybuf[sink->entitylen]=0;
+ if(!strcmp(sink->entitybuf,"amp"))c='&';
+ else if(!strcmp(sink->entitybuf,"lt"))c='<';
+ else if(!strcmp(sink->entitybuf,"gt"))c='>';
+ else if(!strcmp(sink->entitybuf,"quot"))c='"';
+ else if(!strcmp(sink->entitybuf,"apos")||!strcmp(sink->entitybuf,"#39"))c='\'';
+ else if(!strcmp(sink->entitybuf,"nbsp"))c=' ';
+ else if(sink->entitybuf[0]=='#'){
+  char *end=NULL;unsigned long value;
+  value=strtoul(sink->entitybuf+1,&end,10);
+  if(end&&!*end&&value>=32&&value<=126)c=(unsigned char)value;
+ }
+ if(c)append_text(sink,c);
+ else append_text(sink,' ');
+ sink->entity=0;sink->entitylen=0;
+}
+static void process_tag(text_sink_t *sink){
+ char *t=sink->tagbuf,*p=t;int closing=0;
+ size_t i;
+ t[sink->taglen]=0;
+ while(*p==' ')p++;
+ if(*p=='/'){closing=1;p++;}
+ for(i=0;p[i];i++)p[i]=(char)tolower((unsigned char)p[i]);
+ if(!strncmp(p,"script",6)&&(!p[6]||isspace((unsigned char)p[6])))sink->suppress=closing?0:1;
+ else if(!strncmp(p,"style",5)&&(!p[5]||isspace((unsigned char)p[5])))sink->suppress=closing?0:1;
+ else if(!strncmp(p,"head",4)&&(!p[4]||isspace((unsigned char)p[4])))sink->suppress=closing?0:1;
+ else if(!strncmp(p,"nav",3)&&(!p[3]||isspace((unsigned char)p[3])))sink->suppress=closing?0:1;
+ if(!sink->suppress&&(!strncmp(p,"p",1)&&(!p[1]||isspace((unsigned char)p[1]))||
+     !strncmp(p,"div",3)&&(!p[3]||isspace((unsigned char)p[3]))||
+     !strncmp(p,"li",2)&&(!p[2]||isspace((unsigned char)p[2]))||
+     !strncmp(p,"br",2)&&(!p[2]||isspace((unsigned char)p[2]))||
+     !strncmp(p,"h1",2)||!strncmp(p,"h2",2)||!strncmp(p,"h3",2)))
+  append_text(sink,' ');
+ sink->taglen=0;
+}
 static size_t receive(char *ptr,size_t size,size_t count,void *context){
- digit_research_result_t *r=context;size_t n,old;
+ text_sink_t *sink=context;
+ size_t i,n;
  if(count&&size>SIZE_MAX/count)return 0;
  n=size*count;
- old=strlen(r->excerpt);
- if(n>=sizeof r->excerpt-old){
-  size_t available=sizeof r->excerpt-old-1;
-  if(available){memcpy(r->excerpt+old,ptr,available);r->excerpt[old+available]=0;}
-  r->source_truncated=1;
-  return n;
+ for(i=0;i<n;i++){
+  unsigned char c=(unsigned char)ptr[i];
+  if(!sink->html){append_text(sink,c);continue;}
+  if(sink->tag){
+   if(c=='>'){process_tag(sink);sink->tag=0;}
+   else if(sink->taglen<sizeof sink->tagbuf-1)sink->tagbuf[sink->taglen++]=(char)c;
+   continue;
+  }
+  if(c=='<'){
+   if(sink->entity)flush_entity(sink);
+   sink->tag=1;sink->taglen=0;continue;
+  }
+  if(sink->suppress)continue;
+  if(sink->entity){
+   if(c==';'){flush_entity(sink);continue;}
+   if(sink->entitylen<sizeof sink->entitybuf-1&&
+       (isalnum(c)||c=='#')){sink->entitybuf[sink->entitylen++]=(char)c;continue;}
+   flush_entity(sink);
+  }
+  if(c=='&'){sink->entity=1;sink->entitylen=0;continue;}
+  append_text(sink,c);
  }
- memcpy(r->excerpt+old,ptr,n);
- r->excerpt[old+n]=0;
  return n;
 }
 static int audit(const char *mission,const char *url,int status,const char *outcome){
@@ -112,6 +184,7 @@ static stnlabz_module_result_t retrieve(const void *request,size_t length,
  void *response,size_t capacity,size_t *used,void *unused){
  const digit_research_request_t *req=request;
  digit_research_result_t result={0};
+ text_sink_t sink={0};
  CURL *curl=NULL;CURLcode rc;long http=0;char *type=NULL;
  time_t now=time(NULL);struct tm utc={0};
  int valid,logged;
@@ -135,11 +208,12 @@ static stnlabz_module_result_t retrieve(const void *request,size_t length,
  curl_easy_setopt(curl,CURLOPT_PROXY,"");
  curl_easy_setopt(curl,CURLOPT_SSL_VERIFYPEER,1L);
  curl_easy_setopt(curl,CURLOPT_SSL_VERIFYHOST,2L);
- curl_easy_setopt(curl,CURLOPT_USERAGENT,"Digit-Research/0.1.0");
+ curl_easy_setopt(curl,CURLOPT_USERAGENT,"Digit-Research/0.1.2");
  curl_easy_setopt(curl,CURLOPT_CONNECTTIMEOUT,6L);
  curl_easy_setopt(curl,CURLOPT_TIMEOUT,15L);
+ sink.result=&result;sink.html=1;
  curl_easy_setopt(curl,CURLOPT_WRITEFUNCTION,receive);
- curl_easy_setopt(curl,CURLOPT_WRITEDATA,&result);
+ curl_easy_setopt(curl,CURLOPT_WRITEDATA,&sink);
  rc=curl_easy_perform(curl);
  curl_easy_getinfo(curl,CURLINFO_RESPONSE_CODE,&http);
  curl_easy_getinfo(curl,CURLINFO_CONTENT_TYPE,&type);
@@ -194,7 +268,7 @@ static stnlabz_module_result_t stop(void){
 }
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static const stnlabz_module_descriptor_t d={
-  "research","Digit Research",0,1,1,STNLABZ_MODULE_API_MAJOR,
+  "research","Digit Research",0,1,2,STNLABZ_MODULE_API_MAJOR,
   STNLABZ_MODULE_API_MINOR,qualify,start,stop};
  return &d;
 }
