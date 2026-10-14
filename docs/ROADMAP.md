@@ -5,6 +5,10 @@
 **Current operator-directed operational architecture:** **Digit → Router → Module**; no Bootstrap in the production console path  
 **Status:** See the 2026-10-13 accepted operational record below. Historical phase record: Phase 1 Core foundation qualification COMPLETE AND OPERATOR ACCEPTED at revision `bee0d22`; Phase 2 Router module 0.1.0 implemented under separate operator authorization, awaiting build/test acceptance. Bootstrap and later stages are not authorized.
 
+## Agent-level release version — awaiting runtime verification
+
+**Digit 1.0.0** is the operator-designated stable agent version (no RC). Implementation adds a Core-owned version constant and read-only version service, native CLI display, and Ask 0.1.6 public version queries for IRC and Windows GUI. Module versions remain separate. GitHub source changes alone are not proof of deployment or acceptance. Confirm the compiled Core version and both client responses before recording end-to-end acceptance.
+
 ## Current verified operational record — 2026-10-13
 
 The phase narrative below retains historical qualification snapshots and is **not** the current installed-capability inventory. The following explicitly accepted milestones supersede older "future IRC" and "no capability implemented" descriptions where they conflict. A documented accepted scenario does not imply every planned phase exit gate is accepted.
