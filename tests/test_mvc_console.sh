@@ -10,7 +10,7 @@ expect(){
  count=$((count+1))
  if ! grep -F "$1" "$2" >/dev/null; then failed=$((failed+1)); printf 'FAIL console: %s\n' "$1"; fi
 }
-expect 'STN-LABZ Digit | interactive console' out.txt
+expect 'STN-LABZ Digit 1.0.0 | interactive console' out.txt
 expect 'Unknown command.' out.txt
 expect 'MODULE HOTLOAD_ACTIVE sequence=' logs/modules.log
 expect 'module=router' logs/modules.log
