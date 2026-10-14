@@ -274,12 +274,12 @@ static void reply_intel(const char *channel,const char *thread){
  const char *message;
  report=calloc(1,sizeof *report);
  if(!report){(void)send_reply(channel,thread,"Intel report temporarily unavailable.");return;}
- result=host->invoke_service(DIGIT_INTEL_REPORT_SERVICE,&req,sizeof req,
+ result=host->invoke_service("intel.report.generate",&req,sizeof req,
                               report,sizeof *report,&used);
  if(result!=STNLABZ_MODULE_OK||used!=sizeof *report||
     report->version!=DIGIT_INTEL_REPORT_VERSION||
     !memchr(report->report,0,sizeof report->report)||!report->report[0])
-  message="Intel report unavailable; no current stored brief was returned.";
+  message="Intel report generation failed; no current verified brief was returned.";
  else message=report->report;
  if(!send_reply(channel,thread,message)){
   /* Do not silently swallow an interactive Intel request when posting the
@@ -452,7 +452,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"slack");
  snprintf(d.name,sizeof d.name,"Digit Slack Transport");
- d.version_major=0;d.version_minor=1;d.version_patch=11;
+ d.version_major=0;d.version_minor=1;d.version_patch=12;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
