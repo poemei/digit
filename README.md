@@ -13,11 +13,11 @@ Digit follows **Core → Router → independent capability module**, with thin I
 | IRC transport | 0.1.1 | **ACCEPTED** — addressed conversation and per-sender/target scoped DSD with multiline output observed |
 | Ask + Corpus read path | Ask 0.1.4 / Corpus 0.1.2 | **ACCEPTED** — grounded `what is ...?` response with record ID and source |
 | Interpretation + Ask | Interpretation 0.1.0 / Ask 0.1.5 | **ACCEPTED** — capability questions and supported paraphrased Corpus inquiries over IRC |
-| Corpus CLI `learn` | Corpus 0.1.3 | Source committed; **operator acceptance not recorded** |
+| Corpus CLI `learn` | Corpus 0.1.3 | **OPERATOR ACCEPTED — 2026-10-13** |
 
 **Behavior:** Ask handles greetings, Core identity, scoped DSD follow-ups, and Corpus-backed factual requests; Interpretation 0.1.0 classifies bounded capability/knowledge intent. `what can you tell me?`, `what are your capabilities?`, `tell me about the Chaos Foundation`, and `describe Sentinel` were demonstrated through IRC. Source text is returned with Corpus identifier and provenance; language synthesis/rephrasing is not part of the accepted implementation. Interpretation remains lexical, **not** general language-model understanding. Unsupported or missing knowledge is not fabricated.
 
-**Corpus:** `/opt/digit/corpus/corpus.tsv` is the deployed `id<TAB>category<TAB>source<TAB>text` store; runtime records are not part of GitHub source. `corpus.lookup` is read-only. The separate CLI-only `learn CATEGORY | SOURCE | TEXT` code appends records, requires local-console context, and is **pending direct operator acceptance**. IRC/Windows GUI/public `/ask` do not expose learning. The current console-context check is not cryptographic user authentication.
+**Corpus:** `/opt/digit/corpus/corpus.tsv` is the deployed `id<TAB>category<TAB>source<TAB>text` store; runtime records are not part of GitHub source. `corpus.lookup` is read-only. The separate CLI-only `learn CATEGORY | SOURCE | TEXT` code appends records, requires local-console context, and is **operator accepted (2026-10-13)**. IRC/Windows GUI/public `/ask` do not expose learning. The current console-context check is not cryptographic user authentication.
 
 **Build modules individually:** `make -C modules/irc clean all test`, `make -C modules/corpus clean all test`, `make -C modules/interpretation clean all test`, and `make -C modules/ask clean all test`. Install each with `sudo make -C modules/<name> install` after checks, then restart the authorized Digit runtime. These commands are procedures, not claims of tests executed by this documentation update.
 
