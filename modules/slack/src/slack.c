@@ -65,6 +65,9 @@ static int configuration(void){
   else if(!strcmp(key,"app_token"))ok=copy(found.app,sizeof found.app,value);
   else if(!strcmp(key,"bot_token"))ok=copy(found.bot,sizeof found.bot,value);
   else if(!strcmp(key,"intel_channel_id"))ok=copy(found.channel,sizeof found.channel,value);
+  else if(!strcmp(key,"operator_user_id")){ /* Legacy configuration remains accepted, but grants no authority. */
+   char unused_user[64];ok=copy(unused_user,sizeof unused_user,value);erase(unused_user,sizeof unused_user);
+  }
   else ok=0;
   if(!ok)break;
  }
@@ -224,9 +227,12 @@ int digit_slack_seen_message(const char *workspace,const char *channel,const cha
  * may only pass once. Missing source identity fails closed. */
 int digit_slack_admit_message(const char *event_id,const char *workspace,
                              const char *channel,const char *message_ts){
- if(!event_id||!*event_id||!workspace||!*workspace||
-    !channel||!*channel||!message_ts||!*message_ts)return 0;
+ if(!event_id||!*event_id||!workspace||!*workspace||!channel||!*channel)return 0;
  if(seen(event_id))return 0;
+ /* Event identity is sufficient for delivery retries. A source timestamp,
+  * when supplied, additionally suppresses distinct event types for one
+  * message. Its absence must not silence an otherwise valid event. */
+ if(!message_ts||!*message_ts)return 1;
  return !digit_slack_seen_message(workspace,channel,message_ts);
 }
 static int diagnostic(const char *s){
@@ -415,7 +421,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"slack");
  snprintf(d.name,sizeof d.name,"Digit Slack Transport");
- d.version_major=0;d.version_minor=1;d.version_patch=7;
+ d.version_major=0;d.version_minor=1;d.version_patch=8;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
