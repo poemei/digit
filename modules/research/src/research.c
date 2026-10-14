@@ -86,7 +86,12 @@ static size_t receive(char *ptr,size_t size,size_t count,void *context){
  if(count&&size>SIZE_MAX/count)return 0;
  n=size*count;
  old=strlen(r->excerpt);
- if(n>=sizeof r->excerpt-old){r->source_truncated=1;return 0;}
+ if(n>=sizeof r->excerpt-old){
+  size_t available=sizeof r->excerpt-old-1;
+  if(available){memcpy(r->excerpt+old,ptr,available);r->excerpt[old+available]=0;}
+  r->source_truncated=1;
+  return n;
+ }
  memcpy(r->excerpt+old,ptr,n);
  r->excerpt[old+n]=0;
  return n;
@@ -141,7 +146,7 @@ static stnlabz_module_result_t retrieve(const void *request,size_t length,
  if(type)snprintf(result.content_type,sizeof result.content_type,"%s",type);
  result.http_status=(int)http;
  valid=rc==CURLE_OK&&http==200;
- logged=audit(req->mission,req->url,(int)http,valid?"RETRIEVED":
+ logged=audit(req->mission,req->url,(int)http,valid?(result.source_truncated?"RETRIEVED_TRUNCATED":"RETRIEVED"):
                  result.source_truncated?"SIZE_LIMIT":"RETRIEVAL_FAILED");
  curl_easy_cleanup(curl);
  pthread_mutex_unlock(&lock);
