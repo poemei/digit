@@ -1,0 +1,3 @@
+# Interpretation 0.1.0
+
+Independent ABI 1.5 interpretation classifier. It classifies capability inquiries and knowledge-lookup intent and extracts a subject from several phrasing families. The service `interpretation.classify` does not authorize actions, execute tools, write to Corpus, or fabricate knowledge. Unknown intent stays unknown. This is a **bounded lexical interpretation baseline**, not an LLM or general semantic reasoning engine. Capability answers are produced by Ask and explicitly limited to demonstrated read-only functions. Operator evaluation must cover untrained phrasings, negative requests, IRC and GUI. Build with `make -C modules/interpretation clean all test`.
