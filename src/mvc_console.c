@@ -10,6 +10,7 @@
 typedef struct {unsigned int contract_version;char text[2048];} console_dsd_alert_t;
 #include "mvc_console.h"
 #include "agent_root.h"
+#include "digit_version.h"
 #include "router.h"
 #include "core_activation.h"
 #include "core_discovery.h"
@@ -115,6 +116,16 @@ static stnlabz_module_result_t core_identity_service(const void *request,size_t 
  if(n<0||(size_t)n>=capacity)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  *used=(size_t)n+1;return STNLABZ_MODULE_OK;
 }
+/* Read-only Core version; callers receive the version of this running executable. */
+static stnlabz_module_result_t core_version_service(const void *request,size_t size,
+ void *response,size_t capacity,size_t *used,void *context){
+ const char *version=DIGIT_VERSION_STRING;
+ size_t n=sizeof(DIGIT_VERSION_STRING);
+ (void)context;
+ if(!request||size!=1||*(const char *)request!=0||!response||!used||capacity<n)
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ memcpy(response,version,n);*used=n;return STNLABZ_MODULE_OK;
+}
 static int module_message(const char *message){
  return message&&digit_log_event("MODULE","MESSAGE",message)&&digit_log_sync();
 }
@@ -153,7 +164,8 @@ int digit_mvc_console(void){
  stnlabz_module_registry_init(&registry);
  stnlabz_module_loader_init(&loader);
  digit_router_reset();command_count=0;service_count=0;
- if(!register_service("core.identity.read",core_identity_service,NULL))return 1;
+ if(!register_service("core.identity.read",core_identity_service,NULL)||
+    !register_service("core.version.read",core_version_service,NULL))return 1;
  if(!digit_log_open()){fputs("Digit: mandatory log unavailable\n",stderr);return 1;}
  if(!digit_log_event("CONSOLE","START","mode=local")||!digit_log_sync()){good=0;goto done;}
  if(!stnlabz_agent_root_validate(stnlabz_agent_root_identity())){
@@ -187,7 +199,7 @@ int digit_mvc_console(void){
   }
   router_active=1;
  }
- puts("STN-LABZ Digit | interactive console");
+ printf("STN-LABZ Digit %s | interactive console\\n",DIGIT_VERSION_STRING);
  puts("CORE AUTHORITY RULE:");
  puts(stnlabz_agent_root_identity()->core_modification_rule);
  puts("Module commands are registered on activation. /quit exits.");
@@ -220,6 +232,9 @@ int digit_mvc_console(void){
   }
   while(len&&(line[len-1]=='\n'||line[len-1]=='\r'))line[--len]=0;
   if(!strcmp(line,"/quit")||!strcmp(line,"quit"))break;
+  if(!strcmp(line,"version")||!strcmp(line,"/version")){
+   printf("Digit %s\\n",DIGIT_VERSION_STRING);fflush(stdout);continue;
+  }
   while(line[start]==' '||line[start]=='/')start++;
   while(line[start+j]&&line[start+j]!=' '&&j<sizeof word-1){word[j]=line[start+j];j++;}
   word[j]=0;
