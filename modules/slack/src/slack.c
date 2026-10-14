@@ -142,7 +142,7 @@ int digit_slack_format_reply(const char *input,char *output,size_t capacity){
    ch='\\n';
    if(input[i+1]=='\\n')i++;
   }
-  if(dsd&&i+1==strlen(prefix)&&j==strlen(prefix)+1){
+  if(dsd&&i==strlen(prefix)-1&&j==strlen(prefix)){
    if(j+1>=capacity)return 0;
    output[j++]='*';
   }
