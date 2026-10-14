@@ -119,6 +119,43 @@ done:
  if(r){erase(r,sizeof *r);free(r);}
  return result;
 }
+/* Transport-only Slack mrkdwn presentation; bounded and auditable.
+ * Translate DSD's legacy escaped line endings, preserving the evidence text. */
+int digit_slack_format_reply(const char *input,char *output,size_t capacity){
+ size_t i=0,j=0;
+ int dsd;
+ const char *prefix="DSD SCOPED REPORT";
+ if(!input||!output||capacity<2)return 0;
+ dsd=!strncmp(input,prefix,strlen(prefix))&&
+     (input[strlen(prefix)]==0||input[strlen(prefix)]=='\\\\'||input[strlen(prefix)]=='\\n');
+ if(dsd){
+  if(capacity<3)return 0;
+  output[j++]='*';
+ }
+ for(;input[i];i++){
+  char ch=input[i];
+  if(ch=='\\\\'&&input[i+1]=='n'){ch='\\n';i++;}
+  else if(ch=='\\\\'&&input[i+1]=='r'){
+   ch='\\n';i++;
+   if(input[i+1]=='\\\\'&&input[i+2]=='n')i+=2;
+  }else if(ch=='\\r'){
+   ch='\\n';
+   if(input[i+1]=='\\n')i++;
+  }
+  if(dsd&&i+1==strlen(prefix)&&j==strlen(prefix)+1){
+   if(j+1>=capacity)return 0;
+   output[j++]='*';
+  }
+  if(j+1>=capacity)return 0;
+  output[j++]=ch;
+ }
+ if(dsd&&j==strlen(prefix)+1){
+  if(j+1>=capacity)return 0;
+  output[j++]='*';
+ }
+ output[j]=0;
+ return 1;
+}
 static int send_reply(const char *channel,const char *thread,const char *message){
  struct json_object *req=json_object_new_object(),*res;int ok;
  if(!req||!channel||!message){if(req)json_object_put(req);return 0;}
@@ -204,7 +241,12 @@ static void process(struct json_object *root){
   log_status("[SLACK] Ask dispatch unavailable");
   return;
  }
- if(!send_reply(channel,ts?ts:event_ts,answer))log_status("[SLACK] Reply delivery failed");
+ {char formatted[2048];
+  if(!digit_slack_format_reply(answer,formatted,sizeof formatted)){
+   log_status("[SLACK] Reply presentation failed");return;
+  }
+  if(!send_reply(channel,ts?ts:event_ts,formatted))log_status("[SLACK] Reply delivery failed");
+ }
 }
 static int acknowledge(CURL *ws,const char *envelope){
  struct json_object *j=json_object_new_object();const char *txt;
@@ -301,7 +343,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"slack");
  snprintf(d.name,sizeof d.name,"Digit Slack Transport");
- d.version_major=0;d.version_minor=1;d.version_patch=0;
+ d.version_major=0;d.version_minor=1;d.version_patch=1;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
