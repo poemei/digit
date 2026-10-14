@@ -11,3 +11,7 @@ Install after Core is installed: sudo make -C modules/irc install
 Then restart Digit. Operator must supply config in systemd environment and perform end-to-end testing. Never put credentials in source control.
 
 Known: this first version is a transport foundation; no IRC-to-Ask integration or IRC service registration. Qualification is descriptor/smoke only; TLS/SASL/channel behavior requires integration tests. No accepted status is implied by source commits.
+
+## Intel outbound service — IRC 0.1.2 (awaiting acceptance)
+
+Registers `irc.intel.publish`. Queues one short bounded, single-line operational intelligence brief for the currently configured IRC channel. The IRC worker sends over its existing TLS/SASL connection. Queue acceptance is **not proof of on-channel delivery**; disconnect retries are transport-local until shutdown. A full queue rejects further submissions so Intel can retry. No inbound Intel commands are introduced.
