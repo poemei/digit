@@ -108,7 +108,7 @@ static int slack_learn_authorized(const digit_corpus_learn_request_t *r){
  while(fgets(line,sizeof line,fp)){
   char *v=strchr(line,'='),*end;
   if(!v)continue;*v++=0;
-  end=v+strlen(v);while(end>v&&(end[-1]=='\\n'||end[-1]=='\\r'))*--end=0;
+  end=v+strlen(v);while(end>v&&(end[-1]=='\n'||end[-1]=='\r'))*--end=0;
   if(!strcmp(line,"learn_operator_user_id")){
    if(!*v||strlen(v)>=sizeof user){valid=0;break;}strcpy(user,v);
   }else if(!strcmp(line,"learn_authorization_key")){
