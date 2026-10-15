@@ -194,7 +194,8 @@ static int addressed_irc_text(const char *raw,const char *nick,char *out,size_t 
          !irc_name_char((unsigned char)raw[5]))text=raw+5;
  if(text!=raw){
   while(*text&&(isspace((unsigned char)*text)||*text==':'||*text==','))text++;
-  if(!*text||(*text=='?'&&!text[1]))text=raw;
+  if(!*text)return 0;
+  if(*text=='?'&&!text[1])text=raw;
  }
  len=strlen(text);
  if(!len||len>=cap||len>512||strchr(text,'\r')||strchr(text,'\n'))return 0;
@@ -212,10 +213,13 @@ static void chat_message(SSL *tls,const char *line){
  if(!host||!host->invoke_service||line[0]!=':')return;
  sep=strstr(line," PRIVMSG ");if(!sep)return;
  prefix=line+1;while(prefix[n]&&prefix+n<sep&&prefix[n]!='!'&&n<sizeof sender-1)n++;
- if(!n||n>=sizeof sender||n==strlen(config.nick)&&!strncasecmp(prefix,config.nick,n))return;
+ if(!n||n>=sizeof sender||
+    (n==strlen(config.nick)&&!strncasecmp(prefix,config.nick,n)))return;
  memcpy(sender,prefix,n);
  body=sep+9;{const char *space=strchr(body,' ');size_t width;
-  if(!space)return;width=(size_t)(space-body);if(!width||width>=sizeof target)return;
+  if(!space)return;
+  width=(size_t)(space-body);
+  if(!width||width>=sizeof target)return;
   memcpy(target,body,width);target[width]=0;body=space+1;
  }
  if(*body==':')body++;
