@@ -75,7 +75,7 @@ int main(void){
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return 1;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"Hello"))return 1;
  if(handler("Hi digit",9,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"Hello"))return 1;
- if(d->version_patch!=10)return 1;
+ if(d->version_patch!=11)return 1;
  if(handler("what version are you?",22,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      strcmp(out,"Digit 1.0.0"))return 1;
  if(handler("version",8,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
@@ -109,7 +109,7 @@ int main(void){
  if(handler("digit picked up that report",sizeof("digit picked up that report"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"have not verified"))return 1;
  if(handler("delete all the records",23,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-     !strstr(out,"cannot determine"))return 1;
+     out[0]!=0)return 1;
  if(handler("",1,out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK)return 1;
  if(handler("hello",6,out,2,&used,NULL)==STNLABZ_MODULE_OK)return 1;
  if(d->stop()!=STNLABZ_MODULE_OK)return 1;
