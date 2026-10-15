@@ -262,27 +262,44 @@ static int diagnostic(const char *s){
 /* Accept only explicit addressing in workspace channels.
  * A Slack mention, plain bot name, or bot name plus colon qualifies.
  * Arbitrary channel chatter is not routed into Ask. */
+static int slack_name_char(unsigned char c){
+ return isalnum(c)||c=='_'||c=='-';
+}
+static int slack_mentions(const char *raw,const char *name){
+ size_t n;const char *p;
+ if(!raw||!name||!(n=strlen(name)))return 0;
+ for(p=raw;*p;p++){
+  if(p!=raw&&slack_name_char((unsigned char)p[-1]))continue;
+  if(!strncasecmp(p,name,n)&&!slack_name_char((unsigned char)p[n]))
+   return 1;
+ }
+ return 0;
+}
 int digit_slack_addressed_text(const char *type,const char *channel,
  const char *bot,const char *raw,
  char *output,size_t capacity){
  const char *text=raw;
- char mention[96];size_t length;
- if(!type||!channel||!*channel||!bot||!raw||!output||capacity<2)return 0;
+ char mention[96];size_t length,n;
+ if(!type||!channel||!*channel||!bot||!*bot||!raw||!output||capacity<2)return 0;
  if(strcmp(type,"message")&&strcmp(type,"app_mention"))return 0;
- snprintf(mention,sizeof mention,"<@%s>",bot);
- if(!strncmp(text,mention,strlen(mention)))text+=strlen(mention);
- else if(!strncasecmp(text,"digit-bot",9)&&
-         (text[9]==':'||isspace((unsigned char)text[9])))
-  text+=9;
- else if(!strncasecmp(text,"digit",5)&&
-         (text[5]==':'||isspace((unsigned char)text[5])))text+=5;
- else return 0;
- while(*text&&(isspace((unsigned char)*text)||*text==':'||*text==','))text++;
+ if(snprintf(mention,sizeof mention,"<@%s>",bot)>=(int)sizeof mention)return 0;
+ n=strlen(mention);
+ if(!strncasecmp(raw,mention,n))text=raw+n;
+ else if(!strncasecmp(raw,"digit-bot",9)&&!slack_name_char((unsigned char)raw[9]))text=raw+9;
+ else if(!strncasecmp(raw,"digit",5)&&!slack_name_char((unsigned char)raw[5]))text=raw+5;
+ else if(!strstr(raw,mention)&&!slack_mentions(raw,"digit-bot")&&
+         !slack_mentions(raw,"digit"))return 0;
+ if(text!=raw){
+  while(*text&&(isspace((unsigned char)*text)||*text==':'||*text==','))text++;
+  if(!*text)return 0;
+  if(*text=='?'&&!text[1])text=raw;
+ }
  length=strlen(text);
  if(!length||length>=capacity||length>512||strchr(text,'\n')||strchr(text,'\r'))return 0;
  memcpy(output,text,length+1);
  return 1;
 }
+
 /* Read the stored Intel brief from the independently registered module service.
  * Slack admits only addressed events from the configured workspace. */
 int digit_slack_is_intel_command(const char *text){
@@ -503,7 +520,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"slack");
  snprintf(d.name,sizeof d.name,"Digit Slack Transport");
- d.version_major=0;d.version_minor=1;d.version_patch=13;
+ d.version_major=0;d.version_minor=1;d.version_patch=14;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
