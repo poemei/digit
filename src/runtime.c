@@ -24,6 +24,8 @@ void digit_runtime_init(digit_runtime_t *runtime)
     runtime->operational_state = DIGIT_OPERATIONAL_NORMAL;
     runtime->preservation_cause = DIGIT_FAULT_SYSTEM;
     runtime->preservation_cause_set = 0;
+    runtime->module_poll = NULL;
+    runtime->module_poll_context = NULL;
     if (digit_log_is_open()) (void)digit_log_event("RUNTIME", "INITIALIZED", "state=normal");
 }
 int digit_runtime_report_fault(digit_runtime_t *runtime, digit_fault_t fault)
@@ -97,7 +99,8 @@ int digit_runtime_run(digit_runtime_t *runtime)
             (void)sigaction(SIGTERM, &previous_term, NULL);
             return 0;
         }
-        /* Core runs independently; qualified modules may attach in a later phase. */
+        if (digit_runtime_normal_operations_allowed(runtime) && runtime->module_poll)
+            runtime->module_poll(runtime->module_poll_context);
     }
     runtime->running = 0;
     (void)sigaction(SIGINT, &previous_int, NULL);
