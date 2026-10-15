@@ -22,7 +22,7 @@ static stnlabz_module_result_t record(const void *input,size_t length,void *out,
  size_t capacity,size_t *used,void *ctx){
  const digit_observation_t *m=input;
  struct json_object *j=NULL;
- const char *encoded;char stamp[32];
+ const char *encoded;char stamp[32];char line[4098];
  time_t now;struct tm utc;
  int fd=-1,ok=0;size_t n;int saved=0;
  (void)ctx;
@@ -50,14 +50,20 @@ static stnlabz_module_result_t record(const void *input,size_t length,void *out,
  json_object_object_add(j,"text",json_object_new_string(m->text));
  encoded=json_object_to_json_string_ext(j,JSON_C_TO_STRING_PLAIN);
  n=strlen(encoded);if(!n||n>4096)goto done;
+ memcpy(line,encoded,n);line[n++]='\n';
  pthread_mutex_lock(&write_lock);
  fd=open(STORE,O_WRONLY|O_APPEND|O_CREAT|O_NOFOLLOW|O_CLOEXEC,0600);
  if(fd>=0){
   struct stat st;
   if(fstat(fd,&st)==0&&S_ISREG(st.st_mode)&&st.st_nlink==1&&
      !(st.st_mode&077)&&st.st_uid==geteuid()){
-   /* Single append under module lock; never rewrite existing records. */
-   ok=write(fd,encoded,n)==(ssize_t)n&&write(fd,"\n",1)==1;
+   /* One append per JSONL line; roll back a partial tail under the lock. */
+   off_t before=lseek(fd,0,SEEK_END);
+   if(before>=0){
+    ssize_t written=write(fd,line,n);
+    if(written==(ssize_t)n)ok=1;
+    else if(written>=0)(void)ftruncate(fd,before);
+   }
   }
   close(fd);
  }
