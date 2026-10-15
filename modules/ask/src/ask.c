@@ -7,6 +7,8 @@
 #include "corpus_lookup.h"
 #include "interpretation.h"
 #include "research_contract.h"
+#include "observation.h"
+#include "reasoning.h"
 static const stnlabz_module_host_t *host;
 static stnlabz_module_result_t research_answer(const char *subject,
  void *response,size_t capacity,size_t *used){
@@ -61,6 +63,99 @@ static stnlabz_module_result_t research_answer(const char *subject,
  *used=(size_t)written+1;
  return STNLABZ_MODULE_OK;
 }
+/* Evidence-bound fallback for unsupported chat, never an inferred command.
+   Mention admission alone is not a reason to speak. */
+static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
+ const char *message,void *output,size_t capacity,size_t *used){
+ digit_observation_recent_request_t oq={0};
+ digit_observation_recent_response_t *history=NULL;
+ digit_reasoning_request_t *rq=NULL;
+ digit_reasoning_response_t *rr=NULL;
+ digit_corpus_lookup_request_t cq={0};
+ digit_corpus_lookup_response_t *cr=NULL;
+ size_t n=0,i,source_n=0;
+ char *out=output;
+ int result=0,corpus_ok=0;
+ if(!ctx||!ctx->transport[0]||!ctx->channel[0]||
+    !ctx->sender[0]||!host||!host->invoke_service){
+  out[0]=0;*used=1;return STNLABZ_MODULE_OK;
+ }
+ if((strcmp(ctx->transport,"irc")&&strcmp(ctx->transport,"slack"))||
+    (ctx->transport[0]=='i'&&ctx->channel[0]!='#')){
+  out[0]=0;*used=1;return STNLABZ_MODULE_OK;
+ }
+ history=calloc(1,sizeof *history);
+ rq=calloc(1,sizeof *rq);
+ rr=calloc(1,sizeof *rr);
+ cr=calloc(1,sizeof *cr);
+ if(!history||!rq||!rr||!cr)goto done;
+ oq.version=DIGIT_OBSERVATION_READ_VERSION;
+ snprintf(oq.transport,sizeof oq.transport,"%s",ctx->transport);
+ snprintf(oq.channel,sizeof oq.channel,"%s",ctx->channel);
+ oq.limit=DIGIT_OBSERVATION_RECENT_MAX;
+ rq->version=DIGIT_REASONING_VERSION;
+ snprintf(rq->message,sizeof rq->message,"%s",message);
+ snprintf(rq->transport,sizeof rq->transport,"%s",ctx->transport);
+ snprintf(rq->channel,sizeof rq->channel,"%s",ctx->channel);
+ snprintf(rq->sender,sizeof rq->sender,"%s",ctx->sender);
+ if(host->invoke_service(DIGIT_OBSERVATION_READ_SERVICE,&oq,sizeof oq,
+                          history,sizeof *history,&n)==STNLABZ_MODULE_OK&&
+    n==sizeof *history&&history->version==DIGIT_OBSERVATION_READ_VERSION&&
+    history->count<=DIGIT_OBSERVATION_RECENT_MAX){
+  rq->observation_state=history->count?DIGIT_REASONING_PRESENT:DIGIT_REASONING_EMPTY;
+  for(i=0;i<history->count;i++){
+   /* The current message is not independent historical corroboration. */
+   if(!strcmp(history->items[i].sender,ctx->sender)&&
+      !strcmp(history->items[i].text,message))continue;
+   if(rq->observation_count>=DIGIT_REASONING_ITEMS)break;
+   snprintf(rq->observations[rq->observation_count].sender,
+       sizeof rq->observations[0].sender,"%s",history->items[i].sender);
+   snprintf(rq->observations[rq->observation_count].event_id,
+       sizeof rq->observations[0].event_id,"%s",history->items[i].event_id);
+   snprintf(rq->observations[rq->observation_count].text,
+       sizeof rq->observations[0].text,"%s",history->items[i].text);
+   rq->observation_count++;
+  }
+ }else rq->observation_state=DIGIT_REASONING_UNAVAILABLE;
+ /* Search the actual message; no lexicon-derived subject or fabricated claim. */
+ snprintf(cq.term,sizeof cq.term,"%.*s",(int)(sizeof cq.term-1),message);
+ if(host->invoke_service("corpus.lookup",&cq,sizeof cq,cr,sizeof *cr,&n)==STNLABZ_MODULE_OK&&
+    n==sizeof *cr){
+  corpus_ok=1;
+  rq->corpus_state=cr->found?DIGIT_REASONING_PRESENT:DIGIT_REASONING_EMPTY;
+  if(cr->found&&memchr(cr->id,0,sizeof cr->id)&&
+     memchr(cr->source,0,sizeof cr->source)&&memchr(cr->text,0,sizeof cr->text)){
+   snprintf(rq->corpus_id,sizeof rq->corpus_id,"%s",cr->id);
+   snprintf(rq->corpus_source,sizeof rq->corpus_source,"%s",cr->source);
+   snprintf(rq->corpus_text,sizeof rq->corpus_text,"%s",cr->text);
+  }else if(cr->found)rq->corpus_state=DIGIT_REASONING_UNAVAILABLE;
+ }else rq->corpus_state=DIGIT_REASONING_UNAVAILABLE;
+ if(host->invoke_service(DIGIT_REASONING_SERVICE,rq,sizeof *rq,
+         rr,sizeof *rr,&n)!=STNLABZ_MODULE_OK||
+    n!=sizeof *rr||rr->version!=DIGIT_REASONING_VERSION)goto done;
+ /* Explicit question punctuation is a protocol-level request signal, not
+    an intent keyword table. An unaddressed statement may be irrelevant. */
+ if(strchr(message,'?')){
+  if(rr->knowledge==DIGIT_REASONING_CORPUS_SUPPORTED&&corpus_ok){
+   int w=snprintf(out,capacity,"%s [Corpus: %s; source: %s]",
+                    cr->text,cr->id,cr->source);
+   if(w>0&&(size_t)w<capacity){*used=(size_t)w+1;result=1;}
+  }else {
+   const char *explain=rr->knowledge==DIGIT_REASONING_EVIDENCE_UNAVAILABLE?
+     "I do not know; Corpus evidence is unavailable.":
+     "I do not know; I found no supporting Corpus record for that question.";
+   if(strlen(explain)<capacity){strcpy(out,explain);*used=strlen(explain)+1;result=1;}
+  }
+ }else {
+  /* Contextual word overlap does NOT establish conversational intent.
+     Without such evidence we must not interrupt. */
+  out[0]=0;*used=1;result=1;
+ }
+done:
+ free(history);free(rq);free(rr);free(cr);
+ return result?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_NOT_FOUND;
+}
+
 static stnlabz_module_result_t answer(const void *request,size_t length,
  void *response,size_t capacity,size_t *used,void *context){
  const char *s=request;char *out=response;const char *reply;
@@ -199,7 +294,7 @@ static stnlabz_module_result_t answer(const void *request,size_t length,
     else {*used=(size_t)written+1;return STNLABZ_MODULE_OK;}
    }
   }else
-   reply="I cannot determine that request with sufficient confidence. Please specify the subject or ask what I can do.";
+   return contextual_answer(c,s,response,capacity,used);
  }
  if(strlen(reply)+1>capacity)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memcpy(out,reply,strlen(reply)+1);*used=strlen(reply)+1;
@@ -223,7 +318,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
- d.version_major=0;d.version_minor=1;d.version_patch=10;
+ d.version_major=0;d.version_minor=1;d.version_patch=11;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
