@@ -5,6 +5,8 @@
 #include "corpus_lookup.h"
 #include "interpretation.h"
 #include "research_contract.h"
+#include "observation.h"
+#include "reasoning.h"
 extern const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void);
 static stnlabz_module_service_handler_fn handler;
 static int identity_calls;
@@ -23,6 +25,31 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
    v->intent=DIGIT_INTENT_KNOWLEDGE;strcpy(v->subject,"STN-Labz");
   }
   *used=sizeof *v;return STNLABZ_MODULE_OK;
+ }
+ if(!strcmp(name,DIGIT_OBSERVATION_READ_SERVICE)){
+  const digit_observation_recent_request_t *q=req;
+  digit_observation_recent_response_t *r=reply;
+  if(size!=sizeof *q||cap<sizeof *r||strcmp(q->transport,"irc")||
+     strcmp(q->channel,"#stn-labz"))return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+  memset(r,0,sizeof *r);r->version=DIGIT_OBSERVATION_READ_VERSION;r->count=1;
+  strcpy(r->items[0].event_id,"event-1");
+  strcpy(r->items[0].sender,"STN_Boss");
+  strcpy(r->items[0].text,"so I added a reasoning module for Digit");
+  *used=sizeof *r;return STNLABZ_MODULE_OK;
+ }
+ if(!strcmp(name,DIGIT_REASONING_SERVICE)){
+  const digit_reasoning_request_t *q=req;
+  digit_reasoning_response_t *r=reply;
+  if(size!=sizeof *q||cap<sizeof *r||strcmp(q->channel,"#stn-labz")||
+     strcmp(q->sender,"PoeMei")||q->observation_count!=1||
+     strcmp(q->observations[0].event_id,"event-1"))
+     return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+  memset(r,0,sizeof *r);r->version=DIGIT_REASONING_VERSION;
+  r->knowledge=q->corpus_state==DIGIT_REASONING_PRESENT?
+    DIGIT_REASONING_CORPUS_SUPPORTED:DIGIT_REASONING_UNKNOWN;
+  r->relevance=DIGIT_REASONING_CONTEXTUAL;r->matched_observations=1;
+  strcpy(r->observation_ids[0],"event-1");
+  *used=sizeof *r;return STNLABZ_MODULE_OK;
  }
  if(!strcmp(name,"core.version.read")){
   const char *version="1.0.0";
@@ -110,6 +137,19 @@ int main(void){
      !strstr(out,"have not verified"))return 1;
  if(handler("delete all the records",23,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      out[0]!=0)return 1;
+ {digit_ask_context_t context={0};context.magic=DIGIT_ASK_CONTEXT_MAGIC;
+  strcpy(context.transport,"irc");strcpy(context.channel,"#stn-labz");
+  strcpy(context.sender,"PoeMei");
+  strcpy(context.question,"I added a reasoning module for Digit, and expect a canned reply");
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     used!=1||out[0]!=0)return 1;
+  strcpy(context.question,"Can Digit explain a technology that Corpus doesn't contain?");
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     !strstr(out,"I do not know"))return 1;
+  strcpy(context.channel,"#other-channel");
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK)
+   return 1;
+ }
  if(handler("",1,out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK)return 1;
  if(handler("hello",6,out,2,&used,NULL)==STNLABZ_MODULE_OK)return 1;
  if(d->stop()!=STNLABZ_MODULE_OK)return 1;
