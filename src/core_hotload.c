@@ -341,7 +341,8 @@ static void discover_new(digit_hotload_t *w){
   (void)remember(w,id,sha,desc);
   snprintf(detail,sizeof detail,"module=%s version=%u.%u.%u candidate_sha256=%s reason=new_module_activated",
    id,desc->version_major,desc->version_minor,desc->version_patch,sha);
-  (void)digit_log_event("MODULE","HOTLOAD_ACTIVE",detail);
+  (void)log_report(w,"HOTLOAD_ACTIVE",id,NULL,desc,"none",sha,
+   "new_module_activated","module_active");
 rollback:
   if(!admitted){
    record=(stnlabz_module_record_t *)stnlabz_module_registry_find(w->registry,id);
