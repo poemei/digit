@@ -46,10 +46,17 @@ int main(void){
   return 9;
  if(!check_observation(":digit-bot!user@host PRIVMSG #digit :morning everyone",
    NULL,3))return 10;
- if(!check_observation(":alice!user@host PRIVMSG #digit :bad\rtext",NULL,3))
+ if(!check_observation(":alice!user@host PRIVMSG #digit :",NULL,3))
   return 11;
- if(!check_observation(":alice!user@host PRIVMSG #digit :bad\ntext",NULL,3))
-  return 12;
+ {
+  char overlong[640];
+  const char *prefix=":alice!user@host PRIVMSG #digit :";
+  size_t p=strlen(prefix);
+  memcpy(overlong,prefix,p);
+  memset(overlong+p,'x',513);
+  overlong[p+513]=0;
+  if(!check_observation(overlong,NULL,3))return 12;
+ }
  host=NULL;
  puts("IRC descriptor, negative, and observation regression tests: PASS");
  return 0;
