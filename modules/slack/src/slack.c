@@ -316,7 +316,7 @@ int digit_slack_is_intel_command(const char *text){
 /* A learning command is never sent through Ask or ordinary chatter. */
 int digit_slack_is_learn_command(const char *text){
  return text&&!strncasecmp(text,"learn",5)&&
-       (text[5]==' '||text[5]=='\\t'||text[5]==0);
+       (text[5]==' '||text[5]=='\t'||text[5]==0);
 }
 int digit_slack_learn_allowed(const char *channel,const char *user,
                               const char *kind){
