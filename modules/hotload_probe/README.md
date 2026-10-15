@@ -10,15 +10,16 @@ and STOP through Core's host callback.
 1. Build and install the 0.1.0 baseline:
    `make -C modules/hotload_probe clean all test PATCH=0`
    `sudo make -C modules/hotload_probe install PATCH=0`
-2. **Restart Digit once** to discover and activate this newly installed test
-   module. The current Core replacement mechanism does not automatically
-   admit modules which were not active at the start of the process.
+2. Keep Digit running. Core must discover, qualify, authorize and activate this
+   **newly installed** module automatically. Expect HOTLOAD_DETECTED and
+   HOTLOAD_ACTIVE for hotload_probe version 0.1.0 without restarting Core.
 3. While Digit remains running, build and install the 0.1.1 candidate:
    `make -C modules/hotload_probe clean all test PATCH=1`
    `sudo make -C modules/hotload_probe install PATCH=1`
 4. Check `/opt/digit/logs/modules.log` for HOTLOAD_DETECTED and HOTLOAD_ACTIVE
    with module=hotload_probe and versions 0.1.0 -> 0.1.1. Verify START 0.1.1
-   and STOP from the lifecycle logs. No Digit restart should occur in step 3.
+   and STOP from the lifecycle logs. Neither initial installation nor upgrade
+   should require restarting Digit.
 5. **Negative version test:** build and install 0.1.0 again while 0.1.1 is active:
    `make -C modules/hotload_probe clean all test PATCH=0`
    `sudo make -C modules/hotload_probe install PATCH=0`
