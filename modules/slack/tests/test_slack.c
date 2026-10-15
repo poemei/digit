@@ -12,7 +12,7 @@ extern int digit_slack_addressed_text(const char *,const char *,const char *,con
 int main(void){
  stnlabz_module_qualification_result_t q={0};char formatted[512];
  const stnlabz_module_descriptor_t *d=stnlabz_module_get_descriptor();
- if(!d||strcmp(d->id,"slack")||d->version_major!=0||d->version_minor!=1||d->version_patch!=13)return 1;
+ if(!d||strcmp(d->id,"slack")||d->version_major!=0||d->version_minor!=1||d->version_patch!=14)return 1;
  if(d->qualify(NULL)!=STNLABZ_MODULE_ERR_INVALID_ARGUMENT)return 2;
  if(d->qualify(&q)!=STNLABZ_MODULE_OK||q.tests_executed<10||q.tests_failed||!q.negative_test_passed)return 3;
  if(d->start(NULL)!=STNLABZ_MODULE_ERR_INVALID_ARGUMENT)return 4;
@@ -33,6 +33,24 @@ int main(void){
  if(digit_slack_addressed_text("message","C0INTEL","U123","digit-bot: research PHP",formatted,4))return 16;
  if(!digit_slack_addressed_text("app_mention","C0DEV","U123","<@U123> research PHP",formatted,sizeof formatted)||strcmp(formatted,"research PHP"))return 17;
  if(digit_slack_addressed_text("message","","U123","digit-bot: research PHP",formatted,sizeof formatted))return 18;
+ /* Natural addressing must not depend on name position. */
+ if(!digit_slack_addressed_text("message","C0INTEL","U123",
+    "so I think digit has her irc shit figured out?",formatted,sizeof formatted)||
+    strcmp(formatted,"so I think digit has her irc shit figured out?"))return 38;
+ if(!digit_slack_addressed_text("message","C0INTEL","U123",
+    "maybe not yur slack anymore digit?",formatted,sizeof formatted)||
+    strcmp(formatted,"maybe not yur slack anymore digit?"))return 39;
+ if(!digit_slack_addressed_text("message","C0INTEL","U123",
+    "umm digit?",formatted,sizeof formatted)||strcmp(formatted,"umm digit?"))return 40;
+ if(!digit_slack_addressed_text("message","C0INTEL","U123",
+    "hey <@U123> can you hear me?",formatted,sizeof formatted)||
+    strcmp(formatted,"hey <@U123> can you hear me?"))return 41;
+ if(digit_slack_addressed_text("message","C0INTEL","U123",
+    "digital photos are cool",formatted,sizeof formatted))return 42;
+ if(digit_slack_addressed_text("message","C0INTEL","U123",
+    "we need digitization",formatted,sizeof formatted))return 43;
+ if(!digit_slack_addressed_text("message","C0INTEL","U123",
+    "digit-bot?",formatted,sizeof formatted)||strcmp(formatted,"digit-bot?"))return 44;
  if(digit_slack_reply_thread(NULL)!=NULL)return 19;
  if(digit_slack_reply_thread("")!=NULL)return 20;
  if(!digit_slack_reply_thread("1728920000.000001")||strcmp(digit_slack_reply_thread("1728920000.000001"),"1728920000.000001"))return 21;
