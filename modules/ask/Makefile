@@ -12,7 +12,7 @@ $(TARGET): src/ask.c
 	$(CC) $(CFLAGS) -I$(ROOT)/include -I../observation/include -I../reasoning/include -shared src/ask.c -o $@
 bin/test_ask: tests/test_ask.c src/ask.c
 	mkdir -p bin
-	$(CC) $(CFLAGS) -I$(ROOT)/include tests/test_ask.c src/ask.c -o $@
+	$(CC) $(CFLAGS) -I$(ROOT)/include -I../observation/include -I../reasoning/include tests/test_ask.c src/ask.c -o $@
 test: $(TARGET) bin/test_ask
 	@./bin/test_ask
 install: $(TARGET)
