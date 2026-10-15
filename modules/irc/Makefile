@@ -12,7 +12,7 @@ $(TARGET): src/irc.c
 	$(CC) $(CFLAGS) -I$(ROOT)/include -shared src/irc.c -o $@ -lssl -lcrypto -lpthread
 bin/test_irc: tests/test_irc.c src/irc.c
 	mkdir -p bin
-	$(CC) $(CFLAGS) -I$(ROOT)/include tests/test_irc.c src/irc.c -o $@ -lssl -lcrypto -lpthread
+	$(CC) $(CFLAGS) -I$(ROOT)/include tests/test_irc.c -o $@ -lssl -lcrypto -lpthread
 test: $(TARGET) bin/test_irc
 	./bin/test_irc
 install: $(TARGET)
