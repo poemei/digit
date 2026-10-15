@@ -144,7 +144,7 @@ static void observe_irc(const char *line){
  memcpy(target,body,n);target[n]=0;
  if(strcasecmp(target,config.channel)||target[0]!='#')return;
  body=space+1;if(*body==':')body++;
- if(!*body||strlen(body)>512||strchr(body,'\\r')||strchr(body,'\\n'))return;
+ if(!*body||strlen(body)>512||strchr(body,'\r')||strchr(body,'\n'))return;
  m=calloc(1,sizeof *m);if(!m)return;
  m->version=DIGIT_OBSERVATION_VERSION;
  snprintf(m->transport,sizeof m->transport,"irc");
