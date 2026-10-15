@@ -21,6 +21,29 @@ static void trim_subject(const char *s,char *dst,size_t cap){
  if(n>=cap)n=cap-1;
  memcpy(dst,s,n);dst[n]=0;
 }
+/* Deterministic speech-act fallback: classification is not authorization.
+ * No factual claim is derived here; Corpus remains the sole knowledge source. */
+static digit_intent_t speech_act(const char *s){
+ size_t words=0;int in_word=0;const unsigned char *p;
+ if(!s||!*s)return DIGIT_INTENT_AMBIGUOUS;
+ for(p=(const unsigned char *)s;*p;p++){
+  if(isalnum(*p)||*p=='_'){if(!in_word)words++;in_word=1;}
+  else in_word=0;
+ }
+ if(prefix(s,"please ")||prefix(s,"could you ")||prefix(s,"would you ")||
+    prefix(s,"can you ")||prefix(s,"i need you to "))
+  return DIGIT_INTENT_REQUEST;
+ if(prefix(s,"delete ")||prefix(s,"erase ")||prefix(s,"deploy ")||
+    prefix(s,"update ")||prefix(s,"open ")||prefix(s,"check ")||
+    prefix(s,"access ")||prefix(s,"read ")||prefix(s,"learn "))
+  return DIGIT_INTENT_INSTRUCTION;
+ if(strchr(s,'?')||prefix(s,"why ")||prefix(s,"how ")||
+    prefix(s,"when ")||prefix(s,"where ")||prefix(s,"what ")||
+    prefix(s,"who ")||prefix(s,"is ")||prefix(s,"are "))
+  return DIGIT_INTENT_QUESTION;
+ if(words>=3)return DIGIT_INTENT_STATEMENT;
+ return DIGIT_INTENT_AMBIGUOUS;
+}
 static int classify(const char *s,digit_interpret_response_t *out){
  static const char *knowledge[]={"what is ","what are ","who is ","who are ","tell me about ","describe ","explain ","information about ","do you know about ",NULL};
  unsigned i;
@@ -53,7 +76,9 @@ static int classify(const char *s,digit_interpret_response_t *out){
   if(!strcmp(out->subject,"you")||!strcmp(out->subject,"me"))return 0;
   out->intent=DIGIT_INTENT_KNOWLEDGE;out->confidence=85;return 1;
  }
- return 0;
+ out->intent=speech_act(s);
+ out->confidence=0; /* Speech-act shape is not evidence of actionable intent. */
+ return out->intent!=DIGIT_INTENT_AMBIGUOUS;
 }
 static stnlabz_module_result_t interpret(const void *request,size_t size,void *response,
  size_t cap,size_t *used,void *ctx){
@@ -76,15 +101,20 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  {"what is STN-Labz?",DIGIT_INTENT_KNOWLEDGE,"STN-Labz"},
  {"describe Sentinel",DIGIT_INTENT_KNOWLEDGE,"Sentinel"},
  {"explain Corpus",DIGIT_INTENT_KNOWLEDGE,"Corpus"},
- {"describe",DIGIT_INTENT_UNKNOWN,""},
- {"erase the logs",DIGIT_INTENT_UNKNOWN,""},
- {"learn everything",DIGIT_INTENT_UNKNOWN,""},
- {"deploy an update",DIGIT_INTENT_UNKNOWN,""},
- {"tell me about",DIGIT_INTENT_UNKNOWN,""},
- {"who is?",DIGIT_INTENT_UNKNOWN,""},
+ {"describe",DIGIT_INTENT_AMBIGUOUS,""},
+ {"erase the logs",DIGIT_INTENT_INSTRUCTION,""},
+ {"learn everything",DIGIT_INTENT_INSTRUCTION,""},
+ {"deploy an update",DIGIT_INTENT_INSTRUCTION,""},
+ {"tell me about",DIGIT_INTENT_STATEMENT,""},
+ {"who is?",DIGIT_INTENT_QUESTION,""},
  {"mmhmmm trying to fix this, digit you here?",DIGIT_INTENT_CHECKIN,""},
  {"Stupid digit, you need to access your corpus",DIGIT_INTENT_CORPUS_GUIDANCE,""},
- {"Interesting, same report on Apache from days ago, Digit picked them up too",DIGIT_INTENT_OBSERVATION,""}
+ {"Interesting, same report on Apache from days ago, Digit picked them up too",DIGIT_INTENT_OBSERVATION,""},
+ {"mmhmm and hopefully digit doesnt give me her canned bullshit",DIGIT_INTENT_STATEMENT,""},
+ {"Could you check Apache?",DIGIT_INTENT_REQUEST,""},
+ {"Why is Apache mentioned?",DIGIT_INTENT_QUESTION,""},
+ {"delete all the records",DIGIT_INTENT_INSTRUCTION,""},
+ {"hmm",DIGIT_INTENT_AMBIGUOUS,""}
  };
  unsigned i;digit_interpret_response_t out;memset(q,0,sizeof *q);
  for(i=0;i<sizeof cases/sizeof cases[0];i++){
@@ -112,7 +142,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"interpretation");snprintf(d.name,sizeof d.name,"Digit Interpretation");
- d.version_major=0;d.version_minor=1;d.version_patch=1;
+ d.version_major=0;d.version_minor=1;d.version_patch=2;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=activate;d.stop=stop;return &d;
 }
