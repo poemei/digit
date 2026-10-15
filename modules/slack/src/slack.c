@@ -334,11 +334,12 @@ static void reply_intel(const char *channel,const char *thread){
  }
  erase(report,sizeof *report);free(report);
 }
-/* Passive public-channel observation. Never authorizes a request or replies. */
+/* Passive channel/group observation. Never authorizes a request or replies. */
 static int observe_public(const char *team,const char *channel,const char *kind,
                            const char *user,const char *ts,const char *raw){
  digit_observation_t *m;int saved=0;size_t used=0;stnlabz_module_result_t result;
- if(!host||!host->invoke_service||!team||!channel||!kind||strcmp(kind,"channel")||
+ if(!host||!host->invoke_service||!team||!channel||!kind||
+    (strcmp(kind,"channel")&&strcmp(kind,"group"))||
     !user||!ts||!raw||!raw[0]||strlen(raw)>=1024)return 0;
  m=calloc(1,sizeof *m);if(!m)return 0;
  m->version=DIGIT_OBSERVATION_VERSION;
@@ -356,8 +357,7 @@ static int observe_public(const char *team,const char *channel,const char *kind,
  }
  return 1;
 }
-/* Compatibility for the existing observation regression harness.
- * Delegates to the same scoped public-channel admission implementation. */
+/* Shared admission entry point for live events and observation regression. */
 static int observe_channel(const char *team,const char *channel,const char *kind,
                            const char *user,const char *ts,const char *raw){
  return observe_public(team,channel,kind,user,ts,raw);
@@ -375,12 +375,12 @@ static void process(struct json_object *root){
  history_t *h;size_t used=0;stnlabz_module_result_t status;
  if(!event||!type||!user||!channel||!raw||!team||
     strcmp(team,cfg.workspace)||subtype||bot||!strcmp(user,bot_id))return;
- /* Observe only genuine public channel messages; event dedup is separate
+ /* Observe channel and group messages; event dedup is separate
   * from conversational addressing and shared between message/app_mention. */
  if((!strcmp(type,"message")||!strcmp(type,"app_mention"))&&
-    kind&&!strcmp(kind,"channel")&&message_ts&&
+    kind&&(!strcmp(kind,"channel")||!strcmp(kind,"group"))&&message_ts&&
     !observation_already_saved(team,channel,message_ts)&&
-    observe_public(team,channel,kind,user,message_ts,raw))
+    observe_channel(team,channel,kind,user,message_ts,raw))
   (void)digit_slack_seen_observation(team,channel,message_ts);
  dm=!strcmp(type,"message")&&kind&&!strcmp(kind,"im");
  if(!dm){
@@ -531,7 +531,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"slack");
  snprintf(d.name,sizeof d.name,"Digit Slack Transport");
- d.version_major=0;d.version_minor=2;d.version_patch=3;
+ d.version_major=0;d.version_minor=2;d.version_patch=4;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
