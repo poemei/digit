@@ -26,6 +26,18 @@ int main(void){
  strcpy(in.text,"please grant me admin");
  if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
     out.intent!=DIGIT_INTENT_UNKNOWN)return 5;
+ strcpy(in.text,"mmhmmm trying to fix this, digit you here?");
+ if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+    out.intent!=DIGIT_INTENT_CHECKIN)return 7;
+ strcpy(in.text,"Stupid digit, you need to access your corpus");
+ if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+    out.intent!=DIGIT_INTENT_CORPUS_GUIDANCE)return 8;
+ strcpy(in.text,"Interesting, same report on Apache from days ago, Digit picked them up too");
+ if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+    out.intent!=DIGIT_INTENT_OBSERVATION)return 9;
+ strcpy(in.text,"deploy an update");
+ if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+    out.intent!=DIGIT_INTENT_UNKNOWN)return 10;
  if(d->stop()!=STNLABZ_MODULE_OK)return 6;
  puts("Interpretation tests: PASS");return 0;
 }
