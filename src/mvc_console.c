@@ -211,6 +211,8 @@ int digit_mvc_console(void){
  if(unattended_service_input()){
   digit_runtime_t runtime;
   digit_runtime_init(&runtime);
+  runtime.module_poll=(void (*)(void *))digit_hotload_poll;
+  runtime.module_poll_context=watch;
   if(!digit_log_event("CORE","SERVICE_READY","mode=unattended")||
      !digit_log_sync()||!digit_runtime_run(&runtime))good=0;
   goto done;
@@ -222,7 +224,8 @@ int digit_mvc_console(void){
   FD_ZERO(&readfds);FD_SET(STDIN_FILENO,&readfds);
   timeout.tv_sec=5;timeout.tv_usec=0;
   ready=select(STDIN_FILENO+1,&readfds,NULL,NULL,&timeout);
-  if(ready==0){console_dsd_watch();continue;}
+  if(ready==0){digit_hotload_poll(watch);console_dsd_watch();continue;}
+  digit_hotload_poll(watch);
   if(ready<0){if(errno==EINTR)continue;good=0;break;}
   if(!fgets(line,sizeof line,stdin))break;
   stnlabz_module_command_t command={0};
@@ -262,6 +265,7 @@ int digit_mvc_console(void){
   fflush(stdout);
  }
 done:
+ digit_hotload_destroy(watch);
  if(router_active&&!digit_core_stop(&registry,"router"))good=0;
  if(!digit_core_stop_all(&registry))good=0;
  if(!digit_log_event("CONSOLE",good?"STOPPED":"FAILED","mode=local")||!digit_log_sync())good=0;
