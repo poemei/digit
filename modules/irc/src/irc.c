@@ -162,23 +162,40 @@ static void observe_irc(const char *line){
 }
 /* Transport admission matches Slack's addressed channel forms; routing remains
  * entirely owned by router.dispatch. A bare question to the bot is meaningful. */
+static int irc_name_char(unsigned char c){
+ return isalnum(c)||c=='_'||c=='-';
+}
+static int irc_mentions_name(const char *raw,const char *name){
+ size_t n;
+ const char *p;
+ if(!raw||!name||!(n=strlen(name)))return 0;
+ for(p=raw;*p;p++){
+  if(p!=raw&&irc_name_char((unsigned char)p[-1]))continue;
+  if(!strncasecmp(p,name,n)&&
+     !irc_name_char((unsigned char)p[n]))return 1;
+ }
+ return 0;
+}
+/* IRC admits natural mentions anywhere in a channel message.
+ * Preserve the full utterance when the mention is embedded: Ask owns meaning.
+ * Passive observation and Core authorization remain separate. */
 static int addressed_irc_text(const char *raw,const char *nick,char *out,size_t cap){
- const char *text=raw;size_t len=0,name=0;
+ const char *text=raw;size_t len,n;
  if(!raw||!nick||!out||cap<2)return 0;
- name=strlen(nick);
- if(name&&!strncasecmp(text,nick,name)&&
-    (text[name]==':'||text[name]==','||text[name]=='?'||
-     isspace((unsigned char)text[name])))text+=name;
- else if(!strncasecmp(text,"digit-bot",9)&&
-    (text[9]==':'||text[9]==','||text[9]=='?'||
-     isspace((unsigned char)text[9])))text+=9;
- else if(!strncasecmp(text,"digit",5)&&
-    (text[5]==':'||text[5]==','||text[5]=='?'||
-     isspace((unsigned char)text[5])))text+=5;
- else return 0;
- while(*text&&(isspace((unsigned char)*text)||*text==':'||*text==','))text++;
- /* "digit-bot?" is itself a question, not an empty command. */
- if(*text=='?'&&!text[1])text=raw;
+ if(!irc_mentions_name(raw,nick)&&
+    !irc_mentions_name(raw,"digit-bot")&&
+    !irc_mentions_name(raw,"digit"))return 0;
+ n=strlen(nick);
+ if(n&&!strncasecmp(raw,nick,n)&&
+    !irc_name_char((unsigned char)raw[n]))text=raw+n;
+ else if(!strncasecmp(raw,"digit-bot",9)&&
+         !irc_name_char((unsigned char)raw[9]))text=raw+9;
+ else if(!strncasecmp(raw,"digit",5)&&
+         !irc_name_char((unsigned char)raw[5]))text=raw+5;
+ if(text!=raw){
+  while(*text&&(isspace((unsigned char)*text)||*text==':'||*text==','))text++;
+  if(!*text||(*text=='?'&&!text[1]))text=raw;
+ }
  len=strlen(text);
  if(!len||len>=cap||len>512||strchr(text,'\r')||strchr(text,'\n'))return 0;
  memcpy(out,text,len+1);
@@ -392,7 +409,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"irc");snprintf(d.name,sizeof d.name,"Digit IRC Transport");
- d.version_major=0;d.version_minor=1;d.version_patch=5;
+ d.version_major=0;d.version_minor=1;d.version_patch=6;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
