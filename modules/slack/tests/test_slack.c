@@ -4,6 +4,7 @@
 extern const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void);
 extern int digit_slack_format_reply(const char *,char *,size_t);
 extern const char *digit_slack_reply_thread(const char *);
+extern int digit_slack_seen_observation(const char *,const char *,const char *);
 extern int digit_slack_seen_message(const char *,const char *,const char *);
 extern int digit_slack_is_intel_command(const char *);
 extern int digit_slack_admit_message(const char *,const char *,const char *,const char *);
@@ -11,7 +12,7 @@ extern int digit_slack_addressed_text(const char *,const char *,const char *,con
 int main(void){
  stnlabz_module_qualification_result_t q={0};char formatted[512];
  const stnlabz_module_descriptor_t *d=stnlabz_module_get_descriptor();
- if(!d||strcmp(d->id,"slack")||d->version_major!=0||d->version_minor!=1||d->version_patch!=12)return 1;
+ if(!d||strcmp(d->id,"slack")||d->version_major!=0||d->version_minor!=1||d->version_patch!=13)return 1;
  if(d->qualify(NULL)!=STNLABZ_MODULE_ERR_INVALID_ARGUMENT)return 2;
  if(d->qualify(&q)!=STNLABZ_MODULE_OK||q.tests_executed<10||q.tests_failed||!q.negative_test_passed)return 3;
  if(d->start(NULL)!=STNLABZ_MODULE_ERR_INVALID_ARGUMENT)return 4;
@@ -50,5 +51,8 @@ int main(void){
  if(!digit_slack_admit_message("EvE","T2","C4","1800.0001"))return 31;
  if(!digit_slack_is_intel_command("report intel")||!digit_slack_is_intel_command("REPORT INTEL")||!digit_slack_is_intel_command("intel report"))return 33;
  if(digit_slack_is_intel_command("report intel now")||digit_slack_is_intel_command("report")||digit_slack_is_intel_command(NULL))return 34;
- puts("Slack routing, deduplication and Intel command identification: PASS");return 0;
+ if(digit_slack_seen_observation("T1","C1","1.0001"))return 35;
+ if(!digit_slack_seen_observation("T1","C1","1.0001"))return 36;
+ if(digit_slack_seen_observation("T1","C2","1.0001"))return 37;
+ puts("Slack routing, observation deduplication and Intel command recognition: PASS");return 0;
 }
