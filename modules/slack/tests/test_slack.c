@@ -2,6 +2,7 @@
 #include <string.h>
 #include "stnlabz_abi/module.h"
 extern const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void);
+extern const char *digit_slack_delivery_channel(const char *,const char *);
 extern int digit_slack_format_reply(const char *,char *,size_t);
 extern const char *digit_slack_reply_thread(const char *);
 extern int digit_slack_seen_observation(const char *,const char *,const char *);
@@ -12,7 +13,11 @@ extern int digit_slack_addressed_text(const char *,const char *,const char *,con
 int main(void){
  stnlabz_module_qualification_result_t q={0};char formatted[512];
  const stnlabz_module_descriptor_t *d=stnlabz_module_get_descriptor();
- if(!d||strcmp(d->id,"slack")||d->version_major!=0||d->version_minor!=2||d->version_patch!=1)return 1;
+ if(!d||strcmp(d->id,"slack")||d->version_major!=0||d->version_minor!=2||d->version_patch!=2)return 1;
+ if(strcmp(digit_slack_delivery_channel("[MODULE] HOTLOAD_ACTIVE id=reasoning","C0INTEL"),"C0C9LS4QA1X"))return 45;
+ if(strcmp(digit_slack_delivery_channel("[MODULE] HOTLOAD_FAILED id=ask","C0INTEL"),"C0C9LS4QA1X"))return 46;
+ if(strcmp(digit_slack_delivery_channel("Intel report","C0INTEL"),"C0INTEL"))return 47;
+ if(strcmp(digit_slack_delivery_channel("[MODULEX] not a lifecycle event","C0INTEL"),"C0INTEL"))return 48;
  if(d->qualify(NULL)!=STNLABZ_MODULE_ERR_INVALID_ARGUMENT)return 2;
  if(d->qualify(&q)!=STNLABZ_MODULE_OK||q.tests_executed<10||q.tests_failed||!q.negative_test_passed)return 3;
  if(d->start(NULL)!=STNLABZ_MODULE_ERR_INVALID_ARGUMENT)return 4;
