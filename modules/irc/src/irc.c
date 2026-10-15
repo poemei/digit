@@ -230,7 +230,21 @@ static void chat_message(SSL *tls,const char *line){
  }
 
 }
-static int handle_line(SSL *tls,const char *line,int *authenticated,int *joined){
+/* Registration may complete before or after SASL; join only when both pass. */
+static int irc_join_ready(int authenticated,int registered,int joined){
+ return authenticated&&registered&&!joined;
+}
+static int irc_tls_read_ready(int socket_ready,int pending){
+ return socket_ready>0||pending>0;
+}
+static int join_if_ready(SSL *tls,int authenticated,int registered,int *joined){
+ char cmd[513];
+ if(!irc_join_ready(authenticated,registered,*joined))return 1;
+ snprintf(cmd,sizeof cmd,"JOIN %s",config.channel);
+ if(!send_line(tls,cmd))return 0;
+ *joined=1;return 1;
+}
+static int handle_line(SSL *tls,const char *line,int *authenticated,int *registered,int *joined){
  char cmd[513],payload[513];const char *p;
  if(!strncmp(line,"PING ",5))return send_line(tls,line[0]=='P'&&line[5]==':'?
   (snprintf(cmd,sizeof cmd,"PONG %s",line+5),cmd):"PONG");
@@ -238,18 +252,19 @@ static int handle_line(SSL *tls,const char *line,int *authenticated,int *joined)
   if(!sasl_payload(payload,sizeof payload))return 0;
   snprintf(cmd,sizeof cmd,"AUTHENTICATE %s",payload);return send_line(tls,cmd);
  }
- if(strstr(line," 903 ")){*authenticated=1;return send_line(tls,"CAP END");}
+ if(strstr(line," 903 ")){
+  *authenticated=1;
+  if(!send_line(tls,"CAP END"))return 0;
+  return join_if_ready(tls,*authenticated,*registered,joined);
+ }
  if(strstr(line," 904 ")||strstr(line," 905 ")||strstr(line," 906 ")||strstr(line," 907 ")){
   notice("[IRC] SASL authentication rejected");return 0;
  }
  if(strstr(line," CAP ")&&strstr(line," ACK ")&&strstr(line,"sasl"))
   return send_line(tls,"AUTHENTICATE PLAIN");
- if(strstr(line," 001 ")&&*authenticated&&!*joined){
-  snprintf(cmd,sizeof cmd,"JOIN %s",config.channel);
-  *joined=1;return send_line(tls,cmd);
- }
- if(strstr(line," 376 ")||strstr(line," 422 ")){
-  if(*authenticated&&!*joined){snprintf(cmd,sizeof cmd,"JOIN %s",config.channel);*joined=1;return send_line(tls,cmd);}
+ if(strstr(line," 001 ")||strstr(line," 376 ")||strstr(line," 422 ")){
+  *registered=1;
+  return join_if_ready(tls,*authenticated,*registered,joined);
  }
  /* Incoming channel messages are observational only; they confer no command authority. */
  p=strstr(line," PRIVMSG ");
@@ -257,7 +272,7 @@ static int handle_line(SSL *tls,const char *line,int *authenticated,int *joined)
  return 1;
 }
 static void run_connection(void){
- int fd=-1,authenticated=0,joined=0,ok=1;
+ int fd=-1,authenticated=0,registered=0,joined=0,ok=1;
  SSL_CTX *ctx=NULL;SSL *tls=NULL;
  char input[2048],line[513],cmd[513];size_t count=0;
  fd=connect_tcp();if(fd<0){notice("[IRC] TCP connection failed");return;}
@@ -278,16 +293,17 @@ static void run_connection(void){
  while(!atomic_load(&stopping)&&ok){
   fd_set readset;struct timeval tv={1,0};int ready,n;size_t i;
   FD_ZERO(&readset);FD_SET(fd,&readset);
-  ready=select(fd+1,&readset,NULL,NULL,&tv);
-  if(ready<0)break;
-   if(authenticated&&joined&&!send_pending_intel(tls))break;
-   if(!ready)continue;
+  /* Drain OpenSSL's decrypted buffer without waiting for another socket event. */
+  ready=SSL_pending(tls)>0?1:select(fd+1,&readset,NULL,NULL,&tv);
+  if(ready<0){if(errno==EINTR)continue;break;}
+  if(authenticated&&joined&&!send_pending_intel(tls))break;
+  if(!irc_tls_read_ready(ready,SSL_pending(tls)))continue;
   n=SSL_read(tls,input,sizeof input);if(n<=0)break;
   for(i=0;i<(size_t)n;i++){
    if(input[i]=='\n'){
     if(count&&line[count-1]=='\r')count--;
     line[count]=0;
-    if(count&&!(ok=handle_line(tls,line,&authenticated,&joined)))break;
+    if(count&&!(ok=handle_line(tls,line,&authenticated,&registered,&joined)))break;
     count=0;
    }else if(count<sizeof line-1)line[count++]=input[i];
    else {ok=0;notice("[IRC] Oversized IRC line rejected");break;}
@@ -351,7 +367,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"irc");snprintf(d.name,sizeof d.name,"Digit IRC Transport");
- d.version_major=0;d.version_minor=1;d.version_patch=3;
+ d.version_major=0;d.version_minor=1;d.version_patch=4;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
