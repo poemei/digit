@@ -17,6 +17,7 @@
 typedef struct {
  char id[STNLABZ_MODULE_ID_MAX];
  char sha[SHA256_DIGEST_LENGTH*2+1];
+ char rejected_sha[SHA256_DIGEST_LENGTH*2+1];
  unsigned major,minor,patch;
 } observed_t;
 struct digit_hotload {
@@ -241,8 +242,12 @@ void digit_hotload_poll(digit_hotload_t *w){
   observed_t baseline=w->seen[i];char path[1200],hash[65];
   if(snprintf(path,sizeof path,"%s/%s/bin/%s.so",w->directory,
     baseline.id,baseline.id)>=(int)sizeof path)continue;
-  if(digest(path,hash)&&strcmp(hash,baseline.sha))
+  if(digest(path,hash)&&strcmp(hash,baseline.sha)&&strcmp(hash,baseline.rejected_sha)){
    replacement(w,baseline.id,path,&baseline);
+   /* A rejection is reported once per exact binary, not once per second. */
+   if(i<w->count && strcmp(w->seen[i].sha,hash))
+    snprintf(w->seen[i].rejected_sha,sizeof w->seen[i].rejected_sha,"%s",hash);
+  }
  }
 }
 void digit_hotload_destroy(digit_hotload_t *w){
