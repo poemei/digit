@@ -17,6 +17,7 @@
 #include "router.h"
 #include "ask_context.h"
 #include "intel_delivery.h"
+#include "../../observation/include/observation.h"
 #include <time.h>
 
 typedef struct {char server[256],port[8],nick[64],channel[128],account[128],password[256];} irc_config_t;
@@ -126,6 +127,35 @@ static int diagnostic_question(const char *text){
  return !strcasecmp(text,"diagnose my last request")||
  !strcasecmp(text,"diagnose last request")||!strcasecmp(text,"diagnose");
 }
+/* Passive observation is distinct from addressed /ask handling. */
+static void observe_irc(const char *line){
+ const char *sep,*prefix,*body,*space;size_t n;char sender[64],target[128];
+ digit_observation_t *m;int saved=0;size_t used=0;
+ static unsigned long sequence;
+ if(!host||!host->invoke_service||!line||line[0]!=':')return;
+ sep=strstr(line," PRIVMSG ");if(!sep)return;
+ prefix=line+1;
+ n=0;while(prefix+n<sep&&prefix[n]&&prefix[n]!='!'&&n<sizeof sender-1)n++;
+ if(!n||n>=sizeof sender)return;
+ memcpy(sender,prefix,n);sender[n]=0;
+ if(!strcasecmp(sender,config.nick))return;
+ body=sep+9;space=strchr(body,' ');if(!space)return;
+ n=(size_t)(space-body);if(n==0||n>=sizeof target)return;
+ memcpy(target,body,n);target[n]=0;
+ if(strcasecmp(target,config.channel)||target[0]!='#')return;
+ body=space+1;if(*body==':')body++;
+ if(!*body||strlen(body)>512||strchr(body,'\\r')||strchr(body,'\\n'))return;
+ m=calloc(1,sizeof *m);if(!m)return;
+ m->version=DIGIT_OBSERVATION_VERSION;
+ snprintf(m->transport,sizeof m->transport,"irc");
+ snprintf(m->channel,sizeof m->channel,"%s",target);
+ snprintf(m->sender,sizeof m->sender,"%s",sender);
+ snprintf(m->event_id,sizeof m->event_id,"irc-%lu",++sequence);
+ snprintf(m->text,sizeof m->text,"%s",body);
+ (void)host->invoke_service(DIGIT_OBSERVATION_SERVICE,m,sizeof *m,
+                           &saved,sizeof saved,&used);
+ free(m);
+}
 /* Only explicitly addressed conversation, never arbitrary IRC commands. */
 static void chat_message(SSL *tls,const char *line){
  const char *sep,*body,*prefix;char sender[64]={0},target[128]={0},message[513];
@@ -221,7 +251,7 @@ static int handle_line(SSL *tls,const char *line,int *authenticated,int *joined)
  }
  /* Incoming channel messages are observational only; they confer no command authority. */
  p=strstr(line," PRIVMSG ");
- if(p&&*authenticated){chat_message(tls,line);return 1;}
+ if(p&&*authenticated){observe_irc(line);chat_message(tls,line);return 1;}
  return 1;
 }
 static void run_connection(void){
@@ -319,7 +349,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"irc");snprintf(d.name,sizeof d.name,"Digit IRC Transport");
- d.version_major=0;d.version_minor=1;d.version_patch=2;
+ d.version_major=0;d.version_minor=1;d.version_patch=3;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
