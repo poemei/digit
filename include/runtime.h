@@ -21,6 +21,8 @@ typedef struct {
     digit_operational_state_t operational_state;
     digit_fault_t preservation_cause;
     int preservation_cause_set;
+    void (*module_poll)(void *context);
+    void *module_poll_context;
 } digit_runtime_t;
 
 /* Core runtime functions do not require any installed modules. */
