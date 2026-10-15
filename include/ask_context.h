@@ -11,6 +11,9 @@ typedef struct {
  int previous_outcome;
  int previous_service_result;
  int has_previous;
+ char transport[16];
+ char channel[128];
+ char sender[128];
 } digit_ask_context_t;
 typedef struct {
  char request_id[64];
