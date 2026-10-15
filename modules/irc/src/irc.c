@@ -236,6 +236,9 @@ static void chat_message(SSL *tls,const char *line){
  snprintf(req.request_id,sizeof req.request_id,"irc-%lu",++sequence);
  snprintf(req.path,sizeof req.path,"/ask");req.core_authorized=0;
  context.magic=DIGIT_ASK_CONTEXT_MAGIC;
+ snprintf(context.transport,sizeof context.transport,"irc");
+ snprintf(context.channel,sizeof context.channel,"%s",target);
+ snprintf(context.sender,sizeof context.sender,"%s",sender);
  snprintf(context.question,sizeof context.question,"%s",body);
  if(conversation->previous.request_id[0]){
   context.has_previous=1;
