@@ -73,7 +73,7 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
  digit_reasoning_response_t *rr=NULL;
  digit_corpus_lookup_request_t cq={0};
  digit_corpus_lookup_response_t *cr=NULL;
- size_t n=0,i,source_n=0;
+ size_t n=0,i;
  char *out=output;
  int result=0,corpus_ok=0;
  if(!ctx||!ctx->transport[0]||!ctx->channel[0]||
