@@ -264,8 +264,100 @@ digit_hotload_t *digit_hotload_create(const char *directory,
  (void)digit_log_sync();
  return w;
 }
+/* Admit a newly installed module without stopping Digit. Module manifest must
+   identify its own directory; no module gains authority from installation alone. */
+static void discover_new(digit_hotload_t *w){
+ DIR *dir=opendir(w->directory);
+ struct dirent *entry;
+ if(!dir)return;
+ while((entry=readdir(dir))!=NULL){
+  char manifest[1200],binary[1200],id[STNLABZ_MODULE_ID_MAX];
+  char staged[1400],sha[65],detail[500];
+  FILE *config;
+  size_t len;
+  stnlabz_module_loader_t candidate;
+  const stnlabz_module_descriptor_t *desc=NULL;
+  stnlabz_module_result_t rc;
+  stnlabz_module_record_t *record;
+  struct stat st;
+  int admitted=0;
+  if(entry->d_name[0]=='.')continue;
+  len=strlen(entry->d_name);
+  if(!len||len>=sizeof id)continue;
+  memcpy(id,entry->d_name,len+1);
+  if(stnlabz_module_registry_find(w->registry,id))continue;
+  if(snprintf(manifest,sizeof manifest,"%s/%s/module.conf",w->directory,id)>=(int)sizeof manifest ||
+     snprintf(binary,sizeof binary,"%s/%s/bin/%s.so",w->directory,id,id)>=(int)sizeof binary)continue;
+  if(stat(manifest,&st)||!S_ISREG(st.st_mode))continue;
+  config=fopen(manifest,"r");
+  if(!config)continue;
+  {
+   char line[128],expected[128];
+   snprintf(expected,sizeof expected,"id=%s",id);
+   if(!fgets(line,sizeof line,config)){fclose(config);continue;}
+   line[strcspn(line,"\r\n")]=0;
+   if(strcmp(line,expected)||fgetc(config)!=EOF){fclose(config);continue;}
+  }
+  fclose(config);
+  if(stat(binary,&st)||!S_ISREG(st.st_mode))continue;
+  if(!snapshot_candidate(binary,staged,sizeof staged,sha)){
+   snprintf(detail,sizeof detail,"module=%s reason=new_module_snapshot_failed",id);
+   (void)digit_log_event("MODULE","HOTLOAD_FAILED",detail);continue;
+  }
+  snprintf(detail,sizeof detail,"module=%s candidate_sha256=%s status=new_module",id,sha);
+  (void)digit_log_event("MODULE","HOTLOAD_DETECTED",detail);
+  stnlabz_module_loader_init(&candidate);
+  if(stnlabz_module_loader_load(&candidate,id,staged,&desc)!=STNLABZ_MODULE_LOADER_OK){
+   snprintf(detail,sizeof detail,"module=%s candidate_sha256=%s reason=candidate_load_failed",id,sha);
+   (void)digit_log_event("MODULE","HOTLOAD_DENIED",detail);goto cleanup;
+  }
+  rc=stnlabz_module_registry_discover(w->registry,desc);
+  if(rc==STNLABZ_MODULE_OK)rc=stnlabz_module_registry_verify(w->registry,id);
+  if(rc==STNLABZ_MODULE_OK)rc=stnlabz_module_registry_qualify(w->registry,id);
+  if(rc!=STNLABZ_MODULE_OK){
+   snprintf(detail,sizeof detail,"module=%s candidate_sha256=%s reason=qualification_failed result=%d",id,sha,(int)rc);
+   (void)digit_log_event("MODULE","HOTLOAD_DENIED",detail);goto rollback;
+  }
+  w->policy.module_id=id;
+  rc=digit_core_authorize(w->registry,id,&w->policy);
+  if(rc==STNLABZ_MODULE_OK)rc=digit_core_activate(w->registry,id,w->host,&w->policy);
+  if(rc!=STNLABZ_MODULE_OK){
+   snprintf(detail,sizeof detail,"module=%s candidate_sha256=%s reason=activation_failed result=%d",id,sha,(int)rc);
+   (void)digit_log_event("MODULE","HOTLOAD_FAILED",detail);goto rollback;
+  }
+  /* Give ownership of the live handle to the existing loader. */
+  if(w->loader->count==w->loader->capacity){
+   size_t capacity=w->loader->capacity?w->loader->capacity*2:16;
+   stnlabz_loaded_module_t *next=realloc(w->loader->modules,capacity*sizeof *next);
+   if(!next){
+    (void)digit_core_stop(w->registry,id);
+    (void)digit_log_event("MODULE","HOTLOAD_FAILED","reason=loader_capacity_failed");
+    goto rollback;
+   }
+   w->loader->modules=next;w->loader->capacity=capacity;
+  }
+  w->loader->modules[w->loader->count++]=candidate.modules[0];
+  candidate.count=0;admitted=1;
+  (void)remember(w,id,sha,desc);
+  snprintf(detail,sizeof detail,"module=%s version=%u.%u.%u candidate_sha256=%s reason=new_module_activated",
+   id,desc->version_major,desc->version_minor,desc->version_patch,sha);
+  (void)digit_log_event("MODULE","HOTLOAD_ACTIVE",detail);
+rollback:
+  if(!admitted){
+   record=(stnlabz_module_record_t *)stnlabz_module_registry_find(w->registry,id);
+   if(record&&record->state!=STNLABZ_MODULE_STATE_ACTIVE)
+    (void)stnlabz_module_registry_unregister(w->registry,id);
+  }
+cleanup:
+  stnlabz_module_loader_unload_all(&candidate);
+  unlink(staged);
+  (void)digit_log_sync();
+ }
+ closedir(dir);
+}
 void digit_hotload_poll(digit_hotload_t *w){
  size_t i;if(!w)return;
+ discover_new(w);
  /* Rictus-style direct registry walk: newly active entries are visible immediately.
     Only the hash baseline is cached, never the set of modules being polled. */
  for(i=0;i<w->registry->count;i++){
