@@ -49,3 +49,7 @@ The `report intel` command no longer requires or checks `operator_user_id`. Slac
 ## 0.1.12 — repeated operator requests (operator testing pending)
 
 Each distinct incoming Slack event containing `report intel` requests `intel.report.generate` and sends the fresh response back to the requesting conversation. Distinct Slack message timestamps are not subject to report cooldown; retries of the *same* original event remain deduplicated. Slack continues to have no operator member-ID requirement. This is not a guarantee of delivery during network outages or when Digit is stopped; failures must be reported, not represented as successful reports.
+
+## Slack 0.1.13 — passive observation (pending acceptance)
+
+Public-channel `message` and `app_mention` events are forwarded to the independently registered `observation.record` service, regardless of whether Digit is addressed. Only Slack events with `channel_type=channel` are observed; private channels, groups, DMs, bot-origin messages and subtypes are excluded. Observational event deduplication is separate from conversational deduplication. There are no passive replies. The Observation module owns storage and is optional: absent/unavailable observation service does not disable Slack conversation or Intel delivery. No Core/Router changes.
