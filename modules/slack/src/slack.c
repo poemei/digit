@@ -246,6 +246,15 @@ int digit_slack_seen_observation(const char *team,const char *channel,const char
  snprintf(observed_keys[observed_cursor++%256],sizeof observed_keys[0],"%s",key);
  return 0;
 }
+/* Look up an already persisted observation without claiming it was saved. */
+static int observation_already_saved(const char *team,const char *channel,const char *ts){
+ char key[192];unsigned i;int n;
+ if(!team||!channel||!ts||!*team||!*channel||!*ts)return 1;
+ n=snprintf(key,sizeof key,"%s/%s/%s",team,channel,ts);
+ if(n<0||(size_t)n>=sizeof key)return 1;
+ for(i=0;i<256;i++)if(!strcmp(observed_keys[i],key))return 1;
+ return 0;
+}
 static int diagnostic(const char *s){
  return !strcmp(s,"diagnose")||!strcmp(s,"diagnose my last request")||
         !strcmp(s,"diagnose last request");
@@ -304,21 +313,26 @@ static void reply_intel(const char *channel,const char *thread){
  erase(report,sizeof *report);free(report);
 }
 /* Passive public-channel observation. Never authorizes a request or replies. */
-static void observe_public(const char *team,const char *channel,const char *kind,
+static int observe_public(const char *team,const char *channel,const char *kind,
                            const char *user,const char *ts,const char *raw){
- digit_observation_t *m;int saved=0;size_t used=0;
+ digit_observation_t *m;int saved=0;size_t used=0;stnlabz_module_result_t result;
  if(!host||!host->invoke_service||!team||!channel||!kind||strcmp(kind,"channel")||
-    !user||!ts||!raw||!raw[0]||strlen(raw)>=1024)return;
- m=calloc(1,sizeof *m);if(!m)return;
+    !user||!ts||!raw||!raw[0]||strlen(raw)>=1024)return 0;
+ m=calloc(1,sizeof *m);if(!m)return 0;
  m->version=DIGIT_OBSERVATION_VERSION;
  snprintf(m->transport,sizeof m->transport,"slack");
  snprintf(m->channel,sizeof m->channel,"%s:%s",team,channel);
  snprintf(m->sender,sizeof m->sender,"%s",user);
  snprintf(m->event_id,sizeof m->event_id,"%s:%s",channel,ts);
  snprintf(m->text,sizeof m->text,"%s",raw);
- (void)host->invoke_service(DIGIT_OBSERVATION_SERVICE,m,sizeof *m,
-                           &saved,sizeof saved,&used);
+ result=host->invoke_service(DIGIT_OBSERVATION_SERVICE,m,sizeof *m,
+                             &saved,sizeof saved,&used);
  free(m);
+ if(result!=STNLABZ_MODULE_OK||used!=sizeof saved||saved!=1){
+  log_status("[SLACK] Passive observation persistence failed");
+  return 0;
+ }
+ return 1;
 }
 static void process(struct json_object *root){
  struct json_object *payload=obj(root,"payload"),*event=obj(payload,"event");
@@ -337,8 +351,9 @@ static void process(struct json_object *root){
   * from conversational addressing and shared between message/app_mention. */
  if((!strcmp(type,"message")||!strcmp(type,"app_mention"))&&
     kind&&!strcmp(kind,"channel")&&message_ts&&
-    !digit_slack_seen_observation(team,channel,message_ts))
-  observe_public(team,channel,kind,user,message_ts,raw);
+    !observation_already_saved(team,channel,message_ts)&&
+    observe_public(team,channel,kind,user,message_ts,raw))
+  (void)digit_slack_seen_observation(team,channel,message_ts);
  dm=!strcmp(type,"message")&&kind&&!strcmp(kind,"im");
  if(!dm){
   if(!bot_id[0]||!digit_slack_addressed_text(type,channel,
