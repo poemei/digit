@@ -21,6 +21,36 @@ int main(void){
  check(stnlabz_module_registry_quarantine(&reg,d.id)==STNLABZ_MODULE_OK,"quarantine");
  check(stnlabz_module_registry_authorize_activation(&reg,d.id)==STNLABZ_MODULE_ERR_QUARANTINED,"quarantine denies grant");
  check(stnlabz_module_registry_activate(&reg,d.id)==STNLABZ_MODULE_ERR_QUARANTINED,"quarantine denies activation");
+ /* Distinct active transport must survive another module's lifecycle. */
+ {
+  stnlabz_module_registry_t separate;
+  stnlabz_module_descriptor_t transport={0},reasoning={0};
+  const stnlabz_module_record_t *irc;
+  stnlabz_module_registry_init(&separate);
+  strcpy(transport.id,"irc");strcpy(transport.name,"IRC transport fixture");
+  strcpy(reasoning.id,"reasoning");strcpy(reasoning.name,"Reasoning fixture");
+  transport.qualify=qualify;reasoning.qualify=qualify;
+  transport.required_core_api_major=reasoning.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
+  transport.required_core_api_minor=reasoning.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
+  check(stnlabz_module_registry_discover(&separate,&transport)==STNLABZ_MODULE_OK,"discover IRC");
+  check(stnlabz_module_registry_verify(&separate,"irc")==STNLABZ_MODULE_OK,"verify IRC");
+  check(stnlabz_module_registry_qualify(&separate,"irc")==STNLABZ_MODULE_OK,"qualify IRC");
+  check(stnlabz_module_registry_authorize_activation(&separate,"irc")==STNLABZ_MODULE_OK,"authorize IRC");
+  check(stnlabz_module_registry_activate(&separate,"irc")==STNLABZ_MODULE_OK,"activate IRC");
+  check(stnlabz_module_registry_discover(&separate,&reasoning)==STNLABZ_MODULE_OK,"discover Reasoning");
+  check(stnlabz_module_registry_verify(&separate,"reasoning")==STNLABZ_MODULE_OK,"verify Reasoning");
+  check(stnlabz_module_registry_qualify(&separate,"reasoning")==STNLABZ_MODULE_OK,"qualify Reasoning");
+  check(stnlabz_module_registry_authorize_activation(&separate,"reasoning")==STNLABZ_MODULE_OK,"authorize Reasoning");
+  check(stnlabz_module_registry_activate(&separate,"reasoning")==STNLABZ_MODULE_OK,"activate Reasoning");
+  check(stnlabz_module_registry_stop(&separate,"reasoning")==STNLABZ_MODULE_OK,"stop Reasoning only");
+  irc=stnlabz_module_registry_find(&separate,"irc");
+  check(irc&&irc->state==STNLABZ_MODULE_STATE_ACTIVE,"IRC remains active after Reasoning stop");
+  check(stnlabz_module_registry_authorize_activation(&separate,"reasoning")==STNLABZ_MODULE_OK,"reauthorize Reasoning");
+  check(stnlabz_module_registry_activate(&separate,"reasoning")==STNLABZ_MODULE_OK,"reactivate Reasoning");
+  irc=stnlabz_module_registry_find(&separate,"irc");
+  check(irc&&irc->state==STNLABZ_MODULE_STATE_ACTIVE,"IRC remains active after Reasoning replacement");
+  stnlabz_module_registry_destroy(&separate);
+ }
  stnlabz_module_registry_destroy(&reg);
  printf("Core lifecycle isolation tests: %u executed, %u failed\n",count,failed);return failed!=0;
 }
