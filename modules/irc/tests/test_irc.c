@@ -28,7 +28,7 @@ int main(void){
  stnlabz_module_qualification_result_t q={0};
  const stnlabz_module_descriptor_t *d=stnlabz_module_get_descriptor();
  stnlabz_module_host_t mock_host={0};
- if(!d||strcmp(d->id,"irc")||d->version_minor!=1||d->version_patch!=3)return 1;
+ if(!d||strcmp(d->id,"irc")||d->version_minor!=1||d->version_patch!=4)return 1;
  if(d->qualify(NULL)!=STNLABZ_MODULE_ERR_INVALID_ARGUMENT)return 2;
  if(d->qualify(&q)!=STNLABZ_MODULE_OK||q.tests_executed<10||q.tests_failed)return 3;
  if(d->start(NULL)!=STNLABZ_MODULE_ERR_INVALID_ARGUMENT)return 4;
@@ -57,7 +57,21 @@ int main(void){
   overlong[p+513]=0;
   if(!check_observation(overlong,NULL,3))return 12;
  }
+ /* Public-channel mentions must persist even when not addressed as commands. */
+ snprintf(config.channel,sizeof config.channel,"#stn-labz");
+ if(!check_observation(":PoeMei!user@host PRIVMSG #stn-labz :digit-bot?",
+   "digit-bot?",4))return 13;
+ if(!check_observation(":PoeMei!user@host PRIVMSG #stn-labz :digit, can you tell me what I just said?",
+   "digit, can you tell me what I just said?",5))return 14;
+ if(!check_observation(":PoeMei!user@host PRIVMSG #stn-labz :I do wonder if digit-bot even sees this?",
+   "I do wonder if digit-bot even sees this?",6))return 15;
+ /* SASL and registration may complete in either order, exactly one JOIN. */
+ if(irc_join_ready(0,1,0)||irc_join_ready(1,0,0)||
+    !irc_join_ready(1,1,0)||irc_join_ready(1,1,1))return 16;
+ /* An SSL-buffered IRC frame must be read even if select would time out. */
+ if(!irc_tls_read_ready(0,1)||!irc_tls_read_ready(1,0)||
+    irc_tls_read_ready(0,0))return 17;
  host=NULL;
- puts("IRC descriptor, negative, and observation regression tests: PASS");
+ puts("IRC descriptor, observation, SASL/JOIN ordering, TLS-read readiness: PASS");
  return 0;
 }
