@@ -18,13 +18,14 @@
 #include "ask_context.h"
 #include "intel_delivery.h"
 #include "intel_report.h"
+#include "corpus_learn.h"
 #include "../../observation/include/observation.h"
 
 #define CONFIG_PATH "/opt/digit/auth/slack/slack.conf"
 #define MODULE_REPORT_CHANNEL "C0C9LS4QA1X"
 #define RESPONSE_MAX 65536
 #define HISTORY_SIZE 64
-typedef struct {char workspace[64],app[512],bot[512],channel[64];int enabled;} config_t;
+typedef struct {char workspace[64],app[512],bot[512],channel[64],learn_user[64],learn_key[65];int enabled;} config_t;
 typedef struct {char data[RESPONSE_MAX];size_t size;} response_t;
 typedef struct {char user[64],channel[64];digit_scoped_diagnostic_t previous;time_t seen;} history_t;
 static config_t cfg;
@@ -69,6 +70,8 @@ static int configuration(void){
   else if(!strcmp(key,"bot_token"))ok=copy(found.bot,sizeof found.bot,value);
   else if(!strcmp(key,"intel_channel_id"))ok=copy(found.channel,sizeof found.channel,value);
   else if(!strcmp(key,"operator_user_id")){ /* Ignored obsolete setting for compatibility. */ }
+  else if(!strcmp(key,"learn_operator_user_id"))ok=copy(found.learn_user,sizeof found.learn_user,value);
+  else if(!strcmp(key,"learn_authorization_key"))ok=copy(found.learn_key,sizeof found.learn_key,value);
   else ok=0;
   if(!ok)break;
  }
@@ -310,6 +313,53 @@ int digit_slack_addressed_text(const char *type,const char *channel,
 int digit_slack_is_intel_command(const char *text){
  return text&&(!strcasecmp(text,"report intel")||!strcasecmp(text,"intel report"));
 }
+/* A learning command is never sent through Ask or ordinary chatter. */
+int digit_slack_is_learn_command(const char *text){
+ return text&&!strncasecmp(text,"learn",5)&&
+       (text[5]==' '||text[5]=='\\t'||text[5]==0);
+}
+int digit_slack_learn_allowed(const char *channel,const char *user,
+                              const char *kind){
+ return channel&&user&&kind&&!strcmp(channel,DIGIT_CORPUS_OPS_CHANNEL)&&
+        !strcmp(kind,"group")&&cfg.learn_user[0]&&
+        !strcmp(user,cfg.learn_user)&&strlen(cfg.learn_key)==64&&
+        strspn(cfg.learn_key,"0123456789abcdefABCDEF")==64;
+}
+static void reply_learn(const char *channel,const char *user,const char *kind,
+                        const char *text){
+ digit_corpus_learn_request_t req={0};
+ digit_corpus_learn_response_t response={0};
+ size_t used=0;stnlabz_module_result_t rc;
+ if(!digit_slack_learn_allowed(channel,user,kind)){
+  log_status("[SLACK] Learn denied: user or channel not authorized");
+  (void)send_reply(channel,NULL,"Learn denied: unauthorized operator or channel.");
+  return;
+ }
+ if(strlen(text+5)>=sizeof req.arguments){
+  (void)send_reply(channel,NULL,"Learn rejected: command too long.");return;
+ }
+ req.version=DIGIT_CORPUS_LEARN_VERSION;
+ snprintf(req.workspace,sizeof req.workspace,"%s",cfg.workspace);
+ snprintf(req.channel,sizeof req.channel,"%s",channel);
+ snprintf(req.user,sizeof req.user,"%s",user);
+ snprintf(req.key,sizeof req.key,"%s",cfg.learn_key);
+ snprintf(req.arguments,sizeof req.arguments,"%s",text+5);
+ rc=host->invoke_service(DIGIT_CORPUS_LEARN_SERVICE,&req,sizeof req,
+                          &response,sizeof response,&used);
+ erase(&req,sizeof req);
+ if(rc==STNLABZ_MODULE_OK&&used==sizeof response&&
+    response.version==DIGIT_CORPUS_LEARN_VERSION&&
+    memchr(response.message,0,sizeof response.message)&&response.message[0]){
+  (void)send_reply(channel,NULL,response.message);
+ }else if(rc==STNLABZ_MODULE_ERR_NOT_AUTHORIZED){
+  (void)send_reply(channel,NULL,"Learn denied: Corpus authorization failed.");
+ }else if(used==sizeof response&&
+          memchr(response.message,0,sizeof response.message)&&response.message[0]){
+  (void)send_reply(channel,NULL,response.message);
+ }else{
+  (void)send_reply(channel,NULL,"Learn failed: Corpus did not confirm persistence.");
+ }
+}
 static void reply_intel(const char *channel,const char *thread){
  digit_intel_report_request_t req={DIGIT_INTEL_REPORT_VERSION};
  digit_intel_report_response_t *report;
@@ -391,6 +441,9 @@ static void process(struct json_object *root){
  while(*text&&isspace((unsigned char)*text))text++;
  if(!*text||strlen(text)>512||strchr(text,'\r')||strchr(text,'\n')||
     !digit_slack_admit_message(event_id,team,channel,message_ts))return;
+ if(digit_slack_is_learn_command(text)){
+  reply_learn(channel,user,kind,text);return;
+ }
  if(digit_slack_is_intel_command(text)){
   reply_intel(channel,digit_slack_reply_thread(ts));return;
  }
@@ -531,7 +584,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"slack");
  snprintf(d.name,sizeof d.name,"Digit Slack Transport");
- d.version_major=0;d.version_minor=2;d.version_patch=4;
+ d.version_major=0;d.version_minor=2;d.version_patch=5;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
