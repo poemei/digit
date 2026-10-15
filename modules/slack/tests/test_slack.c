@@ -13,7 +13,7 @@ extern int digit_slack_addressed_text(const char *,const char *,const char *,con
 int main(void){
  stnlabz_module_qualification_result_t q={0};char formatted[512];
  const stnlabz_module_descriptor_t *d=stnlabz_module_get_descriptor();
- if(!d||strcmp(d->id,"slack")||d->version_major!=0||d->version_minor!=2||d->version_patch!=2)return 1;
+ if(!d||strcmp(d->id,"slack")||d->version_major!=0||d->version_minor!=2||d->version_patch!=3)return 1;
  if(strcmp(digit_slack_delivery_channel("[MODULE] HOTLOAD_ACTIVE id=reasoning","C0INTEL"),"C0C9LS4QA1X"))return 45;
  if(strcmp(digit_slack_delivery_channel("[MODULE] HOTLOAD_FAILED id=ask","C0INTEL"),"C0C9LS4QA1X"))return 46;
  if(strcmp(digit_slack_delivery_channel("Intel report","C0INTEL"),"C0INTEL"))return 47;
