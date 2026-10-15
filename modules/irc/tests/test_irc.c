@@ -28,7 +28,7 @@ int main(void){
  stnlabz_module_qualification_result_t q={0};
  const stnlabz_module_descriptor_t *d=stnlabz_module_get_descriptor();
  stnlabz_module_host_t mock_host={0};
- if(!d||strcmp(d->id,"irc")||d->version_minor!=1||d->version_patch!=4)return 1;
+ if(!d||strcmp(d->id,"irc")||d->version_minor!=1||d->version_patch!=5)return 1;
  if(d->qualify(NULL)!=STNLABZ_MODULE_ERR_INVALID_ARGUMENT)return 2;
  if(d->qualify(&q)!=STNLABZ_MODULE_OK||q.tests_executed<10||q.tests_failed)return 3;
  if(d->start(NULL)!=STNLABZ_MODULE_ERR_INVALID_ARGUMENT)return 4;
@@ -65,6 +65,21 @@ int main(void){
    "digit, can you tell me what I just said?",5))return 14;
  if(!check_observation(":PoeMei!user@host PRIVMSG #stn-labz :I do wonder if digit-bot even sees this?",
    "I do wonder if digit-bot even sees this?",6))return 15;
+ /* Slack-equivalent conversational admission, independent of observation. */
+ {
+  char text[513];
+  if(!addressed_irc_text("digit-bot: what time is it?",config.nick,text,sizeof text)||
+     strcmp(text,"what time is it?"))return 18;
+  if(!addressed_irc_text("digit, can you tell me what I just said?",config.nick,text,sizeof text)||
+     strcmp(text,"can you tell me what I just said?"))return 19;
+  if(!addressed_irc_text("digit-bot?",config.nick,text,sizeof text)||
+     strcmp(text,"digit-bot?"))return 20;
+  if(!addressed_irc_text("DiGiT how are you",config.nick,text,sizeof text)||
+     strcmp(text,"how are you"))return 21;
+  if(addressed_irc_text("good morning everyone",config.nick,text,sizeof text))return 22;
+  if(addressed_irc_text("digital systems",config.nick,text,sizeof text))return 23;
+  if(addressed_irc_text("digit-bot:",config.nick,text,sizeof text))return 24;
+ }
  /* SASL and registration may complete in either order, exactly one JOIN. */
  if(irc_join_ready(0,1,0)||irc_join_ready(1,0,0)||
     !irc_join_ready(1,1,0)||irc_join_ready(1,1,1))return 16;
@@ -72,6 +87,6 @@ int main(void){
  if(!irc_tls_read_ready(0,1)||!irc_tls_read_ready(1,0)||
     irc_tls_read_ready(0,0))return 17;
  host=NULL;
- puts("IRC descriptor, observation, SASL/JOIN ordering, TLS-read readiness: PASS");
+ puts("IRC descriptor, observation, addressed MVC admission, SASL/JOIN ordering, TLS-read readiness: PASS");
  return 0;
 }
