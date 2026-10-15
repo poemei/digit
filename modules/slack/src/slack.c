@@ -21,6 +21,7 @@
 #include "../../observation/include/observation.h"
 
 #define CONFIG_PATH "/opt/digit/auth/slack/slack.conf"
+#define MODULE_REPORT_CHANNEL "C0C9LS4QA1X"
 #define RESPONSE_MAX 65536
 #define HISTORY_SIZE 64
 typedef struct {char workspace[64],app[512],bot[512],channel[64];int enabled;} config_t;
@@ -175,7 +176,11 @@ static int send_reply(const char *channel,const char *thread,const char *message
  json_object_put(req);
  return ok;
 }
-/* Outbound intelligence only: fixed configured channel, never arbitrary destinations. */
+/* Route only module lifecycle notices to the operator-selected channel. */
+const char *digit_slack_delivery_channel(const char *message,const char *intel_channel){
+ return message&&!strncmp(message,"[MODULE] ",9)?MODULE_REPORT_CHANNEL:intel_channel;
+}
+
 static stnlabz_module_result_t publish_intel(const void *req,size_t len,void *out,
  size_t capacity,size_t *used,void *context){
  const digit_intel_delivery_t *msg=req;
@@ -188,7 +193,7 @@ static stnlabz_module_result_t publish_intel(const void *req,size_t len,void *ou
     !out||capacity<sizeof(int)||!used)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  if(!digit_slack_format_reply(msg->message,formatted,sizeof formatted))
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
- ok=send_reply(cfg.channel,NULL,formatted);
+ ok=send_reply(digit_slack_delivery_channel(msg->message,cfg.channel),NULL,formatted);
  memcpy(out,&ok,sizeof ok);*used=sizeof ok;
  return ok?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_START_FAILED;
 }
@@ -520,7 +525,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"slack");
  snprintf(d.name,sizeof d.name,"Digit Slack Transport");
- d.version_major=0;d.version_minor=2;d.version_patch=1;
+ d.version_major=0;d.version_minor=2;d.version_patch=2;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
