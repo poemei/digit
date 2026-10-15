@@ -132,7 +132,13 @@ static void replacement(digit_hotload_t *w,const char *id,const char *path,
  stnlabz_module_result_t rc;
  stnlabz_loaded_module_t previous;
  size_t pos;int found=0,old_stopped=0;
- if(!snapshot_candidate(path,staged,sizeof staged,sha))return;
+ if(!snapshot_candidate(path,staged,sizeof staged,sha)){
+  char detail[400];
+  snprintf(detail,sizeof detail,"module=%s path=%.230s reason=candidate_snapshot_failed",id,path);
+  (void)digit_log_event("MODULE","HOTLOAD_FAILED",detail);
+  (void)digit_log_sync();
+  return;
+ }
  if(!strcmp(original->sha,sha)){unlink(staged);return;}
  stnlabz_module_loader_init(&candidate);
  if(stnlabz_module_loader_load(&candidate,id,staged,&desc)!=STNLABZ_MODULE_LOADER_OK){
@@ -227,27 +233,84 @@ digit_hotload_t *digit_hotload_create(const char *directory,
  if(strlen(directory)>=sizeof w->directory){free(w);return NULL;}
  snprintf(w->directory,sizeof w->directory,"%s",directory);
  w->registry=registry;w->loader=loader;w->host=host;w->policy=*policy;
+ /* Rictus pattern: Core polls active registry entries, not a fixed watch list.
+    Remember installed binary hashes solely to enforce Digit's SHA/version rule. */
+ {
+  char detail[400];
+  snprintf(detail,sizeof detail,"directory=%.310s status=ready registry_count=%zu",directory,registry->count);
+  (void)digit_log_event("MODULE","HOTLOAD_WATCH_READY",detail);
+  (void)digit_log_sync();
+ }
  for(i=0;i<registry->count;i++){
   const stnlabz_module_record_t *r=&registry->modules[i];
   const stnlabz_loaded_module_t *m=stnlabz_module_loader_find(loader,r->descriptor.id);
-  char sha[65];
-  if(m&&r->state==STNLABZ_MODULE_STATE_ACTIVE&&digest(m->dll_path,sha))
-   (void)remember(w,r->descriptor.id,sha,&r->descriptor);
+  char sha[65],path[1200],detail[450];
+  if(r->state!=STNLABZ_MODULE_STATE_ACTIVE||!m)continue;
+  if(snprintf(path,sizeof path,"%s/%s/bin/%s.so",directory,
+    r->descriptor.id,r->descriptor.id)>=(int)sizeof path)continue;
+  if(!digest(path,sha)){
+   snprintf(detail,sizeof detail,"module=%s reason=baseline_hash_unavailable path=%.250s",
+     r->descriptor.id,path);
+   (void)digit_log_event("MODULE","HOTLOAD_FAILED",detail);
+  }else if(!remember(w,r->descriptor.id,sha,&r->descriptor)){
+   free(w->seen);free(w);return NULL;
+  }else{
+   snprintf(detail,sizeof detail,"module=%s version=%u.%u.%u sha256=%s",
+    r->descriptor.id,r->descriptor.version_major,r->descriptor.version_minor,
+    r->descriptor.version_patch,sha);
+   (void)digit_log_event("MODULE","HOTLOAD_WATCH",detail);
+  }
  }
+ (void)digit_log_sync();
  return w;
 }
 void digit_hotload_poll(digit_hotload_t *w){
  size_t i;if(!w)return;
- for(i=0;i<w->count;i++){
-  observed_t baseline=w->seen[i];char path[1200],hash[65];
+ /* Rictus-style direct registry walk: newly active entries are visible immediately.
+    Only the hash baseline is cached, never the set of modules being polled. */
+ for(i=0;i<w->registry->count;i++){
+  const stnlabz_module_record_t *r=&w->registry->modules[i];
+  const stnlabz_loaded_module_t *loaded;
+  observed_t *known,baseline;
+  char path[1200],hash[65],detail[450];
+  if(r->state!=STNLABZ_MODULE_STATE_ACTIVE)continue;
+  loaded=stnlabz_module_loader_find(w->loader,r->descriptor.id);
+  if(!loaded)continue;
   if(snprintf(path,sizeof path,"%s/%s/bin/%s.so",w->directory,
-    baseline.id,baseline.id)>=(int)sizeof path)continue;
-  if(digest(path,hash)&&strcmp(hash,baseline.sha)&&strcmp(hash,baseline.rejected_sha)){
-   replacement(w,baseline.id,path,&baseline);
-   /* A rejection is reported once per exact binary, not once per second. */
-   if(i<w->count && strcmp(w->seen[i].sha,hash))
-    snprintf(w->seen[i].rejected_sha,sizeof w->seen[i].rejected_sha,"%s",hash);
+    r->descriptor.id,r->descriptor.id)>=(int)sizeof path)continue;
+  known=find(w,r->descriptor.id);
+  if(!digest(path,hash)){
+   /* Failed probes are visible; a later successful probe can recover. */
+   if(known&&strcmp(known->rejected_sha,"unreadable")){
+    snprintf(detail,sizeof detail,"module=%s path=%.240s reason=candidate_hash_unavailable",
+      r->descriptor.id,path);
+    (void)digit_log_event("MODULE","HOTLOAD_FAILED",detail);
+    (void)digit_log_sync();
+    snprintf(known->rejected_sha,sizeof known->rejected_sha,"unreadable");
+   }
+   continue;
   }
+  if(!known){
+   /* Never infer a preexisting version from a newly deployed binary. */
+   if(!remember(w,r->descriptor.id,hash,&r->descriptor))continue;
+   snprintf(detail,sizeof detail,"module=%s version=%u.%u.%u sha256=%s status=baseline",
+     r->descriptor.id,r->descriptor.version_major,r->descriptor.version_minor,
+     r->descriptor.version_patch,hash);
+   (void)digit_log_event("MODULE","HOTLOAD_WATCH",detail);
+   (void)digit_log_sync();
+   continue;
+  }
+  if(!strcmp(hash,known->sha))continue;
+  if(!strcmp(hash,known->rejected_sha))continue;
+  baseline=*known;
+  snprintf(detail,sizeof detail,"module=%s version=%u.%u.%u incumbent_sha256=%s candidate_sha256=%s",
+    baseline.id,baseline.major,baseline.minor,baseline.patch,baseline.sha,hash);
+  (void)digit_log_event("MODULE","HOTLOAD_DETECTED",detail);
+  (void)digit_log_sync();
+  replacement(w,baseline.id,path,&baseline);
+  known=find(w,baseline.id);
+  if(known&&strcmp(known->sha,hash))
+   snprintf(known->rejected_sha,sizeof known->rejected_sha,"%s",hash);
  }
 }
 void digit_hotload_destroy(digit_hotload_t *w){
