@@ -15,3 +15,7 @@ Known: this first version is a transport foundation; no IRC-to-Ask integration o
 ## Intel outbound service — IRC 0.1.2 (awaiting acceptance)
 
 Registers `irc.intel.publish`. Queues one short bounded, single-line operational intelligence brief for the currently configured IRC channel. The IRC worker sends over its existing TLS/SASL connection. Queue acceptance is **not proof of on-channel delivery**; disconnect retries are transport-local until shutdown. A full queue rejects further submissions so Intel can retry. No inbound Intel commands are introduced.
+
+## IRC 0.1.3 — passive observation (pending acceptance)
+
+When connected and authenticated, incoming messages in the configured `DIGIT_IRC_CHANNEL` are forwarded through `observation.record`, whether or not they address Digit. DMs, other channels, and Digit's own messages are excluded. Observation failures do not affect existing addressed replies. Observation writes are handled only by the separate Observation module; no Core or Router changes.
