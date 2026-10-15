@@ -356,6 +356,12 @@ static int observe_public(const char *team,const char *channel,const char *kind,
  }
  return 1;
 }
+/* Compatibility for the existing observation regression harness.
+ * Delegates to the same scoped public-channel admission implementation. */
+static int observe_channel(const char *team,const char *channel,const char *kind,
+                           const char *user,const char *ts,const char *raw){
+ return observe_public(team,channel,kind,user,ts,raw);
+}
 static void process(struct json_object *root){
  struct json_object *payload=obj(root,"payload"),*event=obj(payload,"event");
  const char *event_id=field(payload,"event_id"),*team=field(payload,"team_id");
@@ -525,7 +531,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"slack");
  snprintf(d.name,sizeof d.name,"Digit Slack Transport");
- d.version_major=0;d.version_minor=2;d.version_patch=2;
+ d.version_major=0;d.version_minor=2;d.version_patch=3;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
