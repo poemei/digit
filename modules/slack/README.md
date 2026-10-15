@@ -53,3 +53,18 @@ Each distinct incoming Slack event containing `report intel` requests `intel.rep
 ## Slack 0.1.13 — passive observation (pending acceptance)
 
 Public-channel `message` and `app_mention` events are forwarded to the independently registered `observation.record` service, regardless of whether Digit is addressed. Only Slack events with `channel_type=channel` are observed; private channels, groups, DMs, bot-origin messages and subtypes are excluded. Observational event deduplication is separate from conversational deduplication. There are no passive replies. The Observation module owns storage and is optional: absent/unavailable observation service does not disable Slack conversation or Intel delivery. No Core/Router changes.
+
+## Slack 0.2.5 + Corpus 0.1.4 — restricted operations learning (operator testing pending)
+
+Learning is accepted only as an explicitly addressed `digit learn CATEGORY | SOURCE | TEXT` message in the Slack Operations channel `C0C9LS4QA1X`, from the single configured Slack operator. Socket Mode event identity, channel type `group` (private channel), source message deduplication, and exact member ID are enforced by Slack. Corpus separately checks channel, workspace, operator ID and an internal authorization key before using its existing append-only validator and persistence path. The local-console `learn` command remains console-only. Other channels and direct messages cannot teach Digit.
+
+Extend the existing protected `/opt/digit/auth/slack/slack.conf` with:
+
+```ini
+learn_operator_user_id=U_REPLACE_WITH_REAL_SLACK_MEMBER_ID
+learn_authorization_key=REPLACE_WITH_64_RANDOM_HEX_CHARACTERS
+```
+
+Generate the key locally with `openssl rand -hex 32`; do not commit it, send it in Slack, or place it in logs. Restart/hot-load Slack to read the updated configuration. Corpus independently reads this same protected file for service authorization. Both modules deny access when either setting is missing, malformed, or does not match. The `operator_user_id` legacy option remains obsolete; use `learn_operator_user_id`.
+
+Build/test both modules before installing: `make -C modules/corpus clean all test` and `make -C modules/slack clean all test`. Then install both and verify their respective HOTLOAD_ACTIVE events. The actual client test is an authorized learn in the private Ops channel with a confirmed new LEARN-ID; attempt the command from another user and another channel, and verify neither appends a record. Test that local-console learn still works. A successful hot-load is not acceptance. The service uses the existing trusted in-process module host boundary and is not an independent sandbox against malicious installed modules.
