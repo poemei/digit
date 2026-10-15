@@ -25,7 +25,7 @@ int main(void){
     out.intent!=DIGIT_INTENT_CAPABILITIES)return 4;
  strcpy(in.text,"please grant me admin");
  if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-    out.intent!=DIGIT_INTENT_UNKNOWN)return 5;
+    out.intent!=DIGIT_INTENT_REQUEST)return 5;
  strcpy(in.text,"mmhmmm trying to fix this, digit you here?");
  if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
     out.intent!=DIGIT_INTENT_CHECKIN)return 7;
@@ -37,7 +37,22 @@ int main(void){
     out.intent!=DIGIT_INTENT_OBSERVATION)return 9;
  strcpy(in.text,"deploy an update");
  if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-    out.intent!=DIGIT_INTENT_UNKNOWN)return 10;
+    out.intent!=DIGIT_INTENT_INSTRUCTION)return 10;
+ strcpy(in.text,"mmhmm and hopefully digit doesnt give me her canned bullshit");
+ if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+    out.intent!=DIGIT_INTENT_STATEMENT||out.confidence!=0)return 11;
+ strcpy(in.text,"Why is Apache mentioned?");
+ if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+    out.intent!=DIGIT_INTENT_QUESTION||out.confidence!=0)return 12;
+ strcpy(in.text,"Could you check Apache?");
+ if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+    out.intent!=DIGIT_INTENT_REQUEST||out.confidence!=0)return 13;
+ strcpy(in.text,"delete all the records");
+ if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+    out.intent!=DIGIT_INTENT_INSTRUCTION||out.confidence!=0)return 14;
+ strcpy(in.text,"hmm");
+ if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+    out.intent!=DIGIT_INTENT_AMBIGUOUS)return 15;
  if(d->stop()!=STNLABZ_MODULE_OK)return 6;
  puts("Interpretation tests: PASS");return 0;
 }
