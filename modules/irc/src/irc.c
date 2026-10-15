@@ -152,8 +152,10 @@ static void observe_irc(const char *line){
  snprintf(m->sender,sizeof m->sender,"%s",sender);
  snprintf(m->event_id,sizeof m->event_id,"irc-%lu",++sequence);
  snprintf(m->text,sizeof m->text,"%s",body);
- (void)host->invoke_service(DIGIT_OBSERVATION_SERVICE,m,sizeof *m,
+ stnlabz_module_result_t result=host->invoke_service(DIGIT_OBSERVATION_SERVICE,m,sizeof *m,
                            &saved,sizeof saved,&used);
+ if(result!=STNLABZ_MODULE_OK||used!=sizeof saved||saved!=1)
+  notice("[IRC] Passive observation persistence failed");
  free(m);
 }
 /* Only explicitly addressed conversation, never arbitrary IRC commands. */
