@@ -16,6 +16,9 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
   if(size!=sizeof *q||cap<sizeof *v)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
   memset(v,0,sizeof *v);v->version=DIGIT_INTERPRETATION_VERSION;
   if(!strcmp(q->text,"what can you tell me?"))v->intent=DIGIT_INTENT_CAPABILITIES;
+  else if(!strcmp(q->text,"digit you here?"))v->intent=DIGIT_INTENT_CHECKIN;
+  else if(!strcmp(q->text,"digit, access your corpus"))v->intent=DIGIT_INTENT_CORPUS_GUIDANCE;
+  else if(!strcmp(q->text,"digit picked up that report"))v->intent=DIGIT_INTENT_OBSERVATION;
   else if(!strcmp(q->text,"tell me about STN-Labz")){
    v->intent=DIGIT_INTENT_KNOWLEDGE;strcpy(v->subject,"STN-Labz");
   }
@@ -72,7 +75,7 @@ int main(void){
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return 1;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"Hello"))return 1;
  if(handler("Hi digit",9,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"Hello"))return 1;
- if(d->version_patch!=9)return 1;
+ if(d->version_patch!=10)return 1;
  if(handler("what version are you?",22,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      strcmp(out,"Digit 1.0.0"))return 1;
  if(handler("version",8,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
@@ -99,6 +102,12 @@ int main(void){
  if(handler("research https://www.php.net/releases/",sizeof("research https://www.php.net/releases/"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"Retrieved source:"))return 1;
  if(handler("research unknown subject",sizeof("research unknown subject"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"not available"))return 1;
+ if(handler("digit you here?",sizeof("digit you here?"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     !strstr(out,"I'm here"))return 1;
+ if(handler("digit, access your corpus",sizeof("digit, access your corpus"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     !strstr(out,"specific subject"))return 1;
+ if(handler("digit picked up that report",sizeof("digit picked up that report"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     !strstr(out,"have not verified"))return 1;
  if(handler("delete all the records",23,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"cannot determine"))return 1;
  if(handler("",1,out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK)return 1;
