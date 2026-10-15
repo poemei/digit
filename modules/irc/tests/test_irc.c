@@ -1,6 +1,4 @@
-#include <stdio.h>
-#include <string.h>
-/* Include implementation so this module test exercises the real private filter. */
+/* The implementation defines POSIX feature macros before system headers. */
 #include "../src/irc.c"
 
 static unsigned observed;
