@@ -169,6 +169,12 @@ static stnlabz_module_result_t answer(const void *request,size_t length,
    reply="General language interpretation is unavailable.";
   else if(interpreted.intent==DIGIT_INTENT_CAPABILITIES)
    reply="I can answer greetings, identify myself using Core, retrieve factual records from Corpus, and report a scoped diagnosis of your previous request. Please ask about a specific subject.";
+  else if(interpreted.intent==DIGIT_INTENT_CHECKIN)
+   reply="I'm here and receiving your messages. What would you like me to check?";
+  else if(interpreted.intent==DIGIT_INTENT_CORPUS_GUIDANCE)
+   reply="I can look up a specific subject in Corpus. What subject or record should I check?";
+  else if(interpreted.intent==DIGIT_INTENT_OBSERVATION)
+   reply="I received your observation. I have not verified the report against Corpus; ask me about a specific record or subject to check.";
   else if(interpreted.intent==DIGIT_INTENT_KNOWLEDGE){
    digit_corpus_lookup_request_t query={0};
    digit_corpus_lookup_response_t record={0};
@@ -217,7 +223,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
- d.version_major=0;d.version_minor=1;d.version_patch=9;
+ d.version_major=0;d.version_minor=1;d.version_patch=10;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
