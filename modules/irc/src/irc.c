@@ -29,8 +29,9 @@ static atomic_int stopping;
 static int active;
 static const stnlabz_module_host_t *host;
 static pthread_mutex_t intel_lock=PTHREAD_MUTEX_INITIALIZER;
-static char intel_pending[480];
-static int intel_has_pending;
+#define IRC_INTEL_QUEUE_CAPACITY 16u
+static char intel_pending[IRC_INTEL_QUEUE_CAPACITY][480];
+static unsigned intel_head,intel_count;
 static stnlabz_module_result_t publish_intel(const void *request,size_t length,void *out,
  size_t capacity,size_t *used,void *context){
  const digit_intel_delivery_t *msg=request;
@@ -44,8 +45,9 @@ static stnlabz_module_result_t publish_intel(const void *request,size_t length,v
  if(n>=sizeof intel_pending||strchr(msg->message,'\r')||strchr(msg->message,'\n'))
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  pthread_mutex_lock(&intel_lock);
- if(!intel_has_pending){
-  memcpy(intel_pending,msg->message,n+1);intel_has_pending=1;queued=1;
+ if(intel_count<IRC_INTEL_QUEUE_CAPACITY){
+  memcpy(intel_pending[(intel_head+intel_count)%IRC_INTEL_QUEUE_CAPACITY],msg->message,n+1);
+  intel_count++;queued=1;
  }
  pthread_mutex_unlock(&intel_lock);
  memcpy(out,&queued,sizeof queued);*used=sizeof queued;
@@ -85,11 +87,12 @@ static int send_line(SSL *tls,const char *line){
 static int send_pending_intel(SSL *tls){
  char text[480],wire[512];int ok=1;
  pthread_mutex_lock(&intel_lock);
- if(intel_has_pending){
-  snprintf(text,sizeof text,"%s",intel_pending);
+ if(intel_count){
+  snprintf(text,sizeof text,"%s",intel_pending[intel_head]);
   if(snprintf(wire,sizeof wire,"PRIVMSG %s :%s",config.channel,text)>510)ok=0;
   else ok=send_line(tls,wire);
-  if(ok){intel_has_pending=0;intel_pending[0]=0;}
+  if(ok){intel_pending[intel_head][0]=0;
+   intel_head=(intel_head+1)%IRC_INTEL_QUEUE_CAPACITY;intel_count--;}
  }
  pthread_mutex_unlock(&intel_lock);
  return ok;
@@ -387,7 +390,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
   host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
  }
  pthread_mutex_lock(&intel_lock);
- intel_has_pending=0;intel_pending[0]=0;
+ intel_head=0;intel_count=0;memset(intel_pending,0,sizeof intel_pending);
  pthread_mutex_unlock(&intel_lock);
  atomic_store(&stopping,0);
  memset(history,0,sizeof history);
@@ -408,7 +411,7 @@ static stnlabz_module_result_t stop(void){
  if(host&&host->unregister_service)
   (void)host->unregister_service(DIGIT_INTEL_IRC_SERVICE,NULL);
  pthread_mutex_lock(&intel_lock);
- intel_has_pending=0;intel_pending[0]=0;
+ intel_head=0;intel_count=0;memset(intel_pending,0,sizeof intel_pending);
  pthread_mutex_unlock(&intel_lock);
  active=0;OPENSSL_cleanse(&config,sizeof config);host=NULL;
  return STNLABZ_MODULE_OK;
@@ -416,7 +419,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"irc");snprintf(d.name,sizeof d.name,"Digit IRC Transport");
- d.version_major=0;d.version_minor=1;d.version_patch=7;
+ d.version_major=0;d.version_minor=1;d.version_patch=8;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
