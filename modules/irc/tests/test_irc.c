@@ -28,7 +28,7 @@ int main(void){
  stnlabz_module_qualification_result_t q={0};
  const stnlabz_module_descriptor_t *d=stnlabz_module_get_descriptor();
  stnlabz_module_host_t mock_host={0};
- if(!d||strcmp(d->id,"irc")||d->version_minor!=1||d->version_patch!=5)return 1;
+ if(!d||strcmp(d->id,"irc")||d->version_minor!=1||d->version_patch!=6)return 1;
  if(d->qualify(NULL)!=STNLABZ_MODULE_ERR_INVALID_ARGUMENT)return 2;
  if(d->qualify(&q)!=STNLABZ_MODULE_OK||q.tests_executed<10||q.tests_failed)return 3;
  if(d->start(NULL)!=STNLABZ_MODULE_ERR_INVALID_ARGUMENT)return 4;
@@ -79,6 +79,16 @@ int main(void){
   if(addressed_irc_text("good morning everyone",config.nick,text,sizeof text))return 22;
   if(addressed_irc_text("digital systems",config.nick,text,sizeof text))return 23;
   if(addressed_irc_text("digit-bot:",config.nick,text,sizeof text))return 24;
+  if(!addressed_irc_text("umm digit?",config.nick,text,sizeof text)||
+     strcmp(text,"umm digit?"))return 25;
+  if(!addressed_irc_text("so digit, is yur shit working now?",config.nick,text,sizeof text)||
+     strcmp(text,"so digit, is yur shit working now?"))return 26;
+  if(!addressed_irc_text("is digit-bot working?",config.nick,text,sizeof text)||
+     strcmp(text,"is digit-bot working?"))return 27;
+  if(!addressed_irc_text("what do you think, DiGiT?",config.nick,text,sizeof text)||
+     strcmp(text,"what do you think, DiGiT?"))return 28;
+  if(addressed_irc_text("my digital camera works",config.nick,text,sizeof text))return 29;
+  if(addressed_irc_text("digitization is useful",config.nick,text,sizeof text))return 30;
  }
  /* SASL and registration may complete in either order, exactly one JOIN. */
  if(irc_join_ready(0,1,0)||irc_join_ready(1,0,0)||
