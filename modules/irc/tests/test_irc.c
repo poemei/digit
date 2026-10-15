@@ -28,7 +28,7 @@ int main(void){
  stnlabz_module_qualification_result_t q={0};
  const stnlabz_module_descriptor_t *d=stnlabz_module_get_descriptor();
  stnlabz_module_host_t mock_host={0};
- if(!d||strcmp(d->id,"irc")||d->version_minor!=1||d->version_patch!=7)return 1;
+ if(!d||strcmp(d->id,"irc")||d->version_minor!=1||d->version_patch!=8)return 1;
  if(d->qualify(NULL)!=STNLABZ_MODULE_ERR_INVALID_ARGUMENT)return 2;
  if(d->qualify(&q)!=STNLABZ_MODULE_OK||q.tests_executed<10||q.tests_failed)return 3;
  if(d->start(NULL)!=STNLABZ_MODULE_ERR_INVALID_ARGUMENT)return 4;
@@ -89,6 +89,27 @@ int main(void){
      strcmp(text,"what do you think, DiGiT?"))return 28;
   if(addressed_irc_text("my digital camera works",config.nick,text,sizeof text))return 29;
   if(addressed_irc_text("digitization is useful",config.nick,text,sizeof text))return 30;
+ }
+ /* Notification queue admission must hold multiple reports without replacing
+    the first and reject overflow without claiming delivery. */
+ {
+  digit_intel_delivery_t notice={0};int accepted=0;size_t used=0;
+  unsigned k;char expected[64];
+  notice.version=DIGIT_INTEL_DELIVERY_VERSION;
+  active=1;intel_head=0;intel_count=0;
+  for(k=0;k<IRC_INTEL_QUEUE_CAPACITY;k++){
+   snprintf(notice.message,sizeof notice.message,"module-%u",k);
+   if(publish_intel(&notice,sizeof notice,&accepted,sizeof accepted,&used,NULL)!=STNLABZ_MODULE_OK||
+      !accepted||intel_count!=k+1)return 31;
+  }
+  snprintf(notice.message,sizeof notice.message,"overflow");
+  if(publish_intel(&notice,sizeof notice,&accepted,sizeof accepted,&used,NULL)==STNLABZ_MODULE_OK||
+     accepted||intel_count!=IRC_INTEL_QUEUE_CAPACITY)return 32;
+  for(k=0;k<IRC_INTEL_QUEUE_CAPACITY;k++){
+   snprintf(expected,sizeof expected,"module-%u",k);
+   if(strcmp(intel_pending[(intel_head+k)%IRC_INTEL_QUEUE_CAPACITY],expected))return 33;
+  }
+  active=0;intel_head=0;intel_count=0;
  }
  /* SASL and registration may complete in either order, exactly one JOIN. */
  if(irc_join_ready(0,1,0)||irc_join_ready(1,0,0)||
