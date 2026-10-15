@@ -32,6 +32,20 @@ static int classify(const char *s,digit_interpret_response_t *out){
      tok(s,"capabilities")||tok(s,"functions")||tok(s,"skills"))){
   out->intent=DIGIT_INTENT_CAPABILITIES;out->confidence=90;return 1;
  }
+ /* Explicit conversational intents do not imply knowledge evidence or authority. */
+ if(tok(s,"digit")&&(tok(s,"here")||tok(s,"there")||tok(s,"online"))&&
+    (strchr(s,'?')||tok(s,"are")||tok(s,"you"))){
+  out->intent=DIGIT_INTENT_CHECKIN;out->confidence=85;return 1;
+ }
+ if(tok(s,"corpus")&&(tok(s,"access")||tok(s,"use")||tok(s,"check")||
+                        tok(s,"consult")||tok(s,"look"))){
+  out->intent=DIGIT_INTENT_CORPUS_GUIDANCE;out->confidence=85;return 1;
+ }
+ if((tok(s,"digit")||tok(s,"digit-bot"))&&
+    (tok(s,"report")||tok(s,"reports"))&&
+    (tok(s,"apache")||tok(s,"picked")||tok(s,"found"))){
+  out->intent=DIGIT_INTENT_OBSERVATION;out->confidence=70;return 1;
+ }
  for(i=0;knowledge[i];i++)if(prefix(s,knowledge[i])){
   trim_subject(s+strlen(knowledge[i]),out->subject,sizeof out->subject);
   if(!out->subject[0])return 0;
@@ -67,7 +81,10 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  {"learn everything",DIGIT_INTENT_UNKNOWN,""},
  {"deploy an update",DIGIT_INTENT_UNKNOWN,""},
  {"tell me about",DIGIT_INTENT_UNKNOWN,""},
- {"who is?",DIGIT_INTENT_UNKNOWN,""}
+ {"who is?",DIGIT_INTENT_UNKNOWN,""},
+ {"mmhmmm trying to fix this, digit you here?",DIGIT_INTENT_CHECKIN,""},
+ {"Stupid digit, you need to access your corpus",DIGIT_INTENT_CORPUS_GUIDANCE,""},
+ {"Interesting, same report on Apache from days ago, Digit picked them up too",DIGIT_INTENT_OBSERVATION,""}
  };
  unsigned i;digit_interpret_response_t out;memset(q,0,sizeof *q);
  for(i=0;i<sizeof cases/sizeof cases[0];i++){
@@ -95,7 +112,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"interpretation");snprintf(d.name,sizeof d.name,"Digit Interpretation");
- d.version_major=0;d.version_minor=1;d.version_patch=0;
+ d.version_major=0;d.version_minor=1;d.version_patch=1;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=activate;d.stop=stop;return &d;
 }
