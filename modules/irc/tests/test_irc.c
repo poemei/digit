@@ -5,7 +5,7 @@ extern const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void);
 int main(void){
  stnlabz_module_qualification_result_t q={0};
  const stnlabz_module_descriptor_t *d=stnlabz_module_get_descriptor();
- if(!d||strcmp(d->id,"irc")||d->version_minor!=1||d->version_patch!=2)return 1;
+ if(!d||strcmp(d->id,"irc")||d->version_minor!=1||d->version_patch!=3)return 1;
  if(d->qualify(NULL)!=STNLABZ_MODULE_ERR_INVALID_ARGUMENT)return 2;
  if(d->qualify(&q)!=STNLABZ_MODULE_OK||q.tests_executed<10||q.tests_failed)return 3;
  if(d->start(NULL)!=STNLABZ_MODULE_ERR_INVALID_ARGUMENT)return 4;
