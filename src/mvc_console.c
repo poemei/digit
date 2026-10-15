@@ -14,6 +14,7 @@ typedef struct {unsigned int contract_version;char text[2048];} console_dsd_aler
 #include "router.h"
 #include "core_activation.h"
 #include "core_discovery.h"
+#include "core_hotload.h"
 #include "logging.h"
 #include "stnlabz_abi/module_loader.h"
 #include "stnlabz_abi/module_discovery.h"
@@ -161,6 +162,7 @@ int digit_mvc_console(void){
  char directory[1024],line[512];
  size_t seq=0,i;
  int good=1,router_active=0;
+ digit_hotload_t *watch=NULL;
  stnlabz_module_registry_init(&registry);
  stnlabz_module_loader_init(&loader);
  digit_router_reset();command_count=0;service_count=0;
@@ -199,6 +201,8 @@ int digit_mvc_console(void){
   }
   router_active=1;
  }
+ watch=digit_hotload_create(directory,&registry,&loader,&host,&policy);
+ if(!watch){good=0;goto done;}
  printf("STN-LABZ Digit %s | interactive console\n",DIGIT_VERSION_STRING);
  puts("CORE AUTHORITY RULE:");
  puts(stnlabz_agent_root_identity()->core_modification_rule);
