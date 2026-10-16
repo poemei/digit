@@ -89,21 +89,21 @@ static int classify(const char *s,const char *evidence,digit_interpret_response_
     (tok(s,"you")||tok(s,"your")||tok(s,"digit")||tok(s,"help"))&&
     (tok(s,"do")||tok(s,"tell")||tok(s,"know")||tok(s,"help")||
      tok(s,"capabilities")||tok(s,"functions")||tok(s,"skills"))){
-  out->intent=DIGIT_INTENT_CAPABILITIES;out->confidence=90;return 1;
+  out->subject[0]=0;out->intent=DIGIT_INTENT_CAPABILITIES;out->confidence=90;return 1;
  }
  /* Explicit conversational intents do not imply knowledge evidence or authority. */
  if((tok(s,"digit")||utterance!=s)&&(tok(utterance,"here")||tok(utterance,"there")||tok(utterance,"online"))&&
     (strchr(utterance,'?')||tok(utterance,"are")||tok(utterance,"you"))){
-  out->intent=DIGIT_INTENT_CHECKIN;out->confidence=85;return 1;
+  out->subject[0]=0;out->intent=DIGIT_INTENT_CHECKIN;out->confidence=85;return 1;
  }
  if(tok(s,"corpus")&&(tok(s,"access")||tok(s,"use")||tok(s,"check")||
                         tok(s,"consult")||tok(s,"look"))){
-  out->intent=DIGIT_INTENT_CORPUS_GUIDANCE;out->confidence=85;return 1;
+  out->subject[0]=0;out->intent=DIGIT_INTENT_CORPUS_GUIDANCE;out->confidence=85;return 1;
  }
  if((tok(s,"digit")||tok(s,"digit-bot"))&&
     (tok(s,"report")||tok(s,"reports"))&&
     (tok(s,"apache")||tok(s,"picked")||tok(s,"found"))){
-  out->intent=DIGIT_INTENT_OBSERVATION;out->confidence=70;return 1;
+  out->subject[0]=0;out->intent=DIGIT_INTENT_OBSERVATION;out->confidence=70;return 1;
  }
  for(i=0;knowledge[i];i++)if(prefix(utterance,knowledge[i])){
   trim_subject(utterance+strlen(knowledge[i]),out->subject,sizeof out->subject);
