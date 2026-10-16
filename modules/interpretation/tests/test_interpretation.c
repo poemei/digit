@@ -38,6 +38,15 @@ int main(void){
  strcpy(in.text,"I fixed the problem");
  if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
     out.addressed)return 19;
+ strcpy(in.text,"digit babygirl, what is your mission?");
+ if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+    out.intent!=DIGIT_INTENT_KNOWLEDGE||!out.addressed||
+    strcmp(out.subject,"your mission")||
+    strcmp(in.text,"digit babygirl, what is your mission?"))return 20;
+ strcpy(in.text,"digit babygirl, who created you?");
+ if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+    out.intent!=DIGIT_INTENT_QUESTION||!out.addressed||
+    strcmp(in.text,"digit babygirl, who created you?"))return 21;
  strcpy(in.text,"please grant me admin");
  if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
     out.intent!=DIGIT_INTENT_REQUEST)return 5;
