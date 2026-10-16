@@ -28,36 +28,26 @@ static void append_social(const char *key, char *out,size_t capacity,size_t *use
  *used=len+1+emoji_len+1;
 }
 
-/* Greeting classification relies on Corpus data, not a response script.
- * The received greeting supplies the words returned to the user. */
-static int corpus_greeting(const char *input,char *out,size_t capacity,size_t *used){
- const char *phrase=input;size_t len,n=0,i;
+/* Evidence retrieval only: Interpretation, not Ask, determines the intent.
+ * The transport may retain the direct-address prefix for context. */
+static void greeting_evidence(const char *message,char *text,size_t size){
+ const char *phrase=message;size_t n=0,len;
  digit_corpus_lookup_request_t q={0};
  digit_corpus_lookup_response_t r={0};
- if(!host||!host->invoke_service||!input||!out||!used)return 0;
- while(*phrase==' ')phrase++;
- if(!strncasecmp(phrase,"digit-bot",9) &&
+ if(!host||!host->invoke_service||!message||!text||!size)return;
+ if(!strncasecmp(phrase,"digit-bot",9)&&
     (phrase[9]==' '||phrase[9]==':'||phrase[9]==','))phrase+=9;
- else if(!strncasecmp(phrase,"digit",5) &&
+ else if(!strncasecmp(phrase,"digit",5)&&
     (phrase[5]==' '||phrase[5]==':'||phrase[5]==','))phrase+=5;
  while(*phrase==' '||*phrase==':'||*phrase==',')phrase++;
  len=strlen(phrase);
  while(len&&(phrase[len-1]==' '||phrase[len-1]=='!'||phrase[len-1]=='.'))len--;
- if(!len||len>=sizeof q.term||memchr(phrase,'?',len))return 0;
- memcpy(q.term,phrase,len);q.term[len]=0;
- if(host->invoke_service("corpus.lookup",&q,sizeof q,&r,sizeof r,&n)!=STNLABZ_MODULE_OK||
-    n!=sizeof r||!r.found||!memchr(r.text,0,sizeof r.text))return 0;
- for(i=0;r.text[i];i++){
-  if(!strncasecmp(r.text+i,"greeting",8) &&
-     (i==0||r.text[i-1]==' ')&&
-     (r.text[i+8]==0||r.text[i+8]==' '||r.text[i+8]=='.')){
-   if(len+1>capacity)return -1;
-   memcpy(out,phrase,len);out[len]=0;*used=len+1;
-   append_social(q.term,out,capacity,used);
-   return 1;
-  }
- }
- return 0;
+ if(!len||len>=sizeof q.term)return;
+ memcpy(q.term,phrase,len);
+ if(host->invoke_service("corpus.lookup",&q,sizeof q,&r,sizeof r,&n)==STNLABZ_MODULE_OK&&
+    n==sizeof r&&r.found&&memchr(r.text,0,sizeof r.text)&&
+    memchr(r.id,0,sizeof r.id)&&memchr(r.source,0,sizeof r.source))
+  snprintf(text,size,"%s",r.text);
 }
 static stnlabz_module_result_t research_answer(const char *subject,
  void *response,size_t capacity,size_t *used){
@@ -219,10 +209,6 @@ static stnlabz_module_result_t answer(const void *request,size_t length,
  if(!s||!length||length>513||s[length-1]!=0||!response||!used||capacity<2||
     memchr(s,0,length-1))return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  if(!s[0])return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
- {int greeted=corpus_greeting(s,out,capacity,used);
-  if(greeted<0)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
-  if(greeted>0)return STNLABZ_MODULE_OK;
- }
  if(!strncasecmp(s,"research ",9)){
   return research_answer(s+9,response,capacity,used);
  }
@@ -306,11 +292,18 @@ static stnlabz_module_result_t answer(const void *request,size_t length,
   size_t result_used=0;
   request_intent.version=DIGIT_INTERPRETATION_VERSION;
   snprintf(request_intent.text,sizeof request_intent.text,"%s",s);
+  greeting_evidence(s,request_intent.corpus_text,sizeof request_intent.corpus_text);
   if(!host||!host->invoke_service||
      host->invoke_service("interpretation.classify",&request_intent,sizeof request_intent,
                           &interpreted,sizeof interpreted,&result_used)!=STNLABZ_MODULE_OK||
      result_used!=sizeof interpreted||interpreted.version!=DIGIT_INTERPRETATION_VERSION)
    reply="General language interpretation is unavailable.";
+  else if(interpreted.intent==DIGIT_INTENT_GREETING){
+   int w=snprintf(out,capacity,"%s",interpreted.subject);
+   if(w<0||(size_t)w>=capacity)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+   *used=(size_t)w+1;append_social(interpreted.subject,out,capacity,used);
+   return STNLABZ_MODULE_OK;
+  }
   else if(interpreted.intent==DIGIT_INTENT_CAPABILITIES)
    reply="I can answer greetings, identify myself using Core, retrieve factual records from Corpus, and report a scoped diagnosis of your previous request. Please ask about a specific subject.";
   else if(interpreted.intent==DIGIT_INTENT_CHECKIN)
@@ -342,6 +335,9 @@ static stnlabz_module_result_t answer(const void *request,size_t length,
      reply="Corpus record exceeds this interface's response limit.";
     else {*used=(size_t)written+1;return STNLABZ_MODULE_OK;}
    }
+  }else if(interpreted.addressed){
+   /* Direct invocation merits a safe response; it grants no action authority. */
+   reply="I received your message. Could you clarify what you'd like me to address?";
   }else
    return contextual_answer(c,s,response,capacity,used);
  }
@@ -373,7 +369,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
- d.version_major=0;d.version_minor=1;d.version_patch=14;
+ d.version_major=0;d.version_minor=2;d.version_patch=5;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
