@@ -207,6 +207,19 @@ static int addressed_irc_text(const char *raw,const char *nick,char *out,size_t 
  memcpy(out,text,len+1);
  return 1;
 }
+/* Public chat presentation hides internal Corpus IDs and source tags. */
+static void digit_irc_hide_corpus_reference(char *text){
+ const char *tag=" [Corpus: ",*p,*last=NULL,*source;
+ size_t n;
+ if(!text)return;
+ for(p=strstr(text,tag);p;p=strstr(p+1,tag))last=p;
+ if(!last)return;
+ n=strlen(last);
+ if(n<2||last[n-1]!=']')return;
+ source=strstr(last,"; source: ");
+ if(!source||source>=last+n-1)return;
+ ((char *)last)[0]=0;
+}
 /* Only explicitly addressed conversation, never arbitrary IRC commands. */
 static void chat_message(SSL *tls,const char *line){
  const char *sep,*body,*prefix;char sender[64]={0},target[128]={0},message[513];
@@ -280,21 +293,9 @@ static void chat_message(SSL *tls,const char *line){
   conversation->previous.service_result=(int)dispatch_result;
  }
  if(dispatch_result!=STNLABZ_MODULE_OK||!used||used>sizeof answer||!memchr(answer,0,used))return;
- /* Public chat presentation omits internal Corpus record IDs and source tags.
- * Evidence remains available internally; only the transport-facing copy changes. */
-void digit_irc_hide_corpus_reference(char *text){
- const char *tag=" [Corpus: ",*p,*last=NULL,*source;
- size_t n;
- if(!text)return;
- for(p=strstr(text,tag);p;p=strstr(p+1,tag))last=p;
- if(!last)return;
- n=strlen(last);
- if(n<2||last[n-1]!=']')return;
- source=strstr(last,"; source: ");
- if(!source||source>=last+n-1)return;
- ((char *)last)[0]=0;
-}
-/* IRC protocol framing, not server-side presentation: one PRIVMSG per report line. */
+snprintf(public_answer,sizeof public_answer,"%s",answer);
+ digit_irc_hide_corpus_reference(public_answer);
+ /* IRC protocol framing, not server-side presentation: one PRIVMSG per report line. */
  {
   const char *p=public_answer;const char *recipient=!strcasecmp(target,config.nick)?sender:config.channel;
   size_t sent=0;
