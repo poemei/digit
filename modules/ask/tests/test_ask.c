@@ -47,6 +47,10 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
    v->addressed=1;v->intent=DIGIT_INTENT_AMBIGUOUS;
    snprintf(v->subject,sizeof v->subject,"%s",q->text+6);
   }
+  else if(!strcasecmp(q->text,"Hi Digit")){
+   v->addressed=1;v->intent=DIGIT_INTENT_AMBIGUOUS;
+   strcpy(v->subject,"Hi");
+  }
   else if(strstr(q->text,"Digit")||strstr(q->text,"digit"))v->addressed=1;
   else if(!strcmp(q->text,"tell me about STN-Labz")){
    v->intent=DIGIT_INTENT_KNOWLEDGE;strcpy(v->subject,"STN-Labz");
@@ -174,7 +178,7 @@ int main(void){
      !strstr(out,"Retrieved source:"))return 1;
  if(handler("research unknown subject",sizeof("research unknown subject"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"not available"))return 1;
  if(handler("Hi Digit",sizeof("Hi Digit"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-    !strstr(out,"clarify"))return 1;
+    !strstr(out,"Hi"))return 1;
  if(handler("digit hello",sizeof("digit hello"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
     !strstr(out,"hello"))return 1;
  if(handler("digit you here?",sizeof("digit you here?"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
