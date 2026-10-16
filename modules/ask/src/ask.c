@@ -338,6 +338,10 @@ static stnlabz_module_result_t answer(const void *request,size_t length,
     else {*used=(size_t)written+1;return STNLABZ_MODULE_OK;}
    }
   }else if(interpreted.addressed&&c&&c->transport[0]&&c->channel[0]){
+   /* Do not mask an invalid transport scope as a successful clarification. */
+   if((strcmp(c->transport,"irc")&&strcmp(c->transport,"slack"))||
+      (c->transport[0]=='i'&&c->channel[0]!='#'))
+    return STNLABZ_MODULE_ERR_NOT_FOUND;
    stnlabz_module_result_t evaluated=contextual_answer(c,s,interpreted.addressed,response,capacity,used);
    if(evaluated==STNLABZ_MODULE_OK&&*used>1)return evaluated;
    reply="I received your message. Could you clarify what you would like me to address?";
