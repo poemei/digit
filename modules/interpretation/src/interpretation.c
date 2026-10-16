@@ -63,7 +63,7 @@ static int classify(const char *s,const char *evidence,digit_interpret_response_
  out->addressed=(unsigned)(utterance!=s||tok(s,"digit")||tok(s,"digit-bot"));
  /* Interpretation classifies a greeting using learned Corpus evidence.
   * Corpus retrieval remains owned by the caller's model service. */
- if(out->addressed&&evidence&&*evidence&&
+ if(evidence&&*evidence&&
     tok(evidence,"greeting")){
   size_t n=strlen(utterance);
   while(n&&(utterance[n-1]=='!'||utterance[n-1]=='.'||utterance[n-1]==' '))n--;
