@@ -44,7 +44,7 @@ static digit_intent_t speech_act(const char *s){
  if(words>=3)return DIGIT_INTENT_STATEMENT;
  return DIGIT_INTENT_AMBIGUOUS;
 }
-static int classify(const char *s,digit_interpret_response_t *out){
+static int classify(const char *s,const char *evidence,digit_interpret_response_t *out){
  static const char *knowledge[]={"what is ","what are ","who is ","who are ","tell me about ","describe ","explain ","information about ","do you know about ",NULL};
  unsigned i;
  /* Preserve address semantics while classifying the actual utterance. */
@@ -59,6 +59,19 @@ static int classify(const char *s,digit_interpret_response_t *out){
  }
  while(*utterance==' '||*utterance==':'||*utterance==',')utterance++;
  if(!*utterance)utterance=s;
+ /* Direct address may occur after ordinary conversational text. */
+ out->addressed=(unsigned)(utterance!=s||tok(s,"digit")||tok(s,"digit-bot"));
+ /* Interpretation classifies a greeting using learned Corpus evidence.
+  * Corpus retrieval remains owned by the caller's model service. */
+ if(out->addressed&&evidence&&*evidence&&
+    tok(evidence,"greeting")){
+  size_t n=strlen(utterance);
+  while(n&&(utterance[n-1]=='!'||utterance[n-1]=='.'||utterance[n-1]==' '))n--;
+  if(n&&n<sizeof out->subject){
+   memcpy(out->subject,utterance,n);out->subject[n]=0;
+   out->intent=DIGIT_INTENT_GREETING;out->confidence=80;return 1;
+  }
+ }
  if((tok(s,"can")||tok(s,"could")||tok(s,"able")||tok(s,"capabilities")||
      tok(s,"functions")||tok(s,"skills")||tok(s,"help"))&&
     (tok(s,"you")||tok(s,"your")||tok(s,"digit")||tok(s,"help"))&&
@@ -99,7 +112,8 @@ static stnlabz_module_result_t interpret(const void *request,size_t size,void *r
     q->version!=DIGIT_INTERPRETATION_VERSION||
     !memchr(q->text,0,sizeof q->text)||!q->text[0])
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
- (void)classify(q->text,out);*used=sizeof *out;return STNLABZ_MODULE_OK;
+ if(!memchr(q->corpus_text,0,sizeof q->corpus_text))return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ (void)classify(q->text,q->corpus_text,out);*used=sizeof *out;return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q){
  if(!q)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
@@ -133,7 +147,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  };
  unsigned i;digit_interpret_response_t out;memset(q,0,sizeof *q);
  for(i=0;i<sizeof cases/sizeof cases[0];i++){
-  (void)classify(cases[i].s,&out);q->tests_executed++;
+  (void)classify(cases[i].s,"",&out);q->tests_executed++;
   if(out.intent==cases[i].intent&&!strcmp(out.subject,cases[i].subject))q->tests_passed++;
   else q->tests_failed++;
  }
@@ -157,7 +171,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"interpretation");snprintf(d.name,sizeof d.name,"Digit Interpretation");
- d.version_major=0;d.version_minor=1;d.version_patch=3;
+ d.version_major=0;d.version_minor=1;d.version_patch=4;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=activate;d.stop=stop;return &d;
 }
