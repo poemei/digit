@@ -15,7 +15,7 @@ extern int digit_slack_addressed_text(const char *,const char *,const char *,con
 int main(void){
  stnlabz_module_qualification_result_t q={0};char formatted[512];
  const stnlabz_module_descriptor_t *d=stnlabz_module_get_descriptor();
- if(!d||strcmp(d->id,"slack")||d->version_major!=0||d->version_minor!=2||d->version_patch!=5)return 1;
+ if(!d||strcmp(d->id,"slack")||d->version_major!=0||d->version_minor!=2||d->version_patch!=6)return 1;
  if(strcmp(digit_slack_delivery_channel("[MODULE] HOTLOAD_ACTIVE id=reasoning","C0INTEL"),"C0C9LS4QA1X"))return 45;
  if(strcmp(digit_slack_delivery_channel("[MODULE] HOTLOAD_FAILED id=ask","C0INTEL"),"C0C9LS4QA1X"))return 46;
  if(strcmp(digit_slack_delivery_channel("Intel report","C0INTEL"),"C0INTEL"))return 47;
@@ -39,7 +39,7 @@ int main(void){
      strcmp(formatted,"*DSD SCOPED REPORT*\nRequest: x"))return 9;
  if(!digit_slack_addressed_text("message","C0INTEL","U123","digit-bot: research PHP",formatted,sizeof formatted)||strcmp(formatted,"research PHP"))return 10;
  if(!digit_slack_addressed_text("app_mention","C0INTEL","U123","<@U123> research PHP",formatted,sizeof formatted)||strcmp(formatted,"research PHP"))return 11;
- if(!digit_slack_addressed_text("message","C0INTEL","U123","Digit research PHP",formatted,sizeof formatted)||strcmp(formatted,"research PHP"))return 12;
+ if(!digit_slack_addressed_text("message","C0INTEL","U123","Digit research PHP",formatted,sizeof formatted)||strcmp(formatted,"Digit research PHP"))return 12;
  if(!digit_slack_addressed_text("message","C0OTHER","U123","digit-bot: research PHP",formatted,sizeof formatted)||strcmp(formatted,"research PHP"))return 13;
  if(digit_slack_addressed_text("message","C0INTEL","U123","research PHP",formatted,sizeof formatted))return 14;
  if(digit_slack_addressed_text("message","C0INTEL","U123","digit-bot:",formatted,sizeof formatted))return 15;
