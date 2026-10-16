@@ -19,8 +19,12 @@ bin/corpus-import: src/corpus_import.c include/corpus_store.h
 	$(CC) $(CFLAGS) -Iinclude -I$(ROOT)/include src/corpus_import.c -o $@
 import-tool: bin/corpus-import
 
-test: $(TARGET) bin/test_corpus bin/corpus-import
+bin/test_corpus_import: tests/test_corpus_import.c src/corpus_import.c include/corpus_store.h
+	mkdir -p bin
+	$(CC) $(CFLAGS) -Iinclude -I$(ROOT)/include tests/test_corpus_import.c -o $@
+test: $(TARGET) bin/test_corpus bin/corpus-import bin/test_corpus_import
 	@./bin/test_corpus
+	@./bin/test_corpus_import
 
 install: $(TARGET) bin/corpus-import
 	@test -d "$(PREFIX)/modules" || { echo "Install Digit first" >&2; exit 2; }
