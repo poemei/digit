@@ -49,6 +49,10 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
    v->addressed=0;v->intent=DIGIT_INTENT_KNOWLEDGE;
    strcpy(v->subject,"STN-Labz");
   }
+  else if(!strcasecmp(q->text,"Digit what is your mission?")){
+   v->addressed=1;v->intent=DIGIT_INTENT_KNOWLEDGE;
+   strcpy(v->subject,"Digit's mission");
+  }
   else if(!strcasecmp(q->text,"digit, what is your mission?")){
    v->addressed=1;v->intent=DIGIT_INTENT_KNOWLEDGE;
    strcpy(v->subject,"Digit's mission");
@@ -172,7 +176,7 @@ int main(void){
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return test_failure(__LINE__);
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hello"))return test_failure(__LINE__);
  if(handler("hi",3,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hi"))return test_failure(__LINE__);
- if(d->version_minor!=2||d->version_patch!=7)return test_failure(__LINE__);
+ if(d->version_minor!=2||d->version_patch!=8)return test_failure(__LINE__);
  if(socials_calls!=2||!strstr(out,"💚"))return test_failure(__LINE__);
  socials_available=0;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
@@ -230,6 +234,14 @@ int main(void){
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"support authorized STN-LABZ operations")||
      !strstr(out,"fixture-mission"))return test_failure(__LINE__);
+  /* A private IRC target is the bot nick, not a #channel. The DM itself
+     supplies direct address; ordinary pronouns must still resolve correctly. */
+  strcpy(context.transport,"irc");strcpy(context.channel,"digit-bot");
+  strcpy(context.question,"what is your mission?");
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     !strstr(out,"support authorized STN-LABZ operations")||
+     !strstr(out,"fixture-mission"))return test_failure(__LINE__);
+  strcpy(context.channel,"#stn-labz");
   strcpy(context.question,"Digit topic discussion");
   selected_subject=0;retained_full_message=0;
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
