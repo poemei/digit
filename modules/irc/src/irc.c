@@ -324,20 +324,36 @@ snprintf(public_answer,sizeof public_answer,"%s",answer);
 
 }
 /* Registration may complete before or after SASL; join only when both pass. */
-static int irc_join_ready(int authenticated,int registered,int joined){
- return authenticated&&registered&&!joined;
+/* JOIN send and server confirmation are separate protocol states. */
+static int irc_join_ready(int authenticated,int registered,int join_sent){
+ return authenticated&&registered&&!join_sent;
+}
+static int irc_join_confirmed(const char *line,const char *nick,const char *channel){
+ const char *prefix,*sep,*join,*target,*end;
+ size_t nicklen,targetlen;
+ if(!line||!nick||!channel||line[0]!=':')return 0;
+ sep=strchr(line,' ');if(!sep)return 0;
+ prefix=line+1;nicklen=(size_t)(sep-prefix);
+ {const char *bang=memchr(prefix,'!',nicklen);if(bang)nicklen=(size_t)(bang-prefix);}
+ if(nicklen!=strlen(nick)||strncasecmp(prefix,nick,nicklen))return 0;
+ join=strstr(sep," JOIN ");if(!join)return 0;
+ target=join+6;if(*target==':')target++;
+ end=strchr(target,' ');targetlen=end?(size_t)(end-target):strlen(target);
+ return targetlen==strlen(channel)&&!strncasecmp(target,channel,targetlen);
 }
 static int irc_tls_read_ready(int socket_ready,int pending){
  return socket_ready>0||pending>0;
 }
-static int join_if_ready(SSL *tls,int authenticated,int registered,int *joined){
+static int join_if_ready(SSL *tls,int authenticated,int registered,int *join_sent){
  char cmd[513];
- if(!irc_join_ready(authenticated,registered,*joined))return 1;
+ if(!irc_join_ready(authenticated,registered,*join_sent))return 1;
  snprintf(cmd,sizeof cmd,"JOIN %s",config.channel);
  if(!send_line(tls,cmd))return 0;
- *joined=1;return 1;
+ *join_sent=1;
+ notice("[IRC] JOIN request sent; waiting for server confirmation");
+ return 1;
 }
-static int handle_line(SSL *tls,const char *line,int *authenticated,int *registered,int *joined){
+static int handle_line(SSL *tls,const char *line,int *authenticated,int *registered,int *join_sent,int *joined){
  char cmd[513],payload[513];const char *p;
  if(!strncmp(line,"PING ",5))return send_line(tls,line[0]=='P'&&line[5]==':'?
   (snprintf(cmd,sizeof cmd,"PONG %s",line+5),cmd):"PONG");
@@ -348,7 +364,7 @@ static int handle_line(SSL *tls,const char *line,int *authenticated,int *registe
  if(strstr(line," 903 ")){
   *authenticated=1;
   if(!send_line(tls,"CAP END"))return 0;
-  return join_if_ready(tls,*authenticated,*registered,joined);
+  return join_if_ready(tls,*authenticated,*registered,join_sent);
  }
  if(strstr(line," 904 ")||strstr(line," 905 ")||strstr(line," 906 ")||strstr(line," 907 ")){
   notice("[IRC] SASL authentication rejected");return 0;
@@ -360,12 +376,19 @@ static int handle_line(SSL *tls,const char *line,int *authenticated,int *registe
   return join_if_ready(tls,*authenticated,*registered,joined);
  }
  /* Incoming channel messages are observational only; they confer no command authority. */
- p=strstr(line," PRIVMSG ");
+ if(irc_join_confirmed(line,config.nick,config.channel)){
+   if(!*joined){
+    *joined=1;
+    notice("[IRC] Server confirmed channel membership; queued reports may now be delivered");
+   }
+   return 1;
+  }
+  p=strstr(line," PRIVMSG ");
  if(p&&*authenticated){observe_irc(line);chat_message(tls,line);return 1;}
  return 1;
 }
 static void run_connection(void){
- int fd=-1,authenticated=0,registered=0,joined=0,ok=1;
+ int fd=-1,authenticated=0,registered=0,join_sent=0,joined=0,ok=1;
  SSL_CTX *ctx=NULL;SSL *tls=NULL;
  char input[2048],line[513],cmd[513];size_t count=0;
  fd=connect_tcp();if(fd<0){notice("[IRC] TCP connection failed");return;}
@@ -396,7 +419,7 @@ static void run_connection(void){
    if(input[i]=='\n'){
     if(count&&line[count-1]=='\r')count--;
     line[count]=0;
-    if(count&&!(ok=handle_line(tls,line,&authenticated,&registered,&joined)))break;
+    if(count&&!(ok=handle_line(tls,line,&authenticated,&registered,&join_sent,&joined)))break;
     count=0;
    }else if(count<sizeof line-1)line[count++]=input[i];
    else {ok=0;notice("[IRC] Oversized IRC line rejected");break;}
@@ -460,7 +483,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"irc");snprintf(d.name,sizeof d.name,"Digit IRC Transport");
- d.version_major=0;d.version_minor=2;d.version_patch=1;
+ d.version_major=0;d.version_minor=2;d.version_patch=2;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
