@@ -45,8 +45,15 @@ int main(void){
  strcpy(in.text,"digit babygirl, what is your mission?");
  if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
     out.intent!=DIGIT_INTENT_KNOWLEDGE||!out.addressed||
-    strcmp(out.subject,"your mission")||
+    strcmp(out.subject,"Digit\'s mission")||
     strcmp(in.text,"digit babygirl, what is your mission?"))return test_failure(20,__LINE__);
+ strcpy(in.text,"digit, describe your responsibilities");
+ if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+    out.intent!=DIGIT_INTENT_KNOWLEDGE||!out.addressed||
+    strcmp(out.subject,"Digit's responsibilities"))return test_failure(22,__LINE__);
+ strcpy(in.text,"what is your mission?");
+ if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+    out.addressed||strcmp(out.subject,"your mission"))return test_failure(23,__LINE__);
  strcpy(in.text,"digit babygirl, who created you?");
  if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
     out.intent!=DIGIT_INTENT_QUESTION||!out.addressed||
