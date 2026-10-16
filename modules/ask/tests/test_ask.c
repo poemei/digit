@@ -137,7 +137,7 @@ static int reg(const char *s,stnlabz_module_service_handler_fn fn,void *ctx){(vo
 static int unreg(const char *s,void *ctx){(void)ctx;return strcmp(s,"route./ask")==0;}
 /* Report the precise failed assertion without changing test expectations. */
 static int test_failure(int line){
- fprintf(stderr,"Ask test assertion failed at test_ask.c:%d\\n",line);
+ fprintf(stderr,"Ask test assertion failed at test_ask.c:%d\n",line);
  return 1;
 }
 int main(void){
@@ -208,8 +208,8 @@ int main(void){
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"clarify"))return test_failure(__LINE__);
   strcpy(context.channel,"#other-channel");
-  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK)
-   return test_failure(__LINE__);
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     !strstr(out,"clarify"))return test_failure(__LINE__);
  }
  if(handler("",1,out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK)return test_failure(__LINE__);
  if(handler("hello",6,out,2,&used,NULL)==STNLABZ_MODULE_OK)return test_failure(__LINE__);
