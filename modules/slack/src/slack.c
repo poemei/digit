@@ -286,6 +286,14 @@ int digit_slack_public_conversation(const char *type,const char *kind){
  return type&&kind&&(!strcmp(type,"message")||!strcmp(type,"app_mention"))&&
   (!strcmp(kind,"channel")||!strcmp(kind,"group"));
 }
+/* A successful empty Ask result means intentional silence, not dispatch failure.
+ * Return -1 for invalid/failed dispatch, 0 for valid silence, 1 for a reply. */
+int digit_slack_dispatch_reply_state(stnlabz_module_result_t status,size_t used,
+                                     size_t capacity,const char *answer){
+ if(status!=STNLABZ_MODULE_OK||!answer||!used||used>capacity||
+    !memchr(answer,0,used))return -1;
+ return answer[0]?1:0;
+}
 /* Accept only explicit addressing in workspace channels.
  * A Slack mention, plain bot name, or bot name plus colon qualifies.
  * Arbitrary channel chatter is not routed into Ask. */
@@ -441,7 +449,7 @@ static void process(struct json_object *root){
  const char *kind=field(event,"channel_type"),*text=raw;
  int dm,is_public;char addressed[513]={0},answer[4096]={0};
  digit_router_request_t request={0};digit_ask_context_t ctx={0};
- history_t *h;size_t used=0;stnlabz_module_result_t status;
+ history_t *h;size_t used=0;int reply_state;stnlabz_module_result_t status;
  if(!event||!type||!user||!channel||!raw||!team||
     strcmp(team,cfg.workspace)||subtype||bot||!strcmp(user,bot_id))return;
  /* Observe channel and group messages; event dedup is separate
@@ -498,10 +506,12 @@ static void process(struct json_object *root){
   h->previous.outcome=status==STNLABZ_MODULE_OK?0:5;
   h->previous.service_result=(int)status;
  }
- if(status!=STNLABZ_MODULE_OK||used<2||used>sizeof answer||!memchr(answer,0,used)){
+ reply_state=digit_slack_dispatch_reply_state(status,used,sizeof answer,answer);
+ if(reply_state<0){
   log_status("[SLACK] Ask dispatch unavailable");
   return;
  }
+ if(reply_state==0)return; /* Ask/Reasoning deliberately chose not to speak. */
  {char formatted[8192];
   digit_slack_hide_corpus_reference(answer);
   if(!digit_slack_format_reply(answer,formatted,sizeof formatted)){
@@ -613,7 +623,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"slack");
  snprintf(d.name,sizeof d.name,"Digit Slack Transport");
- d.version_major=0;d.version_minor=2;d.version_patch=8;
+ d.version_major=0;d.version_minor=2;d.version_patch=9;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
