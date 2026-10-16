@@ -166,7 +166,8 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
     n!=sizeof *rr||rr->version!=DIGIT_REASONING_VERSION)goto done;
  /* Reasoning determines response eligibility for direct invocation.
     Preserve existing query handling for non-addressed requests. */
- if(rr->response_eligible||strchr(message,'?')){
+ if(rr->response_eligible||(rr->knowledge==DIGIT_REASONING_CORPUS_SUPPORTED&&
+     rr->relevance==DIGIT_REASONING_CONTEXTUAL&&rr->matched_observations>=2)){
   if(rr->knowledge==DIGIT_REASONING_CORPUS_SUPPORTED&&corpus_ok){
    int w=snprintf(out,capacity,"%s [Corpus: %s; source: %s]",
                     cr->text,cr->id,cr->source);
@@ -203,6 +204,25 @@ static stnlabz_module_result_t answer(const void *request,size_t length,
  if(!s||!length||length>513||s[length-1]!=0||!response||!used||capacity<2||
     memchr(s,0,length-1))return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  if(!s[0])return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ /* Channel traffic is admitted for evaluation, never automatically for speech.
+    Interpret without altering the original utterance and gate unaddressed
+    contributions on independently corroborated Corpus/Observation evidence. */
+ if(c&&c->transport[0]&&c->channel[0]){
+  digit_interpret_request_t iq={0};
+  digit_interpret_response_t ir={0};
+  size_t n=0;
+  iq.version=DIGIT_INTERPRETATION_VERSION;
+  snprintf(iq.text,sizeof iq.text,"%s",s);
+  if(!host||!host->invoke_service||
+     host->invoke_service("interpretation.classify",&iq,sizeof iq,
+                          &ir,sizeof ir,&n)!=STNLABZ_MODULE_OK||
+     n!=sizeof ir||ir.version!=DIGIT_INTERPRETATION_VERSION){
+   out[0]=0;*used=1;return STNLABZ_MODULE_OK;
+  }
+  if(!ir.addressed){
+   return contextual_answer(c,s,ir.subject,0,response,capacity,used);
+  }
+ }
  if(!strncasecmp(s,"research ",9)){
   return research_answer(s+9,response,capacity,used);
  }
@@ -378,7 +398,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
- d.version_major=0;d.version_minor=2;d.version_patch=6;
+ d.version_major=0;d.version_minor=2;d.version_patch=7;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
