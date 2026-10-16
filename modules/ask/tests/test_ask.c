@@ -12,6 +12,8 @@
 extern const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void);
 static stnlabz_module_service_handler_fn handler;
 static int identity_calls;
+static int retained_full_message;
+static int selected_subject;
 static int socials_available=1;
 static int socials_calls;
 static stnlabz_module_result_t invoke(const char *name,const void *req,size_t size,void *reply,size_t cap,size_t *used){
@@ -39,6 +41,10 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
    v->intent=DIGIT_INTENT_GREETING;
    if(!strncasecmp(q->text,"Digit ",6))snprintf(v->subject,sizeof v->subject,"%.*s",(int)sizeof v->subject-1,q->text+6);
    else snprintf(v->subject,sizeof v->subject,"%.*s",(int)sizeof v->subject-1,q->text);
+  }
+  else if(!strcmp(q->text,"Digit topic discussion")){
+   v->addressed=1;v->intent=DIGIT_INTENT_STATEMENT;
+   strcpy(v->subject,"STN-Labz");
   }
   else if(!strcmp(q->text,"what can you tell me?"))v->intent=DIGIT_INTENT_CAPABILITIES;
   else if(!strcmp(q->text,"digit you here?"))v->intent=DIGIT_INTENT_CHECKIN;
@@ -76,6 +82,7 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
      strcmp(q->sender,"PoeMei")||q->observation_count!=1||
      strcmp(q->observations[0].event_id,"event-1"))
      return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+  if(!strcmp(q->message,"Digit topic discussion"))retained_full_message=1;
   memset(r,0,sizeof *r);r->version=DIGIT_REASONING_VERSION;
   r->response_eligible=q->addressed;
   r->knowledge=q->corpus_state==DIGIT_REASONING_PRESENT?
@@ -117,6 +124,7 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
    snprintf(result->text,sizeof result->text,"%s is a greeting commonly used to open a conversation.",q->term);
   }
   if(!strcmp(q->term,"STN-Labz")){
+   selected_subject=1;
    result->found=1;
    strcpy(result->id,"TEST-ORG");
    strcpy(result->source,"fixture-corpus");
@@ -147,7 +155,7 @@ int main(void){
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return test_failure(__LINE__);
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hello"))return test_failure(__LINE__);
  if(handler("hi",3,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hi"))return test_failure(__LINE__);
- if(d->version_minor!=2||d->version_patch!=5)return test_failure(__LINE__);
+ if(d->version_minor!=2||d->version_patch!=6)return test_failure(__LINE__);
  if(socials_calls!=2||!strstr(out,"💚"))return test_failure(__LINE__);
  socials_available=0;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
@@ -201,6 +209,10 @@ int main(void){
   strcpy(context.question,"I added a reasoning module for Digit, and expect a canned reply");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"clarify"))return test_failure(__LINE__);
+  strcpy(context.question,"Digit topic discussion");
+  selected_subject=0;retained_full_message=0;
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     !selected_subject||!retained_full_message||!strstr(out,"engineering research"))return test_failure(__LINE__);
   strcpy(context.question,"Digit I fixed the problem");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"clarify"))return test_failure(__LINE__);
