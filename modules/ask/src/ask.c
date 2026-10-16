@@ -97,7 +97,7 @@ static stnlabz_module_result_t research_answer(const char *subject,
 /* Evidence-bound fallback for unsupported chat, never an inferred command.
    Mention admission alone is not a reason to speak. */
 static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
- const char *message,unsigned addressed,void *output,size_t capacity,size_t *used){
+ const char *message,const char *subject,unsigned addressed,void *output,size_t capacity,size_t *used){
  digit_observation_recent_request_t oq={0};
  digit_observation_recent_response_t *history=NULL;
  digit_reasoning_request_t *rq=NULL;
@@ -149,7 +149,7 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
   }
  }else rq->observation_state=DIGIT_REASONING_UNAVAILABLE;
  /* Search the actual message; no lexicon-derived subject or fabricated claim. */
- snprintf(cq.term,sizeof cq.term,"%.*s",(int)(sizeof cq.term-1),message);
+ snprintf(cq.term,sizeof cq.term,"%.*s",(int)(sizeof cq.term-1),subject&&subject[0]?subject:message);
  if(host->invoke_service("corpus.lookup",&cq,sizeof cq,cr,sizeof *cr,&n)==STNLABZ_MODULE_OK&&
     n==sizeof *cr){
   corpus_ok=1;
@@ -342,13 +342,13 @@ static stnlabz_module_result_t answer(const void *request,size_t length,
    if((strcmp(c->transport,"irc")&&strcmp(c->transport,"slack"))||
       (c->transport[0]=='i'&&c->channel[0]!='#'))
     return STNLABZ_MODULE_ERR_NOT_FOUND;
-   stnlabz_module_result_t evaluated=contextual_answer(c,s,interpreted.addressed,response,capacity,used);
+   stnlabz_module_result_t evaluated=contextual_answer(c,s,interpreted.subject,interpreted.addressed,response,capacity,used);
    if(evaluated==STNLABZ_MODULE_OK&&*used>1)return evaluated;
    reply="I received your message. Could you clarify what you would like me to address?";
   }else if(interpreted.addressed){
    reply="I received your message. Could you clarify what you'd like me to address?";
   }else
-   return contextual_answer(c,s,0,response,capacity,used);
+   return contextual_answer(c,s,interpreted.subject,0,response,capacity,used);
  }
  if(strlen(reply)+1>capacity)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memcpy(out,reply,strlen(reply)+1);*used=strlen(reply)+1;
@@ -378,7 +378,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
- d.version_major=0;d.version_minor=2;d.version_patch=5;
+ d.version_major=0;d.version_minor=2;d.version_patch=6;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
