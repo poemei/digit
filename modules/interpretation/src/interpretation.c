@@ -74,6 +74,21 @@ static int direct_address(const char *s){
  }
  return 0;
 }
+/* Resolve a second-person possessive only when the speaker is addressing
+ * Digit. Keep the original request intact; the resolved phrase is a separate
+ * retrieval view, not an assertion or authorization. */
+static void resolve_possessive(char *subject,size_t capacity,unsigned addressed){
+ char resolved[129];
+ const char *property;
+ size_t n;
+ if(!addressed||strncasecmp(subject,"your ",5))return;
+ property=subject+5;
+ while(*property==' ')property++;
+ if(!*property)return;
+ n=(size_t)snprintf(resolved,sizeof resolved,"Digit's %s",property);
+ if(n>=sizeof resolved||n>=capacity)return;
+ memcpy(subject,resolved,n+1);
+}
 static int classify(const char *s,const char *evidence,digit_interpret_response_t *out){
  static const char *knowledge[]={"what is ","what are ","who is ","who are ","tell me about ","describe ","explain ","information about ","do you know about ",NULL};
  unsigned i;
@@ -142,6 +157,7 @@ static int classify(const char *s,const char *evidence,digit_interpret_response_
   if(!out->subject[0])return 0;
   /* A leading pronoun alone cannot be grounded to a Corpus record. */
   if(!strcmp(out->subject,"you")||!strcmp(out->subject,"me"))return 0;
+  resolve_possessive(out->subject,sizeof out->subject,out->addressed);
   out->intent=DIGIT_INTENT_KNOWLEDGE;out->confidence=85;return 1;
  }
  out->intent=speech_act(meaning);
@@ -216,7 +232,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"interpretation");snprintf(d.name,sizeof d.name,"Digit Interpretation");
- d.version_major=0;d.version_minor=1;d.version_patch=6;
+ d.version_major=0;d.version_minor=1;d.version_patch=7;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=activate;d.stop=stop;return &d;
 }
