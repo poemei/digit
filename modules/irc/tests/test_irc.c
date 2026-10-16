@@ -28,7 +28,7 @@ int main(void){
  stnlabz_module_qualification_result_t q={0};
  const stnlabz_module_descriptor_t *d=stnlabz_module_get_descriptor();
  stnlabz_module_host_t mock_host={0};
- if(!d||strcmp(d->id,"irc")||d->version_minor!=2||d->version_patch!=1)return 1;
+ if(!d||strcmp(d->id,"irc")||d->version_minor!=2||d->version_patch!=2)return 1;
  if(!digit_irc_public_conversation("#stn-labz","#stn-labz"))return 37;
  if(digit_irc_public_conversation("#other","#stn-labz"))return 38;
  if(digit_irc_public_conversation("digit-bot","#stn-labz"))return 39;
@@ -128,6 +128,11 @@ int main(void){
  /* SASL and registration may complete in either order, exactly one JOIN. */
  if(irc_join_ready(0,1,0)||irc_join_ready(1,0,0)||
     !irc_join_ready(1,1,0)||irc_join_ready(1,1,1))return 16;
+ if(!irc_join_confirmed(":digit-bot!user@host JOIN :#stn-labz","digit-bot","#stn-labz"))return 41;
+ if(!irc_join_confirmed(":DIGIT-BOT!user@host JOIN #stn-labz","digit-bot","#stn-labz"))return 42;
+ if(irc_join_confirmed(":alice!user@host JOIN :#stn-labz","digit-bot","#stn-labz"))return 43;
+ if(irc_join_confirmed(":digit-bot!user@host JOIN :#other","digit-bot","#stn-labz"))return 44;
+ if(irc_join_confirmed(":digit-bot!user@host PRIVMSG #stn-labz :hello","digit-bot","#stn-labz"))return 45;
  /* An SSL-buffered IRC frame must be read even if select would time out. */
  if(!irc_tls_read_ready(0,1)||!irc_tls_read_ready(1,0)||
     irc_tls_read_ready(0,0))return 17;
