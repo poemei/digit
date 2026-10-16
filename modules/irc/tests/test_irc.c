@@ -28,7 +28,7 @@ int main(void){
  stnlabz_module_qualification_result_t q={0};
  const stnlabz_module_descriptor_t *d=stnlabz_module_get_descriptor();
  stnlabz_module_host_t mock_host={0};
- if(!d||strcmp(d->id,"irc")||d->version_minor!=1||d->version_patch!=9)return 1;
+ if(!d||strcmp(d->id,"irc")||d->version_minor!=1||d->version_patch!=10)return 1;
  if(d->qualify(NULL)!=STNLABZ_MODULE_ERR_INVALID_ARGUMENT)return 2;
  if(d->qualify(&q)!=STNLABZ_MODULE_OK||q.tests_executed<10||q.tests_failed)return 3;
  if(d->start(NULL)!=STNLABZ_MODULE_ERR_INVALID_ARGUMENT)return 4;
@@ -69,7 +69,7 @@ int main(void){
  {
   char text[513];
   if(!addressed_irc_text("digit-bot: what time is it?",config.nick,text,sizeof text)||
-     strcmp(text,"what time is it?"))return 18;
+     strcmp(text,"digit-bot: what time is it?"))return 18;
   if(!addressed_irc_text("digit, can you tell me what I just said?",config.nick,text,sizeof text)||
      strcmp(text,"digit, can you tell me what I just said?"))return 19;
   if(!addressed_irc_text("digit-bot?",config.nick,text,sizeof text)||
@@ -89,6 +89,8 @@ int main(void){
      strcmp(text,"what do you think, DiGiT?"))return 28;
   if(addressed_irc_text("my digital camera works",config.nick,text,sizeof text))return 29;
   if(addressed_irc_text("digitization is useful",config.nick,text,sizeof text))return 30;
+  if(!addressed_irc_text("digit-bot: what is your mission?",config.nick,text,sizeof text)||
+     strcmp(text,"digit-bot: what is your mission?"))return 34;
  }
  /* Notification queue admission must hold multiple reports without replacing
     the first and reject overflow without claiming delivery. */
