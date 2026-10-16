@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 #include "stnlabz_abi/module.h"
 #include "ask_context.h"
 #include "corpus_lookup.h"
