@@ -11,8 +11,23 @@
 extern const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void);
 static stnlabz_module_service_handler_fn handler;
 static int identity_calls;
+static int socials_available=1;
+static int socials_calls;
 static stnlabz_module_result_t invoke(const char *name,const void *req,size_t size,void *reply,size_t cap,size_t *used){
  const char *msg="I am Digit, the STN-LABZ foundational autonomous agent.";
+ if(!strcmp(name,DIGIT_SOCIALS_SERVICE)){
+  const digit_socials_request_t *q=req;
+  digit_socials_response_t *r=reply;
+  socials_calls++;
+  if(!socials_available)return STNLABZ_MODULE_ERR_NOT_FOUND;
+  if(size!=sizeof *q||cap<sizeof *r||q->version!=DIGIT_SOCIALS_VERSION||
+     q->category!=DIGIT_SOCIALS_ANY||!q->context[0])
+   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+  memset(r,0,sizeof *r);
+  r->version=DIGIT_SOCIALS_VERSION;r->category=DIGIT_SOCIALS_HEART;
+  strcpy(r->emoji,"💚");*used=sizeof *r;
+  return STNLABZ_MODULE_OK;
+ }
  if(!strcmp(name,"interpretation.classify")){
   const digit_interpret_request_t *q=req;
   digit_interpret_response_t *v=reply;
@@ -104,6 +119,11 @@ int main(void){
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"Hello"))return 1;
  if(handler("Hi digit",9,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"Hello"))return 1;
  if(d->version_patch!=12)return 1;
+ if(socials_calls!=2||!strstr(out,"💚"))return 1;
+ socials_available=0;
+ if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+    strcmp(out,"Hello. I'm Digit. What would you like to discuss?"))return 1;
+ socials_available=1;
  if(handler("what version are you?",22,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      strcmp(out,"Digit 1.0.0"))return 1;
  if(handler("version",8,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
