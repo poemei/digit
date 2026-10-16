@@ -64,7 +64,7 @@ static int classify(const char *s,const char *evidence,digit_interpret_response_
  unsigned i;
  /* Preserve address semantics while classifying the actual utterance. */
  const char *utterance=s;
- const char *meaning=clause(s);
+ const char *meaning;
  memset(out,0,sizeof *out);out->version=DIGIT_INTERPRETATION_VERSION;
  if(prefix(utterance,"digit-bot") &&
     (utterance[9]==':'||utterance[9]==','||utterance[9]==' ')){
@@ -75,6 +75,8 @@ static int classify(const char *s,const char *evidence,digit_interpret_response_
  }
  while(*utterance==' '||*utterance==':'||*utterance==',')utterance++;
  if(!*utterance)utterance=s;
+ /* Interpret a derived clause while preserving s as the full request. */
+ meaning=clause(utterance);
  /* Direct address may occur after ordinary conversational text. */
  out->addressed=(unsigned)(utterance!=s||tok(s,"digit")||tok(s,"digit-bot"));
  /* The lookup subject is an interpretation product, not an Ask parser. */
