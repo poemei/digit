@@ -43,7 +43,7 @@ static int corpus_greeting(const char *input,char *out,size_t capacity,size_t *u
  while(*phrase==' '||*phrase==':'||*phrase==',')phrase++;
  len=strlen(phrase);
  while(len&&(phrase[len-1]==' '||phrase[len-1]=='!'||phrase[len-1]=='.'))len--;
- if(!len||len>=sizeof q.term||len+1>capacity||memchr(phrase,'?',len))return 0;
+ if(!len||len>=sizeof q.term||memchr(phrase,'?',len))return 0;
  memcpy(q.term,phrase,len);q.term[len]=0;
  if(host->invoke_service("corpus.lookup",&q,sizeof q,&r,sizeof r,&n)!=STNLABZ_MODULE_OK||
     n!=sizeof r||!r.found||!memchr(r.text,0,sizeof r.text))return 0;
@@ -51,6 +51,7 @@ static int corpus_greeting(const char *input,char *out,size_t capacity,size_t *u
   if(!strncasecmp(r.text+i,"greeting",8) &&
      (i==0||r.text[i-1]==' ')&&
      (r.text[i+8]==0||r.text[i+8]==' '||r.text[i+8]=='.')){
+   if(len+1>capacity)return -1;
    memcpy(out,phrase,len);out[len]=0;*used=len+1;
    append_social(q.term,out,capacity,used);
    return 1;
@@ -218,7 +219,10 @@ static stnlabz_module_result_t answer(const void *request,size_t length,
  if(!s||!length||length>513||s[length-1]!=0||!response||!used||capacity<2||
     memchr(s,0,length-1))return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  if(!s[0])return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
- if(corpus_greeting(s,out,capacity,used))return STNLABZ_MODULE_OK;
+ {int greeted=corpus_greeting(s,out,capacity,used);
+  if(greeted<0)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+  if(greeted>0)return STNLABZ_MODULE_OK;
+ }
  if(!strncasecmp(s,"research ",9)){
   return research_answer(s+9,response,capacity,used);
  }
@@ -369,7 +373,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
- d.version_major=0;d.version_minor=1;d.version_patch=13;
+ d.version_major=0;d.version_minor=1;d.version_patch=14;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
