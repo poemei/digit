@@ -204,7 +204,11 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  {"Digit you here?",DIGIT_INTENT_CHECKIN,""},
  {"digit, you here?",DIGIT_INTENT_CHECKIN,""},
  {"Digit: explain PHP",DIGIT_INTENT_KNOWLEDGE,"PHP"},
- {"digit explain PHP",DIGIT_INTENT_KNOWLEDGE,"PHP"}
+ {"digit explain PHP",DIGIT_INTENT_KNOWLEDGE,"PHP"},
+ {"digit, what is your mission?",DIGIT_INTENT_KNOWLEDGE,"Digit\'s mission"},
+ {"digit babygirl, what is your mission?",DIGIT_INTENT_KNOWLEDGE,"Digit\'s mission"},
+ {"digit, describe your responsibilities",DIGIT_INTENT_KNOWLEDGE,"Digit\'s responsibilities"},
+ {"what is your mission?",DIGIT_INTENT_KNOWLEDGE,"your mission"}
  };
  unsigned i;digit_interpret_response_t out;memset(q,0,sizeof *q);
  for(i=0;i<sizeof cases/sizeof cases[0];i++){
