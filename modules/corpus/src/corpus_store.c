@@ -39,9 +39,18 @@ static int exact_token(const char *text,const char *term){
  }
  return 0;
 }
+/* Ranking is positional and evidence-based, not a subject-specific exception.
+ * Prefer records whose text begins with the requested subject. */
+static unsigned match_rank(const char *text,const char *term){
+ size_t n=strlen(term);
+ if(!exact_token(text,term))return 0;
+ if(!strncasecmp(text,term,n) && !word((unsigned char)text[n]))
+  return 3;
+ return 1;
+}
 int digit_corpus_find(const char *path,const char *term,digit_corpus_record_t *out){
  FILE *f;char *line=NULL;size_t cap=0;ssize_t got;
- digit_corpus_record_t r;int found=0;
+ digit_corpus_record_t r;int found=0;unsigned best=0;
  if(!path||!term||!out||!term[0]||strlen(term)>128||
     strchr(term,'\n')||strchr(term,'\r')||strchr(term,'\t'))return -2;
  memset(out,0,sizeof *out);
@@ -52,7 +61,9 @@ int digit_corpus_find(const char *path,const char *term,digit_corpus_record_t *o
   if(!parse(line,&r))continue;
   /* Prefer an exact record id; otherwise only a token/phrase in knowledge text. */
   if(!strcasecmp(r.id,term)){*out=r;found=1;break;}
-  if(!found&&exact_token(r.text,term)){*out=r;found=1;}
+  {unsigned score=match_rank(r.text,term);
+   if(score>best){*out=r;found=1;best=score;}
+  }
  }
  free(line);
  if(ferror(f)){fclose(f);return -1;}
