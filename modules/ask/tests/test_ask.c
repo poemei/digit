@@ -92,6 +92,13 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
   digit_corpus_lookup_response_t *result=reply;
   if(size!=sizeof *q||cap<sizeof *result)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
   memset(result,0,sizeof *result);
+  if(!strcasecmp(q->term,"hello")||!strcasecmp(q->term,"hi")||
+     !strcasecmp(q->term,"good morning")){
+   result->found=1;
+   strcpy(result->id,"TEST-GREETING");
+   strcpy(result->source,"operator-learned");
+   snprintf(result->text,sizeof result->text,"%s is a greeting commonly used to open a conversation.",q->term);
+  }
   if(!strcmp(q->term,"STN-Labz")){
    result->found=1;
    strcpy(result->id,"TEST-ORG");
@@ -116,14 +123,18 @@ int main(void){
  const stnlabz_module_descriptor_t *d=stnlabz_module_get_descriptor();
  stnlabz_module_host_t h={0};h.register_service=reg;h.unregister_service=unreg;h.invoke_service=invoke;
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return 1;
- if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"Hello"))return 1;
- if(handler("Hi digit",9,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"Hello"))return 1;
- if(d->version_patch!=12)return 1;
+ if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hello"))return 1;
+ if(handler("hi",3,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hi"))return 1;
+ if(d->version_patch!=13)return 1;
  if(socials_calls!=2||!strstr(out,"💚"))return 1;
  socials_available=0;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-    strcmp(out,"Hello. I'm Digit. What would you like to discuss?"))return 1;
+    strcmp(out,"hello"))return 1;
  socials_available=1;
+ if(handler("Digit good morning",sizeof("Digit good morning"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+    !strstr(out,"good morning")||!strstr(out,"💚")||strstr(out,"Corpus:"))return 1;
+ if(handler("Digit good unknown",sizeof("Digit good unknown"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+    out[0]!=0)return 1;
  if(handler("what version are you?",22,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      strcmp(out,"Digit 1.0.0"))return 1;
  if(handler("version",8,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
