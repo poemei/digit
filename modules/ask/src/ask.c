@@ -28,26 +28,18 @@ static void append_social(const char *key, char *out,size_t capacity,size_t *use
  *used=len+1+emoji_len+1;
 }
 
-/* Evidence retrieval only: Interpretation, not Ask, determines the intent.
- * The transport may retain the direct-address prefix for context. */
-static void greeting_evidence(const char *message,char *text,size_t size){
- const char *phrase=message;size_t n=0,len;
+/* Corpus evidence is selected by Interpretation's normalized subject. */
+static void greeting_evidence(const char *subject,char *text,size_t capacity){
  digit_corpus_lookup_request_t q={0};
  digit_corpus_lookup_response_t r={0};
- if(!host||!host->invoke_service||!message||!text||!size)return;
- if(!strncasecmp(phrase,"digit-bot",9)&&
-    (phrase[9]==' '||phrase[9]==':'||phrase[9]==','))phrase+=9;
- else if(!strncasecmp(phrase,"digit",5)&&
-    (phrase[5]==' '||phrase[5]==':'||phrase[5]==','))phrase+=5;
- while(*phrase==' '||*phrase==':'||*phrase==',')phrase++;
- len=strlen(phrase);
- while(len&&(phrase[len-1]==' '||phrase[len-1]=='!'||phrase[len-1]=='.'))len--;
- if(!len||len>=sizeof q.term)return;
- memcpy(q.term,phrase,len);
+ size_t n=0;
+ if(!host||!host->invoke_service||!subject||!subject[0]||
+    strlen(subject)>=sizeof q.term)return;
+ snprintf(q.term,sizeof q.term,"%s",subject);
  if(host->invoke_service("corpus.lookup",&q,sizeof q,&r,sizeof r,&n)==STNLABZ_MODULE_OK&&
     n==sizeof r&&r.found&&memchr(r.text,0,sizeof r.text)&&
     memchr(r.id,0,sizeof r.id)&&memchr(r.source,0,sizeof r.source))
-  snprintf(text,size,"%s",r.text);
+  snprintf(text,capacity,"%s",r.text);
 }
 static stnlabz_module_result_t research_answer(const char *subject,
  void *response,size_t capacity,size_t *used){
@@ -294,7 +286,14 @@ static stnlabz_module_result_t answer(const void *request,size_t length,
   size_t result_used=0;
   request_intent.version=DIGIT_INTERPRETATION_VERSION;
   snprintf(request_intent.text,sizeof request_intent.text,"%s",s);
-  greeting_evidence(s,request_intent.corpus_text,sizeof request_intent.corpus_text);
+  /* First pass determines the lookup subject; second pass applies evidence. */
+  if(host&&host->invoke_service&&
+     host->invoke_service("interpretation.classify",&request_intent,sizeof request_intent,
+                          &interpreted,sizeof interpreted,&result_used)==STNLABZ_MODULE_OK&&
+     result_used==sizeof interpreted&&interpreted.version==DIGIT_INTERPRETATION_VERSION&&
+     interpreted.intent==DIGIT_INTENT_AMBIGUOUS&&interpreted.subject[0])
+    greeting_evidence(interpreted.subject,request_intent.corpus_text,sizeof request_intent.corpus_text);
+  result_used=0;
   if(!host||!host->invoke_service||
      host->invoke_service("interpretation.classify",&request_intent,sizeof request_intent,
                           &interpreted,sizeof interpreted,&result_used)!=STNLABZ_MODULE_OK||
