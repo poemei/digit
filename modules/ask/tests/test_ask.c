@@ -135,79 +135,84 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
 }
 static int reg(const char *s,stnlabz_module_service_handler_fn fn,void *ctx){(void)ctx;if(strcmp(s,"route./ask"))return 0;handler=fn;return 1;}
 static int unreg(const char *s,void *ctx){(void)ctx;return strcmp(s,"route./ask")==0;}
+/* Report the precise failed assertion without changing test expectations. */
+static int test_failure(int line){
+ fprintf(stderr,"Ask test assertion failed at test_ask.c:%d\\n",line);
+ return 1;
+}
 int main(void){
  stnlabz_module_qualification_result_t q;char out[512];size_t used=0;
  const stnlabz_module_descriptor_t *d=stnlabz_module_get_descriptor();
  stnlabz_module_host_t h={0};h.register_service=reg;h.unregister_service=unreg;h.invoke_service=invoke;
- if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return 1;
- if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hello"))return 1;
- if(handler("hi",3,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hi"))return 1;
- if(d->version_minor!=2||d->version_patch!=5)return 1;
- if(socials_calls!=2||!strstr(out,"💚"))return 1;
+ if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return test_failure(__LINE__);
+ if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hello"))return test_failure(__LINE__);
+ if(handler("hi",3,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hi"))return test_failure(__LINE__);
+ if(d->version_minor!=2||d->version_patch!=5)return test_failure(__LINE__);
+ if(socials_calls!=2||!strstr(out,"💚"))return test_failure(__LINE__);
  socials_available=0;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-    strcmp(out,"hello"))return 1;
+    strcmp(out,"hello"))return test_failure(__LINE__);
  socials_available=1;
  if(handler("Digit good morning",sizeof("Digit good morning"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-    !strstr(out,"good morning")||!strstr(out,"💚")||strstr(out,"Corpus:"))return 1;
+    !strstr(out,"good morning")||!strstr(out,"💚")||strstr(out,"Corpus:"))return test_failure(__LINE__);
  if(handler("Digit good unknown",sizeof("Digit good unknown"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-    !strstr(out,"clarify"))return 1;
+    !strstr(out,"clarify"))return test_failure(__LINE__);
  if(handler("what version are you?",22,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-     strcmp(out,"Digit 1.0.0"))return 1;
+     strcmp(out,"Digit 1.0.0"))return test_failure(__LINE__);
  if(handler("version",8,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-     strcmp(out,"Digit 1.0.0"))return 1;
- if(handler("who are you?",13,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"foundational autonomous agent")||identity_calls!=1)return 1;
+     strcmp(out,"Digit 1.0.0"))return test_failure(__LINE__);
+ if(handler("who are you?",13,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"foundational autonomous agent")||identity_calls!=1)return test_failure(__LINE__);
  {digit_ask_context_t context={0};context.magic=DIGIT_ASK_CONTEXT_MAGIC;
   strcpy(context.question,"diagnose my last request");
-  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"No prior request"))return 1;
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"No prior request"))return test_failure(__LINE__);
   context.has_previous=1;strcpy(context.previous_request,"http-1");strcpy(context.previous_route,"/ask");strcpy(context.previous_service,"route./ask");
-  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"DSD SCOPED REPORT"))return 1;
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"DSD SCOPED REPORT"))return test_failure(__LINE__);
  }
  if(handler("what is STN-Labz?",18,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"engineering research organization")||
-     !strstr(out,"fixture-corpus"))return 1;
+     !strstr(out,"fixture-corpus"))return test_failure(__LINE__);
  if(handler("what is unlisted?",18,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-     !strstr(out,"no matching knowledge record"))return 1;
+     !strstr(out,"no matching knowledge record"))return test_failure(__LINE__);
  if(handler("what can you tell me?",22,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-     !strstr(out,"Corpus"))return 1;
+     !strstr(out,"Corpus"))return test_failure(__LINE__);
  if(handler("tell me about STN-Labz",23,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-     !strstr(out,"engineering research organization"))return 1;
+     !strstr(out,"engineering research organization"))return test_failure(__LINE__);
  if(handler("research PHP",sizeof("research PHP"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"https://www.php.net/releases/")||
-     !strstr(out,"Unverified source excerpt"))return 1;
+     !strstr(out,"Unverified source excerpt"))return test_failure(__LINE__);
  if(handler("research https://www.php.net/releases/",sizeof("research https://www.php.net/releases/"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-     !strstr(out,"Retrieved source:"))return 1;
- if(handler("research unknown subject",sizeof("research unknown subject"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"not available"))return 1;
+     !strstr(out,"Retrieved source:"))return test_failure(__LINE__);
+ if(handler("research unknown subject",sizeof("research unknown subject"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"not available"))return test_failure(__LINE__);
  if(handler("Hi Digit",sizeof("Hi Digit"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-    !strstr(out,"Hi"))return 1;
+    !strstr(out,"Hi"))return test_failure(__LINE__);
  if(handler("digit hello",sizeof("digit hello"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-    !strstr(out,"hello"))return 1;
+    !strstr(out,"hello"))return test_failure(__LINE__);
  if(handler("digit you here?",sizeof("digit you here?"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-     !strstr(out,"I'm here"))return 1;
+     !strstr(out,"I'm here"))return test_failure(__LINE__);
  if(handler("digit, access your corpus",sizeof("digit, access your corpus"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-     !strstr(out,"specific subject"))return 1;
+     !strstr(out,"specific subject"))return test_failure(__LINE__);
  if(handler("digit picked up that report",sizeof("digit picked up that report"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-     !strstr(out,"have not verified"))return 1;
+     !strstr(out,"have not verified"))return test_failure(__LINE__);
  if(handler("delete all the records",23,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-     out[0]!=0)return 1;
+     out[0]!=0)return test_failure(__LINE__);
  {digit_ask_context_t context={0};context.magic=DIGIT_ASK_CONTEXT_MAGIC;
   strcpy(context.transport,"irc");strcpy(context.channel,"#stn-labz");
   strcpy(context.sender,"PoeMei");
   strcpy(context.question,"I added a reasoning module for Digit, and expect a canned reply");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-     !strstr(out,"clarify"))return 1;
+     !strstr(out,"clarify"))return test_failure(__LINE__);
   strcpy(context.question,"Digit I fixed the problem");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-     !strstr(out,"clarify"))return 1;
+     !strstr(out,"clarify"))return test_failure(__LINE__);
   strcpy(context.question,"Can Digit explain a technology that Corpus doesn't contain?");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-     !strstr(out,"clarify"))return 1;
+     !strstr(out,"clarify"))return test_failure(__LINE__);
   strcpy(context.channel,"#other-channel");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK)
-   return 1;
+   return test_failure(__LINE__);
  }
- if(handler("",1,out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK)return 1;
- if(handler("hello",6,out,2,&used,NULL)==STNLABZ_MODULE_OK)return 1;
- if(d->stop()!=STNLABZ_MODULE_OK)return 1;
+ if(handler("",1,out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK)return test_failure(__LINE__);
+ if(handler("hello",6,out,2,&used,NULL)==STNLABZ_MODULE_OK)return test_failure(__LINE__);
+ if(d->stop()!=STNLABZ_MODULE_OK)return test_failure(__LINE__);
  puts("Ask tests: PASS");return 0;
 }
