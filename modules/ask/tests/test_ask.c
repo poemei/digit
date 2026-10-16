@@ -34,10 +34,11 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
   digit_interpret_response_t *v=reply;
   if(size!=sizeof *q||cap<sizeof *v)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
   memset(v,0,sizeof *v);v->version=DIGIT_INTERPRETATION_VERSION;
+  v->intent=DIGIT_INTENT_AMBIGUOUS;
   if(strstr(q->corpus_text,"greeting")){
    v->intent=DIGIT_INTENT_GREETING;
-   if(!strncasecmp(q->text,"Digit ",6))snprintf(v->subject,sizeof v->subject,"%s",q->text+6);
-   else snprintf(v->subject,sizeof v->subject,"%s",q->text);
+   if(!strncasecmp(q->text,"Digit ",6))snprintf(v->subject,sizeof v->subject,"%.*s",(int)sizeof v->subject-1,q->text+6);
+   else snprintf(v->subject,sizeof v->subject,"%.*s",(int)sizeof v->subject-1,q->text);
   }
   else if(!strcmp(q->text,"what can you tell me?"))v->intent=DIGIT_INTENT_CAPABILITIES;
   else if(!strcmp(q->text,"digit you here?"))v->intent=DIGIT_INTENT_CHECKIN;
