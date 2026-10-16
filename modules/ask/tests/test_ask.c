@@ -49,6 +49,10 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
    v->addressed=0;v->intent=DIGIT_INTENT_KNOWLEDGE;
    strcpy(v->subject,"STN-Labz");
   }
+  else if(!strcasecmp(q->text,"digit, what is your mission?")){
+   v->addressed=1;v->intent=DIGIT_INTENT_KNOWLEDGE;
+   strcpy(v->subject,"Digit's mission");
+  }
   else if(!strcmp(q->text,"Digit topic discussion")){
    v->addressed=1;v->intent=DIGIT_INTENT_STATEMENT;
    strcpy(v->subject,"STN-Labz");
@@ -129,6 +133,12 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
    strcpy(result->id,"TEST-GREETING");
    strcpy(result->source,"operator-learned");
    snprintf(result->text,sizeof result->text,"%s is a greeting commonly used to open a conversation.",q->term);
+  }
+  if(!strcmp(q->term,"Digit's mission")){
+   result->found=1;
+   strcpy(result->id,"TEST-MISSION");
+   strcpy(result->source,"fixture-mission");
+   strcpy(result->text,"Digit's mission is to support authorized STN-LABZ operations.");
   }
   if(!strcmp(q->term,"STN-Labz")){
    selected_subject=1;
@@ -216,6 +226,10 @@ int main(void){
   strcpy(context.question,"I added a reasoning module for Digit, and expect a canned reply");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      out[0]!=0)return test_failure(__LINE__);
+  strcpy(context.question,"digit, what is your mission?");
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     !strstr(out,"support authorized STN-LABZ operations")||
+     !strstr(out,"fixture-mission"))return test_failure(__LINE__);
   strcpy(context.question,"Digit topic discussion");
   selected_subject=0;retained_full_message=0;
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
