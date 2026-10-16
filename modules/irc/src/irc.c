@@ -251,7 +251,8 @@ static void chat_message(SSL *tls,const char *line){
   /* Direct messages use the same conversation boundary as Slack DMs. */
   if(!strncasecmp(body,"!ask ",5))body+=5;
  }else if(digit_irc_public_conversation(target,config.channel)){
-  /* Every configured public-channel utterance reaches Ask for quiet\n     evidence-gated evaluation; explicit mentions remain direct addresses. */
+  /* Every configured public-channel utterance reaches Ask for quiet
+     evidence-gated evaluation; explicit mentions remain direct addresses. */
   {char addressed[513];
    if(addressed_irc_text(body,config.nick,addressed,sizeof addressed))
     body=addressed;
