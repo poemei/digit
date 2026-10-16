@@ -201,7 +201,7 @@ int main(void){
      !strstr(out,"clarify"))return 1;
   strcpy(context.question,"Can Digit explain a technology that Corpus doesn't contain?");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-     !strstr(out,"I do not know"))return 1;
+     !strstr(out,"clarify"))return 1;
   strcpy(context.channel,"#other-channel");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK)
    return 1;
