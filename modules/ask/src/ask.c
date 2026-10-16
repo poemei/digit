@@ -291,8 +291,9 @@ static stnlabz_module_result_t answer(const void *request,size_t length,
      host->invoke_service("interpretation.classify",&request_intent,sizeof request_intent,
                           &interpreted,sizeof interpreted,&result_used)==STNLABZ_MODULE_OK&&
      result_used==sizeof interpreted&&interpreted.version==DIGIT_INTERPRETATION_VERSION&&
-     interpreted.intent==DIGIT_INTENT_AMBIGUOUS&&interpreted.subject[0])
-    greeting_evidence(interpreted.subject,request_intent.corpus_text,sizeof request_intent.corpus_text);
+     interpreted.intent==DIGIT_INTENT_AMBIGUOUS)
+    greeting_evidence(interpreted.subject[0]?interpreted.subject:s,
+                      request_intent.corpus_text,sizeof request_intent.corpus_text);
   result_used=0;
   if(!host||!host->invoke_service||
      host->invoke_service("interpretation.classify",&request_intent,sizeof request_intent,
