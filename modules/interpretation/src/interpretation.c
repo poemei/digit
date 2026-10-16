@@ -47,7 +47,18 @@ static digit_intent_t speech_act(const char *s){
 static int classify(const char *s,digit_interpret_response_t *out){
  static const char *knowledge[]={"what is ","what are ","who is ","who are ","tell me about ","describe ","explain ","information about ","do you know about ",NULL};
  unsigned i;
+ /* Preserve address semantics while classifying the actual utterance. */
+ const char *utterance=s;
  memset(out,0,sizeof *out);out->version=DIGIT_INTERPRETATION_VERSION;
+ if(prefix(utterance,"digit-bot") &&
+    (utterance[9]==':'||utterance[9]==','||utterance[9]==' ')){
+   utterance+=9;
+ }else if(prefix(utterance,"digit") &&
+    (utterance[5]==':'||utterance[5]==','||utterance[5]==' ')){
+   utterance+=5;
+ }
+ while(*utterance==' '||*utterance==':'||*utterance==',')utterance++;
+ if(!*utterance)utterance=s;
  if((tok(s,"can")||tok(s,"could")||tok(s,"able")||tok(s,"capabilities")||
      tok(s,"functions")||tok(s,"skills")||tok(s,"help"))&&
     (tok(s,"you")||tok(s,"your")||tok(s,"digit")||tok(s,"help"))&&
@@ -56,8 +67,8 @@ static int classify(const char *s,digit_interpret_response_t *out){
   out->intent=DIGIT_INTENT_CAPABILITIES;out->confidence=90;return 1;
  }
  /* Explicit conversational intents do not imply knowledge evidence or authority. */
- if(tok(s,"digit")&&(tok(s,"here")||tok(s,"there")||tok(s,"online"))&&
-    (strchr(s,'?')||tok(s,"are")||tok(s,"you"))){
+ if((tok(s,"digit")||utterance!=s)&&(tok(utterance,"here")||tok(utterance,"there")||tok(utterance,"online"))&&
+    (strchr(utterance,'?')||tok(utterance,"are")||tok(utterance,"you"))){
   out->intent=DIGIT_INTENT_CHECKIN;out->confidence=85;return 1;
  }
  if(tok(s,"corpus")&&(tok(s,"access")||tok(s,"use")||tok(s,"check")||
@@ -69,14 +80,14 @@ static int classify(const char *s,digit_interpret_response_t *out){
     (tok(s,"apache")||tok(s,"picked")||tok(s,"found"))){
   out->intent=DIGIT_INTENT_OBSERVATION;out->confidence=70;return 1;
  }
- for(i=0;knowledge[i];i++)if(prefix(s,knowledge[i])){
-  trim_subject(s+strlen(knowledge[i]),out->subject,sizeof out->subject);
+ for(i=0;knowledge[i];i++)if(prefix(utterance,knowledge[i])){
+  trim_subject(utterance+strlen(knowledge[i]),out->subject,sizeof out->subject);
   if(!out->subject[0])return 0;
   /* A leading pronoun alone cannot be grounded to a Corpus record. */
   if(!strcmp(out->subject,"you")||!strcmp(out->subject,"me"))return 0;
   out->intent=DIGIT_INTENT_KNOWLEDGE;out->confidence=85;return 1;
  }
- out->intent=speech_act(s);
+ out->intent=speech_act(utterance);
  out->confidence=0; /* Speech-act shape is not evidence of actionable intent. */
  return out->intent!=DIGIT_INTENT_AMBIGUOUS;
 }
@@ -114,7 +125,11 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  {"Could you check Apache?",DIGIT_INTENT_REQUEST,""},
  {"Why is Apache mentioned?",DIGIT_INTENT_QUESTION,""},
  {"delete all the records",DIGIT_INTENT_INSTRUCTION,""},
- {"hmm",DIGIT_INTENT_AMBIGUOUS,""}
+ {"hmm",DIGIT_INTENT_AMBIGUOUS,""},
+ {"Digit you here?",DIGIT_INTENT_CHECKIN,""},
+ {"digit, you here?",DIGIT_INTENT_CHECKIN,""},
+ {"Digit: explain PHP",DIGIT_INTENT_KNOWLEDGE,"PHP"},
+ {"digit explain PHP",DIGIT_INTENT_KNOWLEDGE,"PHP"}
  };
  unsigned i;digit_interpret_response_t out;memset(q,0,sizeof *q);
  for(i=0;i<sizeof cases/sizeof cases[0];i++){
@@ -142,7 +157,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"interpretation");snprintf(d.name,sizeof d.name,"Digit Interpretation");
- d.version_major=0;d.version_minor=1;d.version_patch=2;
+ d.version_major=0;d.version_minor=1;d.version_patch=3;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=activate;d.stop=stop;return &d;
 }
