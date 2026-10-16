@@ -28,7 +28,7 @@ int main(void){
  stnlabz_module_qualification_result_t q={0};
  const stnlabz_module_descriptor_t *d=stnlabz_module_get_descriptor();
  stnlabz_module_host_t mock_host={0};
- if(!d||strcmp(d->id,"irc")||d->version_minor!=2||d->version_patch!=2)return 1;
+ if(!d||strcmp(d->id,"irc")||d->version_minor!=2||d->version_patch!=3)return 1;
  if(!digit_irc_public_conversation("#stn-labz","#stn-labz"))return 37;
  if(digit_irc_public_conversation("#other","#stn-labz"))return 38;
  if(digit_irc_public_conversation("digit-bot","#stn-labz"))return 39;
