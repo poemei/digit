@@ -14,10 +14,20 @@ extern int digit_slack_is_intel_command(const char *);
 extern int digit_slack_admit_message(const char *,const char *,const char *,const char *);
 extern int digit_slack_addressed_text(const char *,const char *,const char *,const char *,char *,size_t);
 extern int digit_slack_public_conversation(const char *,const char *);
+extern int digit_slack_dispatch_reply_state(stnlabz_module_result_t,size_t,size_t,const char *);
 int main(void){
  stnlabz_module_qualification_result_t q={0};char formatted[512];
  const stnlabz_module_descriptor_t *d=stnlabz_module_get_descriptor();
- if(!d||strcmp(d->id,"slack")||d->version_major!=0||d->version_minor!=2||d->version_patch!=8)return 1;
+ if(!d||strcmp(d->id,"slack")||d->version_major!=0||d->version_minor!=2||d->version_patch!=9)return 1;
+ {
+  const char quiet[]="";
+  const char response[]="answer";
+  if(digit_slack_dispatch_reply_state(STNLABZ_MODULE_OK,sizeof quiet,sizeof quiet,quiet)!=0)return 62;
+  if(digit_slack_dispatch_reply_state(STNLABZ_MODULE_OK,sizeof response,sizeof response,response)!=1)return 63;
+  if(digit_slack_dispatch_reply_state(STNLABZ_MODULE_ERR_NOT_FOUND,sizeof response,sizeof response,response)!=-1)return 64;
+  if(digit_slack_dispatch_reply_state(STNLABZ_MODULE_OK,0,sizeof response,response)!=-1)return 65;
+  if(digit_slack_dispatch_reply_state(STNLABZ_MODULE_OK,sizeof response-1,sizeof response-1,response)!=-1)return 66;
+ }
  if(!digit_slack_public_conversation("message","channel"))return 57;
  if(!digit_slack_public_conversation("message","group"))return 58;
  if(digit_slack_public_conversation("message","im"))return 59;
