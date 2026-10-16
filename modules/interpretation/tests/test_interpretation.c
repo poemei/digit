@@ -82,5 +82,5 @@ int main(void){
  if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
     out.intent!=DIGIT_INTENT_AMBIGUOUS)return test_failure(15,__LINE__);
  if(d->stop()!=STNLABZ_MODULE_OK)return test_failure(6,__LINE__);
- puts("Interpretation tests: PASS");return test_failure(0,__LINE__);
+ puts("Interpretation tests: PASS");return 0;
 }
