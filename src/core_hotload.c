@@ -64,19 +64,32 @@ static int remember(digit_hotload_t *w,const char *id,const char *hash,
 static int log_report(digit_hotload_t *w,const char *event,const char *id,
  const observed_t *old,const stnlabz_module_descriptor_t *candidate,
  const char *before,const char *after,const char *reason,const char *recovery){
- char detail[680],notice[470];digit_intel_delivery_t msg={0};int queued=0;
+ char detail[760],notice[470],active_version[32];
+ digit_intel_delivery_t msg={0};int queued=0;
  size_t used=0;const char *routes[]={DIGIT_INTEL_IRC_SERVICE,DIGIT_INTEL_SLACK_SERVICE};
- size_t i;int ok;
+ size_t i;int ok,replacement_ok=!strcmp(event,"HOTLOAD_ACTIVE");
+ int active_known=replacement_ok||
+  (recovery&&(!strcmp(recovery,"incumbent_retained")||
+               !strcmp(recovery,"incumbent_restored")));
+ if(replacement_ok&&candidate)
+  snprintf(active_version,sizeof active_version,"%u.%u.%u",
+   candidate->version_major,candidate->version_minor,candidate->version_patch);
+ else if(active_known&&old)
+  snprintf(active_version,sizeof active_version,"%u.%u.%u",
+   old->major,old->minor,old->patch);
+ else snprintf(active_version,sizeof active_version,"unknown");
  snprintf(detail,sizeof detail,
-  "module=%s version=%u.%u.%u candidate=%u.%u.%u incumbent_sha256=%s candidate_sha256=%s reason=%s recovery=%s",
-  id,old?old->major:0,old?old->minor:0,old?old->patch:0,
+  "reported_event=%s module=%s active_version=%s incumbent_version=%u.%u.%u candidate_version=%u.%u.%u incumbent_sha256=%s candidate_sha256=%s reason=%s recovery=%s",
+  event,id,active_version,old?old->major:0,old?old->minor:0,old?old->patch:0,
   candidate?candidate->version_major:0,candidate?candidate->version_minor:0,
   candidate?candidate->version_patch:0,before?before:"unknown",after?after:"unknown",
   reason,recovery);
- ok=digit_log_event("MODULE",event,detail)&&digit_log_sync();
+ /* The activation layer already logs HOTLOAD_ACTIVE. This is a distinct
+    delivery audit, preventing the incumbent from appearing as a second active version. */
+ ok=digit_log_event("MODULE","HOTLOAD_NOTICE",detail)&&digit_log_sync();
  snprintf(notice,sizeof notice,
-  "[MODULE] %s id=%s active=%u.%u.%u candidate=%u.%u.%u reason=%s recovery=%s",
-  event,id,old?old->major:0,old?old->minor:0,old?old->patch:0,
+  "[MODULE] %s id=%s active=%s incumbent=%u.%u.%u candidate=%u.%u.%u reason=%s recovery=%s",
+  event,id,active_version,old?old->major:0,old?old->minor:0,old?old->patch:0,
   candidate?candidate->version_major:0,candidate?candidate->version_minor:0,
   candidate?candidate->version_patch:0,reason,recovery);
  msg.version=DIGIT_INTEL_DELIVERY_VERSION;
