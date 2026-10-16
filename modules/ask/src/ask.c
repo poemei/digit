@@ -9,7 +9,25 @@
 #include "research_contract.h"
 #include "observation.h"
 #include "reasoning.h"
+#include "socials.h"
 static const stnlabz_module_host_t *host;
+/* Social expressions are optional; Socials owns the symbols and selection. */
+static void append_social(const char *key, char *out,size_t capacity,size_t *used) {
+ digit_socials_request_t q={0};
+ digit_socials_response_t r={0};
+ size_t n=0,len,emoji_len;
+ if(!host||!host->invoke_service||!key||!out||!used)return;
+ q.version=DIGIT_SOCIALS_VERSION;q.category=DIGIT_SOCIALS_ANY;
+ if(snprintf(q.context,sizeof q.context,"%s",key)>=(int)sizeof q.context)return;
+ if(host->invoke_service(DIGIT_SOCIALS_SERVICE,&q,sizeof q,&r,sizeof r,&n)!=STNLABZ_MODULE_OK||
+    n!=sizeof r||r.version!=DIGIT_SOCIALS_VERSION||
+    !memchr(r.emoji,0,sizeof r.emoji)||!r.emoji[0])return;
+ len=strlen(out);emoji_len=strlen(r.emoji);
+ if(len+1+emoji_len+1>capacity)return;
+ out[len]=' ';memcpy(out+len+1,r.emoji,emoji_len+1);
+ *used=len+1+emoji_len+1;
+}
+
 static stnlabz_module_result_t research_answer(const char *subject,
  void *response,size_t capacity,size_t *used){
  digit_research_request_t query={0};
@@ -298,6 +316,12 @@ static stnlabz_module_result_t answer(const void *request,size_t length,
  }
  if(strlen(reply)+1>capacity)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memcpy(out,reply,strlen(reply)+1);*used=strlen(reply)+1;
+ /* Never decorate factual answers, errors or diagnostics. */
+ if(!strcasecmp(s,"hello")||!strcasecmp(s,"hi")||
+    !strcasecmp(s,"hello digit")||!strcasecmp(s,"hi digit")||
+    !strcasecmp(s,"hello digit!")||!strcasecmp(s,"hi digit!")||
+    !strcmp(reply,"I'm here and receiving your messages. What would you like me to check?"))
+  append_social(s,out,capacity,used);
  return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q){
@@ -318,7 +342,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
- d.version_major=0;d.version_minor=1;d.version_patch=11;
+ d.version_major=0;d.version_minor=1;d.version_patch=12;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
