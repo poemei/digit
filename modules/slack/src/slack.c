@@ -294,7 +294,7 @@ int digit_slack_addressed_text(const char *type,const char *channel,
  n=strlen(mention);
  if(!strncasecmp(raw,mention,n))text=raw+n;
  else if(!strncasecmp(raw,"digit-bot",9)&&!slack_name_char((unsigned char)raw[9]))text=raw+9;
- else if(!strncasecmp(raw,"digit",5)&&!slack_name_char((unsigned char)raw[5]))text=raw+5;
+ else if(!strncasecmp(raw,"digit",5)&&!slack_name_char((unsigned char)raw[5]))text=raw;
  else if(!strstr(raw,mention)&&!slack_mentions(raw,"digit-bot")&&
          !slack_mentions(raw,"digit"))return 0;
  if(text!=raw){
@@ -584,7 +584,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"slack");
  snprintf(d.name,sizeof d.name,"Digit Slack Transport");
- d.version_major=0;d.version_minor=2;d.version_patch=5;
+ d.version_major=0;d.version_minor=2;d.version_patch=6;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
