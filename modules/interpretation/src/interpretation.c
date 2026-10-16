@@ -59,6 +59,21 @@ static const char *clause(const char *s){
  }
  return candidate;
 }
+/* Mentioning Digit as a third party is not addressing her.
+ * A name at the opening or a comma-delimited vocative is direct address. */
+static int direct_address(const char *s){
+ const char *p=s;
+ while(*p&&isspace((unsigned char)*p))p++;
+ if(prefix(p,"digit-bot")&&!isalnum((unsigned char)p[9])&&p[9]!='_')return 1;
+ if(prefix(p,"digit")&&!isalnum((unsigned char)p[5])&&p[5]!='_')return 1;
+ for(p=s;*p;p++)if(*p==','||*p==':'){
+  const char *q=p+1;
+  while(*q&&isspace((unsigned char)*q))q++;
+  if(prefix(q,"digit-bot")&&!isalnum((unsigned char)q[9])&&q[9]!='_')return 1;
+  if(prefix(q,"digit")&&!isalnum((unsigned char)q[5])&&q[5]!='_')return 1;
+ }
+ return 0;
+}
 static int classify(const char *s,const char *evidence,digit_interpret_response_t *out){
  static const char *knowledge[]={"what is ","what are ","who is ","who are ","tell me about ","describe ","explain ","information about ","do you know about ",NULL};
  unsigned i;
@@ -78,7 +93,7 @@ static int classify(const char *s,const char *evidence,digit_interpret_response_
  /* Interpret a derived clause while preserving s as the full request. */
  meaning=clause(utterance);
  /* Direct address may occur after ordinary conversational text. */
- out->addressed=(unsigned)(utterance!=s||tok(s,"digit")||tok(s,"digit-bot"));
+ out->addressed=(unsigned)direct_address(s);
  /* The lookup subject is an interpretation product, not an Ask parser. */
  if(out->addressed){
   size_t n;
@@ -201,7 +216,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"interpretation");snprintf(d.name,sizeof d.name,"Digit Interpretation");
- d.version_major=0;d.version_minor=1;d.version_patch=5;
+ d.version_major=0;d.version_minor=1;d.version_patch=6;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=activate;d.stop=stop;return &d;
 }
