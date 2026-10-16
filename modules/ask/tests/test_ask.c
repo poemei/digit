@@ -155,7 +155,7 @@ int main(void){
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return test_failure(__LINE__);
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hello"))return test_failure(__LINE__);
  if(handler("hi",3,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hi"))return test_failure(__LINE__);
- if(d->version_minor!=2||d->version_patch!=6)return test_failure(__LINE__);
+ if(d->version_minor!=2||d->version_patch!=7)return test_failure(__LINE__);
  if(socials_calls!=2||!strstr(out,"💚"))return test_failure(__LINE__);
  socials_available=0;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
@@ -208,7 +208,7 @@ int main(void){
   strcpy(context.sender,"PoeMei");
   strcpy(context.question,"I added a reasoning module for Digit, and expect a canned reply");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-     !strstr(out,"clarify"))return test_failure(__LINE__);
+     out[0]!=0)return test_failure(__LINE__);
   strcpy(context.question,"Digit topic discussion");
   selected_subject=0;retained_full_message=0;
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
@@ -219,6 +219,10 @@ int main(void){
   strcpy(context.question,"Can Digit explain a technology that Corpus doesn't contain?");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"clarify"))return test_failure(__LINE__);
+  strcpy(context.question,"What is STN-Labz?");
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     out[0]!=0)return test_failure(__LINE__);
+  strcpy(context.question,"Digit I fixed the problem");
   strcpy(context.channel,"#other-channel");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"clarify"))return test_failure(__LINE__);
