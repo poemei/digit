@@ -37,7 +37,7 @@ static stnlabz_module_result_t evaluate(const void *input,size_t len,void *outpu
  (void)context;
  if(used)*used=0;
  if(!host||!q||len!=sizeof *q||!r||capacity<sizeof *r||!used||
-    q->version!=DIGIT_REASONING_VERSION||
+    q->version!=DIGIT_REASONING_VERSION||q->addressed>1||
     !valid(q->message,sizeof q->message)||!q->message[0]||
     !valid(q->transport,sizeof q->transport)||!valid(q->channel,sizeof q->channel)||
     !valid(q->sender,sizeof q->sender)||
@@ -53,6 +53,8 @@ static stnlabz_module_result_t evaluate(const void *input,size_t len,void *outpu
     (q->transport[0]=='i'&&q->channel[0]!='#'))
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(r,0,sizeof *r);r->version=DIGIT_REASONING_VERSION;
+ r->response_eligible=q->addressed;
+
  r->knowledge=q->corpus_state==DIGIT_REASONING_PRESENT?
    DIGIT_REASONING_CORPUS_SUPPORTED:q->corpus_state==DIGIT_REASONING_UNAVAILABLE?
    DIGIT_REASONING_EVIDENCE_UNAVAILABLE:DIGIT_REASONING_UNKNOWN;
@@ -105,7 +107,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"reasoning");
  snprintf(d.name,sizeof d.name,"Digit Evidence Relationship Evaluator");
- d.version_major=0;d.version_minor=1;d.version_patch=0;
+ d.version_major=0;d.version_minor=1;d.version_patch=1;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;
