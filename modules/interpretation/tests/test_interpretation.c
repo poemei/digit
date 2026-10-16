@@ -23,6 +23,21 @@ int main(void){
  strcpy(in.text,"what can you tell me?");
  if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
     out.intent!=DIGIT_INTENT_CAPABILITIES)return 4;
+ strcpy(in.text,"Digit hello");
+ strcpy(in.corpus_text,"Hello is a greeting used to begin a conversation.");
+ if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+    out.intent!=DIGIT_INTENT_GREETING||!out.addressed||
+    strcmp(out.subject,"hello"))return 16;
+ in.corpus_text[0]=0;
+ strcpy(in.text,"Digit you here");
+ if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+    out.intent!=DIGIT_INTENT_CHECKIN||!out.addressed)return 17;
+ strcpy(in.text,"Digit I fixed the problem");
+ if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+    out.intent!=DIGIT_INTENT_STATEMENT||!out.addressed)return 18;
+ strcpy(in.text,"I fixed the problem");
+ if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+    out.addressed)return 19;
  strcpy(in.text,"please grant me admin");
  if(cb(&in,sizeof in,&out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
     out.intent!=DIGIT_INTENT_REQUEST)return 5;
