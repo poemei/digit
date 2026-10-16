@@ -1,6 +1,7 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 #include "stnlabz_abi/module.h"
 #include "interpretation.h"
 static int active;
@@ -61,14 +62,25 @@ static int classify(const char *s,const char *evidence,digit_interpret_response_
  if(!*utterance)utterance=s;
  /* Direct address may occur after ordinary conversational text. */
  out->addressed=(unsigned)(utterance!=s||tok(s,"digit")||tok(s,"digit-bot"));
+ /* The lookup subject is an interpretation product, not an Ask parser. */
+ if(out->addressed){
+  size_t n;
+  trim_subject(utterance,out->subject,sizeof out->subject);
+  n=strlen(out->subject);
+  if(n>=6&&!strcasecmp(out->subject+n-6," digit"))
+   out->subject[n-6]=0;
+  else if(n>=10&&!strcasecmp(out->subject+n-10," digit-bot"))
+   out->subject[n-10]=0;
+  n=strlen(out->subject);
+  while(n&&out->subject[n-1]==' ')out->subject[--n]=0;
+ }
  /* Interpretation classifies a greeting using learned Corpus evidence.
   * Corpus retrieval remains owned by the caller's model service. */
  if(evidence&&*evidence&&
     tok(evidence,"greeting")){
-  size_t n=strlen(utterance);
-  while(n&&(utterance[n-1]=='!'||utterance[n-1]=='.'||utterance[n-1]==' '))n--;
+  size_t n=strlen(out->subject);
+  if(!n){trim_subject(utterance,out->subject,sizeof out->subject);n=strlen(out->subject);}
   if(n&&n<sizeof out->subject){
-   memcpy(out->subject,utterance,n);out->subject[n]=0;
    out->intent=DIGIT_INTENT_GREETING;out->confidence=80;return 1;
   }
  }
@@ -101,6 +113,7 @@ static int classify(const char *s,const char *evidence,digit_interpret_response_
   out->intent=DIGIT_INTENT_KNOWLEDGE;out->confidence=85;return 1;
  }
  out->intent=speech_act(utterance);
+ if(out->intent!=DIGIT_INTENT_AMBIGUOUS)out->subject[0]=0;
  out->confidence=0; /* Speech-act shape is not evidence of actionable intent. */
  return out->intent!=DIGIT_INTENT_AMBIGUOUS;
 }
