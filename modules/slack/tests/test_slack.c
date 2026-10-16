@@ -6,6 +6,7 @@ extern int digit_slack_is_learn_command(const char *);
 extern int digit_slack_learn_allowed(const char *,const char *,const char *);
 extern const char *digit_slack_delivery_channel(const char *,const char *);
 extern int digit_slack_format_reply(const char *,char *,size_t);
+extern void digit_slack_hide_corpus_reference(char *);
 extern const char *digit_slack_reply_thread(const char *);
 extern int digit_slack_seen_observation(const char *,const char *,const char *);
 extern int digit_slack_seen_message(const char *,const char *,const char *);
@@ -15,7 +16,7 @@ extern int digit_slack_addressed_text(const char *,const char *,const char *,con
 int main(void){
  stnlabz_module_qualification_result_t q={0};char formatted[512];
  const stnlabz_module_descriptor_t *d=stnlabz_module_get_descriptor();
- if(!d||strcmp(d->id,"slack")||d->version_major!=0||d->version_minor!=2||d->version_patch!=6)return 1;
+ if(!d||strcmp(d->id,"slack")||d->version_major!=0||d->version_minor!=2||d->version_patch!=7)return 1;
  if(strcmp(digit_slack_delivery_channel("[MODULE] HOTLOAD_ACTIVE id=reasoning","C0INTEL"),"C0C9LS4QA1X"))return 45;
  if(strcmp(digit_slack_delivery_channel("[MODULE] HOTLOAD_FAILED id=ask","C0INTEL"),"C0C9LS4QA1X"))return 46;
  if(strcmp(digit_slack_delivery_channel("Intel report","C0INTEL"),"C0INTEL"))return 47;
@@ -26,6 +27,14 @@ int main(void){
  if(digit_slack_is_learn_command("learned something"))return 52;
  if(digit_slack_learn_allowed("C0C9LS4QA1X","U123","group"))return 53;
  if(digit_slack_learn_allowed("COTHER","U123","group"))return 54;
+ {
+  char public_text[256]="Answer from Corpus. [Corpus: LEARN-secret123; source: internal-source]";
+  digit_slack_hide_corpus_reference(public_text);
+  if(strcmp(public_text,"Answer from Corpus."))return 55;
+  strcpy(public_text,"Ordinary answer without a reference.");
+  digit_slack_hide_corpus_reference(public_text);
+  if(strcmp(public_text,"Ordinary answer without a reference."))return 56;
+ }
  if(d->qualify(NULL)!=STNLABZ_MODULE_ERR_INVALID_ARGUMENT)return 2;
  if(d->qualify(&q)!=STNLABZ_MODULE_OK||q.tests_executed<10||q.tests_failed||!q.negative_test_passed)return 3;
  if(d->start(NULL)!=STNLABZ_MODULE_ERR_INVALID_ARGUMENT)return 4;
