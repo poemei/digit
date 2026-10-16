@@ -373,7 +373,7 @@ static int handle_line(SSL *tls,const char *line,int *authenticated,int *registe
   return send_line(tls,"AUTHENTICATE PLAIN");
  if(strstr(line," 001 ")||strstr(line," 376 ")||strstr(line," 422 ")){
   *registered=1;
-  return join_if_ready(tls,*authenticated,*registered,joined);
+  return join_if_ready(tls,*authenticated,*registered,join_sent);
  }
  /* Incoming channel messages are observational only; they confer no command authority. */
  if(irc_join_confirmed(line,config.nick,config.channel)){
