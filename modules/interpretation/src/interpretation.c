@@ -45,11 +45,26 @@ static digit_intent_t speech_act(const char *s){
  if(words>=3)return DIGIT_INTENT_STATEMENT;
  return DIGIT_INTENT_AMBIGUOUS;
 }
+/* A conversational clause is an additional view of the original text, never
+ * a replacement for it. Names and forms of address remain in request.text. */
+static const char *clause(const char *s){
+ const char *p=s,*candidate=s;
+ while(*p){
+  if(*p==','||*p==':'){
+   const char *next=p+1;
+   while(*next==' ')next++;
+   if(*next)candidate=next;
+  }
+  p++;
+ }
+ return candidate;
+}
 static int classify(const char *s,const char *evidence,digit_interpret_response_t *out){
  static const char *knowledge[]={"what is ","what are ","who is ","who are ","tell me about ","describe ","explain ","information about ","do you know about ",NULL};
  unsigned i;
  /* Preserve address semantics while classifying the actual utterance. */
  const char *utterance=s;
+ const char *meaning=clause(s);
  memset(out,0,sizeof *out);out->version=DIGIT_INTERPRETATION_VERSION;
  if(prefix(utterance,"digit-bot") &&
     (utterance[9]==':'||utterance[9]==','||utterance[9]==' ')){
@@ -105,14 +120,14 @@ static int classify(const char *s,const char *evidence,digit_interpret_response_
     (tok(s,"apache")||tok(s,"picked")||tok(s,"found"))){
   out->subject[0]=0;out->intent=DIGIT_INTENT_OBSERVATION;out->confidence=70;return 1;
  }
- for(i=0;knowledge[i];i++)if(prefix(utterance,knowledge[i])){
-  trim_subject(utterance+strlen(knowledge[i]),out->subject,sizeof out->subject);
+ for(i=0;knowledge[i];i++)if(prefix(meaning,knowledge[i])){
+  trim_subject(meaning+strlen(knowledge[i]),out->subject,sizeof out->subject);
   if(!out->subject[0])return 0;
   /* A leading pronoun alone cannot be grounded to a Corpus record. */
   if(!strcmp(out->subject,"you")||!strcmp(out->subject,"me"))return 0;
   out->intent=DIGIT_INTENT_KNOWLEDGE;out->confidence=85;return 1;
  }
- out->intent=speech_act(utterance);
+ out->intent=speech_act(meaning);
  if(out->intent!=DIGIT_INTENT_AMBIGUOUS)out->subject[0]=0;
  out->confidence=0; /* Speech-act shape is not evidence of actionable intent. */
  return out->intent!=DIGIT_INTENT_AMBIGUOUS;
@@ -184,7 +199,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"interpretation");snprintf(d.name,sizeof d.name,"Digit Interpretation");
- d.version_major=0;d.version_minor=1;d.version_patch=4;
+ d.version_major=0;d.version_minor=1;d.version_patch=5;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=activate;d.stop=stop;return &d;
 }
