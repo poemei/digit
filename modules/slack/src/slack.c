@@ -281,6 +281,11 @@ static int diagnostic(const char *s){
  return !strcmp(s,"diagnose")||!strcmp(s,"diagnose my last request")||
         !strcmp(s,"diagnose last request");
 }
+/* Public channel/group messages reach Ask for quiet participation evaluation. */
+int digit_slack_public_conversation(const char *type,const char *kind){
+ return type&&kind&&(!strcmp(type,"message")||!strcmp(type,"app_mention"))&&
+  (!strcmp(kind,"channel")||!strcmp(kind,"group"));
+}
 /* Accept only explicit addressing in workspace channels.
  * A Slack mention, plain bot name, or bot name plus colon qualifies.
  * Arbitrary channel chatter is not routed into Ask. */
@@ -434,7 +439,7 @@ static void process(struct json_object *root){
  const char *subtype=field(event,"subtype"),*bot=field(event,"bot_id");
  const char *ts=field(event,"thread_ts"),*message_ts=field(event,"ts");
  const char *kind=field(event,"channel_type"),*text=raw;
- int dm;char addressed[513]={0},answer[4096]={0};
+ int dm,is_public;char addressed[513]={0},answer[4096]={0};
  digit_router_request_t request={0};digit_ask_context_t ctx={0};
  history_t *h;size_t used=0;stnlabz_module_result_t status;
  if(!event||!type||!user||!channel||!raw||!team||
@@ -447,10 +452,13 @@ static void process(struct json_object *root){
     observe_channel(team,channel,kind,user,message_ts,raw))
   (void)digit_slack_seen_observation(team,channel,message_ts);
  dm=!strcmp(type,"message")&&kind&&!strcmp(kind,"im");
+ is_public=digit_slack_public_conversation(type,kind);
  if(!dm){
-  if(!bot_id[0]||!digit_slack_addressed_text(type,channel,
-                                                bot_id,raw,addressed,sizeof addressed))return;
-  text=addressed;
+  if(!bot_id[0])return;
+  if(digit_slack_addressed_text(type,channel,bot_id,raw,addressed,sizeof addressed))
+   text=addressed;
+  else if(is_public)text=raw;
+  else return;
  }
  while(*text&&isspace((unsigned char)*text))text++;
  if(!*text||strlen(text)>512||strchr(text,'\r')||strchr(text,'\n')||
@@ -464,6 +472,12 @@ static void process(struct json_object *root){
  h=conversation(user,channel);
  ctx.magic=DIGIT_ASK_CONTEXT_MAGIC;
  snprintf(ctx.question,sizeof ctx.question,"%s",text);
+ /* Scope public participation to the same key Observation persists. */
+ if(is_public){
+  snprintf(ctx.transport,sizeof ctx.transport,"slack");
+  snprintf(ctx.channel,sizeof ctx.channel,"%s:%s",team,channel);
+  snprintf(ctx.sender,sizeof ctx.sender,"%s",user);
+ }
  if(h->previous.request_id[0]){
   ctx.has_previous=1;
   memcpy(ctx.previous_request,h->previous.request_id,sizeof ctx.previous_request);
@@ -599,7 +613,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"slack");
  snprintf(d.name,sizeof d.name,"Digit Slack Transport");
- d.version_major=0;d.version_minor=2;d.version_patch=7;
+ d.version_major=0;d.version_minor=2;d.version_patch=8;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
