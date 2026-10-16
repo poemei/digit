@@ -34,10 +34,16 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
   digit_interpret_response_t *v=reply;
   if(size!=sizeof *q||cap<sizeof *v)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
   memset(v,0,sizeof *v);v->version=DIGIT_INTERPRETATION_VERSION;
-  if(!strcmp(q->text,"what can you tell me?"))v->intent=DIGIT_INTENT_CAPABILITIES;
+  if(strstr(q->corpus_text,"greeting")){
+   v->intent=DIGIT_INTENT_GREETING;
+   if(!strncasecmp(q->text,"Digit ",6))snprintf(v->subject,sizeof v->subject,"%s",q->text+6);
+   else snprintf(v->subject,sizeof v->subject,"%s",q->text);
+  }
+  else if(!strcmp(q->text,"what can you tell me?"))v->intent=DIGIT_INTENT_CAPABILITIES;
   else if(!strcmp(q->text,"digit you here?"))v->intent=DIGIT_INTENT_CHECKIN;
   else if(!strcmp(q->text,"digit, access your corpus"))v->intent=DIGIT_INTENT_CORPUS_GUIDANCE;
   else if(!strcmp(q->text,"digit picked up that report"))v->intent=DIGIT_INTENT_OBSERVATION;
+  else if(strstr(q->text,"Digit")||strstr(q->text,"digit"))v->addressed=1;
   else if(!strcmp(q->text,"tell me about STN-Labz")){
    v->intent=DIGIT_INTENT_KNOWLEDGE;strcpy(v->subject,"STN-Labz");
   }
@@ -62,6 +68,7 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
      strcmp(q->observations[0].event_id,"event-1"))
      return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
   memset(r,0,sizeof *r);r->version=DIGIT_REASONING_VERSION;
+  r->response_eligible=q->addressed;
   r->knowledge=q->corpus_state==DIGIT_REASONING_PRESENT?
     DIGIT_REASONING_CORPUS_SUPPORTED:DIGIT_REASONING_UNKNOWN;
   r->relevance=DIGIT_REASONING_CONTEXTUAL;r->matched_observations=1;
@@ -126,7 +133,7 @@ int main(void){
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return 1;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hello"))return 1;
  if(handler("hi",3,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hi"))return 1;
- if(d->version_patch!=14)return 1;
+ if(d->version_minor!=2||d->version_patch!=5)return 1;
  if(socials_calls!=2||!strstr(out,"💚"))return 1;
  socials_available=0;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
@@ -162,6 +169,8 @@ int main(void){
  if(handler("research https://www.php.net/releases/",sizeof("research https://www.php.net/releases/"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"Retrieved source:"))return 1;
  if(handler("research unknown subject",sizeof("research unknown subject"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"not available"))return 1;
+ if(handler("digit hello",sizeof("digit hello"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+    !strstr(out,"hello"))return 1;
  if(handler("digit you here?",sizeof("digit you here?"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"I'm here"))return 1;
  if(handler("digit, access your corpus",sizeof("digit, access your corpus"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
@@ -176,6 +185,9 @@ int main(void){
   strcpy(context.question,"I added a reasoning module for Digit, and expect a canned reply");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      used!=1||out[0]!=0)return 1;
+  strcpy(context.question,"Digit I fixed the problem");
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     !strstr(out,"clarify"))return 1;
   strcpy(context.question,"Can Digit explain a technology that Corpus doesn't contain?");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"I do not know"))return 1;
