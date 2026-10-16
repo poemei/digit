@@ -194,7 +194,7 @@ static int addressed_irc_text(const char *raw,const char *nick,char *out,size_t 
  else if(!strncasecmp(raw,"digit-bot",9)&&
          !irc_name_char((unsigned char)raw[9]))text=raw+9;
  else if(!strncasecmp(raw,"digit",5)&&
-         !irc_name_char((unsigned char)raw[5]))text=raw+5;
+         !irc_name_char((unsigned char)raw[5]))text=raw;
  if(text!=raw){
   while(*text&&(isspace((unsigned char)*text)||*text==':'||*text==','))text++;
   if(!*text)return 0;
@@ -419,7 +419,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"irc");snprintf(d.name,sizeof d.name,"Digit IRC Transport");
- d.version_major=0;d.version_minor=1;d.version_patch=8;
+ d.version_major=0;d.version_minor=1;d.version_patch=9;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
