@@ -183,23 +183,11 @@ static int irc_mentions_name(const char *raw,const char *name){
  * Preserve the full utterance when the mention is embedded: Ask owns meaning.
  * Passive observation and Core authorization remain separate. */
 static int addressed_irc_text(const char *raw,const char *nick,char *out,size_t cap){
- const char *text=raw;size_t len,n;
+ const char *text=raw;size_t len;
  if(!raw||!nick||!out||cap<2)return 0;
  if(!irc_mentions_name(raw,nick)&&
     !irc_mentions_name(raw,"digit-bot")&&
     !irc_mentions_name(raw,"digit"))return 0;
- n=strlen(nick);
- if(n&&!strncasecmp(raw,nick,n)&&
-    !irc_name_char((unsigned char)raw[n]))text=raw+n;
- else if(!strncasecmp(raw,"digit-bot",9)&&
-         !irc_name_char((unsigned char)raw[9]))text=raw+9;
- else if(!strncasecmp(raw,"digit",5)&&
-         !irc_name_char((unsigned char)raw[5]))text=raw;
- if(text!=raw){
-  while(*text&&(isspace((unsigned char)*text)||*text==':'||*text==','))text++;
-  if(!*text)return 0;
-  if(*text=='?'&&!text[1])text=raw;
- }
  len=strlen(text);
  if(!len||len>=cap||len>512||strchr(text,'\r')||strchr(text,'\n'))return 0;
  memcpy(out,text,len+1);
@@ -208,7 +196,7 @@ static int addressed_irc_text(const char *raw,const char *nick,char *out,size_t 
 /* Only explicitly addressed conversation, never arbitrary IRC commands. */
 static void chat_message(SSL *tls,const char *line){
  const char *sep,*body,*prefix;char sender[64]={0},target[128]={0},message[513];
- char answer[1024],wire[512],addressed[513];size_t n=0,used=0;
+ char answer[1024],wire[512];size_t n=0,used=0;
  digit_router_request_t req={0};
  digit_ask_context_t context={0};irc_history_t *conversation;
  stnlabz_module_result_t dispatch_result;
@@ -230,8 +218,8 @@ static void chat_message(SSL *tls,const char *line){
   /* Direct messages use the same conversation boundary as Slack DMs. */
   if(!strncasecmp(body,"!ask ",5))body+=5;
  }else if(!strcasecmp(target,config.channel)){
-  if(!addressed_irc_text(body,config.nick,addressed,sizeof addressed))return;
-  body=addressed;
+  /* Preserve complete channel utterances; Ask owns participation decisions. */
+  if(strlen(body)>512)return;
  }else return;
  if(!*body||strlen(body)>512)return;
  conversation=history_for(sender,target);
@@ -419,7 +407,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"irc");snprintf(d.name,sizeof d.name,"Digit IRC Transport");
- d.version_major=0;d.version_minor=1;d.version_patch=9;
+ d.version_major=0;d.version_minor=1;d.version_patch=10;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
