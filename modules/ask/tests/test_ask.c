@@ -43,6 +43,10 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
   else if(!strcmp(q->text,"digit you here?"))v->intent=DIGIT_INTENT_CHECKIN;
   else if(!strcmp(q->text,"digit, access your corpus"))v->intent=DIGIT_INTENT_CORPUS_GUIDANCE;
   else if(!strcmp(q->text,"digit picked up that report"))v->intent=DIGIT_INTENT_OBSERVATION;
+  else if(!strncasecmp(q->text,"Digit ",6)){
+   v->addressed=1;v->intent=DIGIT_INTENT_AMBIGUOUS;
+   snprintf(v->subject,sizeof v->subject,"%s",q->text+6);
+  }
   else if(strstr(q->text,"Digit")||strstr(q->text,"digit"))v->addressed=1;
   else if(!strcmp(q->text,"tell me about STN-Labz")){
    v->intent=DIGIT_INTENT_KNOWLEDGE;strcpy(v->subject,"STN-Labz");
@@ -169,6 +173,8 @@ int main(void){
  if(handler("research https://www.php.net/releases/",sizeof("research https://www.php.net/releases/"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"Retrieved source:"))return 1;
  if(handler("research unknown subject",sizeof("research unknown subject"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"not available"))return 1;
+ if(handler("Hi Digit",sizeof("Hi Digit"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+    !strstr(out,"clarify"))return 1;
  if(handler("digit hello",sizeof("digit hello"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
     !strstr(out,"hello"))return 1;
  if(handler("digit you here?",sizeof("digit you here?"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
