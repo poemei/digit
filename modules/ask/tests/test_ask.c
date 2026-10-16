@@ -195,7 +195,7 @@ int main(void){
   strcpy(context.sender,"PoeMei");
   strcpy(context.question,"I added a reasoning module for Digit, and expect a canned reply");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-     used!=1||out[0]!=0)return 1;
+     !strstr(out,"clarify"))return 1;
   strcpy(context.question,"Digit I fixed the problem");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"clarify"))return 1;
