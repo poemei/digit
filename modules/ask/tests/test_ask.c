@@ -42,6 +42,13 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
    if(!strncasecmp(q->text,"Digit ",6))snprintf(v->subject,sizeof v->subject,"%.*s",(int)sizeof v->subject-1,q->text+6);
    else snprintf(v->subject,sizeof v->subject,"%.*s",(int)sizeof v->subject-1,q->text);
   }
+  else if(!strcmp(q->text,"I added a reasoning module for Digit, and expect a canned reply")){
+   v->addressed=0;v->intent=DIGIT_INTENT_STATEMENT;
+  }
+  else if(!strcmp(q->text,"What is STN-Labz?")){
+   v->addressed=0;v->intent=DIGIT_INTENT_KNOWLEDGE;
+   strcpy(v->subject,"STN-Labz");
+  }
   else if(!strcmp(q->text,"Digit topic discussion")){
    v->addressed=1;v->intent=DIGIT_INTENT_STATEMENT;
    strcpy(v->subject,"STN-Labz");
