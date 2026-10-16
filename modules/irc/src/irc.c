@@ -220,6 +220,12 @@ static void digit_irc_hide_corpus_reference(char *text){
  if(!source||source>=last+n-1)return;
  ((char *)last)[0]=0;
 }
+/* Public channel messages are eligible for quiet Ask/Reasoning evaluation.
+ * Admission itself grants neither response eligibility nor operational authority. */
+int digit_irc_public_conversation(const char *target,const char *configured_channel){
+ return target&&configured_channel&&target[0]=='#'&&
+        configured_channel[0]=='#'&&!strcasecmp(target,configured_channel);
+}
 /* Only explicitly addressed conversation, never arbitrary IRC commands. */
 static void chat_message(SSL *tls,const char *line){
  const char *sep,*body,*prefix;char sender[64]={0},target[128]={0},message[513];
@@ -244,8 +250,8 @@ static void chat_message(SSL *tls,const char *line){
  if(!strcasecmp(target,config.nick)){
   /* Direct messages use the same conversation boundary as Slack DMs. */
   if(!strncasecmp(body,"!ask ",5))body+=5;
- }else if(!strcasecmp(target,config.channel)){
-  /* Use addressed-message validation without denying ambient evaluation. */
+ }else if(digit_irc_public_conversation(target,config.channel)){
+  /* Every configured public-channel utterance reaches Ask for quiet\n     evidence-gated evaluation; explicit mentions remain direct addresses. */
   {char addressed[513];
    if(addressed_irc_text(body,config.nick,addressed,sizeof addressed))
     body=addressed;
@@ -453,7 +459,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"irc");snprintf(d.name,sizeof d.name,"Digit IRC Transport");
- d.version_major=0;d.version_minor=2;d.version_patch=0;
+ d.version_major=0;d.version_minor=2;d.version_patch=1;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
