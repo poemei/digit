@@ -105,7 +105,7 @@ static stnlabz_module_result_t research_answer(const char *subject,
 /* Evidence-bound fallback for unsupported chat, never an inferred command.
    Mention admission alone is not a reason to speak. */
 static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
- const char *message,void *output,size_t capacity,size_t *used){
+ const char *message,unsigned addressed,void *output,size_t capacity,size_t *used){
  digit_observation_recent_request_t oq={0};
  digit_observation_recent_response_t *history=NULL;
  digit_reasoning_request_t *rq=NULL;
@@ -132,7 +132,7 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
  snprintf(oq.transport,sizeof oq.transport,"%s",ctx->transport);
  snprintf(oq.channel,sizeof oq.channel,"%s",ctx->channel);
  oq.limit=DIGIT_OBSERVATION_RECENT_MAX;
- rq->version=DIGIT_REASONING_VERSION;
+ rq->version=DIGIT_REASONING_VERSION;rq->addressed=addressed;
  snprintf(rq->message,sizeof rq->message,"%s",message);
  snprintf(rq->transport,sizeof rq->transport,"%s",ctx->transport);
  snprintf(rq->channel,sizeof rq->channel,"%s",ctx->channel);
@@ -174,13 +174,15 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
     n!=sizeof *rr||rr->version!=DIGIT_REASONING_VERSION)goto done;
  /* Explicit question punctuation is a protocol-level request signal, not
     an intent keyword table. An unaddressed statement may be irrelevant. */
- if(strchr(message,'?')){
+ if(rr->response_eligible||strchr(message,'?')){
   if(rr->knowledge==DIGIT_REASONING_CORPUS_SUPPORTED&&corpus_ok){
    int w=snprintf(out,capacity,"%s [Corpus: %s; source: %s]",
                     cr->text,cr->id,cr->source);
    if(w>0&&(size_t)w<capacity){*used=(size_t)w+1;result=1;}
   }else {
-   const char *explain=rr->knowledge==DIGIT_REASONING_EVIDENCE_UNAVAILABLE?
+   const char *explain=rr->response_eligible?
+     "I received your message. Could you clarify what you\'d like me to address?":
+     rr->knowledge==DIGIT_REASONING_EVIDENCE_UNAVAILABLE?
      "I do not know; Corpus evidence is unavailable.":
      "I do not know; I found no supporting Corpus record for that question.";
    if(strlen(explain)<capacity){strcpy(out,explain);*used=strlen(explain)+1;result=1;}
@@ -335,11 +337,12 @@ static stnlabz_module_result_t answer(const void *request,size_t length,
      reply="Corpus record exceeds this interface's response limit.";
     else {*used=(size_t)written+1;return STNLABZ_MODULE_OK;}
    }
+  }else if(interpreted.addressed&&c&&c->transport[0]&&c->channel[0]){
+   return contextual_answer(c,s,interpreted.addressed,response,capacity,used);
   }else if(interpreted.addressed){
-   /* Direct invocation merits a safe response; it grants no action authority. */
    reply="I received your message. Could you clarify what you'd like me to address?";
   }else
-   return contextual_answer(c,s,response,capacity,used);
+   return contextual_answer(c,s,0,response,capacity,used);
  }
  if(strlen(reply)+1>capacity)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memcpy(out,reply,strlen(reply)+1);*used=strlen(reply)+1;
