@@ -11,6 +11,30 @@
 #include "reasoning.h"
 #include "socials.h"
 static const stnlabz_module_host_t *host;
+/* In IRC, a non-channel target is a private conversation addressed to Digit. */
+static int irc_private_context(const digit_ask_context_t *c){
+ return c&&!strcmp(c->transport,"irc")&&c->channel[0]&&c->channel[0]!='#';
+}
+static int classify_context_message(const digit_ask_context_t *c,const char *message,
+ digit_interpret_request_t *request,digit_interpret_response_t *interpreted){
+ size_t used=0;stnlabz_module_result_t rc;
+ request->version=DIGIT_INTERPRETATION_VERSION;
+ snprintf(request->text,sizeof request->text,"%s",message);
+ if(!host||!host->invoke_service)return 0;
+ rc=host->invoke_service("interpretation.classify",request,sizeof *request,
+                          interpreted,sizeof *interpreted,&used);
+ if(rc!=STNLABZ_MODULE_OK||used!=sizeof *interpreted||
+    interpreted->version!=DIGIT_INTERPRETATION_VERSION)return 0;
+ if(irc_private_context(c)&&!interpreted->addressed){
+  if(snprintf(request->text,sizeof request->text,"Digit %s",message)>=(int)sizeof request->text)return 0;
+  used=0;
+  rc=host->invoke_service("interpretation.classify",request,sizeof *request,
+                           interpreted,sizeof *interpreted,&used);
+  if(rc!=STNLABZ_MODULE_OK||used!=sizeof *interpreted||
+     interpreted->version!=DIGIT_INTERPRETATION_VERSION)return 0;
+ }
+ return 1;
+}
 /* Social expressions are optional; Socials owns the symbols and selection. */
 static void append_social(const char *key, char *out,size_t capacity,size_t *used) {
  digit_socials_request_t q={0};
@@ -112,7 +136,7 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
   out[0]=0;*used=1;return STNLABZ_MODULE_OK;
  }
  if((strcmp(ctx->transport,"irc")&&strcmp(ctx->transport,"slack"))||
-    (ctx->transport[0]=='i'&&ctx->channel[0]!='#')){
+    (ctx->transport[0]=='i'&&ctx->channel[0]!='#'&&!irc_private_context(ctx))){
   out[0]=0;*used=1;return STNLABZ_MODULE_OK;
  }
  history=calloc(1,sizeof *history);
@@ -211,15 +235,10 @@ static stnlabz_module_result_t answer(const void *request,size_t length,
   digit_interpret_request_t iq={0};
   digit_interpret_response_t ir={0};
   size_t n=0;
-  iq.version=DIGIT_INTERPRETATION_VERSION;
-  snprintf(iq.text,sizeof iq.text,"%s",s);
-  if(!host||!host->invoke_service||
-     host->invoke_service("interpretation.classify",&iq,sizeof iq,
-                          &ir,sizeof ir,&n)!=STNLABZ_MODULE_OK||
-     n!=sizeof ir||ir.version!=DIGIT_INTERPRETATION_VERSION){
+  if(!classify_context_message(c,s,&iq,&ir)){
    out[0]=0;*used=1;return STNLABZ_MODULE_OK;
   }
-  if(!ir.addressed){
+  if(!ir.addressed&&!irc_private_context(c)){
    return contextual_answer(c,s,ir.subject,0,response,capacity,used);
   }
  }
@@ -270,7 +289,7 @@ static stnlabz_module_result_t answer(const void *request,size_t length,
     return STNLABZ_MODULE_ERR_NOT_FOUND;
    *used=n;return STNLABZ_MODULE_OK;
   }
- }else if(!strncasecmp(s,"what is ",8)){
+ }else if(!irc_private_context(c)&&!strncasecmp(s,"what is ",8)){
   const char *term=s+8;size_t n=strlen(term),used_lookup=0;
   digit_corpus_lookup_request_t query={0};
   digit_corpus_lookup_response_t found={0};
@@ -305,7 +324,8 @@ static stnlabz_module_result_t answer(const void *request,size_t length,
   digit_interpret_response_t interpreted={0};
   size_t result_used=0;
   request_intent.version=DIGIT_INTERPRETATION_VERSION;
-  snprintf(request_intent.text,sizeof request_intent.text,"%s",s);
+  if(irc_private_context(c))snprintf(request_intent.text,sizeof request_intent.text,"Digit %s",s);
+  else snprintf(request_intent.text,sizeof request_intent.text,"%s",s);
   /* First pass determines the lookup subject; second pass applies evidence. */
   if(host&&host->invoke_service&&
      host->invoke_service("interpretation.classify",&request_intent,sizeof request_intent,
@@ -398,7 +418,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
- d.version_major=0;d.version_minor=2;d.version_patch=7;
+ d.version_major=0;d.version_minor=2;d.version_patch=8;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
