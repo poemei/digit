@@ -172,8 +172,8 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
  if(host->invoke_service(DIGIT_REASONING_SERVICE,rq,sizeof *rq,
          rr,sizeof *rr,&n)!=STNLABZ_MODULE_OK||
     n!=sizeof *rr||rr->version!=DIGIT_REASONING_VERSION)goto done;
- /* Explicit question punctuation is a protocol-level request signal, not
-    an intent keyword table. An unaddressed statement may be irrelevant. */
+ /* Reasoning determines response eligibility for direct invocation.
+    Preserve existing query handling for non-addressed requests. */
  if(rr->response_eligible||strchr(message,'?')){
   if(rr->knowledge==DIGIT_REASONING_CORPUS_SUPPORTED&&corpus_ok){
    int w=snprintf(out,capacity,"%s [Corpus: %s; source: %s]",
@@ -338,7 +338,9 @@ static stnlabz_module_result_t answer(const void *request,size_t length,
     else {*used=(size_t)written+1;return STNLABZ_MODULE_OK;}
    }
   }else if(interpreted.addressed&&c&&c->transport[0]&&c->channel[0]){
-   return contextual_answer(c,s,interpreted.addressed,response,capacity,used);
+   stnlabz_module_result_t evaluated=contextual_answer(c,s,interpreted.addressed,response,capacity,used);
+   if(evaluated==STNLABZ_MODULE_OK&&*used>1)return evaluated;
+   reply="I received your message. Could you clarify what you would like me to address?";
   }else if(interpreted.addressed){
    reply="I received your message. Could you clarify what you'd like me to address?";
   }else
