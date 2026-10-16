@@ -21,7 +21,12 @@ int main(void){
  f=fdopen(fd,"w");if(!f){close(fd);unlink(path);return 2;}
  fputs("TEST-1\tRULE\toperator\tEngine records must remain intact.\n",f);
  fputs("TEST-2\tENGINEERING\ttest\tThe feline makes a purrs sound.\n",f);
+ fputs("TEST-3\tFRAMEWORK\ttest\tA web framework is written in PHP.\n",f);
+ fputs("TEST-4\tLANGUAGE\tlesson:php.txt\tPHP is a server-side scripting language.\n",f);
  fclose(f);
+ if(digit_corpus_find(path,"PHP",&r)!=1||strcmp(r.id,"TEST-4")){
+  puts("FAIL primary-subject evidence preference");failed++;
+ }
  if(digit_corpus_find(path,"purrs",&r)!=1||strcmp(r.id,"TEST-2")||
     strcmp(r.source,"test")){puts("FAIL corpus lookup/source");failed++;}
  if(digit_corpus_find(path,"purr",&r)!=0){puts("FAIL token boundaries");failed++;}
