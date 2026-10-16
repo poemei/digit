@@ -236,7 +236,20 @@ static void chat_message(SSL *tls,const char *line){
   {char addressed[513];
    if(addressed_irc_text(body,config.nick,addressed,sizeof addressed))
     body=addressed;
-   else if(strlen(body)>512)return;
+   else {
+    const char *names[]={config.nick,"digit-bot","digit"};
+    size_t k;
+    if(strlen(body)>512)return;
+    for(k=0;k<sizeof names/sizeof names[0];k++){
+     size_t m=strlen(names[k]);
+     if(m&&!strncasecmp(body,names[k],m)&&
+        (body[m]==':'||body[m]==',')){
+      const char *tail=body+m+1;
+      while(*tail&&isspace((unsigned char)*tail))tail++;
+      if(!*tail)return;
+     }
+    }
+   }
   }
  }else return;
  if(!*body||strlen(body)>512)return;
