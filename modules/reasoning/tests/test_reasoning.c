@@ -40,7 +40,7 @@ int main(void){
  size_t n=0;
  if(!q||!out)return 1;
  h.register_service=register_service;h.unregister_service=unregister_service;
- if(!d||strcmp(d->id,"reasoning")||d->version_patch!=0||
+ if(!d||strcmp(d->id,"reasoning")||d->version_patch!=1||
     d->qualify(&qual)!=STNLABZ_MODULE_OK||qual.tests_executed<10||
     qual.tests_failed||!qual.negative_test_passed)return 2;
  if(d->start(&h)!=STNLABZ_MODULE_OK||!handler)return 3;
@@ -49,6 +49,10 @@ int main(void){
     out->knowledge!=DIGIT_REASONING_CORPUS_SUPPORTED||
     out->matched_observations!=1||strcmp(out->observation_ids[0],"irc-123")||
     strcmp(out->corpus_id,"C-100"))return 4;
+ q->addressed=1;
+ if(handler(q,sizeof *q,out,sizeof *out,&n,NULL)!=STNLABZ_MODULE_OK||
+    out->response_eligible!=1)return 12;
+ q->addressed=0;
  strcpy(q->message,"pineapple turbines");
  if(handler(q,sizeof *q,out,sizeof *out,&n,NULL)!=STNLABZ_MODULE_OK||
     out->relevance!=DIGIT_REASONING_NONE||out->matched_observations)return 5;
