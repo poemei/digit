@@ -189,6 +189,20 @@ static int addressed_irc_text(const char *raw,const char *nick,char *out,size_t 
     !irc_mentions_name(raw,"digit-bot")&&
     !irc_mentions_name(raw,"digit"))return 0;
  len=strlen(text);
+ /* A bare nickname with an address separator has no utterance to route. */
+ {
+  const char *names[]={nick,"digit-bot","digit"};
+  size_t k;
+  for(k=0;k<sizeof names/sizeof names[0];k++){
+   size_t m=strlen(names[k]);
+   if(m&&!strncasecmp(text,names[k],m)&&
+      (text[m]==':'||text[m]==',')){
+    const char *tail=text+m+1;
+    while(*tail&&isspace((unsigned char)*tail))tail++;
+    if(!*tail)return 0;
+   }
+  }
+ }
  if(!len||len>=cap||len>512||strchr(text,'\r')||strchr(text,'\n'))return 0;
  memcpy(out,text,len+1);
  return 1;
@@ -218,8 +232,12 @@ static void chat_message(SSL *tls,const char *line){
   /* Direct messages use the same conversation boundary as Slack DMs. */
   if(!strncasecmp(body,"!ask ",5))body+=5;
  }else if(!strcasecmp(target,config.channel)){
-  /* Preserve complete channel utterances; Ask owns participation decisions. */
-  if(strlen(body)>512)return;
+  /* Use addressed-message validation without denying ambient evaluation. */
+  {char addressed[513];
+   if(addressed_irc_text(body,config.nick,addressed,sizeof addressed))
+    body=addressed;
+   else if(strlen(body)>512)return;
+  }
  }else return;
  if(!*body||strlen(body)>512)return;
  conversation=history_for(sender,target);
