@@ -142,7 +142,7 @@ int main(void){
  if(handler("Digit good morning",sizeof("Digit good morning"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
     !strstr(out,"good morning")||!strstr(out,"💚")||strstr(out,"Corpus:"))return 1;
  if(handler("Digit good unknown",sizeof("Digit good unknown"),out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-    out[0]!=0)return 1;
+    !strstr(out,"clarify"))return 1;
  if(handler("what version are you?",22,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      strcmp(out,"Digit 1.0.0"))return 1;
  if(handler("version",8,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
