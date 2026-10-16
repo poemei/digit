@@ -1,7 +1,7 @@
 #ifndef DIGIT_REASONING_H
 #define DIGIT_REASONING_H
 #include <stdint.h>
-#define DIGIT_REASONING_VERSION 1u
+#define DIGIT_REASONING_VERSION 2u
 #define DIGIT_REASONING_SERVICE "reasoning.evaluate"
 #define DIGIT_REASONING_ITEMS 6u
 typedef enum {DIGIT_REASONING_UNAVAILABLE=0,DIGIT_REASONING_EMPTY=1,DIGIT_REASONING_PRESENT=2} digit_reasoning_evidence_state_t;
@@ -18,6 +18,7 @@ typedef struct {
  char transport[16];
  char channel[128];
  char sender[128];
+ uint32_t addressed;
  digit_reasoning_evidence_state_t observation_state;
  uint32_t observation_count;
  digit_reasoning_observation_t observations[DIGIT_REASONING_ITEMS];
@@ -28,6 +29,7 @@ typedef struct {
 } digit_reasoning_request_t;
 typedef struct {
  uint32_t version;
+ uint32_t response_eligible;
  digit_reasoning_knowledge_t knowledge;
  digit_reasoning_relevance_t relevance;
  uint32_t matched_observations;
