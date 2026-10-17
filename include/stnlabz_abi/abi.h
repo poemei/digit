@@ -44,6 +44,25 @@ stnlabz_module_abi_prepare_replacement(
     const char *module_id
 );
 
+/* Generic, versioned lifecycle notification. Independent transports register
+ * "notify.<module-id>" using the existing host service callbacks. */
+#define STNLABZ_NOTIFICATION_VERSION 1U
+#define STNLABZ_NOTIFICATION_MESSAGE_MAX 4096
+typedef struct {
+    unsigned int version;
+    char message[STNLABZ_NOTIFICATION_MESSAGE_MAX];
+} stnlabz_module_notification_t;
+typedef struct {
+    unsigned int eligible, attempted, delivered, failed;
+} stnlabz_notification_dispatch_result_t;
+
+stnlabz_module_result_t stnlabz_module_abi_notify(
+    const stnlabz_module_registry_t *registry,
+    const stnlabz_module_host_t *host,
+    const stnlabz_module_notification_t *notification,
+    stnlabz_notification_dispatch_result_t *result
+);
+
 int
 stnlabz_module_abi_self_test(void);
 
