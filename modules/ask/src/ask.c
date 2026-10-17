@@ -257,7 +257,7 @@ static int learned_social_reply(const char *message,const char *lesson,
  q=strchr(++p,'"');
  if(!q)return 0;
  n=(size_t)(q-p);
- if(!n||n>=capacity||n>160||memchr(p,'\\n',n)||memchr(p,'\\r',n))
+ if(!n||n>=capacity||n>160||memchr(p,'\n',n)||memchr(p,'\r',n))
   return 0;
  memcpy(out,p,n);out[n]=0;*used=n+1;
  return 1;
