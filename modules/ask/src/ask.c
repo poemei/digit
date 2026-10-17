@@ -198,6 +198,24 @@ static int ambient_fact(const char *src,char *out,size_t cap,size_t *used){
  if(out[n-1]!='.'&&out[n-1]!='!'&&out[n-1]!='?')out[n++]='.';
  out[n]=0;*used=n+1;return 1;
 }
+/* Reject ambient echo of an existing participant's statement. Ignore only
+ * presentation punctuation and case: this is duplicate detection, not a
+ * claim that matching words establish relevance or a reason to speak. */
+static int same_statement(const char *a,const char *b){
+ size_t i=0,j=0,ai=0,bj=0;
+ if(!a||!b)return 0;
+ while(a[i]&&isspace((unsigned char)a[i]))i++;
+ while(b[j]&&isspace((unsigned char)b[j]))j++;
+ ai=strlen(a);bj=strlen(b);
+ while(ai>i&&(isspace((unsigned char)a[ai-1])||a[ai-1]=='.'||a[ai-1]=='!'||a[ai-1]=='?'))ai--;
+ while(bj>j&&(isspace((unsigned char)b[bj-1])||b[bj-1]=='.'||b[bj-1]=='!'||b[bj-1]=='?'))bj--;
+ if(ai-i!=bj-j)return 0;
+ while(i<ai&&j<bj){
+  if(tolower((unsigned char)a[i])!=tolower((unsigned char)b[j]))return 0;
+  i++;j++;
+ }
+ return 1;
+}
 /* Evidence-bound fallback for unsupported chat, never an inferred command.
    Mention admission alone is not a reason to speak. */
 static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
@@ -273,6 +291,13 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
    if(!addressed){
     if(!ambient_fact(cr->text,out,capacity,used)){
      out[0]=0;*used=1;
+    }else{
+     /* Corpus is knowledge, not permission to echo participants.
+      * Do not reply with a statement already present in this channel. */
+     int repeated=same_statement(out,message);
+     for(i=0;!repeated&&i<rq->observation_count;i++)
+      if(same_statement(out,rq->observations[i].text))repeated=1;
+     if(repeated){out[0]=0;*used=1;}
     }
     result=1;
    }else{
@@ -502,7 +527,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
  d.version_major=0;/* [AI:GPT-6 | 2026-10-17 02:49:54 UTC] */
- d.version_minor=3;d.version_patch=1;
+ d.version_minor=3;d.version_patch=2;
  /* [End AI:GPT-6] */
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
