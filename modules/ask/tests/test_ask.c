@@ -96,7 +96,10 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
   strcpy(r->items[0].event_id,"event-1");
   strcpy(r->items[0].sender,"STN_Boss");
   strcpy(r->items[0].text,"so I added a reasoning module for Digit");
-  if(ambient_fixture){
+  if(ambient_fixture==3){
+   r->count=1;
+   strcpy(r->items[0].text,"The ChAoS MVC Net concerns company coordination.");
+  }else if(ambient_fixture){
    r->count=ambient_fixture==2?1:2;
    strcpy(r->items[0].text,"ChAoS MVC Net agenda has been discussed");
    strcpy(r->items[1].event_id,"event-2");
@@ -207,7 +210,7 @@ int main(void){
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return test_failure(__LINE__);
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hello"))return test_failure(__LINE__);
  if(handler("hi",3,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hi"))return test_failure(__LINE__);
- if(d->version_minor!=3||d->version_patch!=1)return test_failure(__LINE__);
+ if(d->version_minor!=3||d->version_patch!=2)return test_failure(__LINE__);
  if(socials_calls!=2||!strstr(out,"💚"))return test_failure(__LINE__);
  socials_available=0;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
@@ -291,6 +294,15 @@ int main(void){
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !selected_subject||!strstr(out,"company coordination")||
      strstr(out,"I am ready"))return test_failure(__LINE__);
+  /* An existing conversational statement must not be recited back. */
+  ambient_fixture=3;long_corpus_fixture=0;
+  strcpy(context.question,"are you ready for the ChAoS MVC Net tomorrow?");
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     out[0]!=0||used!=1)return test_failure(__LINE__);
+  ambient_fixture=1;
+  /* No matching prior statement: previous contextual evidence path remains. */
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     !strstr(out,"company coordination"))return test_failure(__LINE__);
   long_corpus_fixture=1;
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      strcmp(out,"The ChAoS MVC Net is a team discussion.")||
