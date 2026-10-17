@@ -124,8 +124,8 @@ stnlabz_module_result_t digit_corpus_selftest(stnlabz_module_qualification_resul
   digit_corpus_record_t records[3]={{0}};
   int multiple=digit_corpus_find_multi(name,"engine",records);
   CHECK(multiple==2);
-  CHECK(multiple==2&&!strcmp(records[0].id,"Q-02"));
-  CHECK(multiple==2&&!strcmp(records[1].id,"Q-01"));
+  CHECK(multiple==2&&!strcmp(records[0].id,"Q-01"));
+  CHECK(multiple==2&&!strcmp(records[1].id,"Q-02"));
   multiple=digit_corpus_find_multi(name,"nonsense",records);
   CHECK(multiple==0);
   multiple=digit_corpus_find_multi(name,"",records);
