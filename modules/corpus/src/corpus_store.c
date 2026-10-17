@@ -120,7 +120,18 @@ stnlabz_module_result_t digit_corpus_selftest(stnlabz_module_qualification_resul
   unlink(name);return STNLABZ_MODULE_ERR_QUALIFICATION;
  }
 #define CHECK(v) do{q->tests_executed++;if(v)passed++;else q->tests_failed++;}while(0)
- rc=digit_corpus_find(name,"cobalt",&r);
+ {
+  digit_corpus_record_t records[3]={{0}};
+  int multiple=digit_corpus_find_multi(name,"engine",records);
+  CHECK(multiple==2);
+  CHECK(multiple==2&&!strcmp(records[0].id,"Q-02"));
+  CHECK(multiple==2&&!strcmp(records[1].id,"Q-01"));
+  multiple=digit_corpus_find_multi(name,"nonsense",records);
+  CHECK(multiple==0);
+  multiple=digit_corpus_find_multi(name,"",records);
+  CHECK(multiple==-2);
+ }
+  rc=digit_corpus_find(name,"cobalt",&r);
  CHECK(rc==1);
  CHECK(rc==1&&!strcmp(r.id,"Q-01"));
  CHECK(rc==1&&!strcmp(r.category,"RULE"));
