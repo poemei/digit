@@ -114,7 +114,7 @@ static int generate_local(const digit_conversation_request_t *q,
  char *prompt=NULL,*body=NULL,*http=NULL,*raw=NULL;
  size_t n=0,body_n=0,received=0;int fd=-1,ok=0;
  struct sockaddr_in addr={0};
- struct timeval timeout={3,0};
+ struct timeval send_timeout={3,0},receive_timeout={12,0};
  ssize_t count;
  if(!model_name(model))return 0; /* explicitly operator-configured only */
  prompt=calloc(1,22000);body=calloc(1,49000);
@@ -126,8 +126,8 @@ static int generate_local(const digit_conversation_request_t *q,
     !json_string(body,49000,&body_n,prompt)||
     !put(body,49000,&body_n,",\"stream\":false,\"options\":{\"num_predict\":128}}"))goto done;
  fd=socket(AF_INET,SOCK_STREAM,0);if(fd<0)goto done;
- (void)setsockopt(fd,SOL_SOCKET,SO_SNDTIMEO,&timeout,sizeof timeout);
- (void)setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof timeout);
+ (void)setsockopt(fd,SOL_SOCKET,SO_SNDTIMEO,&send_timeout,sizeof send_timeout);
+ (void)setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&receive_timeout,sizeof receive_timeout);
  addr.sin_family=AF_INET;addr.sin_port=htons(11434);
  addr.sin_addr.s_addr=htonl(INADDR_LOOPBACK);
  if(connect(fd,(struct sockaddr *)&addr,sizeof addr)!=0)goto done;
