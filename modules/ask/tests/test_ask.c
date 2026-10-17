@@ -168,6 +168,11 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
    strcpy(result->source,"fixture-net");
    if(long_corpus_fixture)
     strcpy(result->text,"The ChAoS MVC Net is a team discussion intended to coordinate technical topics and documentation across departments. Another sentence gives lengthy background.");
+   else if(long_corpus_fixture==2){
+    /* [AI:GPT-6 | 2026-10-17 02:49:54 UTC] */
+    strcpy(result->text,"The ChAoS MVC Net concerns company coordination");
+    /* [End AI:GPT-6] */
+   }
    else strcpy(result->text,"The ChAoS MVC Net concerns company coordination.");
   }
   if(!strcmp(q->term,"STN-Labz")){
@@ -202,7 +207,7 @@ int main(void){
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return test_failure(__LINE__);
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hello"))return test_failure(__LINE__);
  if(handler("hi",3,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hi"))return test_failure(__LINE__);
- if(d->version_minor!=3||d->version_patch!=0)return test_failure(__LINE__);
+ if(d->version_minor!=3||d->version_patch!=1)return test_failure(__LINE__);
  if(socials_calls!=2||!strstr(out,"💚"))return test_failure(__LINE__);
  socials_available=0;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
@@ -290,6 +295,13 @@ int main(void){
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      strcmp(out,"The ChAoS MVC Net is a team discussion.")||
      strstr(out,"Corpus:")||strlen(out)>120)return test_failure(__LINE__);
+  /* [AI:GPT-6 | 2026-10-17 02:49:54 UTC]
+   * Corpus propositions without a full stop remain eligible for presentation. */
+  long_corpus_fixture=2;
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     strcmp(out,"The ChAoS MVC Net concerns company coordination.")||
+     strstr(out,"Corpus:"))return test_failure(__LINE__);
+  /* [End AI:GPT-6] */
   long_corpus_fixture=0;
   ambient_fixture=2;
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
