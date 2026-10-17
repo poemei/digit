@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "stnlabz_abi/abi.h"
-static int calls[2], mode[2];
+static int calls[2], mode[2], checks, failures;
 static stnlabz_module_result_t invoke(const char *name,const void *req,size_t size,
  void *response,size_t cap,size_t *used){
  int index;
@@ -16,7 +16,7 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
  *(int *)response=mode[index]==1?1:0;*used=sizeof(int);
  return mode[index]==3?STNLABZ_MODULE_ERR_START_FAILED:STNLABZ_MODULE_OK;
 }
-static int check(int yes,const char *why){if(!yes)fprintf(stderr,"notification test: %s\n",why);return yes;}
+static int check(int yes,const char *why){checks++;if(!yes){failures++;fprintf(stderr,"notification test: %s\n",why);}return yes;}
 int main(void){
  stnlabz_module_record_t records[3]={0};
  stnlabz_module_registry_t reg={0};
@@ -47,6 +47,6 @@ int main(void){
  ok&=check(stnlabz_module_abi_notify(&reg,&host,&notice,&result)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT,"bad version");
  notice.version=STNLABZ_NOTIFICATION_VERSION;
  ok&=check(stnlabz_module_abi_notify(NULL,&host,&notice,&result)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT,"null registry");
- if(ok)puts("ABI notification tests: PASS");
+ printf("ABI notification tests: %d executed, %d failed\n",checks,failures);
  return ok?0:1;
 }
