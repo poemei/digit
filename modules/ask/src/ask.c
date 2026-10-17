@@ -119,6 +119,9 @@ static stnlabz_module_result_t research_answer(const char *subject,
  *used=(size_t)written+1;
  return STNLABZ_MODULE_OK;
 }
+/* Forward declaration: single-token fallback must validate a full social
+ * example before admitting a Corpus record. */
+static int learned_social_reply(const char *,const char *,char *,size_t,size_t *);
 /* Resolve ambient topics using Corpus, not a predefined subject vocabulary.
  * Bounded multiword spans preserve original order and require a Corpus match. */
 static int contextual_corpus_lookup(const char *message,const char *subject,
@@ -156,6 +159,21 @@ static int contextual_corpus_lookup(const char *message,const char *subject,
       ==STNLABZ_MODULE_OK&&n==sizeof *result&&result->found)return 1;
   }
  }
+ /* A changed spelling can defeat literal phrase lookup. Try bounded single
+  * tokens only for a learned social record that matches the ENTIRE utterance.
+  * Never admit an arbitrary factual record using a common single word. */
+ for(start=0;start<count;start++){
+  char candidate[161];size_t candidate_used=0;
+  size_t len=(size_t)(end[start]-begin[start]);
+  if(len<3||len>=sizeof q.term)continue;
+  memcpy(q.term,begin[start],len);q.term[len]=0;n=0;
+  memset(result,0,sizeof *result);
+  if(host->invoke_service("corpus.lookup",&q,sizeof q,result,sizeof *result,&n)
+     ==STNLABZ_MODULE_OK&&n==sizeof *result&&result->found&&
+     learned_social_reply(message,result->text,candidate,
+                          sizeof candidate,&candidate_used))return 1;
+ }
+ memset(result,0,sizeof *result);
  return 0;
 }
 /* Keep ambient speech short, factual and complete. Prefer an earlier
