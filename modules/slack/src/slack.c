@@ -607,12 +607,18 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
   atomic_store(&stopping,1);pthread_join(worker,NULL);active=0;
   erase(&cfg,sizeof cfg);host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
  }
+ if(!host->register_service("notify.slack",publish_intel,NULL)){
+  (void)host->unregister_service(DIGIT_INTEL_SLACK_SERVICE,NULL);
+  atomic_store(&stopping,1);pthread_join(worker,NULL);active=0;erase(&cfg,sizeof cfg);host=NULL;
+  return STNLABZ_MODULE_ERR_START_FAILED;
+ }
  log_status("[SLACK] Transport started; Socket Mode connecting");
  return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t stop(void){
  if(!active)return STNLABZ_MODULE_ERR_INVALID_STATE;
- if(host&&host->unregister_service)(void)host->unregister_service(DIGIT_INTEL_SLACK_SERVICE,NULL);
+ if(host&&host->unregister_service)(void)host->unregister_service("notify.slack",NULL);
+  (void)host->unregister_service(DIGIT_INTEL_SLACK_SERVICE,NULL);
  atomic_store(&stopping,1);
  pthread_join(worker,NULL);
  active=0;erase(&cfg,sizeof cfg);erase(bot_id,sizeof bot_id);host=NULL;
@@ -623,7 +629,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"slack");
  snprintf(d.name,sizeof d.name,"Digit Slack Transport");
- d.version_major=0;d.version_minor=2;d.version_patch=9;
+ d.version_major=0;d.version_minor=2;d.version_patch=10;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
