@@ -11,6 +11,7 @@
 #include "observation.h"
 #include "reasoning.h"
 #include "recognition.h"
+#include "conversation.h"
 #include "socials.h"
 static const stnlabz_module_host_t *host;
 /* In IRC, a non-channel target is a private conversation addressed to Digit. */
@@ -489,6 +490,71 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
    snprintf(rq->corpus_text,sizeof rq->corpus_text,"%s",item->text);
   }
  }
+ /* Generative conversation is evaluated from attributed history and multiple
+  * Corpus records BEFORE the legacy lexical admission rules. No topic-word
+  * gate can veto a grounded, useful reply from the conversation module. */
+ {
+  digit_conversation_request_t *cq=calloc(1,sizeof *cq);
+  digit_conversation_response_t generated={0};
+  size_t k,gn=0;
+  if(cq){
+   cq->version=DIGIT_CONVERSATION_VERSION;
+   cq->addressed=addressed;
+   snprintf(cq->sender,sizeof cq->sender,"%s",ctx->sender);
+   snprintf(cq->message,sizeof cq->message,"%s",message);
+   for(k=0;k<rq->observation_count&&
+          cq->history_count<DIGIT_CONVERSATION_HISTORY_MAX;k++){
+    unsigned idx=cq->history_count++;
+    snprintf(cq->history[idx].sender,sizeof cq->history[idx].sender,
+             "%s",rq->observations[k].sender);
+    snprintf(cq->history[idx].text,sizeof cq->history[idx].text,
+             "%s",rq->observations[k].text);
+   }
+   for(k=0;k<multiple->count&&
+          cq->evidence_count<DIGIT_CONVERSATION_EVIDENCE_MAX;k++){
+    digit_corpus_lookup_response_t *item=&multiple->items[k];
+    unsigned idx,duplicate=0,j;
+    if(!item->found||!item->id[0]||!item->text[0]||!item->source[0])
+     continue;
+    for(j=0;j<cq->evidence_count;j++)
+     if(!strcmp(cq->evidence[j].id,item->id))duplicate=1;
+    if(duplicate)continue;
+    idx=cq->evidence_count++;
+    snprintf(cq->evidence[idx].id,sizeof cq->evidence[idx].id,
+             "%s",item->id);
+    snprintf(cq->evidence[idx].source,sizeof cq->evidence[idx].source,
+             "%s",item->source);
+    snprintf(cq->evidence[idx].text,sizeof cq->evidence[idx].text,
+             "%s",item->text);
+   }
+   if(!cq->evidence_count&&rq->corpus_state==DIGIT_REASONING_PRESENT){
+    cq->evidence_count=1;
+    snprintf(cq->evidence[0].id,sizeof cq->evidence[0].id,
+             "%s",rq->corpus_id);
+    snprintf(cq->evidence[0].source,sizeof cq->evidence[0].source,
+             "%s",rq->corpus_source);
+    snprintf(cq->evidence[0].text,sizeof cq->evidence[0].text,
+             "%s",rq->corpus_text);
+   }
+   if(host->invoke_service(DIGIT_CONVERSATION_SERVICE,cq,sizeof *cq,
+      &generated,sizeof generated,&gn)==STNLABZ_MODULE_OK&&
+      gn==sizeof generated&&generated.version==DIGIT_CONVERSATION_VERSION&&
+      generated.generated<=1&&memchr(generated.text,0,sizeof generated.text)){
+    if(!generated.generated){out[0]=0;*used=1;result=1;}
+    else if(generated.text[0]&&strlen(generated.text)<capacity){
+     int duplicate=same_statement(generated.text,message);
+     for(k=0;!duplicate&&k<rq->observation_count;k++)
+      if(same_statement(generated.text,rq->observations[k].text))
+       duplicate=1;
+     if(!duplicate){
+      strcpy(out,generated.text);*used=strlen(out)+1;result=1;
+     }
+    }
+   }
+   free(cq);
+   if(result)goto done;
+  }
+ }
  /* Read-only Recognition runs on the same scoped evidence used by Reasoning.
   * Relevance is not semantic understanding and cannot grant permission to
   * speak. On absence/failure the accepted pre-integration path remains. */
@@ -794,7 +860,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
  d.version_major=0;/* [AI:GPT-6 | 2026-10-17 02:49:54 UTC] */
- d.version_minor=3;d.version_patch=9;
+ d.version_minor=4;d.version_patch=0;
  /* [End AI:GPT-6] */
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
