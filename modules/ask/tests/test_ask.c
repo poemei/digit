@@ -21,6 +21,7 @@ static int ambient_fixture;
 static int long_corpus_fixture;
 static int recognition_calls;
 static int recognition_unrelated;
+static int social_repeat_fixture;
 static stnlabz_module_result_t invoke(const char *name,const void *req,size_t size,void *reply,size_t cap,size_t *used){
  const char *msg="I am Digit, the STN-LABZ foundational autonomous agent.";
  if(!strcmp(name,DIGIT_CORPUS_MULTI_SERVICE)){
@@ -133,7 +134,11 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
   strcpy(r->items[0].event_id,"event-1");
   strcpy(r->items[0].sender,"STN_Boss");
   strcpy(r->items[0].text,"so I added a reasoning module for Digit");
-  if(ambient_fixture==3){
+  if(social_repeat_fixture){
+   strcpy(r->items[0].sender,"digit-bot");
+   strcpy(r->items[0].text,"Mew!");
+  }
+   if(ambient_fixture==3){
    r->count=1;
    strcpy(r->items[0].text,"The ChAoS MVC Net concerns company coordination.");
   }else if(ambient_fixture){
@@ -339,7 +344,11 @@ int main(void){
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      strcmp(out,"Mew!"))return test_failure(__LINE__);
   /* Learn from example spellings, without hardcoded vocabulary rules. */
-  strcpy(context.question,"Das is godos!"); /* adjacent swapped characters */
+  social_repeat_fixture=1;
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     strcmp(out,"Purrfect!"))return test_failure(__LINE__);
+  social_repeat_fixture=0;
+   strcpy(context.question,"Das is godos!"); /* adjacent swapped characters */
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      strcmp(out,"Mew!"))return test_failure(__LINE__);
   strcpy(context.question,"Das is gooods!!");
