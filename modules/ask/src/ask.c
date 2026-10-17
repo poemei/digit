@@ -387,21 +387,68 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
    snprintf(rq->corpus_text,sizeof rq->corpus_text,"%s",cr->text);
   }else if(cr->found)rq->corpus_state=DIGIT_REASONING_UNAVAILABLE;
  }else rq->corpus_state=DIGIT_REASONING_UNAVAILABLE;
- /* Retrieve up to three relevant knowledge records using the same selected
-  * subject. No fabricated third record, and no changes to authority paths. */
- if(corpus_ok&&rq->corpus_state==DIGIT_REASONING_PRESENT){
-  digit_corpus_multi_request_t mq={0};size_t mn=0;
-  mq.version=DIGIT_CORPUS_MULTI_VERSION;
-  if(subject&&subject[0]&&strlen(subject)<sizeof mq.term)
-   snprintf(mq.term,sizeof mq.term,"%s",subject);
-  else if(strlen(message)<sizeof mq.term)
-   snprintf(mq.term,sizeof mq.term,"%s",message);
-  if(mq.term[0]&&host->invoke_service(DIGIT_CORPUS_MULTI_SERVICE,
-       &mq,sizeof mq,multiple,sizeof *multiple,&mn)==STNLABZ_MODULE_OK&&
-     mn==sizeof *multiple&&multiple->version==DIGIT_CORPUS_MULTI_VERSION&&
-     multiple->count<=DIGIT_CORPUS_MULTI_MAX){
-   /* The single-record ABI remains the compatibility fallback. */
-  }else memset(multiple,0,sizeof *multiple);
+ /* Gather distinct records from the current utterance AND recent context.
+  * Never treat one keyword as the whole discussion. Each lookup remains a
+  * read-only bounded service call; cap candidates to avoid chatter-driven I/O.
+  * The candidate list is derived from the conversation, not vocabulary code. */
+ {
+  char terms[18][DIGIT_CORPUS_LOOKUP_TERM_MAX]={{0}};
+  unsigned term_count=0,t,k;
+  const char *sources[4]={message,NULL,NULL,NULL};
+  digit_corpus_multi_request_t mq={0};
+  digit_corpus_multi_response_t *batch=calloc(1,sizeof *batch);
+  if(subject&&*subject&&strlen(subject)<sizeof terms[0])
+   snprintf(terms[term_count++],sizeof terms[0],"%s",subject);
+  for(k=0;k<rq->observation_count&&k<3;k++)
+   sources[k+1]=rq->observations[k].text;
+  for(k=0;k<4&&term_count<18;k++)if(sources[k]){
+   const char *p=sources[k],*start[48],*stop[48];
+   unsigned count=0,span,j;
+   while(*p&&count<48){
+    while(*p&&!isalnum((unsigned char)*p))p++;
+    if(!*p)break;
+    start[count]=p;
+    while(*p&&(isalnum((unsigned char)*p)||*p=='_'))p++;
+    stop[count++]=p;
+   }
+   for(span=3;span>=1&&term_count<18;span--){
+    for(j=0;j+span<=count&&term_count<18;j++){
+     size_t len=(size_t)(stop[j+span-1]-start[j]);
+     unsigned duplicate=0;
+     if(len<5||len>=sizeof terms[0])continue;
+     for(t=0;t<term_count;t++)
+      if(strlen(terms[t])==len&&!strncasecmp(terms[t],start[j],len)){
+       duplicate=1;break;
+      }
+     if(duplicate)continue;
+     memcpy(terms[term_count],start[j],len);
+     terms[term_count++][len]=0;
+    }
+   }
+  }
+  if(batch)for(t=0;t<term_count;t++){
+   size_t mn=0,j;
+   memset(&mq,0,sizeof mq);mq.version=DIGIT_CORPUS_MULTI_VERSION;
+   snprintf(mq.term,sizeof mq.term,"%s",terms[t]);
+   memset(batch,0,sizeof *batch);
+   if(host->invoke_service(DIGIT_CORPUS_MULTI_SERVICE,
+      &mq,sizeof mq,batch,sizeof *batch,&mn)!=STNLABZ_MODULE_OK||
+      mn!=sizeof *batch||batch->version!=DIGIT_CORPUS_MULTI_VERSION||
+      batch->count>DIGIT_CORPUS_MULTI_MAX)continue;
+   for(j=0;j<batch->count&&multiple->count<DIGIT_CORPUS_MULTI_MAX;j++){
+    unsigned z,dup=0;
+    digit_corpus_lookup_response_t *item=&batch->items[j];
+    if(!item->found||!memchr(item->id,0,sizeof item->id)||
+       !memchr(item->text,0,sizeof item->text)||
+       !memchr(item->source,0,sizeof item->source))continue;
+    for(z=0;z<multiple->count;z++)
+     if(!strcmp(multiple->items[z].id,item->id)){dup=1;break;}
+    if(!dup)multiple->items[multiple->count++]=*item;
+   }
+   if(multiple->count==DIGIT_CORPUS_MULTI_MAX)break;
+  }
+  free(batch);
+  multiple->version=DIGIT_CORPUS_MULTI_VERSION;
  }
  /* Read-only Recognition runs on the same scoped evidence used by Reasoning.
   * Relevance is not semantic understanding and cannot grant permission to
@@ -708,7 +755,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
  d.version_major=0;/* [AI:GPT-6 | 2026-10-17 02:49:54 UTC] */
- d.version_minor=3;d.version_patch=7;
+ d.version_minor=3;d.version_patch=8;
  /* [End AI:GPT-6] */
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
