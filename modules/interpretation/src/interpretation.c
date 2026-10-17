@@ -139,8 +139,16 @@ static int classify(const char *s,const char *evidence,digit_interpret_response_
   out->subject[0]=0;out->intent=DIGIT_INTENT_CAPABILITIES;out->confidence=90;return 1;
  }
  /* Explicit conversational intents do not imply knowledge evidence or authority. */
- if((tok(s,"digit")||utterance!=s)&&(tok(utterance,"here")||tok(utterance,"there")||tok(utterance,"online"))&&
-    (strchr(utterance,'?')||tok(utterance,"are")||tok(utterance,"you"))){
+ /* AI-assisted correction (GPT-6): Presence checking requires an actual
+  * second-person presence question, not scattered "are"/"there" words.
+  * Preserve general statement classification and authority boundaries. */
+ if(out->addressed&&
+    (prefix(meaning,"you here")||prefix(meaning,"are you here")||
+     prefix(meaning,"you there")||prefix(meaning,"are you there")||
+     prefix(meaning,"you online")||prefix(meaning,"are you online")||
+     prefix(meaning,"you around")||prefix(meaning,"are you around"))&&
+    (strchr(meaning,'?')||!strchr(meaning,','))
+   ){
   out->subject[0]=0;out->intent=DIGIT_INTENT_CHECKIN;out->confidence=85;return 1;
  }
  if(tok(s,"corpus")&&(tok(s,"access")||tok(s,"use")||tok(s,"check")||
@@ -203,6 +211,11 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  {"hmm",DIGIT_INTENT_AMBIGUOUS,""},
  {"Digit you here?",DIGIT_INTENT_CHECKIN,""},
  {"digit, you here?",DIGIT_INTENT_CHECKIN,""},
+ /* AI-assisted regression coverage: previously false presence check. */
+ {"Digit we get it, your old rules are there but that doesnt apply anymore, your mission has been super expanded",DIGIT_INTENT_STATEMENT,""},
+ {"Digit are you there?",DIGIT_INTENT_CHECKIN,""},
+ {"Digit are you online?",DIGIT_INTENT_CHECKIN,""},
+ {"Digit your rules are there and we are discussing them",DIGIT_INTENT_STATEMENT,""},
  {"Digit: explain PHP",DIGIT_INTENT_KNOWLEDGE,"PHP"},
  {"digit explain PHP",DIGIT_INTENT_KNOWLEDGE,"PHP"},
  {"digit, what is your mission?",DIGIT_INTENT_KNOWLEDGE,"Digit\'s mission"},
@@ -236,7 +249,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"interpretation");snprintf(d.name,sizeof d.name,"Digit Interpretation");
- d.version_major=0;d.version_minor=1;d.version_patch=7;
+ d.version_major=0;d.version_minor=1;d.version_patch=8;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=activate;d.stop=stop;return &d;
 }
