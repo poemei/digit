@@ -3,6 +3,8 @@ CFLAGS ?= -std=c11 -Wall -Wextra -Wpedantic -O2 -fPIC
 ROOT := ../..
 TARGET := bin/conversation.so
 PREFIX ?= /opt/digit
+OWNER ?= digit
+GROUP ?= digit
 .PHONY: all test install clean
 all: $(TARGET)
 $(TARGET): src/conversation.c include/conversation.h
@@ -17,5 +19,6 @@ install: $(TARGET)
 	@install -d -m 0750 "$(PREFIX)/modules/conversation/bin"
 	@install -m 0640 module.conf "$(PREFIX)/modules/conversation/module.conf"
 	@install -m 0750 "$(TARGET)" "$(PREFIX)/modules/conversation/bin/conversation.so"
+	@chown -R "$(OWNER):$(GROUP)" "$(PREFIX)/modules/conversation"
 clean:
 	rm -rf bin
