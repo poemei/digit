@@ -94,7 +94,9 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
    {"human language","human languuage",2},
    {"same same same","same",1},
    {"longword alpha","longword beta",1},
-   {"context here","context elsewhere",1}
+   {"context here","context elsewhere",1},
+   {"message structure","message structrue",2},
+   {"bounded evidence","bounded evidence",2}
   };
   size_t i;
   for(i=0;i<sizeof cases/sizeof cases[0];i++){
