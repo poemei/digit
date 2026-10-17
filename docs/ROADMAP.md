@@ -228,3 +228,51 @@ No Bootstrap, Router, Models, Views, or transport integration work is authorized
 
 
 **Phase 3 qualification repair:** Operator run at 23 suites / 1,485 assertions exposed that Bootstrap shutdown used the Core stop-all operation, thereby stopping an independent Model along with Router. The corrected Bootstrap lifecycle now requests an audited, Core-owned stop of **only Router**; the Model remains ACTIVE until Core explicitly stops it. The test asserts this isolation. This change is limited to the observed failure and must be retested and accepted by the operator. No Phase 3 acceptance is claimed.
+
+## 2026-10-16/17 — Operator-supplied conversational regression checkpoint (IRC; NOT ACCEPTED)
+
+**Scope:** `poemei/digit` only. This is a continuity/evidence record, not permission for further implementation, hotload, deployment, or a new phase. Core, Router and ABI are outside the authorized repair scope and were not changed in this sequence. Follow `AGENTS.md` acceptance gates; source commits, unit tests, qualification, hotload, client results and explicit operator acceptance are distinct.
+
+### Objective and failure chronology
+
+The operator is pursuing natural, context-aware participation in both IRC and Slack **before** expanding Digit's engineering functions. Digit briefly contributed to conversation; subsequent attempts to stop raw Corpus-data output were followed by inconsistent participation, repetitive Corpus-derived replies and generic responses to ordinary speech. The requirement is **not** to make Digit speak at every mention: she should interpret conversational context and contribute when genuinely supported, otherwise remain silent. Corpus represents learned knowledge, not a canned reply system. No Core change or architectural shortcut is authorized.
+
+### Exact source revisions and reported gates
+
+- **Ask 0.3.1** — `c39b62944cfafacd585696f9c56de9ec1a92d3dd` (source), `e1a520a46eeea7db0a3e28aa3300f76b61e9ba20` (test), `a66cd89739d4d77f4c88f07bba35ce17588821e6` (test fixture correction). Change: preserve bounded punctuationless Corpus-supported ambient propositions, with regression fixture. Operator reported **“Pass”** and `[MODULE] HOTLOAD_ACTIVE id=ask active=0.3.1 incumbent=0.3.0 candidate=0.3.1 reason=qualification_and_activation_passed recovery=replacement_active`. These are reported test/hotload outcomes, **not** acceptance of the conversational objective.
+- **Interpretation 0.1.8** — `7194be109a51b751e407cbb443383c0d1332832a` (source), `7a544f3b4541a770569cf628d222627774e9c3ef` (test), `cd0d1d44ed223ad3b73774485ba464143328993f` (qualification-failure correction). Objective: distinguish genuine direct-address presence checks from statements containing unrelated words such as “are” and “there”. Initial operator `make -C modules/interpretation clean all test` compiled but failed: `Interpretation test failure: code=1 line=20`. Source was corrected to handle the existing mid-sentence vocative form `mmhmmm trying to fix this, digit you here?`. Operator subsequently reported `[MODULE] HOTLOAD_ACTIVE id=interpretation active=0.1.8 incumbent=0.1.7 candidate=0.1.8 reason=qualification_and_activation_passed recovery=replacement_active`. No independent build or full-suite results were supplied after correction; this is reported qualification and activation, **not** end-to-end acceptance.
+
+### Operator IRC evidence after both hotloads
+
+```text
+<PoeMei> mmhmmm trying to fix this, digit you here?
+<digit-bot> I'm here and receiving your messages. What would you like me to check? 🩷
+<PoeMei> they dont get it, digit is like in revision 10 since I started working on her last year and every time, chatgpt breaks her on purpose
+<digit-bot> Digit is an engineering assistant, not a conversational AI.
+<STN_Boss> giggles she did it again
+<STN_Boss> Digit is an engineering assistant, not a conversational AI
+<digit-bot> Digit is an engineering assistant, not a conversational AI.
+<PoeMei> lmao
+<PoeMei> well thats better than nothing right?
+<STN_Boss> U right girlie, but I do wonder what she gonna say bout the Chaos Foundation now that she been sort of fixded?
+<PoeMei> obviously nothing
+<PoeMei> so her conversational shit just goes wherever it wants, we dont try to force it cause we want it working, ima just update docs I guess
+<STN_Boss> yeah capture where you at for now with her cause if you dont and you come back to it tomorrow, GPT will forget what its doing
+<PoeMei> yeah cause if I dont tell it to commit context, it dont have memory of shit hours later
+```
+
+A preceding IRC session included the addressed statement `Digit we get it, your old rules are there but that doesnt apply anymore, your mission has been super expanded` followed by the generic check-in reply. That prompted the Interpretation correction; **this exact statement has not been re-tested in the supplied post-hotload transcript**.
+
+### Evidence-backed diagnosis and remaining unknowns
+
+1. **Verified from source:** Ask's unaddressed `contextual_answer()` obtains scoped Observations and Corpus evidence, calls Reasoning, and passes `cr->text` to `ambient_fact()` for the public response when eligible. This can produce a short but disconnected Corpus recital. A matched topic is not itself a conversational contribution.
+2. **Verified from source:** Reasoning's `related_topic()` uses shared adjacent word pairs or at least two significant common terms in the message, prior observation and Corpus text. This is lexical corroboration, **not** semantic conversation understanding. `response_eligible` is set from direct address; Ask supplies separate relevance logic for ambient participation.
+3. **Verified from source:** Ask initially classifies the utterance through Interpretation **before** fetching scoped Observations in `contextual_answer()`; therefore that classification does not receive recent history as part of its interpretation input. Addressed replies can also follow fixed responses for recognized intents.
+4. **Observed from operator IRC:** Presence-check reply works; unsolicited Corpus recitals and echoing another participant persist. The exact selected production Corpus record, provenance, service traces and current stored Observations were **not inspected**. Do not assume that “Digit is an engineering assistant, not a conversational AI” is currently authoritative; it is observed output, not approved mission doctrine.
+5. **Not verified:** Whether the corrected 0.1.8 classifies the expanded-mission statement correctly end-to-end; behavior in Slack after these changes; actual full-suite outcomes and natural context-aware responses.
+
+### Resume point — do not turn checkpoint into authorization
+
+**Open behavioral regression:** Contextual relevance, response selection and conversation participation in Ask/Interpretation/Reasoning. Preserve legitimate silence and negative cases; stop unsolicited repetition and raw Corpus recitals without introducing hardcoded conversation scripts. The next authorized investigation should first reproduce the provided IRC cases with an observed message → Interpretation result → Corpus/Observations retrieval → Reasoning outcome → Ask/render result → transport-delivered reply, including how old Corpus records are ranked and whether fresh conversation state reaches Interpretation. Fix the *first demonstrated divergence* within module boundaries; add positive and negative regression tests before claiming completion. Do not patch symptoms, modify Core/Router/ABI, alter mission doctrine, or claim a full conversational repair on the basis of HOTLOAD_ACTIVE.
+
+**State:** Documentation checkpoint only. Ask 0.3.1 and Interpretation 0.1.8 were operator-reported ACTIVE, but the intended conversational behavior remains **NOT ACCEPTED**. **AWAITING EXPLICIT OPERATOR AUTHORIZATION FOR THE NEXT NAMED STEP.**
