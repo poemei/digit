@@ -40,7 +40,7 @@ int main(void){
  size_t n=0;
  if(!q||!out)return 1;
  h.register_service=register_service;h.unregister_service=unregister_service;
- if(!d||strcmp(d->id,"reasoning")||d->version_patch!=2||
+ if(!d||strcmp(d->id,"reasoning")||d->version_patch!=3||
     d->qualify(&qual)!=STNLABZ_MODULE_OK||qual.tests_executed<10||
     qual.tests_failed||!qual.negative_test_passed)return 2;
  if(d->start(&h)!=STNLABZ_MODULE_OK||!handler)return 3;
@@ -64,6 +64,25 @@ int main(void){
  strcpy(q->corpus_text,"A weather update is expected tomorrow");
  if(handler(q,sizeof *q,out,sizeof *out,&n,NULL)!=STNLABZ_MODULE_OK||
     out->matched_observations!=0)return 15;
+ /* Rewording and reordered named topics retain two corroborated terms. */
+ strcpy(q->message,"I may prepare for the Foundation ChAoS meeting");
+ strcpy(q->corpus_text,"The ChAoS Foundation is an organization.");
+ strcpy(q->observations[0].text,"Foundation work for the ChAoS team");
+ strcpy(q->observations[1].text,"Weather forecast for tomorrow");
+ if(handler(q,sizeof *q,out,sizeof *out,&n,NULL)!=STNLABZ_MODULE_OK||
+    out->matched_observations!=1||out->relevance!=DIGIT_REASONING_CONTEXTUAL)return 16;
+ /* A generic shared word does not establish relevance by itself. */
+ strcpy(q->message,"I will check tomorrow with our people");
+ strcpy(q->corpus_text,"Tomorrow the Foundation will meet.");
+ strcpy(q->observations[0].text,"Tomorrow the weather will improve.");
+ if(handler(q,sizeof *q,out,sizeof *out,&n,NULL)!=STNLABZ_MODULE_OK||
+    out->matched_observations!=0||out->relevance!=DIGIT_REASONING_NONE)return 17;
+ /* Matching only a single named term is insufficient. */
+ strcpy(q->message,"The ChAoS deployment needs testing");
+ strcpy(q->corpus_text,"The ChAoS Foundation handles operations.");
+ strcpy(q->observations[0].text,"ChAoS events are scheduled");
+ if(handler(q,sizeof *q,out,sizeof *out,&n,NULL)!=STNLABZ_MODULE_OK||
+    out->matched_observations!=0)return 18;
  strcpy(q->message,"Digit observation update");
  strcpy(q->corpus_text,"Digit observation supports this test record");
  strcpy(q->observations[0].text,"Testing Digit observation in the channel");
