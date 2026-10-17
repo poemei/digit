@@ -172,7 +172,18 @@ static int ambient_fact(const char *src,char *out,size_t cap,size_t *used){
    end=p+1;break;
   }
  }
- if(!end)return 0;
+ /* [AI:GPT-6 | 2026-10-17 02:49:54 UTC]
+  * Preserve short, complete evidence statements without terminal punctuation.
+  * Long unpunctuated records still produce silence instead of a dump. */
+ if(!end){
+  n=strlen(src);
+  while(n&&isspace((unsigned char)src[n-1]))n--;
+  if(!n||n>120||n+2>cap)return 0;
+  memcpy(out,src,n);
+  if(out[n-1]!='.'&&out[n-1]!='!'&&out[n-1]!='?')out[n++]='.';
+  out[n]=0;*used=n+1;return 1;
+ }
+ /* [End AI:GPT-6] */
  /* Only shorten at the start of a subordinate clause, never mid-word. */
  if((size_t)(end-src)>100)for(i=0;clauses[i];i++){
   const char *candidate=strstr(src,clauses[i]);
@@ -490,7 +501,9 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
- d.version_major=0;d.version_minor=3;d.version_patch=0;
+ d.version_major=0;/* [AI:GPT-6 | 2026-10-17 02:49:54 UTC] */
+ d.version_minor=3;d.version_patch=1;
+ /* [End AI:GPT-6] */
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
