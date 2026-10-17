@@ -326,6 +326,7 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
  digit_reasoning_request_t *rq=NULL;
  digit_reasoning_response_t *rr=NULL;
  digit_corpus_lookup_response_t *cr=NULL;
+ digit_corpus_multi_response_t *multiple=NULL;
  digit_recognition_request_t *recognition=NULL;
  digit_recognition_response_t recognized={0};
  
@@ -344,8 +345,9 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
  rq=calloc(1,sizeof *rq);
  rr=calloc(1,sizeof *rr);
  cr=calloc(1,sizeof *cr);
+ multiple=calloc(1,sizeof *multiple);
  recognition=calloc(1,sizeof *recognition);
- if(!history||!rq||!rr||!cr||!recognition)goto done;
+ if(!history||!rq||!rr||!cr||!recognition||!multiple)goto done;
  oq.version=DIGIT_OBSERVATION_READ_VERSION;
  snprintf(oq.transport,sizeof oq.transport,"%s",ctx->transport);
  snprintf(oq.channel,sizeof oq.channel,"%s",ctx->channel);
@@ -385,6 +387,22 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
    snprintf(rq->corpus_text,sizeof rq->corpus_text,"%s",cr->text);
   }else if(cr->found)rq->corpus_state=DIGIT_REASONING_UNAVAILABLE;
  }else rq->corpus_state=DIGIT_REASONING_UNAVAILABLE;
+ /* Retrieve up to three relevant knowledge records using the same selected
+  * subject. No fabricated third record, and no changes to authority paths. */
+ if(corpus_ok&&rq->corpus_state==DIGIT_REASONING_PRESENT){
+  digit_corpus_multi_request_t mq={0};size_t mn=0;
+  mq.version=DIGIT_CORPUS_MULTI_VERSION;
+  if(subject&&subject[0]&&strlen(subject)<sizeof mq.term)
+   snprintf(mq.term,sizeof mq.term,"%s",subject);
+  else if(strlen(message)<sizeof mq.term)
+   snprintf(mq.term,sizeof mq.term,"%s",message);
+  if(mq.term[0]&&host->invoke_service(DIGIT_CORPUS_MULTI_SERVICE,
+       &mq,sizeof mq,multiple,sizeof *multiple,&mn)==STNLABZ_MODULE_OK&&
+     mn==sizeof *multiple&&multiple->version==DIGIT_CORPUS_MULTI_VERSION&&
+     multiple->count<=DIGIT_CORPUS_MULTI_MAX){
+   /* The single-record ABI remains the compatibility fallback. */
+  }else memset(multiple,0,sizeof *multiple);
+ }
  /* Read-only Recognition runs on the same scoped evidence used by Reasoning.
   * Relevance is not semantic understanding and cannot grant permission to
   * speak. On absence/failure the accepted pre-integration path remains. */
@@ -426,19 +444,25 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
     /* Operator-learned conversational examples are response guidance, not
      * assertions to recite. A direct example may invite a lightweight
      * acknowledgment without an unrelated historical lexical match. */
-    if(learned_social_reply(message,cr->text,out,capacity,used)){
-     result=1;
-    }else if(strstr(cr->text,"response like")){
-     out[0]=0;*used=1;result=1;
-    }else if(!ambient_fact(cr->text,out,capacity,used)){
-     out[0]=0;*used=1;
-    }else{
-     /* Corpus is knowledge, not permission to echo participants.
-      * Do not reply with a statement already present in this channel. */
-     int repeated=same_statement(out,message);
-     for(i=0;!repeated&&i<rq->observation_count;i++)
-      if(same_statement(out,rq->observations[i].text))repeated=1;
-     if(repeated){out[0]=0;*used=1;}
+    /* Prefer response guidance supported by any of the ranked records;
+     * never dump several definitions as an imitation of synthesis. */
+    {size_t k;int guided=learned_social_reply(message,cr->text,out,capacity,used);
+     for(k=0;!guided&&k<multiple->count;k++){
+      if(!multiple->items[k].found||
+         !memchr(multiple->items[k].text,0,sizeof multiple->items[k].text))continue;
+      guided=learned_social_reply(message,multiple->items[k].text,out,capacity,used);
+     }
+     if(guided){result=1;}
+     else if(strstr(cr->text,"response like")){
+      out[0]=0;*used=1;result=1;
+     }else if(!ambient_fact(cr->text,out,capacity,used)){
+      out[0]=0;*used=1;
+     }else{
+      int repeated=same_statement(out,message);
+      for(i=0;!repeated&&i<rq->observation_count;i++)
+       if(same_statement(out,rq->observations[i].text))repeated=1;
+      if(repeated){out[0]=0;*used=1;}
+     }
     }
     result=1;
    }else{
@@ -460,7 +484,7 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
   out[0]=0;*used=1;result=1;
  }
 done:
- free(history);free(rq);free(rr);free(cr);free(recognition);
+ free(history);free(rq);free(rr);free(cr);free(recognition);free(multiple);
  return result?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_NOT_FOUND;
 }
 
