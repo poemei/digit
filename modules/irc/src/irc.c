@@ -483,7 +483,13 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
  if(!host->register_service(DIGIT_INTEL_IRC_SERVICE,publish_intel,NULL)){
   active=0;host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
  }
+ if(!host->register_service("notify.irc",publish_intel,NULL)){
+  (void)host->unregister_service(DIGIT_INTEL_IRC_SERVICE,NULL);
+  active=0;host=NULL;
+  return STNLABZ_MODULE_ERR_START_FAILED;
+ }
  if(pthread_create(&worker,NULL,thread_main,NULL)!=0){
+  (void)host->unregister_service("notify.irc",NULL);
   (void)host->unregister_service(DIGIT_INTEL_IRC_SERVICE,NULL);
   active=0;host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
  }
@@ -494,6 +500,7 @@ static stnlabz_module_result_t stop(void){
  atomic_store(&stopping,1);
  pthread_join(worker,NULL);
  if(host&&host->unregister_service)
+  (void)host->unregister_service("notify.irc",NULL);
   (void)host->unregister_service(DIGIT_INTEL_IRC_SERVICE,NULL);
  pthread_mutex_lock(&intel_lock);
  intel_head=0;intel_count=0;memset(intel_pending,0,sizeof intel_pending);
@@ -504,7 +511,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"irc");snprintf(d.name,sizeof d.name,"Digit IRC Transport");
- d.version_major=0;d.version_minor=2;d.version_patch=4;
+ d.version_major=0;d.version_minor=2;d.version_patch=5;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
