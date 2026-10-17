@@ -94,7 +94,7 @@ static int classify(const char *s,const char *evidence,digit_interpret_response_
  unsigned i;
  /* Preserve address semantics while classifying the actual utterance. */
  const char *utterance=s;
- const char *meaning;
+ const char *meaning,*presence;
  memset(out,0,sizeof *out);out->version=DIGIT_INTERPRETATION_VERSION;
  if(prefix(utterance,"digit-bot") &&
     (utterance[9]==':'||utterance[9]==','||utterance[9]==' ')){
@@ -138,16 +138,25 @@ static int classify(const char *s,const char *evidence,digit_interpret_response_
      tok(s,"capabilities")||tok(s,"functions")||tok(s,"skills"))){
   out->subject[0]=0;out->intent=DIGIT_INTENT_CAPABILITIES;out->confidence=90;return 1;
  }
+ /* For presence classification only, remove a vocative at the start
+  * of the selected clause (e.g. "... , digit you here?").
+  * Preserve the full utterance for all other intent classifiers. */
+ presence=meaning;
+ if(prefix(presence,"digit-bot")&&
+    (presence[9]==' '||presence[9]==':'||presence[9]==','))presence+=9;
+ else if(prefix(presence,"digit")&&
+    (presence[5]==' '||presence[5]==':'||presence[5]==','))presence+=5;
+ while(*presence==' '||*presence==':'||*presence==',')presence++;
  /* Explicit conversational intents do not imply knowledge evidence or authority. */
  /* AI-assisted correction (GPT-6): Presence checking requires an actual
   * second-person presence question, not scattered "are"/"there" words.
   * Preserve general statement classification and authority boundaries. */
  if(out->addressed&&
-    (prefix(meaning,"you here")||prefix(meaning,"are you here")||
-     prefix(meaning,"you there")||prefix(meaning,"are you there")||
-     prefix(meaning,"you online")||prefix(meaning,"are you online")||
-     prefix(meaning,"you around")||prefix(meaning,"are you around"))&&
-    (strchr(meaning,'?')||!strchr(meaning,','))
+    (prefix(presence,"you here")||prefix(presence,"are you here")||
+     prefix(presence,"you there")||prefix(presence,"are you there")||
+     prefix(presence,"you online")||prefix(presence,"are you online")||
+     prefix(presence,"you around")||prefix(presence,"are you around"))&&
+    (strchr(presence,'?')||!strchr(presence,','))
    ){
   out->subject[0]=0;out->intent=DIGIT_INTENT_CHECKIN;out->confidence=85;return 1;
  }
