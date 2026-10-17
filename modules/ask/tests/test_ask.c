@@ -23,7 +23,22 @@ static int recognition_calls;
 static int recognition_unrelated;
 static stnlabz_module_result_t invoke(const char *name,const void *req,size_t size,void *reply,size_t cap,size_t *used){
  const char *msg="I am Digit, the STN-LABZ foundational autonomous agent.";
- if(!strcmp(name,DIGIT_RECOGNITION_SERVICE)){
+ if(!strcmp(name,DIGIT_CORPUS_MULTI_SERVICE)){
+  const digit_corpus_multi_request_t *q=req;
+  digit_corpus_multi_response_t *v=reply;
+  if(size!=sizeof *q||cap<sizeof *v||q->version!=DIGIT_CORPUS_MULTI_VERSION)
+   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+  memset(v,0,sizeof *v);v->version=DIGIT_CORPUS_MULTI_VERSION;
+  if(strstr(q->term,"ChAoS MVC Net")){
+   v->count=2;
+   v->items[0].found=v->items[1].found=1;
+   strcpy(v->items[0].id,"T-1");strcpy(v->items[1].id,"T-2");
+   strcpy(v->items[0].text,"Context about the ChAoS MVC Net.");
+   strcpy(v->items[1].text,"Additional discussion about the ChAoS MVC Net.");
+  }
+  *used=sizeof *v;return STNLABZ_MODULE_OK;
+ }
+  if(!strcmp(name,DIGIT_RECOGNITION_SERVICE)){
   const digit_recognition_request_t *q=req;
   digit_recognition_response_t *v=reply;
   if(size!=sizeof *q||cap<sizeof *v||
