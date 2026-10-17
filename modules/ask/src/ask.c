@@ -234,10 +234,9 @@ static int same_statement(const char *a,const char *b){
  }
  return 1;
 }
-/* Corpus-taught social examples: parse quoted input examples before the
- * guidance "response like", then select a quoted reply after it. The learned
- * text owns both vocabulary and reply; no feline phrases exist in source.
- * Exact normalized utterances only: discussing an example is not an invitation. */
+/* Corpus-taught social examples: quoted utterances before the response
+ * guidance are learned recognition examples; quoted replies after it are
+ * data, not code. A partial mention of an example never grants a reply. */
 /* Compare full utterances with data-driven tolerance for elongated vowels
  * and minor spelling edits. No language vocabulary is encoded here.
  * Short tokens are exact; longer tokens allow at most one edit. */
@@ -255,13 +254,19 @@ static size_t social_token(const char **cursor,char *out,size_t capacity){
  out[n]=0;*cursor=(const char *)p;
  return n;
 }
+/* Compare learned example tokens with typo tolerance: one swapped pair,
+ * insertion, deletion or substitution. This is orthographic matching only;
+ * semantics and replies remain Corpus-owned. Small words require equality. */
 static int social_token_close(const char *a,const char *b){
  size_t i=0,j=0,edits=0,na=strlen(a),nb=strlen(b);
- if(na==nb&&!strcmp(a,b))return 1;
+ if(!strcmp(a,b))return 1;
  if(na<5||nb<5||(na>nb?na-nb:nb-na)>1)return 0;
  while(i<na&&j<nb){
   if(a[i]==b[j]){i++;j++;continue;}
   if(++edits>1)return 0;
+  if(na==nb&&i+1<na&&a[i]==b[j+1]&&a[i+1]==b[j]){
+   i+=2;j+=2;continue;
+  }
   if(na>nb)i++;
   else if(nb>na)j++;
   else{i++;j++;}
@@ -630,7 +635,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
  d.version_major=0;/* [AI:GPT-6 | 2026-10-17 02:49:54 UTC] */
- d.version_minor=3;d.version_patch=4;
+ d.version_minor=3;d.version_patch=5;
  /* [End AI:GPT-6] */
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
