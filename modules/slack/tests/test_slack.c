@@ -18,7 +18,7 @@ extern int digit_slack_dispatch_reply_state(stnlabz_module_result_t,size_t,size_
 int main(void){
  stnlabz_module_qualification_result_t q={0};char formatted[512];
  const stnlabz_module_descriptor_t *d=stnlabz_module_get_descriptor();
- if(!d||strcmp(d->id,"slack")||d->version_major!=0||d->version_minor!=2||d->version_patch!=9)return 1;
+ if(!d||strcmp(d->id,"slack")||d->version_major!=0||d->version_minor!=2||d->version_patch!=11)return 1;
  {
   const char quiet[]="";
   const char response[]="answer";
