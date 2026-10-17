@@ -317,6 +317,34 @@ static int learned_social_reply(const char *message,const char *lesson,
  memcpy(out,p,n);out[n]=0;*used=n+1;
  return 1;
 }
+/* Choose among Corpus-taught response examples using recent bot output.
+ * All response words come from Corpus, never source-controlled personality.
+ * Do not repeat a participant's recent utterance or the bot's last reply. */
+static int learned_reply_context(const char *message,const char *lesson,
+ const digit_reasoning_request_t *conversation,
+ char *out,size_t cap,size_t *used){
+ const char *marker,*p,*end;
+ char first[180];size_t n,i;
+ if(!learned_social_reply(message,lesson,first,sizeof first,&n))return 0;
+ marker=strstr(lesson,"response like");
+ if(!marker)return 0;
+ p=marker+strlen("response like");
+ while((p=strchr(p,'"'))!=NULL){
+  end=strchr(++p,'"');if(!end)break;
+  n=(size_t)(end-p);
+  if(n&&n<cap&&n<=160&&!memchr(p,'\n',n)&&!memchr(p,'\r',n)){
+   char candidate[180];int repeated=0;
+   memcpy(candidate,p,n);candidate[n]=0;
+   if(same_statement(candidate,message))repeated=1;
+   if(conversation)for(i=0;!repeated&&i<conversation->observation_count;i++)
+    if(same_statement(candidate,conversation->observations[i].text))
+     repeated=1;
+   if(!repeated){memcpy(out,candidate,n+1);*used=n+1;return 1;}
+  }
+  p=end+1;
+ }
+ return 0;
+}
 /* Evidence-bound fallback for unsupported chat, never an inferred command.
    Mention admission alone is not a reason to speak. */
 static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
@@ -488,7 +516,7 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
   for(k=0;k<multiple->count;k++)
    if(multiple->items[k].found&&
       memchr(multiple->items[k].text,0,sizeof multiple->items[k].text)&&
-      learned_social_reply(message,multiple->items[k].text,
+      learned_reply_context(message,multiple->items[k].text,rq,
                            example,sizeof example,&example_used)){
     social=1;break;
    }
@@ -501,7 +529,7 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
     Preserve existing query handling for non-addressed requests. */
  if(rr->response_eligible||(rr->knowledge==DIGIT_REASONING_CORPUS_SUPPORTED&&
      ((rr->relevance==DIGIT_REASONING_CONTEXTUAL&&rr->matched_observations>=1)||
-      (!addressed&&learned_social_reply(message,cr->text,out,capacity,used))))){
+      (!addressed&&learned_reply_context(message,cr->text,rq,out,capacity,used))))){
   if(rr->knowledge==DIGIT_REASONING_CORPUS_SUPPORTED&&corpus_ok){
    if(!addressed){
     /* Operator-learned conversational examples are response guidance, not
@@ -509,11 +537,11 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
      * acknowledgment without an unrelated historical lexical match. */
     /* Prefer response guidance supported by any of the ranked records;
      * never dump several definitions as an imitation of synthesis. */
-    {size_t k;int guided=learned_social_reply(message,cr->text,out,capacity,used);
+    {size_t k;int guided=learned_reply_context(message,cr->text,rq,out,capacity,used);
      for(k=0;!guided&&k<multiple->count;k++){
       if(!multiple->items[k].found||
          !memchr(multiple->items[k].text,0,sizeof multiple->items[k].text))continue;
-      guided=learned_social_reply(message,multiple->items[k].text,out,capacity,used);
+      guided=learned_reply_context(message,multiple->items[k].text,rq,out,capacity,used);
      }
      if(guided){result=1;}
      else if(strstr(cr->text,"response like")){
