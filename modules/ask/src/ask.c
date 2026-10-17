@@ -390,13 +390,16 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
   * speak. On absence/failure the accepted pre-integration path remains. */
  recognition->version=DIGIT_RECOGNITION_VERSION;
  snprintf(recognition->message,sizeof recognition->message,"%s",message);
+ snprintf(recognition->sender,sizeof recognition->sender,"%s",ctx->sender);
+ recognition->addressed=addressed;
  if(rq->corpus_state==DIGIT_REASONING_PRESENT)
   snprintf(recognition->corpus_text,sizeof recognition->corpus_text,"%s",rq->corpus_text);
  for(i=0;i<rq->observation_count&&
           recognition->history_count<DIGIT_RECOGNITION_HISTORY_MAX;i++){
-  snprintf(recognition->history[recognition->history_count],
-   sizeof recognition->history[0],"%.*s",
-   (int)sizeof recognition->history[0]-1,rq->observations[i].text);
+  snprintf(recognition->history[recognition->history_count].text,
+   sizeof recognition->history[0].text,"%s",rq->observations[i].text);
+  snprintf(recognition->history[recognition->history_count].sender,
+   sizeof recognition->history[0].sender,"%s",rq->observations[i].sender);
   recognition->history_count++;
  }
  n=0;
@@ -405,7 +408,8 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
    n==sizeof recognized&&recognized.version==DIGIT_RECOGNITION_VERSION&&
    recognized.corpus_relation<=DIGIT_RECOGNITION_UNCERTAIN&&
    recognized.conversation_relation<=DIGIT_RECOGNITION_UNCERTAIN&&
-   recognized.meaning_established==0)recognition_available=1;
+   recognized.meaning_established==0&&
+   recognized.direct_address==addressed)recognition_available=1;
  n=0;
   if(host->invoke_service(DIGIT_REASONING_SERVICE,rq,sizeof *rq,
          rr,sizeof *rr,&n)!=STNLABZ_MODULE_OK||
@@ -423,11 +427,6 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
     if(learned_social_reply(message,cr->text,out,capacity,used)){
      result=1;
     }else if(strstr(cr->text,"response like")){
-     out[0]=0;*used=1;result=1;
-    }else if(recognition_available&&
-       recognized.corpus_relation!=DIGIT_RECOGNITION_RELATED&&
-       recognized.conversation_relation!=DIGIT_RECOGNITION_RELATED){
-     /* Neither evidence source is related: do not recite a Corpus fact. */
      out[0]=0;*used=1;result=1;
     }else if(!ambient_fact(cr->text,out,capacity,used)){
      out[0]=0;*used=1;
