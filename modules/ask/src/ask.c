@@ -169,7 +169,9 @@ static int ambient_fact(const char *src,char *out,size_t cap,size_t *used){
   }
   if(*p==';'&&p>src+20){stop=p;break;}
  }
- if(!stop)for(i=0;clauses[i];i++){
+ /* Prefer an earlier self-contained clause when the full sentence is
+  * lengthy. Otherwise preserve the first complete sentence intact. */
+ if(!stop||(size_t)(stop-src)>80)for(i=0;clauses[i];i++){
   const char *cut=strstr(src,clauses[i]);
   if(cut&&cut>src+28&&(size_t)(cut-src)<=limit&&(!stop||cut<stop))
    stop=cut;
@@ -303,7 +305,6 @@ static stnlabz_module_result_t answer(const void *request,size_t length,
  if(c&&c->transport[0]&&c->channel[0]){
   digit_interpret_request_t iq={0};
   digit_interpret_response_t ir={0};
-  size_t n=0;
   if(!classify_context_message(c,s,&iq,&ir)){
    out[0]=0;*used=1;return STNLABZ_MODULE_OK;
   }
