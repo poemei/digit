@@ -126,11 +126,14 @@ static int contextual_corpus_lookup(const char *message,const char *subject,
  digit_corpus_lookup_request_t q={0};
  const char *begin[80],*end[80],*p=message;
  size_t count=0,n=0,words,start;
- if(subject&&subject[0]){
-  if(strlen(subject)>=sizeof q.term)return 0;
+ /* A selected subject is a candidate, not a terminal search result.
+    On a genuine miss, search evidence-bearing phrases from the full message. */
+ if(subject&&subject[0]&&strlen(subject)<sizeof q.term){
   snprintf(q.term,sizeof q.term,"%s",subject);
-  return host->invoke_service("corpus.lookup",&q,sizeof q,result,
-   sizeof *result,&n)==STNLABZ_MODULE_OK&&n==sizeof *result;
+  if(host->invoke_service("corpus.lookup",&q,sizeof q,result,
+     sizeof *result,&n)==STNLABZ_MODULE_OK&&n==sizeof *result&&result->found)
+   return 1;
+  memset(result,0,sizeof *result);n=0;
  }
  if(strlen(message)<sizeof q.term){
   snprintf(q.term,sizeof q.term,"%s",message);
@@ -487,7 +490,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
- d.version_major=0;d.version_minor=2;d.version_patch=11;
+ d.version_major=0;d.version_minor=3;d.version_patch=0;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
