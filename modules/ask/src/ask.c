@@ -254,7 +254,7 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
  /* Reasoning determines response eligibility for direct invocation.
     Preserve existing query handling for non-addressed requests. */
  if(rr->response_eligible||(rr->knowledge==DIGIT_REASONING_CORPUS_SUPPORTED&&
-     rr->relevance==DIGIT_REASONING_CONTEXTUAL&&rr->matched_observations>=2)){
+     rr->relevance==DIGIT_REASONING_CONTEXTUAL&&rr->matched_observations>=1)){
   if(rr->knowledge==DIGIT_REASONING_CORPUS_SUPPORTED&&corpus_ok){
    if(!addressed){
     if(!ambient_fact(cr->text,out,capacity,used)){
