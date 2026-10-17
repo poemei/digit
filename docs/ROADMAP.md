@@ -3,7 +3,7 @@
 **Repository:** `poemei/digit`  
 **Reference source:** [`stnlabz/digit`](https://github.com/stnlabz/digit)  
 **Current operator-directed operational architecture:** **Digit → Router → Module**; no Bootstrap in the production console path  
-**Status:** See the 2026-10-13 accepted operational record below. Historical phase record: Phase 1 Core foundation qualification COMPLETE AND OPERATOR ACCEPTED at revision `bee0d22`; Phase 2 Router module 0.1.0 implemented under separate operator authorization, awaiting build/test acceptance. Bootstrap and later stages are not authorized.
+**Current conversational status (2026-10-16/17):** Ask 0.3.1 and Interpretation 0.1.8 operator-reported HOTLOAD_ACTIVE; post-hotload IRC still demonstrates repetitive Corpus-derived unsolicited replies. Conversational objective **OPEN / NOT OPERATOR ACCEPTED**. Full evidence and resume instructions are in the checkpoint at the end of this file. The following older status is historical, not the latest conversational state. **Historical phase record:** Phase 1 Core foundation qualification COMPLETE AND OPERATOR ACCEPTED at revision `bee0d22`; Phase 2 Router module 0.1.0 implemented under separate operator authorization, awaiting build/test acceptance. Bootstrap and later stages are not authorized.
 
 ## Agent-level release version — OPERATOR ACCEPTED (2026-10-13)
 
