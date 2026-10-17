@@ -9,6 +9,7 @@
 #include "observation.h"
 #include "reasoning.h"
 #include "recognition.h"
+#include "conversation.h"
 #include "socials.h"
 extern const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void);
 static stnlabz_module_service_handler_fn handler;
@@ -22,10 +23,27 @@ static int long_corpus_fixture;
 static int recognition_calls;
 static int recognition_unrelated;
 static int social_repeat_fixture;
+static int generation_fixture;
+static int generation_context_checked;
 static int observation_lookup_calls;
 static stnlabz_module_result_t invoke(const char *name,const void *req,size_t size,void *reply,size_t cap,size_t *used){
  const char *msg="I am Digit, the STN-LABZ foundational autonomous agent.";
- if(!strcmp(name,DIGIT_CORPUS_MULTI_SERVICE)){
+ if(!strcmp(name,DIGIT_CONVERSATION_SERVICE)){
+  const digit_conversation_request_t *q=req;
+  digit_conversation_response_t *v=reply;
+  if(size!=sizeof *q||cap<sizeof *v||
+     q->version!=DIGIT_CONVERSATION_VERSION)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+  if(!generation_fixture)return STNLABZ_MODULE_ERR_NOT_FOUND;
+  if(q->history_count>0&&q->evidence_count>0&&
+     !strcmp(q->sender,"PoeMei")&&
+     !strcmp(q->history[0].sender,"STN_Boss"))
+   generation_context_checked=1;
+  memset(v,0,sizeof *v);v->version=DIGIT_CONVERSATION_VERSION;
+  v->generated=1;
+  strcpy(v->text,"That sounds frustrating. Which part is blocking you?");
+  *used=sizeof *v;return STNLABZ_MODULE_OK;
+ }
+  if(!strcmp(name,DIGIT_CORPUS_MULTI_SERVICE)){
   const digit_corpus_multi_request_t *q=req;
   digit_corpus_multi_response_t *v=reply;
   if(size!=sizeof *q||cap<sizeof *v||q->version!=DIGIT_CORPUS_MULTI_VERSION)
@@ -261,7 +279,7 @@ int main(void){
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return test_failure(__LINE__);
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hello"))return test_failure(__LINE__);
  if(handler("hi",3,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hi"))return test_failure(__LINE__);
- if(d->version_minor!=3||d->version_patch!=9)return test_failure(__LINE__);
+ if(d->version_minor!=4||d->version_patch!=0)return test_failure(__LINE__);
  if(socials_calls!=2||!strstr(out,"💚"))return test_failure(__LINE__);
  socials_available=0;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
@@ -372,6 +390,11 @@ int main(void){
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !selected_subject||!strstr(out,"company coordination")||
      strstr(out,"I am ready"))return test_failure(__LINE__);
+  generation_fixture=1;generation_context_checked=0;
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     strcmp(out,"That sounds frustrating. Which part is blocking you?")||
+     !generation_context_checked)return test_failure(__LINE__);
+  generation_fixture=0;
   /* Recognition uncertainty alone must not veto a separately supported
      contextual contribution. */
   recognition_unrelated=1;
