@@ -434,6 +434,22 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
   if(host->invoke_service(DIGIT_REASONING_SERVICE,rq,sizeof *rq,
          rr,sizeof *rr,&n)!=STNLABZ_MODULE_OK||
     n!=sizeof *rr||rr->version!=DIGIT_REASONING_VERSION)goto done;
+ /* Data-driven learned examples from any retrieved record can participate
+  * without requiring a second copy of the same record in Observation. */
+ {size_t k;char example[180];size_t example_used=0;
+  int social=0;
+  for(k=0;k<multiple->count;k++)
+   if(multiple->items[k].found&&
+      memchr(multiple->items[k].text,0,sizeof multiple->items[k].text)&&
+      learned_social_reply(message,multiple->items[k].text,
+                           example,sizeof example,&example_used)){
+    social=1;break;
+   }
+  if(social&&!addressed&&example_used<=capacity){
+   memcpy(out,example,example_used);*used=example_used;
+   result=1;goto done;
+  }
+ }
  /* Reasoning determines response eligibility for direct invocation.
     Preserve existing query handling for non-addressed requests. */
  if(rr->response_eligible||(rr->knowledge==DIGIT_REASONING_CORPUS_SUPPORTED&&
