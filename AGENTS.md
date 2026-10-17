@@ -1,5 +1,13 @@
 # Digit engineering instructions
 
+## Binding Core ownership and namespace boundary (operator directive, 2026-10-16)
+
+- **STN-LABZ owns Core.** Core-owned features, methods and public APIs use the `stnlabz_` namespace. Existing `digit_`-prefixed Core symbols are legacy migration debt, not precedent for new Core APIs. Renaming published symbols requires separately verified compatibility across consumers; do not silently break ABI.
+- **Digit owns mission-specific modules.** These extend Core exclusively through established generic interfaces and may not govern, replace, or modify Core.
+- Core owns agent foundation, identity validation, lifecycle/runtime, policy and authority evaluation, mandatory logging, and generic module discovery, verification, qualification, activation and inventory.
+- **Absolutely no module-specific calls or transport names in Core** (including IRC/Slack publication services). Core emits generic lifecycle/audit events; transport delivery and conversational behavior belong to Digit modules. Do not introduce a Core-to-module service-specific dispatch as a workaround.
+- Do not expand the current authorized correction into other modules. Preserve human acceptance gates and record remaining namespace migration explicitly rather than claiming it completed.
+
 ## Scope and architecture
 
 Read README.md and docs/ROADMAP.md before changes. Work on one operator-authorized step at a time. Current operator-directed operational path is **Digit -> Router -> Module**, following ChAoS MVC. The default Digit console uses Router directly; Bootstrap is not required in this path. Existing historical Bootstrap fixtures do not authorize adding it back. Independent activated modules publish/withdraw their routes using the existing ABI command-registration callbacks; never add module-specific cases to Router or Core. Core contains Digit's identity, General Orders, foundational function, lifecycle, mandatory logging, and module management. Router only routes (e.g. `/diagnose` -> the installed DSD module's registered command). Modules work independently and return results for rendering: never require module-to-module-to-module response chains. SA-specific authorization is a future module, not part of Core identity or a mandatory Core dependency. A roadmap is an ordered plan, not permission to implement future steps.
