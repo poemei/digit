@@ -155,31 +155,30 @@ static int contextual_corpus_lookup(const char *message,const char *subject,
  }
  return 0;
 }
-/* Use concise complete Corpus propositions for ambient channel speech.
- * Never cut off a sentence arbitrarily to satisfy transport limits. */
+/* Keep ambient speech short, factual and complete. Prefer an earlier
+ * complete clause; if unavailable, use a bounded complete first sentence.
+ * Never manufacture a summary or suppress supported evidence for word count. */
 static int ambient_fact(const char *src,char *out,size_t cap,size_t *used){
- const size_t limit=120;
- const char *p,*stop=NULL;
+ const size_t limit=320;
+ const char *p,*end=NULL,*cut=NULL;
  size_t n,i;
  static const char *const clauses[]={" intended to "," which "," that "," because ",NULL};
  if(!src||!*src||!out||!used||cap<2)return 0;
  for(p=src;*p&&(size_t)(p-src)<limit;p++){
   if((*p=='.'||*p=='!'||*p=='?')&&(!p[1]||isspace((unsigned char)p[1]))){
-   stop=p+1;break;
+   end=p+1;break;
   }
-  if(*p==';'&&p>src+20){stop=p;break;}
  }
- /* Prefer an earlier self-contained clause when the full sentence is
-  * lengthy. Otherwise preserve the first complete sentence intact. */
- if(!stop||(size_t)(stop-src)>80)for(i=0;clauses[i];i++){
-  const char *cut=strstr(src,clauses[i]);
-  if(cut&&cut>src+28&&(size_t)(cut-src)<=limit&&(!stop||cut<stop))
-   stop=cut;
+ if(!end)return 0;
+ /* Only shorten at the start of a subordinate clause, never mid-word. */
+ if((size_t)(end-src)>100)for(i=0;clauses[i];i++){
+  const char *candidate=strstr(src,clauses[i]);
+  if(candidate&&candidate>src+28&&candidate<end&&
+     (!cut||candidate<cut))cut=candidate;
  }
- if(!stop)return 0;
- n=(size_t)(stop-src);
+ if(cut)end=cut;
+ n=(size_t)(end-src);
  while(n&&isspace((unsigned char)src[n-1]))n--;
- if(n&&src[n-1]==';')n--;
  if(!n||n+2>cap)return 0;
  memcpy(out,src,n);
  if(out[n-1]!='.'&&out[n-1]!='!'&&out[n-1]!='?')out[n++]='.';
@@ -488,7 +487,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
- d.version_major=0;d.version_minor=2;d.version_patch=10;
+ d.version_major=0;d.version_minor=2;d.version_patch=11;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
