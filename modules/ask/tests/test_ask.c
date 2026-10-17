@@ -166,7 +166,7 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
    result->found=1;
    strcpy(result->id,"TEST-NET");
    strcpy(result->source,"fixture-net");
-   if(long_corpus_fixture)
+   if(long_corpus_fixture==1)
     strcpy(result->text,"The ChAoS MVC Net is a team discussion intended to coordinate technical topics and documentation across departments. Another sentence gives lengthy background.");
    else if(long_corpus_fixture==2){
     /* [AI:GPT-6 | 2026-10-17 02:49:54 UTC] */
