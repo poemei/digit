@@ -14,6 +14,7 @@
 #include <time.h>
 #include <unistd.h>
 #include "stnlabz_abi/module.h"
+#include "stnlabz_abi/abi.h"
 #include "router.h"
 #include "ask_context.h"
 #include "intel_delivery.h"
@@ -213,6 +214,21 @@ static stnlabz_module_result_t publish_intel(const void *req,size_t len,void *ou
  ok=send_reply(digit_slack_delivery_channel(msg->message,cfg.channel),NULL,formatted);
  memcpy(out,&ok,sizeof ok);*used=sizeof ok;
  return ok?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_START_FAILED;
+}
+/* Module-owned adapter: the shared ABI dispatches a generic event.
+ * This transport decides how to publish it; legacy Intel callers are retained. */
+static stnlabz_module_result_t publish_status(const void *request,size_t length,
+ void *out,size_t capacity,size_t *used,void *context){
+ const stnlabz_module_notification_t *event=request;
+ digit_intel_delivery_t legacy={0};
+ if(used)*used=0;
+ if(!event||length!=sizeof *event||
+    event->version!=STNLABZ_NOTIFICATION_VERSION||
+    !memchr(event->message,0,sizeof event->message)||!event->message[0])
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ legacy.version=DIGIT_INTEL_DELIVERY_VERSION;
+ memcpy(legacy.message,event->message,sizeof legacy.message);
+ return publish_intel(&legacy,sizeof legacy,out,capacity,used,context);
 }
 static history_t *conversation(const char *user,const char *channel){
  time_t now=time(NULL);history_t *oldest=&history[0];size_t i;
@@ -607,7 +623,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
   atomic_store(&stopping,1);pthread_join(worker,NULL);active=0;
   erase(&cfg,sizeof cfg);host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
  }
- if(!host->register_service("notify.slack",publish_intel,NULL)){
+ if(!host->register_service("notify.slack",publish_status,NULL)){
   (void)host->unregister_service(DIGIT_INTEL_SLACK_SERVICE,NULL);
   atomic_store(&stopping,1);pthread_join(worker,NULL);active=0;erase(&cfg,sizeof cfg);host=NULL;
   return STNLABZ_MODULE_ERR_START_FAILED;
@@ -617,8 +633,10 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
 }
 static stnlabz_module_result_t stop(void){
  if(!active)return STNLABZ_MODULE_ERR_INVALID_STATE;
- if(host&&host->unregister_service)(void)host->unregister_service("notify.slack",NULL);
+ if(host&&host->unregister_service){
+  (void)host->unregister_service("notify.slack",NULL);
   (void)host->unregister_service(DIGIT_INTEL_SLACK_SERVICE,NULL);
+ }
  atomic_store(&stopping,1);
  pthread_join(worker,NULL);
  active=0;erase(&cfg,sizeof cfg);erase(bot_id,sizeof bot_id);host=NULL;
@@ -629,7 +647,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"slack");
  snprintf(d.name,sizeof d.name,"Digit Slack Transport");
- d.version_major=0;d.version_minor=2;d.version_patch=10;
+ d.version_major=0;d.version_minor=2;d.version_patch=11;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
