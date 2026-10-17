@@ -36,6 +36,7 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
    v->count=2;
    v->items[0].found=v->items[1].found=1;
    strcpy(v->items[0].id,"T-1");strcpy(v->items[1].id,"T-2");
+   strcpy(v->items[0].source,"fixture-net");strcpy(v->items[1].source,"fixture-net");
    strcpy(v->items[0].text,"Context about the ChAoS MVC Net.");
    strcpy(v->items[1].text,"Additional discussion about the ChAoS MVC Net.");
   }
@@ -261,7 +262,7 @@ int main(void){
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return test_failure(__LINE__);
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hello"))return test_failure(__LINE__);
  if(handler("hi",3,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hi"))return test_failure(__LINE__);
- if(d->version_minor!=3||d->version_patch!=9)return test_failure(__LINE__);
+ if(d->version_minor!=3||d->version_patch!=10)return test_failure(__LINE__);
  if(socials_calls!=2||!strstr(out,"💚"))return test_failure(__LINE__);
  socials_available=0;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
