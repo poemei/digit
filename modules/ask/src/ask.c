@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -118,6 +119,42 @@ static stnlabz_module_result_t research_answer(const char *subject,
  *used=(size_t)written+1;
  return STNLABZ_MODULE_OK;
 }
+/* Resolve ambient topics using Corpus, not a predefined subject vocabulary.
+ * Bounded multiword spans preserve original order and require a Corpus match. */
+static int contextual_corpus_lookup(const char *message,const char *subject,
+ digit_corpus_lookup_response_t *result){
+ digit_corpus_lookup_request_t q={0};
+ const char *begin[80],*end[80],*p=message;
+ size_t count=0,n=0,words,start;
+ if(subject&&subject[0]){
+  if(strlen(subject)>=sizeof q.term)return 0;
+  snprintf(q.term,sizeof q.term,"%s",subject);
+  return host->invoke_service("corpus.lookup",&q,sizeof q,result,
+   sizeof *result,&n)==STNLABZ_MODULE_OK&&n==sizeof *result;
+ }
+ if(strlen(message)<sizeof q.term){
+  snprintf(q.term,sizeof q.term,"%s",message);
+  if(host->invoke_service("corpus.lookup",&q,sizeof q,result,sizeof *result,&n)
+     ==STNLABZ_MODULE_OK&&n==sizeof *result&&result->found)return 1;
+ }
+ while(*p&&count<80){
+  while(*p&&!isalnum((unsigned char)*p))p++;
+  if(!*p)break;
+  begin[count]=p;
+  while(*p&&(isalnum((unsigned char)*p)||*p=='-'||*p=='_'))p++;
+  end[count]=p;count++;
+ }
+ for(words=4;words>=2;words--){
+  for(start=0;start+words<=count;start++){
+   size_t len=(size_t)(end[start+words-1]-begin[start]);
+   if(len<7||len>=sizeof q.term)continue;
+   memcpy(q.term,begin[start],len);q.term[len]=0;n=0;
+   if(host->invoke_service("corpus.lookup",&q,sizeof q,result,sizeof *result,&n)
+      ==STNLABZ_MODULE_OK&&n==sizeof *result&&result->found)return 1;
+  }
+ }
+ return 0;
+}
 /* Evidence-bound fallback for unsupported chat, never an inferred command.
    Mention admission alone is not a reason to speak. */
 static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
@@ -126,7 +163,6 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
  digit_observation_recent_response_t *history=NULL;
  digit_reasoning_request_t *rq=NULL;
  digit_reasoning_response_t *rr=NULL;
- digit_corpus_lookup_request_t cq={0};
  digit_corpus_lookup_response_t *cr=NULL;
  size_t n=0,i;
  char *out=output;
@@ -172,10 +208,8 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
    rq->observation_count++;
   }
  }else rq->observation_state=DIGIT_REASONING_UNAVAILABLE;
- /* Search the actual message; no lexicon-derived subject or fabricated claim. */
- snprintf(cq.term,sizeof cq.term,"%.*s",(int)(sizeof cq.term-1),subject&&subject[0]?subject:message);
- if(host->invoke_service("corpus.lookup",&cq,sizeof cq,cr,sizeof *cr,&n)==STNLABZ_MODULE_OK&&
-    n==sizeof *cr){
+ /* Corpus finds actual subject phrases in the utterance. */
+ if(contextual_corpus_lookup(message,subject,cr)){
   corpus_ok=1;
   rq->corpus_state=cr->found?DIGIT_REASONING_PRESENT:DIGIT_REASONING_EMPTY;
   if(cr->found&&memchr(cr->id,0,sizeof cr->id)&&
@@ -418,7 +452,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
- d.version_major=0;d.version_minor=2;d.version_patch=8;
+ d.version_major=0;d.version_minor=2;d.version_patch=9;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
