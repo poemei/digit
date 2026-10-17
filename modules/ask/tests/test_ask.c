@@ -220,7 +220,7 @@ int main(void){
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return test_failure(__LINE__);
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hello"))return test_failure(__LINE__);
  if(handler("hi",3,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hi"))return test_failure(__LINE__);
- if(d->version_minor!=3||d->version_patch!=3)return test_failure(__LINE__);
+ if(d->version_minor!=3||d->version_patch!=4)return test_failure(__LINE__);
  if(socials_calls!=2||!strstr(out,"💚"))return test_failure(__LINE__);
  socials_available=0;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
@@ -304,6 +304,14 @@ int main(void){
   strcpy(context.transport,"slack");strcpy(context.channel,"T1:C1");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      strcmp(out,"Mew!"))return test_failure(__LINE__);
+  /* Learn from example spellings, without hardcoded vocabulary rules. */
+  strcpy(context.question,"Daaas is gooods!!");
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     strcmp(out,"Mew!"))return test_failure(__LINE__);
+  strcpy(context.question,"We were discussing Das is goods yesterday");
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     strstr(out,"Mew!"))return test_failure(__LINE__);
+
   strcpy(context.question,"is digit even seeing Das is goods!");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      out[0]!=0||used!=1)return test_failure(__LINE__);
