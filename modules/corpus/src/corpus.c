@@ -172,6 +172,28 @@ static stnlabz_module_result_t lookup(const void *request,size_t size,
  }
  *used=sizeof *out;return STNLABZ_MODULE_OK;
 }
+static stnlabz_module_result_t lookup_multi(const void *request,size_t size,
+ void *response,size_t capacity,size_t *used,void *context){
+ const digit_corpus_multi_request_t *q=request;
+ digit_corpus_multi_response_t *out=response;
+ digit_corpus_record_t records[3]={{0}};
+ int count,i;(void)context;
+ if(!host||!q||size!=sizeof *q||!out||capacity<sizeof *out||!used||
+    q->version!=DIGIT_CORPUS_MULTI_VERSION||
+    !memchr(q->term,0,sizeof q->term)||!q->term[0])
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ count=digit_corpus_find_multi(DIGIT_CORPUS_PATH,q->term,records);
+ if(count<0)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ memset(out,0,sizeof *out);out->version=DIGIT_CORPUS_MULTI_VERSION;
+ out->count=(unsigned)count;
+ for(i=0;i<count;i++){
+  out->items[i].found=1;
+  snprintf(out->items[i].id,sizeof out->items[i].id,"%s",records[i].id);
+  snprintf(out->items[i].source,sizeof out->items[i].source,"%s",records[i].source);
+  snprintf(out->items[i].text,sizeof out->items[i].text,"%s",records[i].text);
+ }
+ *used=sizeof *out;return STNLABZ_MODULE_OK;
+}
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q){
  return digit_corpus_selftest(q);
 }
@@ -192,10 +214,18 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
   (void)h->unregister_command("corpus",NULL);
   return STNLABZ_MODULE_ERR_START_FAILED;
  }
- host=h;return STNLABZ_MODULE_OK;
+ if(!h->register_service(DIGIT_CORPUS_MULTI_SERVICE,lookup_multi,NULL)){
+  (void)h->unregister_service(DIGIT_CORPUS_LEARN_SERVICE,NULL);
+  (void)h->unregister_service("corpus.lookup",NULL);
+  (void)h->unregister_command("learn",NULL);
+  (void)h->unregister_command("corpus",NULL);
+  return STNLABZ_MODULE_ERR_START_FAILED;
+ }
+  host=h;return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t stop(void){
  if(!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(!host->unregister_service(DIGIT_CORPUS_MULTI_SERVICE,NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
  if(!host->unregister_service(DIGIT_CORPUS_LEARN_SERVICE,NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
  if(!host->unregister_service("corpus.lookup",NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
  if(!host->unregister_command("learn",NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
@@ -207,7 +237,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  (void)snprintf(d.id,sizeof d.id,"corpus");
  (void)snprintf(d.name,sizeof d.name,"Corpus");
- d.version_major=0;d.version_minor=1;d.version_patch=5;
+ d.version_major=0;d.version_minor=1;d.version_patch=6;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
