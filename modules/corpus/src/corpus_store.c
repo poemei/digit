@@ -70,6 +70,36 @@ int digit_corpus_find(const char *path,const char *term,digit_corpus_record_t *o
  fclose(f);return found;
 }
 
+/* Read at most three distinct records matching a token or phrase.
+ * A record ID match is ranked above a subject-leading text match;
+ * equal scores preserve file order. No corpus changes or synthesized facts. */
+int digit_corpus_find_multi(const char *path,const char *term,
+ digit_corpus_record_t out[3]){
+ FILE *f;char *line=NULL;size_t cap=0;ssize_t got;
+ digit_corpus_record_t r;unsigned ranks[3]={0};size_t count=0,i,slot;
+ if(!path||!term||!out||!term[0]||strlen(term)>128||
+    strchr(term,'\n')||strchr(term,'\r')||strchr(term,'\t'))return -2;
+ memset(out,0,3*sizeof *out);
+ f=fopen(path,"r");if(!f)return -1;
+ while((got=getline(&line,&cap,f))>=0){
+  unsigned rank; (void)got;
+  memset(&r,0,sizeof r);if(!parse(line,&r))continue;
+  rank=!strcasecmp(r.id,term)?4:match_rank(r.text,term);
+  if(!rank)continue;
+  for(i=0;i<count;i++)if(!strcmp(out[i].id,r.id))break;
+  if(i<count)continue;
+  slot=0;
+  while(slot<count&&ranks[slot]>=rank)slot++;
+  if(slot>=3)continue;
+  if(count<3)count++;
+  for(i=count-1;i>slot;i--){out[i]=out[i-1];ranks[i]=ranks[i-1];}
+  out[slot]=r;ranks[slot]=rank;
+ }
+ free(line);
+ if(ferror(f)){fclose(f);return -1;}
+ fclose(f);return (int)count;
+}
+
 /* Every count below is backed by an executed assertion; production data is untouched. */
 stnlabz_module_result_t digit_corpus_selftest(stnlabz_module_qualification_result_t *q){
  char name[]="/tmp/digit-qual-XXXXXX";
