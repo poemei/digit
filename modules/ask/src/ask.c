@@ -216,6 +216,52 @@ static int same_statement(const char *a,const char *b){
  }
  return 1;
 }
+/* Corpus-taught social examples: parse quoted input examples before the
+ * guidance "response like", then select a quoted reply after it. The learned
+ * text owns both vocabulary and reply; no feline phrases exist in source.
+ * Exact normalized utterances only: discussing an example is not an invitation. */
+static int social_example_equal(const char *message,const char *begin,size_t length){
+ size_t a=0,b=strlen(message);
+ while(a<b&&isspace((unsigned char)message[a]))a++;
+ while(b>a&&(isspace((unsigned char)message[b-1])||
+  message[b-1]=='!'||message[b-1]=='?'||message[b-1]=='.'))b--;
+ while(length&&(isspace((unsigned char)begin[length-1])||
+  begin[length-1]=='!'||begin[length-1]=='?'||begin[length-1]=='.'))length--;
+ if(b-a!=length||!length)return 0;
+ while(length--)if(tolower((unsigned char)message[a++])!=
+                     tolower((unsigned char)*begin++))return 0;
+ return 1;
+}
+static int learned_social_reply(const char *message,const char *lesson,
+ char *out,size_t capacity,size_t *used){
+ const char *marker,*p,*q,*responses;
+ size_t n;
+ int matched=0;
+ if(!message||!lesson||!out||!used)return 0;
+ /* A guidance phrase distinguishes response examples from definitions. */
+ marker=strstr(lesson,"response like");
+ if(!marker)return 0;
+ for(p=lesson;p<marker;){
+  p=strchr(p,'"');
+  if(!p||p>=marker)break;
+  q=strchr(++p,'"');
+  if(!q||q>=marker)break;
+  if(social_example_equal(message,p,(size_t)(q-p)))matched=1;
+  p=q+1;
+ }
+ if(!matched)return 0;
+ responses=marker+strlen("response like");
+ /* Do not speak prose copied from a lesson; only a delimited example. */
+ p=strchr(responses,'"');
+ if(!p)return 0;
+ q=strchr(++p,'"');
+ if(!q)return 0;
+ n=(size_t)(q-p);
+ if(!n||n>=capacity||n>160||memchr(p,'\\n',n)||memchr(p,'\\r',n))
+  return 0;
+ memcpy(out,p,n);out[n]=0;*used=n+1;
+ return 1;
+}
 /* Evidence-bound fallback for unsupported chat, never an inferred command.
    Mention admission alone is not a reason to speak. */
 static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
@@ -286,10 +332,18 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
  /* Reasoning determines response eligibility for direct invocation.
     Preserve existing query handling for non-addressed requests. */
  if(rr->response_eligible||(rr->knowledge==DIGIT_REASONING_CORPUS_SUPPORTED&&
-     rr->relevance==DIGIT_REASONING_CONTEXTUAL&&rr->matched_observations>=1)){
+     ((rr->relevance==DIGIT_REASONING_CONTEXTUAL&&rr->matched_observations>=1)||
+      (!addressed&&learned_social_reply(message,cr->text,out,capacity,used))))){
   if(rr->knowledge==DIGIT_REASONING_CORPUS_SUPPORTED&&corpus_ok){
    if(!addressed){
-    if(!ambient_fact(cr->text,out,capacity,used)){
+    /* Operator-learned conversational examples are response guidance, not
+     * assertions to recite. A direct example may invite a lightweight
+     * acknowledgment without an unrelated historical lexical match. */
+    if(learned_social_reply(message,cr->text,out,capacity,used)){
+     result=1;
+    }else if(strstr(cr->text,"response like")){
+     out[0]=0;*used=1;result=1;
+    }else if(!ambient_fact(cr->text,out,capacity,used)){
      out[0]=0;*used=1;
     }else{
      /* Corpus is knowledge, not permission to echo participants.
@@ -527,7 +581,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
  d.version_major=0;/* [AI:GPT-6 | 2026-10-17 02:49:54 UTC] */
- d.version_minor=3;d.version_patch=2;
+ d.version_minor=3;d.version_patch=3;
  /* [End AI:GPT-6] */
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
