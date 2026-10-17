@@ -15,6 +15,9 @@ typedef struct {
 } digit_corpus_record_t;
 /* 1 found, 0 absent, -1 inaccessible, -2 malformed query. No writes. */
 int digit_corpus_find(const char *path,const char *term,digit_corpus_record_t *out);
+/* Bounded ranked read; returns count 0..3 or a negative error. */
+int digit_corpus_find_multi(const char *path,const char *term,
+ digit_corpus_record_t out[3]);
 /* Executes >=10 isolated read-only and negative qualification assertions. */
 stnlabz_module_result_t digit_corpus_selftest(stnlabz_module_qualification_result_t *result);
 #endif
