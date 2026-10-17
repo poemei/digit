@@ -53,15 +53,17 @@ static stnlabz_module_result_t evaluate(const void *request,size_t size,
  void *response,size_t capacity,size_t *used,void *ctx){
  const digit_recognition_request_t *q=request;
  digit_recognition_response_t *r=response;
- unsigned i,highest=0;
+ unsigned i,highest=0; int speaker_continuity=0,subject_continuity=0;
  (void)ctx;
  if(!host||!q||size!=sizeof *q||!r||capacity<sizeof *r||!used||
     q->version!=DIGIT_RECOGNITION_VERSION||
     !terminated(q->message,sizeof q->message)||!q->message[0]||
+    !terminated(q->sender,sizeof q->sender)||!q->sender[0]||q->addressed>1||
     !terminated(q->corpus_text,sizeof q->corpus_text)||
     q->history_count>DIGIT_RECOGNITION_HISTORY_MAX)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  for(i=0;i<q->history_count;i++)
-  if(!terminated(q->history[i],sizeof q->history[i]))
+  if(!terminated(q->history[i].text,sizeof q->history[i].text)||
+     !terminated(q->history[i].sender,sizeof q->history[i].sender)||!q->history[i].sender[0])
    return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(r,0,sizeof *r);r->version=DIGIT_RECOGNITION_VERSION;
  if(q->corpus_text[0]){
@@ -70,7 +72,9 @@ static stnlabz_module_result_t evaluate(const void *request,size_t size,
     DIGIT_RECOGNITION_RELATED:DIGIT_RECOGNITION_UNCERTAIN;
  }
  for(i=0;i<q->history_count;i++){
-  unsigned n=overlap(q->message,q->history[i]);
+  unsigned n=overlap(q->message,q->history[i].text);
+  if(!strcmp(q->sender,q->history[i].sender))speaker_continuity=1;
+  if(strcmp(q->sender,q->history[i].sender)&&n>=2)subject_continuity=1;
   if(n>highest)highest=n;
  }
  r->conversation_shared_terms=highest;
@@ -79,6 +83,9 @@ static stnlabz_module_result_t evaluate(const void *request,size_t size,
     DIGIT_RECOGNITION_RELATED:DIGIT_RECOGNITION_UNCERTAIN;
  /* Lexical evidence alone NEVER establishes the message's meaning. */
  r->meaning_established=0;
+ r->speaker_continuity=(unsigned)speaker_continuity;
+ r->subject_continuity=(unsigned)subject_continuity;
+ r->direct_address=q->addressed;
  *used=sizeof *r;return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q){
@@ -130,7 +137,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"recognition");
  snprintf(d.name,sizeof d.name,"Digit Conversation Recognition Evidence");
- d.version_major=0;d.version_minor=1;d.version_patch=0;
+ d.version_major=0;d.version_minor=2;d.version_patch=0;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;
