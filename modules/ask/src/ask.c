@@ -155,6 +155,34 @@ static int contextual_corpus_lookup(const char *message,const char *subject,
  }
  return 0;
 }
+/* Use concise complete Corpus propositions for ambient channel speech.
+ * Never cut off a sentence arbitrarily to satisfy transport limits. */
+static int ambient_fact(const char *src,char *out,size_t cap,size_t *used){
+ const size_t limit=120;
+ const char *p,*stop=NULL;
+ size_t n,i;
+ static const char *const clauses[]={" intended to "," which "," that "," because ",NULL};
+ if(!src||!*src||!out||!used||cap<2)return 0;
+ for(p=src;*p&&(size_t)(p-src)<limit;p++){
+  if((*p=='.'||*p=='!'||*p=='?')&&(!p[1]||isspace((unsigned char)p[1]))){
+   stop=p+1;break;
+  }
+  if(*p==';'&&p>src+20){stop=p;break;}
+ }
+ if(!stop)for(i=0;clauses[i];i++){
+  const char *cut=strstr(src,clauses[i]);
+  if(cut&&cut>src+28&&(size_t)(cut-src)<=limit&&(!stop||cut<stop))
+   stop=cut;
+ }
+ if(!stop)return 0;
+ n=(size_t)(stop-src);
+ while(n&&isspace((unsigned char)src[n-1]))n--;
+ if(n&&src[n-1]==';')n--;
+ if(!n||n+2>cap)return 0;
+ memcpy(out,src,n);
+ if(out[n-1]!='.'&&out[n-1]!='!'&&out[n-1]!='?')out[n++]='.';
+ out[n]=0;*used=n+1;return 1;
+}
 /* Evidence-bound fallback for unsupported chat, never an inferred command.
    Mention admission alone is not a reason to speak. */
 static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
@@ -227,9 +255,16 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
  if(rr->response_eligible||(rr->knowledge==DIGIT_REASONING_CORPUS_SUPPORTED&&
      rr->relevance==DIGIT_REASONING_CONTEXTUAL&&rr->matched_observations>=2)){
   if(rr->knowledge==DIGIT_REASONING_CORPUS_SUPPORTED&&corpus_ok){
-   int w=snprintf(out,capacity,"%s [Corpus: %s; source: %s]",
-                    cr->text,cr->id,cr->source);
-   if(w>0&&(size_t)w<capacity){*used=(size_t)w+1;result=1;}
+   if(!addressed){
+    if(!ambient_fact(cr->text,out,capacity,used)){
+     out[0]=0;*used=1;
+    }
+    result=1;
+   }else{
+    int w=snprintf(out,capacity,"%s [Corpus: %s; source: %s]",
+                   cr->text,cr->id,cr->source);
+    if(w>0&&(size_t)w<capacity){*used=(size_t)w+1;result=1;}
+   }
   }else {
    const char *explain=rr->response_eligible?
      "I received your message. Could you clarify what you\'d like me to address?":
@@ -452,7 +487,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
- d.version_major=0;d.version_minor=2;d.version_patch=9;
+ d.version_major=0;d.version_minor=2;d.version_patch=10;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
