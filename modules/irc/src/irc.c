@@ -226,6 +226,14 @@ int digit_irc_public_conversation(const char *target,const char *configured_chan
  return target&&configured_channel&&target[0]=='#'&&
         configured_channel[0]=='#'&&!strcasecmp(target,configured_channel);
 }
+/* Preserve the distinction between Ask's intentional silence and a broken
+ * Router/Ask dispatch. Only genuine failures are reported to module logs. */
+static int digit_irc_dispatch_state(stnlabz_module_result_t rc,size_t used,
+ size_t capacity,const char *answer){
+ if(rc!=STNLABZ_MODULE_OK||!answer||!used||used>capacity||
+    !memchr(answer,0,used))return -1;
+ return answer[0]?1:0;
+}
 /* Only explicitly addressed conversation, never arbitrary IRC commands. */
 static void chat_message(SSL *tls,const char *line){
  const char *sep,*body,*prefix;char sender[64]={0},target[128]={0},message[513];
@@ -299,7 +307,17 @@ static void chat_message(SSL *tls,const char *line){
   conversation->previous.outcome=dispatch_result==STNLABZ_MODULE_OK?0:5;
   conversation->previous.service_result=(int)dispatch_result;
  }
- if(dispatch_result!=STNLABZ_MODULE_OK||!used||used>sizeof answer||!memchr(answer,0,used))return;
+ {
+  int state=digit_irc_dispatch_state(dispatch_result,used,sizeof answer,answer);
+  if(state<0){
+   char detail[128];
+   snprintf(detail,sizeof detail,
+    "[IRC] Ask dispatch failed result=%d bytes=%zu",(int)dispatch_result,used);
+   notice(detail);
+   return;
+  }
+  if(state==0)return; /* Explicit silence is an acceptable Ask result. */
+ }
 snprintf(public_answer,sizeof public_answer,"%s",answer);
  digit_irc_hide_corpus_reference(public_answer);
  /* IRC protocol framing, not server-side presentation: one PRIVMSG per report line. */
@@ -486,7 +504,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"irc");snprintf(d.name,sizeof d.name,"Digit IRC Transport");
- d.version_major=0;d.version_minor=2;d.version_patch=3;
+ d.version_major=0;d.version_minor=2;d.version_patch=4;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
