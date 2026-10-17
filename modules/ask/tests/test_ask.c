@@ -22,6 +22,7 @@ static int long_corpus_fixture;
 static int recognition_calls;
 static int recognition_unrelated;
 static int social_repeat_fixture;
+static int observation_lookup_calls;
 static stnlabz_module_result_t invoke(const char *name,const void *req,size_t size,void *reply,size_t cap,size_t *used){
  const char *msg="I am Digit, the STN-LABZ foundational autonomous agent.";
  if(!strcmp(name,DIGIT_CORPUS_MULTI_SERVICE)){
@@ -30,6 +31,7 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
   if(size!=sizeof *q||cap<sizeof *v||q->version!=DIGIT_CORPUS_MULTI_VERSION)
    return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
   memset(v,0,sizeof *v);v->version=DIGIT_CORPUS_MULTI_VERSION;
+  if(strstr(q->term,"agenda"))observation_lookup_calls++;
   if(strstr(q->term,"ChAoS MVC Net")){
    v->count=2;
    v->items[0].found=v->items[1].found=1;
@@ -259,7 +261,7 @@ int main(void){
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return test_failure(__LINE__);
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hello"))return test_failure(__LINE__);
  if(handler("hi",3,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hi"))return test_failure(__LINE__);
- if(d->version_minor!=3||d->version_patch!=8)return test_failure(__LINE__);
+ if(d->version_minor!=3||d->version_patch!=9)return test_failure(__LINE__);
  if(socials_calls!=2||!strstr(out,"💚"))return test_failure(__LINE__);
  socials_available=0;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
@@ -376,7 +378,7 @@ int main(void){
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"company coordination"))return test_failure(__LINE__);
   recognition_unrelated=0;
-  if(!recognition_calls)return test_failure(__LINE__);
+  if(!recognition_calls||!observation_lookup_calls)return test_failure(__LINE__);
   /* An existing conversational statement must not be recited back. */
   ambient_fixture=3;long_corpus_fixture=0;
   strcpy(context.question,"are you ready for the ChAoS MVC Net tomorrow?");
