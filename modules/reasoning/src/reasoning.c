@@ -5,11 +5,12 @@
 #include "reasoning.h"
 static const stnlabz_module_host_t *host;
 static int valid(const char *s,size_t n){return s&&memchr(s,0,n)!=NULL;}
-/* Language-neutral, data-derived token intersection, not a word/intent dictionary.
-   Common words cannot establish meaning: an overlap is only a traceable candidate. */
+/* A shared topic must contain at least two adjacent significant words and
+ * be present in the current message, the observation, and Corpus evidence.
+ * This is a traceable relationship, not a claim of semantic understanding. */
 static size_t tokens(const char *s,char a[][64],size_t capacity){
  size_t count=0;
- while(*s){
+ while(*s&&count<capacity){
   size_t k=0;
   while(*s&&!isalnum((unsigned char)*s))s++;
   if(!*s)break;
@@ -17,16 +18,20 @@ static size_t tokens(const char *s,char a[][64],size_t capacity){
    if(k<63)a[count][k++]=(char)tolower((unsigned char)*s);
    s++;
   }
-  if(k>=3&&count<capacity){a[count][k]=0;count++;}
-  if(count==capacity)break;
+  if(k>=3){a[count][k]=0;count++;}
  }
  return count;
 }
-static int intersects(const char *a,const char *b){
- char x[64][64]={{0}},y[64][64]={{0}};
- size_t nx=tokens(a,x,64),ny=tokens(b,y,64),i,j;
- for(i=0;i<nx;i++)for(j=0;j<ny;j++)
-  if(!strcmp(x[i],y[j]))return 1;
+static int has_pair(char words[][64],size_t n,const char *a,const char *b){
+ size_t i;
+ for(i=1;i<n;i++)if(!strcmp(words[i-1],a)&&!strcmp(words[i],b))return 1;
+ return 0;
+}
+static int related_topic(const char *message,const char *observation,const char *corpus){
+ char m[64][64]={{0}},o[64][64]={{0}},c[64][64]={{0}};
+ size_t nm=tokens(message,m,64),no=tokens(observation,o,64),nc=tokens(corpus,c,64),i;
+ for(i=1;i<nm;i++)
+  if(has_pair(o,no,m[i-1],m[i])&&has_pair(c,nc,m[i-1],m[i]))return 1;
  return 0;
 }
 static stnlabz_module_result_t evaluate(const void *input,size_t len,void *output,
@@ -69,7 +74,8 @@ static stnlabz_module_result_t evaluate(const void *input,size_t len,void *outpu
   if(!valid(o->text,sizeof o->text)||!valid(o->event_id,sizeof o->event_id)||
      !valid(o->sender,sizeof o->sender)||!o->event_id[0])
     return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
-  if(intersects(q->message,o->text)){
+  if(q->corpus_state==DIGIT_REASONING_PRESENT&&
+     related_topic(q->message,o->text,q->corpus_text)){
    memcpy(r->observation_ids[r->matched_observations],o->event_id,
           sizeof o->event_id);
    r->matched_observations++;
@@ -107,7 +113,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  memset(&d,0,sizeof d);
  snprintf(d.id,sizeof d.id,"reasoning");
  snprintf(d.name,sizeof d.name,"Digit Evidence Relationship Evaluator");
- d.version_major=0;d.version_minor=1;d.version_patch=1;
+ d.version_major=0;d.version_minor=1;d.version_patch=2;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;
  d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;
