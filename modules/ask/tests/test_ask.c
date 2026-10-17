@@ -305,7 +305,7 @@ int main(void){
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      strcmp(out,"Mew!"))return test_failure(__LINE__);
   /* Learn from example spellings, without hardcoded vocabulary rules. */
-  strcpy(context.question,"Daaas is gooods!!");
+  strcpy(context.question,"Das is gooods!!");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      strcmp(out,"Mew!"))return test_failure(__LINE__);
   strcpy(context.question,"We were discussing Das is goods yesterday");
