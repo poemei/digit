@@ -478,6 +478,17 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
   free(batch);
   multiple->version=DIGIT_CORPUS_MULTI_VERSION;
  }
+ /* A record discovered through recent conversation is valid read-only
+  * evidence even if this isolated message misses the original lookup. */
+ if(rq->corpus_state!=DIGIT_REASONING_PRESENT&&multiple->count){
+  digit_corpus_lookup_response_t *item=&multiple->items[0];
+  if(item->found&&item->id[0]&&item->source[0]&&item->text[0]){
+   *cr=*item;corpus_ok=1;rq->corpus_state=DIGIT_REASONING_PRESENT;
+   snprintf(rq->corpus_id,sizeof rq->corpus_id,"%s",item->id);
+   snprintf(rq->corpus_source,sizeof rq->corpus_source,"%s",item->source);
+   snprintf(rq->corpus_text,sizeof rq->corpus_text,"%s",item->text);
+  }
+ }
  /* Read-only Recognition runs on the same scoped evidence used by Reasoning.
   * Relevance is not semantic understanding and cannot grant permission to
   * speak. On absence/failure the accepted pre-integration path remains. */
@@ -783,7 +794,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
  d.version_major=0;/* [AI:GPT-6 | 2026-10-17 02:49:54 UTC] */
- d.version_minor=3;d.version_patch=8;
+ d.version_minor=3;d.version_patch=9;
  /* [End AI:GPT-6] */
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
