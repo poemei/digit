@@ -63,7 +63,7 @@ static int decode_response(const char *json,char *out,size_t cap){
 }
 static int model_name(const char *s){
  size_t n=0;
- if(!s||!*s)return 0;
+ if(!s||!*s||s[0]=='/'||strstr(s,".."))return 0;
  while(s[n]){
   unsigned char c=(unsigned char)s[n++];
   if(n>96||!(isalnum(c)||c=='.'||c=='_'||c=='-'||c==':'||c=='/'))return 0;
