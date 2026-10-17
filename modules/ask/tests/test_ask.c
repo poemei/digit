@@ -346,11 +346,11 @@ int main(void){
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !selected_subject||!strstr(out,"company coordination")||
      strstr(out,"I am ready"))return test_failure(__LINE__);
-  /* When both Recognition evidence relations are uncertain, unrelated
-     Corpus facts must not be emitted into a public conversation. */
+  /* Recognition uncertainty alone must not veto a separately supported
+     contextual contribution. */
   recognition_unrelated=1;
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
-     out[0]!=0||used!=1)return test_failure(__LINE__);
+     !strstr(out,"company coordination"))return test_failure(__LINE__);
   recognition_unrelated=0;
   if(!recognition_calls)return test_failure(__LINE__);
   /* An existing conversational statement must not be recited back. */
