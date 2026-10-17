@@ -1,5 +1,17 @@
 # Digit — Architectural Rebuild
 
+## Current operator-reported conversational status (2026-10-16/17)
+
+**Scope:** This repository's Digit rebuild under poemei.com. This section supersedes older conversational *status descriptions* below, but does not revise previously accepted evidence, architecture, mission authority, or historical development records. The detailed source/test/IRC checkpoint is in [docs/ROADMAP.md](docs/ROADMAP.md#2026-10-1617--operator-supplied-conversational-regression-checkpoint-irc-not-accepted).
+
+- **Digit Core:** unchanged; agent release remains **1.0.0**. Core, Router, public ABI, and release identity are not part of the conversational repair.
+- **Ask 0.3.1:** the operator reported a passing focused test and `HOTLOAD_ACTIVE` replacing 0.3.0. The patch preserves short Corpus-supported ambient statements without requiring terminal punctuation. It **does not** establish acceptable conversation behavior.
+- **Interpretation 0.1.8:** an initial qualification run compiled but failed the existing mid-sentence presence-check case; a follow-up source correction was committed. The operator then reported `HOTLOAD_ACTIVE` replacing 0.1.7. The observed IRC case `mmhmmm trying to fix this, digit you here?` received a presence-check reply. The expanded-mission statement has **not** been retested in the supplied post-hotload transcript.
+- **Remaining regression (OPEN, NOT OPERATOR ACCEPTED):** Digit unsolicitedly recited `Digit is an engineering assistant, not a conversational AI.` and repeated the statement when another participant echoed it. This is *observed output*, not confirmation of present-day mission authority. The source includes a Corpus-to-`ambient_fact()` response path; Reasoning currently uses lexical overlap to assess observations and knowledge. The retrieved production record and exact runtime decision trace remain unknown.
+- **Slack:** current post-repair conversational behavior is unverified. An IRC hotload does not prove Slack response quality.
+
+**Acceptance separation:** source commits, compilation, qualification, activation, live-client behavior and explicit operator acceptance are separate. Do not convert `HOTLOAD_ACTIVE` into conversational acceptance or permission for a next implementation step. For future authorized investigation, trace observed message → Interpretation → scoped Observations/Corpus → Reasoning → Ask/output → delivery, then test useful participation **and** intentional silence without hardcoded conversational scripts. No changes to Core or module contracts without explicit human approval.
+
 Digit is an STN-LABZ modular autonomous-agent project. This repository is a **clean architectural rebuild** of Digit, using the established ChAoS MVC design as its structural reference.
 
 The existing [stnlabz/digit](https://github.com/stnlabz/digit) repository is the **reference implementation**: it provides source material and previously developed functionality, not an architecture to copy wholesale. Working features may be migrated only after being realigned with the design and qualification requirements here.
