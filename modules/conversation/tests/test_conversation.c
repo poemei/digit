@@ -1,4 +1,6 @@
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "stnlabz_abi/module.h"
 #include "conversation.h"
@@ -17,6 +19,7 @@ int main(void){
  digit_conversation_response_t response={0};
  size_t used=0;
  const stnlabz_module_descriptor_t *d=stnlabz_module_get_descriptor();
+ (void)unsetenv("DIGIT_CONVERSATION_MODEL");
  host.register_service=reg;host.unregister_service=unreg;
  if(strcmp(d->id,"conversation")||d->version_minor!=1||
     d->qualify(&q)!=STNLABZ_MODULE_OK||q.tests_executed<10||
