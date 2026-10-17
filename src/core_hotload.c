@@ -10,6 +10,7 @@
 #include <openssl/sha.h>
 #include "core_hotload.h"
 #include "core_activation.h"
+#include "stnlabz_abi/abi.h"
 #include "logging.h"
 
 /* Core owns module replacement; no module may grant its own activation. */
@@ -72,7 +73,6 @@ static int log_report(digit_hotload_t *w,const char *event,const char *id,
  int active_known=replacement_ok||
   (recovery&&(!strcmp(recovery,"incumbent_retained")||
                !strcmp(recovery,"incumbent_restored")));
- (void)w;
  if(replacement_ok&&candidate)
   snprintf(active_version,sizeof active_version,"%u.%u.%u",
    candidate->version_major,candidate->version_minor,candidate->version_patch);
@@ -86,7 +86,26 @@ static int log_report(digit_hotload_t *w,const char *event,const char *id,
   candidate?candidate->version_major:0,candidate?candidate->version_minor:0,
   candidate?candidate->version_patch:0,before?before:"unknown",after?after:"unknown",
   reason,recovery);
- return digit_log_event("MODULE","HOTLOAD_NOTICE",detail)&&digit_log_sync();
+ {
+  int ok=digit_log_event("MODULE","HOTLOAD_NOTICE",detail)&&digit_log_sync();
+  stnlabz_module_notification_t notification={0};
+  stnlabz_notification_dispatch_result_t report={0};
+  int rc;
+  notification.version=STNLABZ_NOTIFICATION_VERSION;
+  snprintf(notification.message,sizeof notification.message,
+   "[MODULE] %s id=%s active=%s incumbent=%u.%u.%u candidate=%u.%u.%u reason=%s recovery=%s",
+   event,id,active_version,old?old->major:0,old?old->minor:0,old?old->patch:0,
+   candidate?candidate->version_major:0,candidate?candidate->version_minor:0,
+   candidate?candidate->version_patch:0,reason,recovery);
+  rc=stnlabz_module_abi_notify(w->registry,w->host,&notification,&report);
+  if(rc!=STNLABZ_MODULE_OK||report.failed){
+   char failure[160];
+   snprintf(failure,sizeof failure,"module=%s attempted=%u delivered=%u failed=%u",
+    id,report.attempted,report.delivered,report.failed);
+   (void)digit_log_event("MODULE","NOTIFICATION_FAILED",failure);
+  }
+  return ok;
+ }
 }
 static int newer(const observed_t *o,const stnlabz_module_descriptor_t *d){
  if(d->version_major!=o->major)return d->version_major>o->major;
