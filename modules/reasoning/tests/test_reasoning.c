@@ -29,7 +29,7 @@ static digit_reasoning_request_t *request(void){
  strcpy(q->observations[1].text,"The weather outside is pleasant");
  q->corpus_state=DIGIT_REASONING_PRESENT;
  strcpy(q->corpus_id,"C-100");strcpy(q->corpus_source,"fixture");
- strcpy(q->corpus_text,"A test record about observation");
+ strcpy(q->corpus_text,"Digit observation supports this test record");
  return q;
 }
 int main(void){
@@ -40,7 +40,7 @@ int main(void){
  size_t n=0;
  if(!q||!out)return 1;
  h.register_service=register_service;h.unregister_service=unregister_service;
- if(!d||strcmp(d->id,"reasoning")||d->version_patch!=1||
+ if(!d||strcmp(d->id,"reasoning")||d->version_patch!=2||
     d->qualify(&qual)!=STNLABZ_MODULE_OK||qual.tests_executed<10||
     qual.tests_failed||!qual.negative_test_passed)return 2;
  if(d->start(&h)!=STNLABZ_MODULE_OK||!handler)return 3;
@@ -49,6 +49,25 @@ int main(void){
     out->knowledge!=DIGIT_REASONING_CORPUS_SUPPORTED||
     out->matched_observations!=1||strcmp(out->observation_ids[0],"irc-123")||
     strcmp(out->corpus_id,"C-100"))return 4;
+ /* A topical announcement with two independent observations is relevant,
+    but never proves that Digit herself is ready. */
+ strcpy(q->message,"are you ready for the ChAoS MVC Net tomorrow?");
+ strcpy(q->corpus_text,"The ChAoS MVC Net concerns company coordination.");
+ strcpy(q->observations[0].text,"ChAoS MVC Net agenda is being prepared");
+ strcpy(q->observations[1].text,"The ChAoS MVC Net is tomorrow");
+ if(handler(q,sizeof *q,out,sizeof *out,&n,NULL)!=STNLABZ_MODULE_OK||
+    out->matched_observations!=2||out->relevance!=DIGIT_REASONING_CONTEXTUAL||
+    out->response_eligible)return 13;
+ strcpy(q->observations[1].text,"Are you ready for the unrelated weather?");
+ if(handler(q,sizeof *q,out,sizeof *out,&n,NULL)!=STNLABZ_MODULE_OK||
+    out->matched_observations!=1)return 14;
+ strcpy(q->corpus_text,"A weather update is expected tomorrow");
+ if(handler(q,sizeof *q,out,sizeof *out,&n,NULL)!=STNLABZ_MODULE_OK||
+    out->matched_observations!=0)return 15;
+ strcpy(q->message,"Digit observation update");
+ strcpy(q->corpus_text,"Digit observation supports this test record");
+ strcpy(q->observations[0].text,"Testing Digit observation in the channel");
+ strcpy(q->observations[1].text,"The weather outside is pleasant");
  q->addressed=1;
  if(handler(q,sizeof *q,out,sizeof *out,&n,NULL)!=STNLABZ_MODULE_OK||
     out->response_eligible!=1)return 12;
