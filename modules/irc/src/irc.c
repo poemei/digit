@@ -16,6 +16,7 @@
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include "stnlabz_abi/module.h"
+#include "stnlabz_abi/abi.h"
 #include "router.h"
 #include "ask_context.h"
 #include "intel_delivery.h"
@@ -42,7 +43,7 @@ static stnlabz_module_result_t publish_intel(const void *request,size_t length,v
     !memchr(msg->message,0,sizeof msg->message)||!msg->message[0]||
     !out||capacity<sizeof(int)||!used)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  n=strlen(msg->message);
- if(n>=sizeof intel_pending||strchr(msg->message,'\r')||strchr(msg->message,'\n'))
+ if(n>=sizeof intel_pending[0]||strchr(msg->message,'\r')||strchr(msg->message,'\n'))
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  pthread_mutex_lock(&intel_lock);
  if(intel_count<IRC_INTEL_QUEUE_CAPACITY){
@@ -52,6 +53,21 @@ static stnlabz_module_result_t publish_intel(const void *request,size_t length,v
  pthread_mutex_unlock(&intel_lock);
  memcpy(out,&queued,sizeof queued);*used=sizeof queued;
  return queued?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_START_FAILED;
+}
+/* Module-owned adapter: the shared ABI dispatches a generic event.
+ * This transport decides how to publish it; legacy Intel callers are retained. */
+static stnlabz_module_result_t publish_status(const void *request,size_t length,
+ void *out,size_t capacity,size_t *used,void *context){
+ const stnlabz_module_notification_t *event=request;
+ digit_intel_delivery_t legacy={0};
+ if(used)*used=0;
+ if(!event||length!=sizeof *event||
+    event->version!=STNLABZ_NOTIFICATION_VERSION||
+    !memchr(event->message,0,sizeof event->message)||!event->message[0])
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ legacy.version=DIGIT_INTEL_DELIVERY_VERSION;
+ memcpy(legacy.message,event->message,sizeof legacy.message);
+ return publish_intel(&legacy,sizeof legacy,out,capacity,used,context);
 }
 static void notice(const char *s){if(host&&host->send_message)host->send_message(s);}
 static int valid(const char *s,size_t max){size_t i,n;if(!s)return 0;n=strlen(s);if(!n||n>=max)return 0;for(i=0;i<n;i++)if((unsigned char)s[i]<33||s[i]==127)return 0;return 1;}
@@ -483,7 +499,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
  if(!host->register_service(DIGIT_INTEL_IRC_SERVICE,publish_intel,NULL)){
   active=0;host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
  }
- if(!host->register_service("notify.irc",publish_intel,NULL)){
+ if(!host->register_service("notify.irc",publish_status,NULL)){
   (void)host->unregister_service(DIGIT_INTEL_IRC_SERVICE,NULL);
   active=0;host=NULL;
   return STNLABZ_MODULE_ERR_START_FAILED;
@@ -499,9 +515,10 @@ static stnlabz_module_result_t stop(void){
  if(!active)return STNLABZ_MODULE_ERR_INVALID_STATE;
  atomic_store(&stopping,1);
  pthread_join(worker,NULL);
- if(host&&host->unregister_service)
+ if(host&&host->unregister_service){
   (void)host->unregister_service("notify.irc",NULL);
   (void)host->unregister_service(DIGIT_INTEL_IRC_SERVICE,NULL);
+ }
  pthread_mutex_lock(&intel_lock);
  intel_head=0;intel_count=0;memset(intel_pending,0,sizeof intel_pending);
  pthread_mutex_unlock(&intel_lock);
@@ -511,7 +528,7 @@ static stnlabz_module_result_t stop(void){
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"irc");snprintf(d.name,sizeof d.name,"Digit IRC Transport");
- d.version_major=0;d.version_minor=2;d.version_patch=5;
+ d.version_major=0;d.version_minor=2;d.version_patch=6;
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
 }
