@@ -84,9 +84,31 @@ static stnlabz_module_result_t evaluate(const void *request,size_t size,
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q){
  if(!q)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(q,0,sizeof *q);
- q->tests_executed=q->tests_passed=STNLABZ_MODULE_MIN_TESTS;
- q->negative_test_executed=q->negative_test_passed=1;
- return STNLABZ_MODULE_OK;
+ /* Qualification runs actual positive and negative invariants. */
+ {
+  const struct {const char *a,*b;unsigned minimum;} cases[]={
+   {"repeated characters","repeeated characters",2},
+   {"typing mistake","typing mistkae",2},
+   {"channel discussion","channel discussion",2},
+   {"server down","unrelated subject",0},
+   {"human language","human languuage",2},
+   {"same same same","same",1},
+   {"longword alpha","longword beta",1},
+   {"context here","context elsewhere",1}
+  };
+  size_t i;
+  for(i=0;i<sizeof cases/sizeof cases[0];i++){
+   unsigned n=overlap(cases[i].a,cases[i].b);
+   q->tests_executed++;
+   if((cases[i].minimum==0&&n==0)||
+      (cases[i].minimum>0&&n>=cases[i].minimum))q->tests_passed++;
+   else q->tests_failed++;
+  }
+  q->negative_test_executed=1;
+  q->negative_test_passed=overlap("totally unrelated","another matter")==0;
+ }
+ return q->tests_failed||!q->negative_test_passed?
+   STNLABZ_MODULE_ERR_QUALIFICATION:STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
  if(host||!h||!h->register_service||!h->unregister_service)
