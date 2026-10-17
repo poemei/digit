@@ -91,7 +91,7 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
   strcpy(r->items[0].sender,"STN_Boss");
   strcpy(r->items[0].text,"so I added a reasoning module for Digit");
   if(ambient_fixture){
-   r->count=2;
+   r->count=ambient_fixture==2?1:2;
    strcpy(r->items[0].text,"ChAoS MVC Net agenda has been discussed");
    strcpy(r->items[1].event_id,"event-2");
    strcpy(r->items[1].sender,"STN_Boss");
@@ -103,7 +103,7 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
   const digit_reasoning_request_t *q=req;
   digit_reasoning_response_t *r=reply;
   if(size!=sizeof *q||cap<sizeof *r||strcmp(q->channel,"#stn-labz")||
-     strcmp(q->sender,"PoeMei")||q->observation_count!=(ambient_fixture?2u:1u)||
+     strcmp(q->sender,"PoeMei")||q->observation_count!=(ambient_fixture==1?2u:1u)||
      strcmp(q->observations[0].event_id,"event-1"))
      return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
   if(!strcmp(q->message,"Digit topic discussion"))retained_full_message=1;
@@ -111,8 +111,8 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
   r->response_eligible=q->addressed;
   r->knowledge=q->corpus_state==DIGIT_REASONING_PRESENT?
     DIGIT_REASONING_CORPUS_SUPPORTED:DIGIT_REASONING_UNKNOWN;
-  r->relevance=DIGIT_REASONING_CONTEXTUAL;
-  r->matched_observations=ambient_fixture?2:1;
+  r->relevance=(ambient_fixture||q->addressed)?DIGIT_REASONING_CONTEXTUAL:DIGIT_REASONING_NONE;
+  r->matched_observations=ambient_fixture?(ambient_fixture==2?1:2):(q->addressed?1:0);
   strcpy(r->observation_ids[0],"event-1");
   *used=sizeof *r;return STNLABZ_MODULE_OK;
  }
@@ -195,7 +195,7 @@ int main(void){
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return test_failure(__LINE__);
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hello"))return test_failure(__LINE__);
  if(handler("hi",3,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hi"))return test_failure(__LINE__);
- if(d->version_minor!=2||d->version_patch!=10)return test_failure(__LINE__);
+ if(d->version_minor!=2||d->version_patch!=11)return test_failure(__LINE__);
  if(socials_calls!=2||!strstr(out,"💚"))return test_failure(__LINE__);
  socials_available=0;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
@@ -284,6 +284,9 @@ int main(void){
      strcmp(out,"The ChAoS MVC Net is a team discussion.")||
      strstr(out,"Corpus:")||strlen(out)>120)return test_failure(__LINE__);
   long_corpus_fixture=0;
+  ambient_fixture=2;
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     !strstr(out,"company coordination")||strstr(out,"Corpus:"))return test_failure(__LINE__);
   ambient_fixture=0;
   strcpy(context.question,"are you ready for the unrelated gathering tomorrow?");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
