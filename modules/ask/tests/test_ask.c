@@ -16,6 +16,7 @@ static int retained_full_message;
 static int selected_subject;
 static int socials_available=1;
 static int socials_calls;
+static int ambient_fixture;
 static stnlabz_module_result_t invoke(const char *name,const void *req,size_t size,void *reply,size_t cap,size_t *used){
  const char *msg="I am Digit, the STN-LABZ foundational autonomous agent.";
  if(!strcmp(name,DIGIT_SOCIALS_SERVICE)){
@@ -88,13 +89,20 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
   strcpy(r->items[0].event_id,"event-1");
   strcpy(r->items[0].sender,"STN_Boss");
   strcpy(r->items[0].text,"so I added a reasoning module for Digit");
+  if(ambient_fixture){
+   r->count=2;
+   strcpy(r->items[0].text,"ChAoS MVC Net agenda has been discussed");
+   strcpy(r->items[1].event_id,"event-2");
+   strcpy(r->items[1].sender,"STN_Boss");
+   strcpy(r->items[1].text,"The ChAoS MVC Net is tomorrow");
+  }
   *used=sizeof *r;return STNLABZ_MODULE_OK;
  }
  if(!strcmp(name,DIGIT_REASONING_SERVICE)){
   const digit_reasoning_request_t *q=req;
   digit_reasoning_response_t *r=reply;
   if(size!=sizeof *q||cap<sizeof *r||strcmp(q->channel,"#stn-labz")||
-     strcmp(q->sender,"PoeMei")||q->observation_count!=1||
+     strcmp(q->sender,"PoeMei")||q->observation_count!=(ambient_fixture?2u:1u)||
      strcmp(q->observations[0].event_id,"event-1"))
      return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
   if(!strcmp(q->message,"Digit topic discussion"))retained_full_message=1;
@@ -102,7 +110,8 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
   r->response_eligible=q->addressed;
   r->knowledge=q->corpus_state==DIGIT_REASONING_PRESENT?
     DIGIT_REASONING_CORPUS_SUPPORTED:DIGIT_REASONING_UNKNOWN;
-  r->relevance=DIGIT_REASONING_CONTEXTUAL;r->matched_observations=1;
+  r->relevance=DIGIT_REASONING_CONTEXTUAL;
+  r->matched_observations=ambient_fixture?2:1;
   strcpy(r->observation_ids[0],"event-1");
   *used=sizeof *r;return STNLABZ_MODULE_OK;
  }
@@ -144,6 +153,13 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
    strcpy(result->source,"fixture-mission");
    strcpy(result->text,"Digit's mission is to support authorized STN-LABZ operations.");
   }
+  if(!strcasecmp(q->term,"ChAoS MVC Net")){
+   selected_subject=1;
+   result->found=1;
+   strcpy(result->id,"TEST-NET");
+   strcpy(result->source,"fixture-net");
+   strcpy(result->text,"The ChAoS MVC Net concerns company coordination.");
+  }
   if(!strcmp(q->term,"STN-Labz")){
    selected_subject=1;
    result->found=1;
@@ -176,7 +192,7 @@ int main(void){
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return test_failure(__LINE__);
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hello"))return test_failure(__LINE__);
  if(handler("hi",3,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hi"))return test_failure(__LINE__);
- if(d->version_minor!=2||d->version_patch!=8)return test_failure(__LINE__);
+ if(d->version_minor!=2||d->version_patch!=9)return test_failure(__LINE__);
  if(socials_calls!=2||!strstr(out,"💚"))return test_failure(__LINE__);
  socials_available=0;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
@@ -252,6 +268,15 @@ int main(void){
   strcpy(context.question,"Can Digit explain a technology that Corpus doesn't contain?");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"clarify"))return test_failure(__LINE__);
+  /* Ambient question: Corpus resolves the multiword meeting subject without
+     claiming Digit is prepared. No explicit bot address is present. */
+  ambient_fixture=1;
+  selected_subject=0;
+  strcpy(context.question,"are you ready for the ChAoS MVC Net tomorrow?");
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     !selected_subject||!strstr(out,"company coordination")||
+     strstr(out,"I am ready"))return test_failure(__LINE__);
+  ambient_fixture=0;
   strcpy(context.question,"What is STN-Labz?");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      out[0]!=0)return test_failure(__LINE__);
