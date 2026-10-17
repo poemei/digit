@@ -28,7 +28,7 @@ int main(void){
  stnlabz_module_qualification_result_t q={0};
  const stnlabz_module_descriptor_t *d=stnlabz_module_get_descriptor();
  stnlabz_module_host_t mock_host={0};
- if(!d||strcmp(d->id,"irc")||d->version_minor!=2||d->version_patch!=4)return 1;
+ if(!d||strcmp(d->id,"irc")||d->version_minor!=2||d->version_patch!=6)return 1;
  if(!digit_irc_public_conversation("#stn-labz","#stn-labz"))return 37;
  if(digit_irc_public_conversation("#other","#stn-labz"))return 38;
  if(digit_irc_public_conversation("digit-bot","#stn-labz"))return 39;
@@ -138,6 +138,26 @@ int main(void){
    snprintf(expected,sizeof expected,"module-%u",k);
    if(strcmp(intel_pending[(intel_head+k)%IRC_INTEL_QUEUE_CAPACITY],expected))return 33;
   }
+  active=0;intel_head=0;intel_count=0;
+ }
+ /* Generic ABI module status is admitted independently of legacy Intel.
+    Reject invalid versions and messages too long for an IRC wire frame. */
+ {
+  stnlabz_module_notification_t event={0};
+  int accepted=0;size_t used=0;
+  active=1;intel_head=0;intel_count=0;
+  event.version=STNLABZ_NOTIFICATION_VERSION;
+  strcpy(event.message,"[MODULE] HOTLOAD_ACTIVE id=interpretation active=0.1.8");
+  if(publish_status(&event,sizeof event,&accepted,sizeof accepted,&used,NULL)!=STNLABZ_MODULE_OK||
+     !accepted||used!=sizeof accepted||intel_count!=1||
+     strcmp(intel_pending[0],event.message))return 51;
+  event.version=99;
+  if(publish_status(&event,sizeof event,&accepted,sizeof accepted,&used,NULL)!=STNLABZ_MODULE_ERR_INVALID_ARGUMENT||
+     intel_count!=1)return 52;
+  event.version=STNLABZ_NOTIFICATION_VERSION;
+  memset(event.message,'x',480);event.message[480]=0;
+  if(publish_status(&event,sizeof event,&accepted,sizeof accepted,&used,NULL)!=STNLABZ_MODULE_ERR_INVALID_ARGUMENT||
+     intel_count!=1)return 53;
   active=0;intel_head=0;intel_count=0;
  }
  /* SASL and registration may complete in either order, exactly one JOIN. */
