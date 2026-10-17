@@ -8,6 +8,7 @@
 #include "research_contract.h"
 #include "observation.h"
 #include "reasoning.h"
+#include "recognition.h"
 #include "socials.h"
 extern const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void);
 static stnlabz_module_service_handler_fn handler;
@@ -18,9 +19,26 @@ static int socials_available=1;
 static int socials_calls;
 static int ambient_fixture;
 static int long_corpus_fixture;
+static int recognition_calls;
+static int recognition_unrelated;
 static stnlabz_module_result_t invoke(const char *name,const void *req,size_t size,void *reply,size_t cap,size_t *used){
  const char *msg="I am Digit, the STN-LABZ foundational autonomous agent.";
- if(!strcmp(name,DIGIT_SOCIALS_SERVICE)){
+ if(!strcmp(name,DIGIT_RECOGNITION_SERVICE)){
+  const digit_recognition_request_t *q=req;
+  digit_recognition_response_t *v=reply;
+  if(size!=sizeof *q||cap<sizeof *v||
+     q->version!=DIGIT_RECOGNITION_VERSION||
+     !q->message[0]||q->history_count>DIGIT_RECOGNITION_HISTORY_MAX)
+   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+  recognition_calls++;
+  memset(v,0,sizeof *v);v->version=DIGIT_RECOGNITION_VERSION;
+  v->corpus_relation=recognition_unrelated?
+    DIGIT_RECOGNITION_UNCERTAIN:DIGIT_RECOGNITION_RELATED;
+  v->conversation_relation=recognition_unrelated?
+    DIGIT_RECOGNITION_UNCERTAIN:DIGIT_RECOGNITION_RELATED;
+  *used=sizeof *v;return STNLABZ_MODULE_OK;
+ }
+  if(!strcmp(name,DIGIT_SOCIALS_SERVICE)){
   const digit_socials_request_t *q=req;
   digit_socials_response_t *r=reply;
   socials_calls++;
@@ -220,7 +238,7 @@ int main(void){
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return test_failure(__LINE__);
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hello"))return test_failure(__LINE__);
  if(handler("hi",3,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hi"))return test_failure(__LINE__);
- if(d->version_minor!=3||d->version_patch!=5)return test_failure(__LINE__);
+ if(d->version_minor!=3||d->version_patch!=6)return test_failure(__LINE__);
  if(socials_calls!=2||!strstr(out,"💚"))return test_failure(__LINE__);
  socials_available=0;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
@@ -327,6 +345,13 @@ int main(void){
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !selected_subject||!strstr(out,"company coordination")||
      strstr(out,"I am ready"))return test_failure(__LINE__);
+  /* When both Recognition evidence relations are uncertain, unrelated
+     Corpus facts must not be emitted into a public conversation. */
+  recognition_unrelated=1;
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     out[0]!=0||used!=1)return test_failure(__LINE__);
+  recognition_unrelated=0;
+  if(!recognition_calls)return test_failure(__LINE__);
   /* An existing conversational statement must not be recited back. */
   ambient_fixture=3;long_corpus_fixture=0;
   strcpy(context.question,"are you ready for the ChAoS MVC Net tomorrow?");
