@@ -34,7 +34,7 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
   if(size!=sizeof *q||cap<sizeof *v||
      q->version!=DIGIT_CONVERSATION_VERSION)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
   if(!generation_fixture)return STNLABZ_MODULE_ERR_NOT_FOUND;
-  if(q->history_count>0&&q->evidence_count>0&&
+  if(q->history_count>0&&q->evidence_count>=2&&
      !strcmp(q->sender,"PoeMei")&&
      !strcmp(q->history[0].sender,"STN_Boss"))
    generation_context_checked=1;
@@ -279,7 +279,7 @@ int main(void){
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return test_failure(__LINE__);
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hello"))return test_failure(__LINE__);
  if(handler("hi",3,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hi"))return test_failure(__LINE__);
- if(d->version_minor!=4||d->version_patch!=0)return test_failure(__LINE__);
+ if(d->version_minor!=4||d->version_patch!=1)return test_failure(__LINE__);
  if(socials_calls!=2||!strstr(out,"💚"))return test_failure(__LINE__);
  socials_available=0;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
