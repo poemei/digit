@@ -431,7 +431,7 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
    sources[k+1]=rq->observations[k].text;
   for(k=0;k<4&&term_count<18;k++)if(sources[k]){
    const char *p=sources[k],*start[48],*stop[48];
-   unsigned count=0,span,j;
+   unsigned count=0,span,j,origin_start=term_count;
    while(*p&&count<48){
     while(*p&&!isalnum((unsigned char)*p))p++;
     if(!*p)break;
@@ -439,8 +439,8 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
     while(*p&&(isalnum((unsigned char)*p)||*p=='_'))p++;
     stop[count++]=p;
    }
-   for(span=3;span>=1&&term_count<18;span--){
-    for(j=0;j+span<=count&&term_count<18;j++){
+   for(span=3;span>=1&&term_count<18&&term_count-origin_start<4;span--){
+    for(j=0;j+span<=count&&term_count<18&&term_count-origin_start<4;j++){
      size_t len=(size_t)(stop[j+span-1]-start[j]);
      unsigned duplicate=0;
      if(len<5||len>=sizeof terms[0])continue;
