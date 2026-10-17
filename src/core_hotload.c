@@ -11,7 +11,6 @@
 #include "core_hotload.h"
 #include "core_activation.h"
 #include "logging.h"
-#include "intel_delivery.h"
 
 /* Core owns module replacement; no module may grant its own activation. */
 typedef struct {
@@ -61,16 +60,19 @@ static int remember(digit_hotload_t *w,const char *id,const char *hash,
  s->major=d->version_major;s->minor=d->version_minor;s->patch=d->version_patch;
  return 1;
 }
+/* STN-LABZ Core owns lifecycle audit. Transport-specific publication
+ * (including IRC and Slack) belongs exclusively to Digit modules.
+ * Preserve replacement metadata and operational logging without dispatching
+ * any mission-specific service from Core. */
 static int log_report(digit_hotload_t *w,const char *event,const char *id,
  const observed_t *old,const stnlabz_module_descriptor_t *candidate,
  const char *before,const char *after,const char *reason,const char *recovery){
- char detail[760],notice[470],active_version[32];
- digit_intel_delivery_t msg={0};int queued=0;
- size_t used=0;const char *routes[]={DIGIT_INTEL_IRC_SERVICE,DIGIT_INTEL_SLACK_SERVICE};
- size_t i;int ok,replacement_ok=!strcmp(event,"HOTLOAD_ACTIVE");
+ char detail[760],active_version[32];
+ int replacement_ok=!strcmp(event,"HOTLOAD_ACTIVE");
  int active_known=replacement_ok||
   (recovery&&(!strcmp(recovery,"incumbent_retained")||
                !strcmp(recovery,"incumbent_restored")));
+ (void)w;
  if(replacement_ok&&candidate)
   snprintf(active_version,sizeof active_version,"%u.%u.%u",
    candidate->version_major,candidate->version_minor,candidate->version_patch);
@@ -84,29 +86,7 @@ static int log_report(digit_hotload_t *w,const char *event,const char *id,
   candidate?candidate->version_major:0,candidate?candidate->version_minor:0,
   candidate?candidate->version_patch:0,before?before:"unknown",after?after:"unknown",
   reason,recovery);
- /* The activation layer already logs HOTLOAD_ACTIVE. This is a distinct
-    delivery audit, preventing the incumbent from appearing as a second active version. */
- ok=digit_log_event("MODULE","HOTLOAD_NOTICE",detail)&&digit_log_sync();
- snprintf(notice,sizeof notice,
-  "[MODULE] %s id=%s active=%s incumbent=%u.%u.%u candidate=%u.%u.%u reason=%s recovery=%s",
-  event,id,active_version,old?old->major:0,old?old->minor:0,old?old->patch:0,
-  candidate?candidate->version_major:0,candidate?candidate->version_minor:0,
-  candidate?candidate->version_patch:0,reason,recovery);
- msg.version=DIGIT_INTEL_DELIVERY_VERSION;
- snprintf(msg.message,sizeof msg.message,"%s",notice);
- for(i=0;i<2;i++){
-  stnlabz_module_result_t rc=w->host->invoke_service?
-   w->host->invoke_service(routes[i],&msg,sizeof msg,&queued,sizeof queued,&used):
-   STNLABZ_MODULE_ERR_NOT_FOUND;
-  if(rc!=STNLABZ_MODULE_OK||used!=sizeof queued||queued!=1){
-   char failure[256];
-   snprintf(failure,sizeof failure,"module=%s route=%s result=%d reason=delivery_not_confirmed",
-    id,routes[i],(int)rc);
-   (void)digit_log_event("MODULE","NOTIFICATION_FAILED",failure);
-   ok=0;
-  }
- }
- (void)digit_log_sync();return ok;
+ return digit_log_event("MODULE","HOTLOAD_NOTICE",detail)&&digit_log_sync();
 }
 static int newer(const observed_t *o,const stnlabz_module_descriptor_t *d){
  if(d->version_major!=o->major)return d->version_major>o->major;
