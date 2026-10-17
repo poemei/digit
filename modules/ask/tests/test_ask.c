@@ -51,6 +51,9 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
    v->addressed=0;v->intent=DIGIT_INTENT_STATEMENT;
    strcpy(v->subject,"tomorrow's ChAoS MVC Net");
   }
+  else if(!strcmp(q->text,"is digit even seeing Das is goods!")){
+   v->addressed=0;v->intent=DIGIT_INTENT_QUESTION;
+  }
   else if(!strcmp(q->text,"What is STN-Labz?")){
    v->addressed=0;v->intent=DIGIT_INTENT_KNOWLEDGE;
    strcpy(v->subject,"STN-Labz");
