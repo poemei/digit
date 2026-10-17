@@ -47,6 +47,10 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
   else if(!strcmp(q->text,"I added a reasoning module for Digit, and expect a canned reply")){
    v->addressed=0;v->intent=DIGIT_INTENT_STATEMENT;
   }
+  else if(!strcmp(q->text,"I suppose I'll get Codex ready for tomorrow's ChAoS MVC Net")){
+   v->addressed=0;v->intent=DIGIT_INTENT_STATEMENT;
+   strcpy(v->subject,"tomorrow's ChAoS MVC Net");
+  }
   else if(!strcmp(q->text,"What is STN-Labz?")){
    v->addressed=0;v->intent=DIGIT_INTENT_KNOWLEDGE;
    strcpy(v->subject,"STN-Labz");
@@ -84,8 +88,10 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
  if(!strcmp(name,DIGIT_OBSERVATION_READ_SERVICE)){
   const digit_observation_recent_request_t *q=req;
   digit_observation_recent_response_t *r=reply;
-  if(size!=sizeof *q||cap<sizeof *r||strcmp(q->transport,"irc")||
-     strcmp(q->channel,"#stn-labz"))return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+  if(size!=sizeof *q||cap<sizeof *r||
+     !((!strcmp(q->transport,"irc")&&!strcmp(q->channel,"#stn-labz"))||
+       (!strcmp(q->transport,"slack")&&!strcmp(q->channel,"T1:C1"))))
+    return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
   memset(r,0,sizeof *r);r->version=DIGIT_OBSERVATION_READ_VERSION;r->count=1;
   strcpy(r->items[0].event_id,"event-1");
   strcpy(r->items[0].sender,"STN_Boss");
@@ -102,7 +108,8 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
  if(!strcmp(name,DIGIT_REASONING_SERVICE)){
   const digit_reasoning_request_t *q=req;
   digit_reasoning_response_t *r=reply;
-  if(size!=sizeof *q||cap<sizeof *r||strcmp(q->channel,"#stn-labz")||
+  if(size!=sizeof *q||cap<sizeof *r||
+     (strcmp(q->channel,"#stn-labz")&&strcmp(q->channel,"T1:C1"))||
      strcmp(q->sender,"PoeMei")||q->observation_count!=(ambient_fixture==1?2u:1u)||
      strcmp(q->observations[0].event_id,"event-1"))
      return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
@@ -195,7 +202,7 @@ int main(void){
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return test_failure(__LINE__);
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hello"))return test_failure(__LINE__);
  if(handler("hi",3,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hi"))return test_failure(__LINE__);
- if(d->version_minor!=2||d->version_patch!=11)return test_failure(__LINE__);
+ if(d->version_minor!=3||d->version_patch!=0)return test_failure(__LINE__);
  if(socials_calls!=2||!strstr(out,"💚"))return test_failure(__LINE__);
  socials_available=0;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
@@ -287,6 +294,15 @@ int main(void){
   ambient_fixture=2;
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"company coordination")||strstr(out,"Corpus:"))return test_failure(__LINE__);
+  /* Slack receives unaddressed operations talk. A broader subject miss
+     must not suppress an independently corroborated Corpus-backed topic. */
+  strcpy(context.transport,"slack");strcpy(context.channel,"T1:C1");
+  ambient_fixture=2;selected_subject=0;
+  strcpy(context.question,"I suppose I'll get Codex ready for tomorrow's ChAoS MVC Net");
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     !selected_subject||!strstr(out,"company coordination")||
+     strstr(out,"Corpus:"))return test_failure(__LINE__);
+  strcpy(context.transport,"irc");strcpy(context.channel,"#stn-labz");
   ambient_fixture=0;
   strcpy(context.question,"are you ready for the unrelated gathering tomorrow?");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
