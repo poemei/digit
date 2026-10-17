@@ -277,6 +277,9 @@ int main(void){
      !selected_subject||!strstr(out,"company coordination")||
      strstr(out,"I am ready"))return test_failure(__LINE__);
   ambient_fixture=0;
+  strcpy(context.question,"are you ready for the unrelated gathering tomorrow?");
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     out[0]!=0||used!=1)return test_failure(__LINE__);
   strcpy(context.question,"What is STN-Labz?");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      out[0]!=0)return test_failure(__LINE__);
