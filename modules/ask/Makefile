@@ -9,7 +9,7 @@ GROUP ?= digit
 all: $(TARGET)
 $(TARGET): src/ask.c
 	mkdir -p bin
-	$(CC) $(CFLAGS) -I$(ROOT)/include -I../observation/include -I../reasoning/include -I../recognition/include -I../socials/include -shared src/ask.c -o $@
+	$(CC) $(CFLAGS) -I$(ROOT)/include -I../observation/include -I../reasoning/include -I../recognition/include -I../conversation/include -I../socials/include -shared src/ask.c -o $@
 bin/test_ask: tests/test_ask.c src/ask.c
 	mkdir -p bin
 	$(CC) $(CFLAGS) -I$(ROOT)/include -I../observation/include -I../reasoning/include -I../recognition/include -I../socials/include tests/test_ask.c src/ask.c -o $@
