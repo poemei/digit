@@ -463,7 +463,7 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
       &mq,sizeof mq,batch,sizeof *batch,&mn)!=STNLABZ_MODULE_OK||
       mn!=sizeof *batch||batch->version!=DIGIT_CORPUS_MULTI_VERSION||
       batch->count>DIGIT_CORPUS_MULTI_MAX)continue;
-   for(j=0;j<batch->count&&multiple->count<DIGIT_CORPUS_MULTI_MAX;j++){
+   for(j=0;j<batch->count;j++){
     unsigned z,dup=0;
     digit_corpus_lookup_response_t *item=&batch->items[j];
     if(!item->found||!memchr(item->id,0,sizeof item->id)||
@@ -471,9 +471,9 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
        !memchr(item->source,0,sizeof item->source))continue;
     for(z=0;z<multiple->count;z++)
      if(!strcmp(multiple->items[z].id,item->id)){dup=1;break;}
-    if(!dup)multiple->items[multiple->count++]=*item;
+    if(!dup&&multiple->count<DIGIT_CORPUS_MULTI_MAX)
+     multiple->items[multiple->count++]=*item;
    }
-   if(multiple->count==DIGIT_CORPUS_MULTI_MAX)break;
   }
   free(batch);
   multiple->version=DIGIT_CORPUS_MULTI_VERSION;
@@ -794,7 +794,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
  d.version_major=0;/* [AI:GPT-6 | 2026-10-17 02:49:54 UTC] */
- d.version_minor=3;d.version_patch=9;
+ d.version_minor=3;d.version_patch=10;
  /* [End AI:GPT-6] */
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
