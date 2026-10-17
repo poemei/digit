@@ -3,7 +3,7 @@ CFLAGS ?= -std=c11 -Wall -Wextra -Wpedantic -O2
 CPPFLAGS += -Iinclude -Iinclude/stnlabz_abi -Imodules/dsd/include
 
 .PHONY: all test clean install install-modules module-dsd module-expression module-corpus
-all: bin/test_corpus_store bin/digit bin/test_agent_root bin/test_runtime bin/test_module_manager bin/test_logging bin/test_abi_compat bin/test_loader bin/test_discovery bin/test_registry_growth bin/test_loader_growth bin/test_qualification bin/test_activation bin/test_inventory bin/test_policy bin/test_provenance bin/test_escalation bin/test_lifecycle_isolation bin/test_core_failure bin/test_authority_boundary bin/test_router bin/test_bootstrap bin/test_model_expression bin/test_rendering
+all: bin/test_abi_notification bin/test_corpus_store bin/digit bin/test_agent_root bin/test_runtime bin/test_module_manager bin/test_logging bin/test_abi_compat bin/test_loader bin/test_discovery bin/test_registry_growth bin/test_loader_growth bin/test_qualification bin/test_activation bin/test_inventory bin/test_policy bin/test_provenance bin/test_escalation bin/test_lifecycle_isolation bin/test_core_failure bin/test_authority_boundary bin/test_router bin/test_bootstrap bin/test_model_expression bin/test_rendering
 
 bin:
 	mkdir -p bin
@@ -25,6 +25,9 @@ bin/test_module_manager: tests/test_module_manager.c src/module_manager.c src/lo
 
 bin/test_logging: tests/test_logging.c src/logging.c include/logging.h | bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_logging.c src/logging.c -o $@
+
+bin/test_abi_notification: tests/test_abi_notification.c src/stnlabz_abi/notification.c include/stnlabz_abi/abi.h | bin
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_abi_notification.c src/stnlabz_abi/notification.c -o $@
 
 bin/test_abi_compat: tests/test_abi_compat.c src/stnlabz_abi/module.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/abi.c include/stnlabz_abi/module.h include/stnlabz_abi/module_registry.h include/stnlabz_abi/abi.h | bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_abi_compat.c src/stnlabz_abi/module.c src/stnlabz_abi/module_registry.c src/stnlabz_abi/abi.c -o $@
