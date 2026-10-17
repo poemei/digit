@@ -17,6 +17,7 @@ static int selected_subject;
 static int socials_available=1;
 static int socials_calls;
 static int ambient_fixture;
+static int long_corpus_fixture;
 static stnlabz_module_result_t invoke(const char *name,const void *req,size_t size,void *reply,size_t cap,size_t *used){
  const char *msg="I am Digit, the STN-LABZ foundational autonomous agent.";
  if(!strcmp(name,DIGIT_SOCIALS_SERVICE)){
@@ -158,7 +159,9 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
    result->found=1;
    strcpy(result->id,"TEST-NET");
    strcpy(result->source,"fixture-net");
-   strcpy(result->text,"The ChAoS MVC Net concerns company coordination.");
+   if(long_corpus_fixture)
+    strcpy(result->text,"The ChAoS MVC Net is a team discussion intended to coordinate technical topics and documentation across departments. Another sentence gives lengthy background.");
+   else strcpy(result->text,"The ChAoS MVC Net concerns company coordination.");
   }
   if(!strcmp(q->term,"STN-Labz")){
    selected_subject=1;
@@ -192,7 +195,7 @@ int main(void){
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return test_failure(__LINE__);
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hello"))return test_failure(__LINE__);
  if(handler("hi",3,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hi"))return test_failure(__LINE__);
- if(d->version_minor!=2||d->version_patch!=9)return test_failure(__LINE__);
+ if(d->version_minor!=2||d->version_patch!=10)return test_failure(__LINE__);
  if(socials_calls!=2||!strstr(out,"💚"))return test_failure(__LINE__);
  socials_available=0;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
@@ -276,6 +279,11 @@ int main(void){
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !selected_subject||!strstr(out,"company coordination")||
      strstr(out,"I am ready"))return test_failure(__LINE__);
+  long_corpus_fixture=1;
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     strcmp(out,"The ChAoS MVC Net is a team discussion.")||
+     strstr(out,"Corpus:")||strlen(out)>120)return test_failure(__LINE__);
+  long_corpus_fixture=0;
   ambient_fixture=0;
   strcpy(context.question,"are you ready for the unrelated gathering tomorrow?");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
