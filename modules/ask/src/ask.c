@@ -11,7 +11,6 @@
 #include "observation.h"
 #include "reasoning.h"
 #include "recognition.h"
-#include "conversation.h"
 #include "socials.h"
 static const stnlabz_module_host_t *host;
 /* In IRC, a non-channel target is a private conversation addressed to Digit. */
@@ -422,13 +421,12 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
   * The candidate list is derived from the conversation, not vocabulary code. */
  {
   char terms[18][DIGIT_CORPUS_LOOKUP_TERM_MAX]={{0}};
-  unsigned term_count=0,t,k,rank[3]={0},term_rank[18]={0};
+  unsigned term_count=0,t,k;
   const char *sources[4]={message,NULL,NULL,NULL};
   digit_corpus_multi_request_t mq={0};
   digit_corpus_multi_response_t *batch=calloc(1,sizeof *batch);
   if(subject&&*subject&&strlen(subject)<sizeof terms[0])
-   {snprintf(terms[term_count],sizeof terms[0],"%s",subject);
-    term_rank[term_count++]=10;}
+   snprintf(terms[term_count++],sizeof terms[0],"%s",subject);
   for(k=0;k<rq->observation_count&&k<3;k++)
    sources[k+1]=rq->observations[k].text;
   for(k=0;k<4&&term_count<18;k++)if(sources[k]){
@@ -452,8 +450,7 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
       }
      if(duplicate)continue;
      memcpy(terms[term_count],start[j],len);
-     terms[term_count][len]=0;
-     term_rank[term_count++]=(k==0?4:3)+span;
+     terms[term_count++][len]=0;
     }
    }
   }
@@ -466,25 +463,17 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
       &mq,sizeof mq,batch,sizeof *batch,&mn)!=STNLABZ_MODULE_OK||
       mn!=sizeof *batch||batch->version!=DIGIT_CORPUS_MULTI_VERSION||
       batch->count>DIGIT_CORPUS_MULTI_MAX)continue;
-   for(j=0;j<batch->count;j++){
-    unsigned z,dup=0,slot=0,p;
+   for(j=0;j<batch->count&&multiple->count<DIGIT_CORPUS_MULTI_MAX;j++){
+    unsigned z,dup=0;
     digit_corpus_lookup_response_t *item=&batch->items[j];
-    unsigned quality=term_rank[t];
     if(!item->found||!memchr(item->id,0,sizeof item->id)||
        !memchr(item->text,0,sizeof item->text)||
        !memchr(item->source,0,sizeof item->source))continue;
     for(z=0;z<multiple->count;z++)
      if(!strcmp(multiple->items[z].id,item->id)){dup=1;break;}
-    if(dup)continue;
-    while(slot<multiple->count&&rank[slot]>=quality)slot++;
-    if(slot>=DIGIT_CORPUS_MULTI_MAX)continue;
-    if(multiple->count<DIGIT_CORPUS_MULTI_MAX)multiple->count++;
-    for(p=multiple->count-1;p>slot;p--){
-     multiple->items[p]=multiple->items[p-1];
-     rank[p]=rank[p-1];
-    }
-    multiple->items[slot]=*item;rank[slot]=quality;
+    if(!dup)multiple->items[multiple->count++]=*item;
    }
+   if(multiple->count==DIGIT_CORPUS_MULTI_MAX)break;
   }
   free(batch);
   multiple->version=DIGIT_CORPUS_MULTI_VERSION;
@@ -498,71 +487,6 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
    snprintf(rq->corpus_id,sizeof rq->corpus_id,"%s",item->id);
    snprintf(rq->corpus_source,sizeof rq->corpus_source,"%s",item->source);
    snprintf(rq->corpus_text,sizeof rq->corpus_text,"%s",item->text);
-  }
- }
- /* Generative conversation is evaluated from attributed history and multiple
-  * Corpus records BEFORE the legacy lexical admission rules. No topic-word
-  * gate can veto a grounded, useful reply from the conversation module. */
- {
-  digit_conversation_request_t *cq=calloc(1,sizeof *cq);
-  digit_conversation_response_t generated={0};
-  size_t k,gn=0;
-  if(cq){
-   cq->version=DIGIT_CONVERSATION_VERSION;
-   cq->addressed=addressed;
-   snprintf(cq->sender,sizeof cq->sender,"%s",ctx->sender);
-   snprintf(cq->message,sizeof cq->message,"%s",message);
-   for(k=0;k<rq->observation_count&&
-          cq->history_count<DIGIT_CONVERSATION_HISTORY_MAX;k++){
-    unsigned idx=cq->history_count++;
-    snprintf(cq->history[idx].sender,sizeof cq->history[idx].sender,
-             "%s",rq->observations[k].sender);
-    snprintf(cq->history[idx].text,sizeof cq->history[idx].text,
-             "%s",rq->observations[k].text);
-   }
-   for(k=0;k<multiple->count&&
-          cq->evidence_count<DIGIT_CONVERSATION_EVIDENCE_MAX;k++){
-    digit_corpus_lookup_response_t *item=&multiple->items[k];
-    unsigned idx,duplicate=0,j;
-    if(!item->found||!item->id[0]||!item->text[0]||!item->source[0])
-     continue;
-    for(j=0;j<cq->evidence_count;j++)
-     if(!strcmp(cq->evidence[j].id,item->id))duplicate=1;
-    if(duplicate)continue;
-    idx=cq->evidence_count++;
-    snprintf(cq->evidence[idx].id,sizeof cq->evidence[idx].id,
-             "%s",item->id);
-    snprintf(cq->evidence[idx].source,sizeof cq->evidence[idx].source,
-             "%s",item->source);
-    snprintf(cq->evidence[idx].text,sizeof cq->evidence[idx].text,
-             "%s",item->text);
-   }
-   if(!cq->evidence_count&&rq->corpus_state==DIGIT_REASONING_PRESENT){
-    cq->evidence_count=1;
-    snprintf(cq->evidence[0].id,sizeof cq->evidence[0].id,
-             "%s",rq->corpus_id);
-    snprintf(cq->evidence[0].source,sizeof cq->evidence[0].source,
-             "%s",rq->corpus_source);
-    snprintf(cq->evidence[0].text,sizeof cq->evidence[0].text,
-             "%s",rq->corpus_text);
-   }
-   if(host->invoke_service(DIGIT_CONVERSATION_SERVICE,cq,sizeof *cq,
-      &generated,sizeof generated,&gn)==STNLABZ_MODULE_OK&&
-      gn==sizeof generated&&generated.version==DIGIT_CONVERSATION_VERSION&&
-      generated.generated<=1&&memchr(generated.text,0,sizeof generated.text)){
-    if(!generated.generated){out[0]=0;*used=1;result=1;}
-    else if(generated.text[0]&&strlen(generated.text)<capacity){
-     int duplicate=same_statement(generated.text,message);
-     for(k=0;!duplicate&&k<rq->observation_count;k++)
-      if(same_statement(generated.text,rq->observations[k].text))
-       duplicate=1;
-     if(!duplicate){
-      strcpy(out,generated.text);*used=strlen(out)+1;result=1;
-     }
-    }
-   }
-   free(cq);
-   if(result)goto done;
   }
  }
  /* Read-only Recognition runs on the same scoped evidence used by Reasoning.
@@ -870,7 +794,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
  d.version_major=0;/* [AI:GPT-6 | 2026-10-17 02:49:54 UTC] */
- d.version_minor=4;d.version_patch=1;
+ d.version_minor=3;d.version_patch=9;
  /* [End AI:GPT-6] */
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
