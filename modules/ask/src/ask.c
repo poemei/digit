@@ -328,7 +328,7 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
  digit_corpus_lookup_response_t *cr=NULL;
  digit_recognition_request_t *recognition=NULL;
  digit_recognition_response_t recognized={0};
- int recognition_available=0;
+ 
  size_t n=0,i;
  char *out=output;
  int result=0,corpus_ok=0;
@@ -409,7 +409,9 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
    recognized.corpus_relation<=DIGIT_RECOGNITION_UNCERTAIN&&
    recognized.conversation_relation<=DIGIT_RECOGNITION_UNCERTAIN&&
    recognized.meaning_established==0&&
-   recognized.direct_address==addressed)recognition_available=1;
+   recognized.direct_address==addressed){
+  /* Recognition may describe context; it is never an authority to silence. */
+ }
  n=0;
   if(host->invoke_service(DIGIT_REASONING_SERVICE,rq,sizeof *rq,
          rr,sizeof *rr,&n)!=STNLABZ_MODULE_OK||
@@ -666,7 +668,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
  d.version_major=0;/* [AI:GPT-6 | 2026-10-17 02:49:54 UTC] */
- d.version_minor=3;d.version_patch=6;
+ d.version_minor=3;d.version_patch=7;
  /* [End AI:GPT-6] */
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
