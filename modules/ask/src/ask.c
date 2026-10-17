@@ -220,17 +220,48 @@ static int same_statement(const char *a,const char *b){
  * guidance "response like", then select a quoted reply after it. The learned
  * text owns both vocabulary and reply; no feline phrases exist in source.
  * Exact normalized utterances only: discussing an example is not an invitation. */
+/* Compare full utterances with data-driven tolerance for elongated vowels
+ * and minor spelling edits. No language vocabulary is encoded here.
+ * Short tokens are exact; longer tokens allow at most one edit. */
+static size_t social_token(const char **cursor,char *out,size_t capacity){
+ const unsigned char *p=(const unsigned char *)*cursor;
+ size_t n=0;
+ while(*p&&!isalnum(*p))p++;
+ while(*p&&isalnum(*p)){
+  unsigned char c=(unsigned char)tolower(*p++);
+  if(n+1>=capacity)return 0;
+  /* Collapse runs beyond two characters, preserving intentional doubles. */
+  if(n>=2&&out[n-1]==(char)c&&out[n-2]==(char)c)continue;
+  out[n++]=(char)c;
+ }
+ out[n]=0;*cursor=(const char *)p;
+ return n;
+}
+static int social_token_close(const char *a,const char *b){
+ size_t i=0,j=0,edits=0,na=strlen(a),nb=strlen(b);
+ if(na==nb&&!strcmp(a,b))return 1;
+ if(na<5||nb<5||(na>nb?na-nb:nb-na)>1)return 0;
+ while(i<na&&j<nb){
+  if(a[i]==b[j]){i++;j++;continue;}
+  if(++edits>1)return 0;
+  if(na>nb)i++;
+  else if(nb>na)j++;
+  else{i++;j++;}
+ }
+ return edits+(i<na||j<nb)<=1;
+}
 static int social_example_equal(const char *message,const char *begin,size_t length){
- size_t a=0,b=strlen(message);
- while(a<b&&isspace((unsigned char)message[a]))a++;
- while(b>a&&(isspace((unsigned char)message[b-1])||
-  message[b-1]=='!'||message[b-1]=='?'||message[b-1]=='.'))b--;
- while(length&&(isspace((unsigned char)begin[length-1])||
-  begin[length-1]=='!'||begin[length-1]=='?'||begin[length-1]=='.'))length--;
- if(b-a!=length||!length)return 0;
- while(length--)if(tolower((unsigned char)message[a++])!=
-                     tolower((unsigned char)*begin++))return 0;
- return 1;
+ char example[513],a[80],b[80];
+ const char *m=message,*p=example;
+ if(!message||!begin||!length||length>=sizeof example)return 0;
+ memcpy(example,begin,length);example[length]=0;
+ for(;;){
+  size_t na=social_token(&m,a,sizeof a),nb=social_token(&p,b,sizeof b);
+  if(!na||!nb)return !na&&!nb;
+  if(!social_token_close(a,b))return 0;
+  /* The full message must match, not simply contain an example. */
+
+ }
 }
 static int learned_social_reply(const char *message,const char *lesson,
  char *out,size_t capacity,size_t *used){
@@ -581,7 +612,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
  d.version_major=0;/* [AI:GPT-6 | 2026-10-17 02:49:54 UTC] */
- d.version_minor=3;d.version_patch=3;
+ d.version_minor=3;d.version_patch=4;
  /* [End AI:GPT-6] */
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
