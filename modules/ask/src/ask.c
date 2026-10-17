@@ -10,6 +10,7 @@
 #include "research_contract.h"
 #include "observation.h"
 #include "reasoning.h"
+#include "recognition.h"
 #include "socials.h"
 static const stnlabz_module_host_t *host;
 /* In IRC, a non-channel target is a private conversation addressed to Digit. */
@@ -325,6 +326,9 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
  digit_reasoning_request_t *rq=NULL;
  digit_reasoning_response_t *rr=NULL;
  digit_corpus_lookup_response_t *cr=NULL;
+ digit_recognition_request_t *recognition=NULL;
+ digit_recognition_response_t recognized={0};
+ int recognition_available=0;
  size_t n=0,i;
  char *out=output;
  int result=0,corpus_ok=0;
@@ -340,7 +344,8 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
  rq=calloc(1,sizeof *rq);
  rr=calloc(1,sizeof *rr);
  cr=calloc(1,sizeof *cr);
- if(!history||!rq||!rr||!cr)goto done;
+ recognition=calloc(1,sizeof *recognition);
+ if(!history||!rq||!rr||!cr||!recognition)goto done;
  oq.version=DIGIT_OBSERVATION_READ_VERSION;
  snprintf(oq.transport,sizeof oq.transport,"%s",ctx->transport);
  snprintf(oq.channel,sizeof oq.channel,"%s",ctx->channel);
@@ -380,7 +385,29 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
    snprintf(rq->corpus_text,sizeof rq->corpus_text,"%s",cr->text);
   }else if(cr->found)rq->corpus_state=DIGIT_REASONING_UNAVAILABLE;
  }else rq->corpus_state=DIGIT_REASONING_UNAVAILABLE;
- if(host->invoke_service(DIGIT_REASONING_SERVICE,rq,sizeof *rq,
+ /* Read-only Recognition runs on the same scoped evidence used by Reasoning.
+  * Relevance is not semantic understanding and cannot grant permission to
+  * speak. On absence/failure the accepted pre-integration path remains. */
+ recognition->version=DIGIT_RECOGNITION_VERSION;
+ snprintf(recognition->message,sizeof recognition->message,"%s",message);
+ if(rq->corpus_state==DIGIT_REASONING_PRESENT)
+  snprintf(recognition->corpus_text,sizeof recognition->corpus_text,"%s",rq->corpus_text);
+ for(i=0;i<rq->observation_count&&
+          recognition->history_count<DIGIT_RECOGNITION_HISTORY_MAX;i++){
+  snprintf(recognition->history[recognition->history_count],
+   sizeof recognition->history[0],"%.*s",
+   (int)sizeof recognition->history[0]-1,rq->observations[i].text);
+  recognition->history_count++;
+ }
+ n=0;
+ if(host->invoke_service(DIGIT_RECOGNITION_SERVICE,recognition,sizeof *recognition,
+   &recognized,sizeof recognized,&n)==STNLABZ_MODULE_OK&&
+   n==sizeof recognized&&recognized.version==DIGIT_RECOGNITION_VERSION&&
+   recognized.corpus_relation<=DIGIT_RECOGNITION_UNCERTAIN&&
+   recognized.conversation_relation<=DIGIT_RECOGNITION_UNCERTAIN&&
+   recognized.meaning_established==0)recognition_available=1;
+ n=0;
+  if(host->invoke_service(DIGIT_REASONING_SERVICE,rq,sizeof *rq,
          rr,sizeof *rr,&n)!=STNLABZ_MODULE_OK||
     n!=sizeof *rr||rr->version!=DIGIT_REASONING_VERSION)goto done;
  /* Reasoning determines response eligibility for direct invocation.
@@ -396,6 +423,11 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
     if(learned_social_reply(message,cr->text,out,capacity,used)){
      result=1;
     }else if(strstr(cr->text,"response like")){
+     out[0]=0;*used=1;result=1;
+    }else if(recognition_available&&
+       recognized.corpus_relation!=DIGIT_RECOGNITION_RELATED&&
+       recognized.conversation_relation!=DIGIT_RECOGNITION_RELATED){
+     /* Neither evidence source is related: do not recite a Corpus fact. */
      out[0]=0;*used=1;result=1;
     }else if(!ambient_fact(cr->text,out,capacity,used)){
      out[0]=0;*used=1;
@@ -427,7 +459,7 @@ static stnlabz_module_result_t contextual_answer(const digit_ask_context_t *ctx,
   out[0]=0;*used=1;result=1;
  }
 done:
- free(history);free(rq);free(rr);free(cr);
+ free(history);free(rq);free(rr);free(cr);free(recognition);
  return result?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_NOT_FOUND;
 }
 
@@ -635,7 +667,7 @@ const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
  static stnlabz_module_descriptor_t d;
  memset(&d,0,sizeof d);snprintf(d.id,sizeof d.id,"ask");snprintf(d.name,sizeof d.name,"Digit Ask");
  d.version_major=0;/* [AI:GPT-6 | 2026-10-17 02:49:54 UTC] */
- d.version_minor=3;d.version_patch=5;
+ d.version_minor=3;d.version_patch=6;
  /* [End AI:GPT-6] */
  d.required_core_api_major=STNLABZ_MODULE_API_MAJOR;d.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  d.qualify=qualify;d.start=start;d.stop=stop;return &d;
