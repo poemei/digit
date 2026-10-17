@@ -27,11 +27,12 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
   const digit_recognition_request_t *q=req;
   digit_recognition_response_t *v=reply;
   if(size!=sizeof *q||cap<sizeof *v||
-     q->version!=DIGIT_RECOGNITION_VERSION||
+     q->version!=DIGIT_RECOGNITION_VERSION||!q->sender[0]||
      !q->message[0]||q->history_count>DIGIT_RECOGNITION_HISTORY_MAX)
    return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
   recognition_calls++;
   memset(v,0,sizeof *v);v->version=DIGIT_RECOGNITION_VERSION;
+  v->direct_address=q->addressed;
   v->corpus_relation=recognition_unrelated?
     DIGIT_RECOGNITION_UNCERTAIN:DIGIT_RECOGNITION_RELATED;
   v->conversation_relation=recognition_unrelated?
@@ -238,7 +239,7 @@ int main(void){
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return test_failure(__LINE__);
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hello"))return test_failure(__LINE__);
  if(handler("hi",3,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hi"))return test_failure(__LINE__);
- if(d->version_minor!=3||d->version_patch!=6)return test_failure(__LINE__);
+ if(d->version_minor!=3||d->version_patch!=7)return test_failure(__LINE__);
  if(socials_calls!=2||!strstr(out,"💚"))return test_failure(__LINE__);
  socials_available=0;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
