@@ -164,6 +164,13 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t si
    strcpy(result->source,"fixture-mission");
    strcpy(result->text,"Digit's mission is to support authorized STN-LABZ operations.");
   }
+  if(!strcasecmp(q->term,"Das is goods")||!strcasecmp(q->term,"Das is goods!")||
+     !strcasecmp(q->term,"Das")||!strcasecmp(q->term,"goods")){
+   result->found=1;
+   strcpy(result->id,"LEARN-SOCIAL");
+   strcpy(result->source,"operator");
+   strcpy(result->text,"\"Das is goods\", \"des\", \"demz\", and similar playful spellings can express approval. In casual conversation, Digit may acknowledge such expressions with a short, playful response like \"Mew!\", \"Purrfect!\", or \"Digit cat approves.\"");
+  }
   if(!strcasecmp(q->term,"ChAoS MVC Net")){
    selected_subject=1;
    result->found=1;
@@ -210,7 +217,7 @@ int main(void){
  if(strcmp(d->id,"ask")||d->qualify(&q)!=STNLABZ_MODULE_OK||d->start(&h)!=STNLABZ_MODULE_OK||!handler)return test_failure(__LINE__);
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hello"))return test_failure(__LINE__);
  if(handler("hi",3,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||!strstr(out,"hi"))return test_failure(__LINE__);
- if(d->version_minor!=3||d->version_patch!=2)return test_failure(__LINE__);
+ if(d->version_minor!=3||d->version_patch!=3)return test_failure(__LINE__);
  if(socials_calls!=2||!strstr(out,"💚"))return test_failure(__LINE__);
  socials_available=0;
  if(handler("hello",6,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
@@ -286,6 +293,18 @@ int main(void){
   strcpy(context.question,"Can Digit explain a technology that Corpus doesn't contain?");
   if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
      !strstr(out,"clarify"))return test_failure(__LINE__);
+  /* Shared IRC/Slack regression: learned playful example is a reply,
+     never a recital of the definition or an answer to someone discussing it. */
+  strcpy(context.question,"Das is goods!");
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     strcmp(out,"Mew!")||strstr(out,"playful spellings"))return test_failure(__LINE__);
+  strcpy(context.transport,"slack");strcpy(context.channel,"T1:C1");
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     strcmp(out,"Mew!"))return test_failure(__LINE__);
+  strcpy(context.question,"is digit even seeing Das is goods!");
+  if(handler(&context,sizeof context,out,sizeof out,&used,NULL)!=STNLABZ_MODULE_OK||
+     out[0]!=0||used!=1)return test_failure(__LINE__);
+  strcpy(context.transport,"irc");strcpy(context.channel,"#stn-labz");
   /* Ambient question: Corpus resolves the multiword meeting subject without
      claiming Digit is prepared. No explicit bot address is present. */
   ambient_fixture=1;
