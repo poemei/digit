@@ -1,0 +1,3 @@
+#ifndef STNLABZ_AGENT_ROOT_H
+#define STNLABZ_AGENT_ROOT_H
+#endif
