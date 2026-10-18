@@ -25,7 +25,10 @@ static int putval(char *dst,size_t cap,const char *src){
 }
 static int read_env(config_t *c){
  FILE *f;char line[1024];
- if(!c)return 0;memset(c,0,sizeof *c);
+ /* [AI:GPT-6 | 2026-10-18 23:52:44 UTC] */
+ if(!c)return 0;
+ memset(c,0,sizeof *c);
+ /* [End AI:GPT-6] */
  f=fopen(IRC_ENV_PATH,"r");if(!f)return 0;
  while(fgets(line,sizeof line,f)){
   char *p=line,*eq,*end;
@@ -61,7 +64,10 @@ static int connect_tls(const config_t *c,SSL_CTX **ctx_out,SSL **ssl_out){
  for(a=addresses;a;a=a->ai_next){
   fd=socket(a->ai_family,a->ai_socktype,a->ai_protocol);
   if(fd>=0&&connect(fd,a->ai_addr,a->ai_addrlen)==0)break;
-  if(fd>=0)close(fd);fd=-1;
+  /* [AI:GPT-6 | 2026-10-18 23:52:44 UTC] */
+  if(fd>=0)close(fd);
+  fd=-1;
+  /* [End AI:GPT-6] */
  }
  freeaddrinfo(addresses);if(fd<0)return -1;
  ctx=SSL_CTX_new(TLS_client_method());
@@ -74,7 +80,12 @@ static int connect_tls(const config_t *c,SSL_CTX **ctx_out,SSL **ssl_out){
     SSL_connect(ssl)!=1||SSL_get_verify_result(ssl)!=X509_V_OK)goto fail;
  *ctx_out=ctx;*ssl_out=ssl;return fd;
 fail:
- if(ssl)SSL_free(ssl);if(ctx)SSL_CTX_free(ctx);close(fd);return -1;
+ /* [AI:GPT-6 | 2026-10-18 23:52:44 UTC] */
+ if(ssl)SSL_free(ssl);
+ if(ctx)SSL_CTX_free(ctx);
+ close(fd);
+ return -1;
+ /* [End AI:GPT-6] */
 }
 static int sasl_payload(SSL *ssl,const config_t *c){
  unsigned char plain[512];char encoded[720],line[750];size_t a=strlen(c->account),p=strlen(c->password);
@@ -98,7 +109,10 @@ static int handle_message(SSL *ssl,const config_t *c,char *line){
  command=space+1;
  if(strncmp(command,"PRIVMSG ",8))return 1;
  target=command+8;space=strchr(target,' ');if(!space)return 1;*space++=0;
- if(*space!=':')return 1;body=space+1;
+ /* [AI:GPT-6 | 2026-10-18 23:52:44 UTC] */
+ if(*space!=':')return 1;
+ body=space+1;
+ /* [End AI:GPT-6] */
  n=strlen(c->nick);
  if(!strcasecmp(target,c->nick)){
   snprintf(request,sizeof request,"%s",body);target=sender;
@@ -142,14 +156,20 @@ static int irc_session(const config_t *c){
   }else if(strstr(line," 904 ")||strstr(line," 905 ")||strstr(line," 906 ")||strstr(line," 907 "))break;
   else if(authed&&!joined&&strstr(line," 001 ")){
    snprintf(nickline,sizeof nickline,"%s",c->channel);
-   if(!sendfmt(ssl,"JOIN",nickline))break;joined=1;
+   /* [AI:GPT-6 | 2026-10-18 23:52:44 UTC] */
+   if(!sendfmt(ssl,"JOIN",nickline))break;
+   joined=1;
+   /* [End AI:GPT-6] */
   }else if(authed&&strstr(line," PRIVMSG ")){
    if(!handle_message(ssl,c,line))break;
   }
  }
 done:
  if(ssl){SSL_shutdown(ssl);SSL_free(ssl);}
- if(ctx)SSL_CTX_free(ctx);close(fd);
+ /* [AI:GPT-6 | 2026-10-18 23:52:44 UTC] */
+ if(ctx)SSL_CTX_free(ctx);
+ close(fd);
+ /* [End AI:GPT-6] */
  return authed&&joined;
 }
 int digit_irc_run(void){
