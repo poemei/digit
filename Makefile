@@ -1,21 +1,23 @@
+# [AI:GPT-6 | 2026-10-18 23:50:00 UTC]
 CC ?= cc
 CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Wpedantic
-CPPFLAGS += -ICore -ICore/stnlabz_abi -IModel -IView -IController
+CPPFLAGS += -Icore -Icore/stnlabz_abi -Imodels -IViews -Icontrollers
 LDLIBS += -lssl -lcrypto -ldl
 TARGET := bin/digit
-SOURCES := Core/agent_root.c Core/identity_digit.c Model/report.c View/irc_render.c Controller/irc.c Controller/main.c
-CORE_SOURCES := $(filter-out Core/main.c,$(wildcard Core/*.c)) $(wildcard Core/stnlabz_abi/*.c)
+SOURCES := core/agent_root.c core/identity_digit.c models/report.c Views/irc_render.c controllers/irc.c controllers/main.c
+CORE_SOURCES := $(filter-out core/main.c,$(wildcard core/*.c)) $(wildcard core/stnlabz_abi/*.c)
 CORE_TARGET := bin/digit-core
 .PHONY: all clean test
 all: $(TARGET) $(CORE_TARGET)
 $(TARGET): $(SOURCES)
 	@mkdir -p bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(SOURCES) -o $(TARGET) $(LDLIBS)
-$(CORE_TARGET): $(CORE_SOURCES) Core/main.c
+$(CORE_TARGET): $(CORE_SOURCES) core/main.c
 	@mkdir -p bin
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(CORE_SOURCES) Core/main.c -o $(CORE_TARGET) $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(CORE_SOURCES) core/main.c -o $(CORE_TARGET) $(LDLIBS)
 test: $(TARGET) $(CORE_TARGET)
-	$(CC) $(CPPFLAGS) $(CFLAGS) Core/agent_root.c Core/identity_digit.c Model/report.c View/irc_render.c tests/test_core.c -o bin/test_core
+	$(CC) $(CPPFLAGS) $(CFLAGS) core/agent_root.c core/identity_digit.c models/report.c Views/irc_render.c test/test_core.c -o bin/test_core
 	./bin/test_core
 clean:
 	rm -rf bin
+# [End AI:GPT-6]
