@@ -2,7 +2,7 @@
 #include "agent_root.h"
 int stnlabz_agent_root_validate(const stnlabz_agent_root_t *r){
  static const char *const orders[]={"Remain at your assigned mission.","Follow established policies and authorized instructions.","Report anything outside your authority to the appropriate next level of authority."};
- static const char *const ids[]={"poe","laurie","ezra"};
+ static const char *const ids[]={"poemei","laurie_vo","ezra"};
  static const char *const rel[]={"mother","aunt","younger sister"};
  static const char *const names[]={"Momma","Auntie","Kitty Sister"};
  unsigned i;
