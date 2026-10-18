@@ -7,7 +7,10 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
+/* [AI:GPT-6 | 2026-10-18 23:53:12 UTC] */
 #include <openssl/sha.h>
+#include <openssl/evp.h>
+/* [End AI:GPT-6] */
 #include "core_hotload.h"
 #include "core_activation.h"
 #include "logging.h"
@@ -28,17 +31,26 @@ struct stnlabz_hotload {
  observed_t *seen;
  size_t count,capacity;
 };
+/* [AI:GPT-6 | 2026-10-18 23:53:12 UTC] */
 static int digest(const char *path,char out[65]){
  unsigned char bytes[16384],hash[SHA256_DIGEST_LENGTH];
- SHA256_CTX ctx;ssize_t n;size_t i;int fd=open(path,O_RDONLY|O_CLOEXEC);
+ EVP_MD_CTX *ctx=NULL;unsigned int hash_len=0;
+ ssize_t n;size_t i;int fd=open(path,O_RDONLY|O_CLOEXEC),ok=0;
  if(fd<0)return 0;
- if(!SHA256_Init(&ctx)){close(fd);return 0;}
- while((n=read(fd,bytes,sizeof bytes))>0)SHA256_Update(&ctx,bytes,(size_t)n);
- if(n<0||!SHA256_Final(hash,&ctx)){close(fd);return 0;}
- close(fd);
+ ctx=EVP_MD_CTX_new();
+ if(!ctx||EVP_DigestInit_ex(ctx,EVP_sha256(),NULL)!=1)goto done;
+ while((n=read(fd,bytes,sizeof bytes))>0)
+  if(EVP_DigestUpdate(ctx,bytes,(size_t)n)!=1)goto done;
+ if(n<0||EVP_DigestFinal_ex(ctx,hash,&hash_len)!=1||
+    hash_len!=SHA256_DIGEST_LENGTH)goto done;
  for(i=0;i<sizeof hash;i++)sprintf(out+2*i,"%02x",hash[i]);
- out[64]=0;return 1;
+ out[64]=0;ok=1;
+done:
+ EVP_MD_CTX_free(ctx);
+ close(fd);
+ return ok;
 }
+/* [End AI:GPT-6] */
 static observed_t *find(stnlabz_hotload_t *w,const char *id){
  size_t i;for(i=0;i<w->count;i++)if(!strcmp(w->seen[i].id,id))return &w->seen[i];
  return NULL;
@@ -78,28 +90,41 @@ static int newer(const observed_t *o,const stnlabz_module_descriptor_t *d){
  if(d->version_minor!=o->minor)return d->version_minor>o->minor;
  return d->version_patch>o->patch;
 }
+/* [AI:GPT-6 | 2026-10-18 23:53:12 UTC] */
 static int snapshot_candidate(const char *path,char *staged,size_t cap,
  char sha[65]){
- char buf[16384];int in,out;ssize_t n;size_t off;SHA256_CTX ctx;
- unsigned char hash[SHA256_DIGEST_LENGTH];size_t i;
+ char buf[16384];int in=-1,out=-1;ssize_t n,k;size_t off,i;
+ EVP_MD_CTX *ctx=NULL;unsigned int hash_len=0;
+ unsigned char hash[SHA256_DIGEST_LENGTH];int ok=0;
  if(snprintf(staged,cap,"%s.candidate.XXXXXX",path)>=(int)cap)return 0;
  out=mkstemp(staged);if(out<0)return 0;
  in=open(path,O_RDONLY|O_CLOEXEC);
- if(in<0){close(out);unlink(staged);return 0;}
- if(!SHA256_Init(&ctx)){close(in);close(out);unlink(staged);return 0;}
+ if(in<0)goto done;
+ ctx=EVP_MD_CTX_new();
+ if(!ctx||EVP_DigestInit_ex(ctx,EVP_sha256(),NULL)!=1)goto done;
  while((n=read(in,buf,sizeof buf))>0){
-  SHA256_Update(&ctx,buf,(size_t)n);
+  if(EVP_DigestUpdate(ctx,buf,(size_t)n)!=1)goto done;
   for(off=0;off<(size_t)n;){
-   ssize_t k=write(out,buf+off,(size_t)n-off);
-   if(k<=0){close(in);close(out);unlink(staged);return 0;}
+   k=write(out,buf+off,(size_t)n-off);
+   if(k<=0)goto done;
    off+=(size_t)k;
   }
  }
- close(in);
- if(n<0||close(out)!=0||!SHA256_Final(hash,&ctx)){unlink(staged);return 0;}
+ if(n<0)goto done;
+ if(close(out)!=0){out=-1;goto done;}
+ out=-1;
+ if(EVP_DigestFinal_ex(ctx,hash,&hash_len)!=1||
+    hash_len!=SHA256_DIGEST_LENGTH)goto done;
  for(i=0;i<sizeof hash;i++)sprintf(sha+i*2,"%02x",hash[i]);
- sha[64]=0;return 1;
+ sha[64]=0;ok=1;
+done:
+ EVP_MD_CTX_free(ctx);
+ if(in>=0)close(in);
+ if(out>=0)close(out);
+ if(!ok)unlink(staged);
+ return ok;
 }
+/* [End AI:GPT-6] */
 static void replacement(stnlabz_hotload_t *w,const char *id,const char *path,
  observed_t *original){
  char staged[1120],sha[65];stnlabz_module_loader_t candidate;
@@ -385,5 +410,9 @@ void stnlabz_hotload_poll(stnlabz_hotload_t *w){
  }
 }
 void stnlabz_hotload_destroy(stnlabz_hotload_t *w){
- if(!w)return;free(w->seen);free(w);
+ /* [AI:GPT-6 | 2026-10-18 23:53:12 UTC] */
+ if(!w)return;
+ free(w->seen);
+ free(w);
+ /* [End AI:GPT-6] */
 }
