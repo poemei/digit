@@ -12,3 +12,6 @@
 
 ## Status
 Pending Core rebuild and testing of core requirements in a secure IRC Environment in #stn-Labz on **Libera.Chat**
+
+## Law
+Nothing in Digits Core gets changed, altered or updated without direct consent from the ***Director** of the **Digit Project** once it is established.
