@@ -139,7 +139,6 @@ static int irc_session(const config_t *c){
    if(!sasl_payload(ssl,c))break;
   }else if(strstr(line," 903 ")){
    authed=1;if(!sendline(ssl,"CAP END\r\n"))break;
-   if(!joined){if(!sendfmt(ssl,"JOIN",c->channel))break;joined=1;}
   }else if(strstr(line," 904 ")||strstr(line," 905 ")||strstr(line," 906 ")||strstr(line," 907 "))break;
   else if(authed&&!joined&&strstr(line," 001 ")){
    snprintf(nickline,sizeof nickline,"%s",c->channel);
