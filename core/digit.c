@@ -109,6 +109,14 @@ static stnlabz_module_result_t digit_service(const char *name,
         !memchr(msg->target, 0, sizeof msg->target) ||
         !memchr(msg->message, 0, sizeof msg->message))
         return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+    /* [AI:GPT-6 | 2026-10-18] Only module-management requests enter
+       the privileged command path. Ordinary conversation is not an
+       authorization failure; the response pipeline is not wired yet. */
+    if (strcmp(msg->message, "show modules") &&
+        strncmp(msg->message, "activate module", 15) &&
+        strncmp(msg->message, "deactivate module", 17))
+        return STNLABZ_MODULE_OK; /* no response; IRC ignores used == 0 */
+
     /* 'target' is the originating channel/nick. Only direct messages
        are passed with target equal to sender by the IRC adapter. */
     if (strcmp(msg->target, msg->sender) ||
