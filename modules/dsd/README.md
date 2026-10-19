@@ -1,4 +1,4 @@
-# Digit Developer Self-Diagnostics (DSD) 0.4.0
+# Digit Developer Self-Diagnostics (DSD) 0.4.1
 
 An independent ABI 1.5 module providing bounded, read-only, evidence-led
 trace correlation. **Source candidate; operator acceptance outstanding.**
@@ -110,3 +110,18 @@ those modules; do not claim an end-to-end trace from a synthetic probe.
 
 The DM does not accept public-channel DSD commands. Source edits are not
 deployment or qualification evidence. Operator end-to-end acceptance is pending.
+
+## Private `show trace` command (DSD 0.4.1 / IRC 0.2.16)
+
+`show trace` returns the previous authenticated account-scoped DM request's
+retained trace without becoming the next trace. It is admitted by IRC only in
+private messages. It reports actual recorded operations, statuses and source
+locations. It does not invent internal Core, module or database spans that
+did not execute or were not instrumented. `diagnose my last request` remains
+the explanatory report. Neither command is accepted in public channels.
+
+A `digit.message` result with no reply cannot reveal absent downstream work.
+The independent SQLite3 schema probe in the diagnosis is not part of the
+original request's execution trail. A complete module-to-database trace
+requires an actual running conversational service chain; the current Core
+handler does not route ordinary conversation to one. Core is unchanged.
