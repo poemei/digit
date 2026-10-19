@@ -1,17 +1,35 @@
 # Digit — Architectural Rebuild
 
-## Current operator-reported conversational status (2026-10-16/17)
+## Architecture and authority
 
-**Scope:** This repository's Digit rebuild under Direct Supervision of the Creator of STN-Labz (Poe Mei). This section supersedes older conversational *status descriptions* below, but does not revise previously accepted evidence, architecture, mission authority, or historical development records.
+Digit follows the ChAoS MVC structure with a **Core**, **Model**, **View**, and **Controller** flow. Core responsibilities live in `core/`; standard `includes/` and `src/` directory structures are not permitted by this project.
 
-- **Digit Core:** unchanged; agent release remains **1.0.0**.
-- Digit runs in the same structure of the **ChAoS MVC** with a **CORE** and then a **Model**, **View**, **Controller** flow
-- The Core is what is core to digit and stored in core
-- The MVC follows a standrd MVD directory structure
-- Standard Includes/src directories are **NOT** allowed.
+**Core change control:** Nothing in Digit's Core may be changed, altered, or updated without direct consent from the Director of the Digit Project. Core qualification results do not replace this requirement.
 
-## Status
-Pending Core rebuild and testing of core requirements in a secure IRC Environment in #stn-Labz on **Libera.Chat**
+## Core verification status (2026-10-19)
+
+**Current test-suite milestone: 20/20; all eight configured suites passing.**
+
+The operator supplied successful `make test` output documenting 20 tracked Core coverage milestones. Five newer suites produced **41 positive assertions passed, 31 negative assertions passed, and zero failures**. Coverage includes Core authorization, lifecycle integrity, service registry protection, hotload version guards, and management-command handling.
+
+These are **scoped qualification results**, not proof of universal reliability or completed live hotload rollback. See [Core Qualification — Evidence Record](docs/CORE_QUALIFICATION.md) for exact receipts, reproduction steps, and unverified boundaries.
+
+```sh
+make test
+```
+
+## Runtime observations
+
+Operator-provided IRC output previously established that Digit's seven installed modules were ACTIVE with reported qualification counts and displayed their loaded descriptor versions. Separate live receipts demonstrated IRC observation persistence to SQLite and S2 retrieving Rictus intelligence observation `#268` for IRC reporting.
+
+These runtime observations are distinct from Core's isolated qualification tests.
+
+## Historical conversational status (2026-10-16/17)
+
+The earlier project status described pending Core rebuild and Core testing in the secure IRC environment `#stn-labz` on Libera.Chat. That statement is **historical**; the 2026-10-19 qualification milestone above supersedes its testing-progress status.
+
+The earlier records stated that Digit's agent release remained **1.0.0** and that Core was unchanged at that time. This historical statement does not independently verify the current installed Core binary or release version.
 
 ## Law
-Nothing in Digits Core gets changed, altered or updated without direct consent from the ***Director** of the **Digit Project** once it is established.
+
+The Core remains governed by explicit human director consent. Tests, documentation, and observations are evidence—not permission to deploy or alter Core.
