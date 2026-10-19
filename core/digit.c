@@ -80,7 +80,7 @@ static stnlabz_module_result_t digit_service(const char *name,
             action = 2;
         }
         if (!id || !*id || strlen(id) >= sizeof pending_id ||
-            strchr(id, ' ') || strchr(id, '\\r') || strchr(id, '\\n')) {
+            strchr(id, ' ') || strchr(id, '\r') || strchr(id, '\n')) {
             snprintf(reply, sizeof reply,
                 "Commands: show modules | activate module <id> | deactivate module <id>");
         } else if (atomic_flag_test_and_set(&command_lock)) {
