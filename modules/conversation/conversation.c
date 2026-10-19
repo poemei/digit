@@ -201,10 +201,7 @@ static stnlabz_module_result_t listen_message(const message_t *m,char *out,
  if(strcmp(m->target,"#stn-labz"))return STNLABZ_MODULE_OK;
  if(last_passive_reply&&time(NULL)>=last_passive_reply&&
     time(NULL)-last_passive_reply<120)return STNLABZ_MODULE_OK;
- /* A learner expressing a problem is a necessary, not sufficient, trigger. */
- if(!topic_present(m->message,"forgetting")&&
-    !topic_present(m->message,"struggling")&&
-    !topic_present(m->message,"confused"))return STNLABZ_MODULE_OK;
+ /* Ordinary channel conversation is eligible for participation. */
  snprintf(request.channel,sizeof request.channel,"%s",m->target);
  if(api->invoke_service(DIGIT_OBSERVATION_RECENT_SERVICE,&request,
     sizeof request,&history,sizeof history,&read)!=STNLABZ_MODULE_OK||
@@ -409,7 +406,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="conversation",.name="Conversation knowledge retrieval",
- .version_major=0,.version_minor=4,.version_patch=11,
+ .version_major=0,.version_minor=4,.version_patch=12,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
