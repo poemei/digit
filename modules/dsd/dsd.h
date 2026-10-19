@@ -5,6 +5,9 @@
 #define DIGIT_DSD_RECORD_SERVICE "digit.dsd.record"
 #define DIGIT_DSD_DIAGNOSE_SERVICE "digit.dsd.diagnose"
 #define DIGIT_DSD_COMMAND_SERVICE "digit.dsd.command"
+/* Bind/clear request trace on the current dispatch thread; 0 clears. */
+#define DIGIT_DSD_BIND_SERVICE "digit.dsd.bind"
+#define DIGIT_DSD_CURRENT_SERVICE "digit.dsd.current"
 #define DIGIT_DSD_COMMAND_MAX 128
 #define DIGIT_DSD_TEXT_MAX 480
 #define DIGIT_DSD_MAX_EVENTS 32
