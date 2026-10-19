@@ -169,22 +169,42 @@ static stnlabz_module_result_t service(const void *request,size_t request_size,
  return answer((const message_t *)request,(char *)response,response_size,
                used,host);
 }
-/* Narrow evidence-grounded tutoring interaction. This is intentionally
- * not a general natural-language interpreter or permission to chatter. */
+/* Conservative topic-independent context matching, not full semantic
+ * understanding. Only a repeated learner difficulty can solicit a reply.
+ * Require two preceding references to a subject, a shared problem term,
+ * another speaker, and a corpus excerpt containing both. */
+static int candidate_word(const char *p,size_t n){
+ static const char *const stop[]={"that","this","with","from","have",
+  "your","just","when","where","what","there","they","their","would",
+  "could","should","please","about","remember","learning","learn",
+  "statement","keep","forgetting","forgot","again","into","here",
+  "the","and","for","you","are","not","but","our","was","were",
+  "who","how","can","does","did","she","him","her","its","too"};
+ size_t i;
+ if(n<3||n>32)return 0;
+ for(i=0;i<sizeof stop/sizeof stop[0];i++)
+  if(strlen(stop[i])==n&&!strncasecmp(stop[i],p,n))return 0;
+ return 1;
+}
 static stnlabz_module_result_t listen_message(const message_t *m,char *out,
  size_t cap,size_t *used,const stnlabz_module_host_t *api){
  digit_observation_recent_query_t request={0};
  digit_observation_recent_result_t history={0};
  digit_corpus_query_t query={0};
  digit_corpus_result_t evidence={0};
- size_t read=0,i;
- int topic=0,prior_problem=0,other_speaker=0;
+ char issue[64]={0},subject[64]={0};
+ word_t words[WORD_CAP];size_t read=0,i,j,k,count;
+ int other_speaker=0;
  if(used)*used=0;
  if(!message_valid(m)||!out||!cap||!used||!api||!api->invoke_service)
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  if(strcmp(m->target,"#stn-labz"))return STNLABZ_MODULE_OK;
  if(last_passive_reply&&time(NULL)>=last_passive_reply&&
     time(NULL)-last_passive_reply<120)return STNLABZ_MODULE_OK;
+ /* A learner expressing a problem is a necessary, not sufficient, trigger. */
+ if(!topic_present(m->message,"forgetting")&&
+    !topic_present(m->message,"struggling")&&
+    !topic_present(m->message,"confused"))return STNLABZ_MODULE_OK;
  snprintf(request.channel,sizeof request.channel,"%s",m->target);
  if(api->invoke_service(DIGIT_OBSERVATION_RECENT_SERVICE,&request,
     sizeof request,&history,sizeof history,&read)!=STNLABZ_MODULE_OK||
@@ -194,23 +214,45 @@ static stnlabz_module_result_t listen_message(const message_t *m,char *out,
   if(!memchr(history.items[i].text,0,sizeof history.items[i].text)||
      !memchr(history.items[i].sender,0,sizeof history.items[i].sender))
    return STNLABZ_MODULE_OK;
- /* Fail closed if the last observation does not describe this exact turn. */
  if(strcmp(history.items[history.count-1].text,m->message)||
     (history.items[history.count-1].sender[0]&&
      strcasecmp(history.items[history.count-1].sender,m->sender)))
   return STNLABZ_MODULE_OK;
- for(i=0;i+1<history.count;i++){
-  if(topic_present(history.items[i].text,"PHP"))topic=1;
-  if(topic_present(history.items[i].text,"semicolon"))prior_problem=1;
-  if(history.items[i].sender[0]&&strcasecmp(history.items[i].sender,m->sender))
-   other_speaker=1;
+ /* Choose the shared difficulty from current message and a different
+  * speaker's preceding turn. This prevents replying merely to a topic. */
+ count=tokens(m->message,words,WORD_CAP);
+ for(i=0;i<count&&!issue[0];i++){
+  size_t n=words[i].end-words[i].begin;
+  const char *p=m->message+words[i].begin;
+  char term[64];
+  if(!candidate_word(p,n)||n>=sizeof term)continue;
+  memcpy(term,p,n);term[n]=0;
+  for(j=0;j+1<history.count;j++)
+   if(history.items[j].sender[0]&&
+      strcasecmp(history.items[j].sender,m->sender)&&
+      topic_present(history.items[j].text,term)){
+    snprintf(issue,sizeof issue,"%s",term);other_speaker=1;break;
+   }
  }
- /* Limited first acceptance scenario: the learner explicitly describes a
-  * repeated obstacle following another speaker's discussion of PHP. */
- if(!topic||!prior_problem||!other_speaker||
-    !topic_present(m->message,"semicolon")||
-    !strstr(m->message,"forgetting"))return STNLABZ_MODULE_OK;
- snprintf(query.query,sizeof query.query,"PHP");
+ if(!issue[0]||!other_speaker)return STNLABZ_MODULE_OK;
+ /* Find an independently repeated technical subject in earlier turns.
+  * Subject must differ from the problem, rather than trusting one keyword. */
+ for(i=0;i+1<history.count&&!subject;i++){
+  count=tokens(history.items[i].text,words,WORD_CAP);
+  for(j=0;j<count&&!subject;j++){
+   size_t n=words[j].end-words[j].begin,repeat=0;
+   const char *p=history.items[i].text+words[j].begin;
+   char term[64];
+   if(!candidate_word(p,n)||n>=sizeof term)continue;
+   memcpy(term,p,n);term[n]=0;
+   if(!strcasecmp(term,issue))continue;
+   for(k=i+1;k+1<history.count;k++)
+    if(topic_present(history.items[k].text,term))repeat++;
+   if(repeat)snprintf(subject,sizeof subject,"%s",term);
+  }
+ }
+ if(!subject[0])return STNLABZ_MODULE_OK;
+ snprintf(query.query,sizeof query.query,"%s",subject);
  read=0;
  if(api->invoke_service(DIGIT_CORPUS_SEARCH_SERVICE,&query,sizeof query,
     &evidence,sizeof evidence,&read)!=STNLABZ_MODULE_OK||
@@ -220,8 +262,8 @@ static stnlabz_module_result_t listen_message(const message_t *m,char *out,
   const digit_corpus_hit_t *hit=&evidence.hits[i];
   char line[512];int length;
   if(!memchr(hit->excerpt,0,sizeof hit->excerpt)||
-     !topic_present(hit->excerpt,"PHP")||
-     !topic_present(hit->excerpt,"semicolon"))continue;
+     !topic_present(hit->excerpt,subject)||
+     !topic_present(hit->excerpt,issue))continue;
   length=snprintf(line,sizeof line,"%s, a quick reminder: %.170s",
       m->sender,hit->excerpt);
   if(length>0&&(size_t)length<cap&&length<350){
@@ -358,7 +400,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="conversation",.name="Conversation knowledge retrieval",
- .version_major=0,.version_minor=4,.version_patch=8,
+ .version_major=0,.version_minor=4,.version_patch=9,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
