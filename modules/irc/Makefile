@@ -21,7 +21,7 @@ $(TEST_TARGET): test/test_irc.c ../../core/stnlabz_abi/module.h
 
 test: $(TARGET) $(TEST_TARGET)
 	@./$(TEST_TARGET) ./$(TARGET)
-	@printf 'IRC qualification: PENDING (20 real tests required; activation prohibited)\n'
+	@printf 'IRC offline qualification checks completed; activation still requires Core authorization.\n'
 
 install: $(TARGET)
 	install -d "$(DESTDIR)$(MODULE_DIR)/bin"
