@@ -183,10 +183,27 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled
     if(!host_api||!host_api->invoke_service)return 1;
     if(host_api->invoke_service(IRC_INPUT_SERVICE,&input,sizeof input,
         response,sizeof response,&used)!=STNLABZ_MODULE_OK)return 1;
-    if(!reply_valid(response,used))return 1;
+    /* Core returns inventory records separated by ASCII RS (0x1e).
+     * IRC cannot transmit multiline payloads: send one PRIVMSG per record.
+     * Reject empty records and CR/LF injection; never interpret remote text
+     * as wire commands. */
+    if(!used || used>=sizeof response)return 1;
     response[used]=0;
-    k=snprintf(wire,sizeof wire,"PRIVMSG %s :%s\r\n",target,response);
-    return k>0&&(size_t)k<sizeof wire&&write_line(ssl,wire);
+    {
+        char *part=response;
+        char *end=response+used;
+        while(part<end) {
+            char *separator=memchr(part,0x1e,(size_t)(end-part));
+            size_t length=(size_t)((separator?separator:end)-part);
+            if(!reply_valid(part,length))return 1;
+            k=snprintf(wire,sizeof wire,"PRIVMSG %s :%.*s\r\n",
+                       target,(int)length,part);
+            if(k<=0||(size_t)k>=sizeof wire||!write_line(ssl,wire))
+                return 0;
+            part=separator?separator+1:end;
+        }
+    }
+    return 1;
 }
 static void session(const irc_config_t *cfg) {
     SSL_CTX *ctx=NULL;SSL *ssl=NULL;int fd,authed=0,joined=0,got_sasl=0,welcomed=0,tags_enabled=0;
