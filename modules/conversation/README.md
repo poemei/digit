@@ -1,29 +1,42 @@
-# Digit Conversation 0.3.0 — corpus retrieval
+# Digit Conversation 0.4.1 — read-only corpus retrieval and diagnostics
 
-Core dispatches ordinary digit.message requests to digit.conversation.
-Conversation uses the ABI 1.5 service digit.sqlite3.corpus_search to query
-the **existing** corpus_fts(text) index joined by rowid to corpus(id).
+Core sends ordinary `digit.message` requests to `digit.conversation`.
+Conversation calls the SQLite3 module's `digit.sqlite3.corpus_search` service,
+which queries the existing `corpus_fts` index joined to `corpus`.
+No direct database connection exists in Conversation.
 
-The database contains 48,362 corpus rows and the corpus_fts index also
-reports 48,362 entries (operator-supplied observations, 2026-10-19).
-No new tables, configuration files, migrations, or database writes.
+The operator has explicitly declared every entry of her existing corpus
+verified. SQLite3's read-only search service therefore returns a
+`operator-verified` display status for corpus hits, irrespective of legacy
+`corpus.verification_status` values. The stored column is **not modified**.
+Source record IDs and excerpts are retained in replies. The response is
+retrieval evidence, not an invented generated explanation.
 
-Requests are split into literal contiguous phrases; up to four terms are
-searched, longest phrase first, with no fixed conversational trigger words.
-SQLite3 builds a quoted FTS5 phrase, binds it as a SQL parameter, and
-returns a bounded set of corpus IDs, verification statuses and excerpts.
-The reply shows source evidence, not a fabricated generative explanation.
-A no-hit response means no matching phrase was found, not an empty database.
+**No additional configuration files. No INSERT/UPDATE/DELETE, no schema
+migrations, no database write services.** SQLite3 opens its database with
+`SQLITE_OPEN_READONLY`.
 
-No put/delete service is registered; the database is opened READONLY.
-The existing digit.sqlite3.get service remains for backward compatibility.
+## DSD
 
-Offline qualification tests use in-memory fixtures. Full DSD drill-down
-into individual retrieval attempts is not yet supported: IRC's current
-recording observes the outer digit.message result only.
+IRC binds a per-worker-thread trace ID through `digit.dsd.bind` before
+Core dispatch and clears it after the service returns. SQLite3 and Conversation
+can query `digit.dsd.current` and record observed search outcome events
+through `digit.dsd.record`. DSD displays bounded multi-stage traces for
+`show trace` / `diagnose my last request`, including lookup status, counts,
+source files and lines where the actual modules emit evidence. No Core or
+ABI 1.5 changes are needed.
 
-Operator-controlled verification:
+When DSD is absent, lookup services still work; internal evidence is simply
+unavailable. DSD only reports observed events; failed/missing instrumentation
+is not presented as a success.
+
+Build and qualify with:
+
+```sh
+make -C modules/dsd clean all test
 make -C modules/sqlite3 clean all test
 make -C modules/conversation clean all test
+make -C modules/irc clean all test
+```
 
-Live corpus lookup and deployment remain subject to operator acceptance.
+Deployment and live IRC acceptance are operator-controlled.
