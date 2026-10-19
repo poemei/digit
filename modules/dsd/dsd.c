@@ -108,6 +108,16 @@ static int diagnose(uint64_t trace_id,digit_dsd_result_t *out){
  }
  if(first_failure!=DIGIT_DSD_MAX_EVENTS){
   const digit_dsd_event_t *e=&out->events[first_failure];
+  /* This is the *observable service boundary*, not a diagnosis of Core
+   * internals. Do not attribute an internal method or defect without a
+   * distinct instrumented observation. */
+  if(!strcmp(e->status,"NO_RESPONSE") &&
+     !strcmp(e->module,"irc") &&
+     !strcmp(e->operation,"digit.message")){
+   snprintf(out->summary,sizeof out->summary,
+    "IRC accepted the private request and invoked digit.message; the service returned without a reply. Last observed location: %.150s:%u (%.60s). No downstream conversational stage was observed. Cause inside the handler is not established.",
+    e->file,e->line,e->method);
+  }else
   snprintf(out->summary,sizeof out->summary,
    "Observed failure boundary: %.47s.%.63s at %.159s:%u, operation %.63s, status %.63s (%.80s). Underlying cause not established.",
    e->module,e->method,e->file,e->line,e->operation,e->status,
@@ -248,6 +258,21 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  assertion(q,!valid_event(&bad),1);
  assertion(q,!diagnose(0,&out),1);
  assertion(q,diagnose(999,&out)&&!out.found,0);
+ /* Silent digit.message is a service-boundary observation, not proof
+  * of a faulty IRC transport or a particular Core line. */
+ {
+  digit_dsd_event_t silent={0};
+  silent.trace_id=55;silent.span_id=1;silent.line=347;silent.result=1;
+  snprintf(silent.module,sizeof silent.module,"irc");
+  snprintf(silent.method,sizeof silent.method,"incoming");
+  snprintf(silent.file,sizeof silent.file,"modules/irc/irc.c");
+  snprintf(silent.operation,sizeof silent.operation,"digit.message");
+  snprintf(silent.status,sizeof silent.status,"NO_RESPONSE");
+  assertion(q,record(&silent),0);
+  assertion(q,diagnose(55,&out) &&
+    strstr(out.summary,"service returned without a reply")!=NULL &&
+    strstr(out.summary,"Cause inside the handler is not established")!=NULL,0);
+ }
  for(i=0;i<DIGIT_DSD_MAX_EVENTS+2;i++){
   e.span_id=3+i;assertion(q,record(&e),0);
  }
@@ -306,7 +331,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="dsd",.name="Developer Self-Diagnostics",
- .version_major=0,.version_minor=3,.version_patch=1,
+ .version_major=0,.version_minor=3,.version_patch=2,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
