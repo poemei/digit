@@ -324,9 +324,26 @@ static void discover_new(stnlabz_hotload_t *w){
   }
   fclose(config);
   if(stat(binary,&st)||!S_ISREG(st.st_mode))continue;
+  /* Bound repeated failures for the same as-yet-unregistered binary.
+     Reconsider changed hashes immediately, or unchanged hashes after 60 s. */
+  if(!digest(binary,sha))continue;
+  {
+   observed_t *attempt=find(w,id);
+   if(attempt && !strcmp(attempt->rejected_sha,sha) &&
+      time(NULL)<attempt->retry_after)continue;
+  }
   if(!snapshot_candidate(binary,staged,sizeof staged,sha)){
    snprintf(detail,sizeof detail,"module=%s reason=new_module_snapshot_failed",id);
-   (void)stnlabz_log_event("MODULE","HOTLOAD_FAILED",detail);continue;
+   (void)stnlabz_log_event("MODULE","HOTLOAD_FAILED",detail);
+   {
+    stnlabz_module_descriptor_t placeholder={0};
+    observed_t *attempt;
+    if(remember(w,id,sha,&placeholder) && (attempt=find(w,id))) {
+     snprintf(attempt->rejected_sha,sizeof attempt->rejected_sha,"%s",sha);
+     attempt->retry_after=time(NULL)+60;
+    }
+   }
+   continue;
   }
   snprintf(detail,sizeof detail,"module=%s candidate_sha256=%s status=new_module",id,sha);
   (void)stnlabz_log_event("MODULE","HOTLOAD_DETECTED",detail);
