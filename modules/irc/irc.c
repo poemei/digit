@@ -15,6 +15,7 @@
 #include <strings.h>
 #include <sys/socket.h>
 #include <sys/time.h>
+#include <sys/select.h>
 #include <unistd.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -307,8 +308,22 @@ static void session(const irc_config_t *cfg) {
     while(!stopping) {
         char ch;int n;
         if(!s2_report(ssl,cfg,authed&&joined))break;
+        /* A readable socket or buffered TLS data is required before SSL_read.
+         * The one-second select timeout also drives periodic S2 polling when
+         * the channel is idle; transport reads remain on this worker. */
+        if(!SSL_pending(ssl)) {
+            fd_set readable;struct timeval tick={1,0};int ready;
+            FD_ZERO(&readable);FD_SET(fd,&readable);
+            ready=select(fd+1,&readable,NULL,NULL,&tick);
+            if(ready==0||(ready<0&&errno==EINTR))continue;
+            if(ready<0)break;
+        }
         n=SSL_read(ssl,&ch,1);
-        if(n<=0){if(SSL_get_error(ssl,n)==SSL_ERROR_WANT_READ)continue;break;}
+        if(n<=0){
+            int error=SSL_get_error(ssl,n);
+            if(error==SSL_ERROR_WANT_READ||error==SSL_ERROR_WANT_WRITE)continue;
+            break;
+        }
         if(ch=='\r')continue;
         if(ch!='\n') {
             if(used+1>=sizeof line){used=0;continue;}
@@ -431,7 +446,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=3,.version_patch=0,
+    .version_major=0,.version_minor=3,.version_patch=1,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
