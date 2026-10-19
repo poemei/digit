@@ -1,4 +1,4 @@
-/* Digit conversation: authenticated private knowledge retrieval via ABI 1.5.
+/* Digit conversation: read-only knowledge retrieval via ABI 1.5.
  * No initial command vocabulary, Core mutation, direct SQLite access,
  * inferred record schema, or synthetic DSD observations.
  */
@@ -11,7 +11,6 @@
 
 #define CONVERSATION_SERVICE "digit.conversation"
 #define SQLITE_GET_SERVICE "digit.sqlite3.get"
-#define AUTH_FILE "/opt/digit/state/auth/conversation.env"
 #define KEY_CAP 128
 #define VALUE_CAP 1024
 #define WORD_CAP 32
@@ -27,31 +26,6 @@ typedef struct {
 typedef struct {size_t begin,end;} word_t;
 
 static const stnlabz_module_host_t *host;
-static char permitted_account[128];
-
-static int safe_account(const char *s,size_t cap){
- size_t i;
- if(!s||!memchr(s,0,cap)||!s[0])return 0;
- for(i=0;s[i];i++){
-  unsigned char c=(unsigned char)s[i];
-  if(!isalnum(c)&&c!='_'&&c!='-'&&c!='.')return 0;
- }
- return 1;
-}
-static int auth_read(char *out,size_t cap){
- FILE *f=fopen(AUTH_FILE,"r");
- char line[256];
- size_t n;
- if(!f)return 0;
- if(!fgets(line,sizeof line,f)){fclose(f);return 0;}
- fclose(f);
- n=strcspn(line,"\r\n");
- if(n==sizeof line-1&&line[n])return 0;
- line[n]=0;
- if(!safe_account(line,sizeof line)||strlen(line)>=cap)return 0;
- memcpy(out,line,strlen(line)+1);
- return 1;
-}
 static int message_valid(const message_t *m){
  return m&&memchr(m->sender,0,sizeof m->sender)&&
   memchr(m->account,0,sizeof m->account)&&
@@ -107,11 +81,6 @@ static stnlabz_module_result_t answer(const message_t *m,char *response,
  if(used)*used=0;
  if(!message_valid(m)||!response||!capacity||!used||!api||
     !api->invoke_service)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
- /* Authorization is explicit, configured locally and never inferred from
-  * nicknames or user text. Public-channel lookup is prohibited. */
- if(!permitted_account[0]||strcmp(m->account,permitted_account)||
-    strcmp(m->sender,m->target))
-  return STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
  count=tokens(m->message,words,WORD_CAP);
  if(!count){
   const char *text="I couldn't identify a knowledge key in that message.";
@@ -179,11 +148,6 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  size_t used=0,n;
  if(!q)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(q,0,sizeof *q);
- check(q,safe_account("PoeMei",128),0);
- check(q,!safe_account("",128),1);
- check(q,!safe_account("a b",128),1);
- check(q,!safe_account(NULL,128),1);
- check(q,!safe_account("a\nb",128),1);
  check(q,tokens("explain STN-Labz",w,WORD_CAP)==2,0);
  check(q,key_candidate("explain STN-Labz",w,1,1,key)&&!strcmp(key,"STN-Labz"),0);
  check(q,key_candidate("explain STN-Labz",w,0,1,key)&&!strcmp(key,"explain.STN-Labz"),0);
@@ -207,8 +171,6 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  strcpy(m.message,"explain STN-Labz");
  check(q,answer(&m,response,sizeof response,&used,NULL)==
          STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
- /* Failure to configure an operator account never opens the database. */
- check(q,safe_account("ExampleAccount",128),0);
  check(q,service(NULL,0,response,sizeof response,&used,NULL)==
          STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
  check(q,!key_candidate("abc",w,2,1,key),1);
@@ -223,9 +185,6 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
 static stnlabz_module_result_t start(const stnlabz_module_host_t *api){
  if(host||!api||!api->invoke_service||!api->register_service||
     !api->unregister_service)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
- /* Missing or invalid configuration leaves the service closed. */
- memset(permitted_account,0,sizeof permitted_account);
- (void)auth_read(permitted_account,sizeof permitted_account);
  if(!api->register_service(CONVERSATION_SERVICE,service,NULL))
   return STNLABZ_MODULE_ERR_START_FAILED;
  host=api;
@@ -236,12 +195,11 @@ static stnlabz_module_result_t stop(void){
  if(!host->unregister_service(CONVERSATION_SERVICE,NULL))
   return STNLABZ_MODULE_ERR_STOP_FAILED;
  host=NULL;
- memset(permitted_account,0,sizeof permitted_account);
  return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="conversation",.name="Conversation knowledge retrieval",
- .version_major=0,.version_minor=1,.version_patch=0,
+ .version_major=0,.version_minor=2,.version_patch=0,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
