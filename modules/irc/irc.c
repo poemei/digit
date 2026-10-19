@@ -46,7 +46,7 @@ static time_t last_greeting;
  * names, credentials, hostmasks, or server-supplied text. stderr is already
  * connected to Digit's service output; no extra file or log sink is created. */
 static void irc_diag(const char *stage,const char *result) {
-    fprintf(stderr,"[digit:irc] %s %s\\n",stage,result);
+    fprintf(stderr,"[digit:irc] %s %s\n",stage,result);
     fflush(stderr);
 }
 static int assign(char *out,size_t cap,const char *in) {
@@ -329,12 +329,15 @@ static void session(const irc_config_t *cfg) {
             irc_diag("sasl","rejected");break;
         } else if(strstr(line," 001 ")) {
             irc_diag("welcome","received");welcomed=1;
-            if(authed&&!joined){if(!command(ssl,"JOIN",cfg->channel))break;joined=1;}
+            if(authed&&!joined){if(!command(ssl,"JOIN",cfg->channel)){irc_diag("join","send_failed");break;}irc_diag("join","sent");joined=1;}
         } else if(strstr(line," 433 ")) {
             irc_diag("nickname","in_use");
         } else if(strstr(line," 471 ")||strstr(line," 473 ")||
                   strstr(line," 474 ")||strstr(line," 475 ")) {
             irc_diag("join","server_rejected");
+        } else if(authed&&joined&&strstr(line," JOIN ")&&strstr(line,cfg->nick)) {
+            irc_diag("join","event_received");
+            if(!join_greeting(ssl,cfg,line,tags_enabled,joined))break;
         } else if(authed&&joined&&strstr(line," JOIN ")) {
             if(!join_greeting(ssl,cfg,line,tags_enabled,joined))break;
         } else if(authed&&strstr(line," PRIVMSG ")) {
