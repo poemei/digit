@@ -182,6 +182,43 @@ static stnlabz_module_result_t observation_insert(
  sqlite3_finalize(stmt);
  return rc==SQLITE_DONE?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
 }
+/* Bounded, read-only IRC context; exact channel match, oldest first.
+ * SQL text is fixed and caller data is only ever bound as a parameter. */
+static stnlabz_module_result_t observation_recent(
+ const void *request,size_t request_size,void *response,size_t response_size,
+ size_t *response_used,void *context){
+ const digit_observation_recent_query_t *q=request;
+ digit_observation_recent_result_t out={0};
+ sqlite3_stmt *stmt=NULL;
+ int rc;unsigned i=0;
+ (void)context;
+ if(response_used)*response_used=0;
+ if(!database||!q||request_size!=sizeof *q||!response||
+    response_size<sizeof out||!response_used||
+    !memchr(q->channel,0,sizeof q->channel)||
+    strcmp(q->channel,"#stn-labz"))
+   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ rc=sqlite3_prepare_v2(database,
+  "SELECT COALESCE(p.display_name,''),o.text FROM ("
+  "SELECT o.sender_id,o.text,o.id FROM observations o "
+  "JOIN conversations c ON c.id=o.conversation_id "
+  "WHERE c.transport='irc' AND c.channel=?1 "
+  "ORDER BY o.id DESC LIMIT 6) o "
+  "LEFT JOIN people p ON p.id=o.sender_id ORDER BY o.id ASC",
+  -1,&stmt,NULL);
+ if(rc!=SQLITE_OK)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ sqlite3_bind_text(stmt,1,q->channel,-1,SQLITE_TRANSIENT);
+ while((rc=sqlite3_step(stmt))==SQLITE_ROW&&i<DIGIT_OBSERVATION_RECENT_MAX){
+  copy_column(stmt,0,out.items[i].sender,sizeof out.items[i].sender);
+  copy_column(stmt,1,out.items[i].text,sizeof out.items[i].text);
+  i++;
+ }
+ sqlite3_finalize(stmt);
+ if(rc!=SQLITE_DONE&&rc!=SQLITE_ROW)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ out.count=i;
+ memcpy(response,&out,sizeof out);*response_used=sizeof out;
+ return STNLABZ_MODULE_OK;
+}
 /* Return newest IRC Rictus Intel observation after an explicit cursor.
  * No rows are modified; callers receive text and provenance ID only. */
 static stnlabz_module_result_t s2_observations(
@@ -363,6 +400,16 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api) {
         host->unregister_service(DIGIT_OBSERVATION_INSERT_SERVICE,NULL);
         goto fail;
     }
+    stage="register_observation_recent";
+    if(!host->register_service(DIGIT_OBSERVATION_RECENT_SERVICE,
+                               observation_recent,NULL)){
+        host->unregister_service(DIGIT_SQLITE3_DIAGNOSTIC_SERVICE,NULL);
+        host->unregister_service(DIGIT_CORPUS_SEARCH_SERVICE,(void *)op_search);
+        host->unregister_service("digit.sqlite3.get",(void *)op_get);
+        host->unregister_service(DIGIT_S2_OBSERVATIONS_SERVICE,NULL);
+        host->unregister_service(DIGIT_OBSERVATION_INSERT_SERVICE,NULL);
+        goto fail;
+    }
     startup_log("active",SQLITE_OK,"all_services_registered");
     return STNLABZ_MODULE_OK;
 fail:
@@ -373,6 +420,7 @@ fail:
 }
 static stnlabz_module_result_t stop(void) {
     if(!database||!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
+    host->unregister_service(DIGIT_OBSERVATION_RECENT_SERVICE,NULL);
     host->unregister_service(DIGIT_S2_OBSERVATIONS_SERVICE,NULL);
     host->unregister_service(DIGIT_OBSERVATION_INSERT_SERVICE,NULL);
     host->unregister_service(DIGIT_SQLITE3_DIAGNOSTIC_SERVICE,NULL);
@@ -467,7 +515,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="sqlite3",.name="SQLite3 persistence",
-    .version_major=0,.version_minor=4,.version_patch=3,
+    .version_major=0,.version_minor=4,.version_patch=4,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
