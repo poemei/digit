@@ -84,12 +84,12 @@ int main(int argc,char **argv){
  ++total;passed+=send("PoeMei","laurie where do you upload your module to?",0);
  ++total;passed+=send("Laurie_Vo","I am learning Python",0);
  ++total;passed+=send("PoeMei","Python uses indentation, remember the indentation",0);
- /* One grounded on-topic contribution, without exposing corpus metadata. */
+ /* With empty corpus evidence the learner must not receive a fabricated reply. */
  ++total;passed+=send("Laurie_Vo","I keep forgetting the indentation!",0);
- printf("Observation reads=%u, corpus reads=%u; coherence %d/%d\n",
+ printf("Observation reads=%u, corpus reads=%u; no-knowledge safety %d/%d\n",
   observation_reads,corpus_reads,passed,total);
  if(mod->stop()!=STNLABZ_MODULE_OK){dlclose(handle);return 2;}
  dlclose(handle);
- if(!observation_reads||!corpus_reads){fprintf(stderr,"Evidence integration missing\\n");return 3;}
+ if(observation_reads!=4||corpus_reads!=1){fprintf(stderr,"Expected four history requests and one corpus lookup\\n");return 3;}
  return passed==total?0:1;
 }
