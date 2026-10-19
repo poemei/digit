@@ -103,6 +103,62 @@ static stnlabz_module_result_t service(const void *request,size_t request_size,
     }
     return STNLABZ_MODULE_ERR_NOT_FOUND;
 }
+
+/* Read-only diagnostic service. This probes SQLite3 at the time requested;
+ * it is NOT evidence that a historical user request reached the database. */
+#define DIGIT_SQLITE3_DIAGNOSTIC_SERVICE "digit.sqlite3.diagnostic"
+typedef struct {
+ char state[32],stage[48],detail[96];
+ char source[96],method[48];
+ unsigned int line;
+} sqlite3_diagnostic_t;
+static stnlabz_module_result_t diagnostic_service(
+ const void *request,size_t request_size,void *response,
+ size_t response_size,size_t *response_used,void *context){
+ sqlite3_diagnostic_t out={0};
+ sqlite3_stmt *stmt=NULL;
+ int code,step_code;
+ (void)context;
+ if(response_used)*response_used=0;
+ if(request||request_size||!response||response_size<sizeof out||!response_used)
+   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ snprintf(out.source,sizeof out.source,"modules/sqlite3/sqlite3.c");
+ snprintf(out.method,sizeof out.method,"diagnostic_service");
+ out.line=__LINE__+1;
+ if(!database){
+   snprintf(out.state,sizeof out.state,"UNAVAILABLE");
+   snprintf(out.stage,sizeof out.stage,"database_handle");
+   snprintf(out.detail,sizeof out.detail,"database handle is not active");
+ }else{
+   /* Metadata-only prepared read; no user records or values are read. */
+   code=sqlite3_prepare_v2(database,
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='digit_kv'",
+      -1,&stmt,NULL);
+   if(code!=SQLITE_OK){
+      snprintf(out.state,sizeof out.state,"FAILED");
+      snprintf(out.stage,sizeof out.stage,"schema_prepare");
+      snprintf(out.detail,sizeof out.detail,"%.80s",sqlite3_errstr(code));
+   }else{
+      step_code=sqlite3_step(stmt);
+      if(step_code==SQLITE_ROW){
+       snprintf(out.state,sizeof out.state,"OBSERVED");
+       snprintf(out.stage,sizeof out.stage,"schema_lookup");
+       snprintf(out.detail,sizeof out.detail,"digit_kv table found; data operations not tested");
+      }else if(step_code==SQLITE_DONE){
+       snprintf(out.state,sizeof out.state,"FAILED");
+       snprintf(out.stage,sizeof out.stage,"schema_lookup");
+       snprintf(out.detail,sizeof out.detail,"digit_kv table not found");
+      }else{
+       snprintf(out.state,sizeof out.state,"FAILED");
+       snprintf(out.stage,sizeof out.stage,"schema_step");
+       snprintf(out.detail,sizeof out.detail,"%.80s",sqlite3_errstr(step_code));
+      }
+   }
+ }
+ if(stmt)sqlite3_finalize(stmt);
+ memcpy(response,&out,sizeof out);*response_used=sizeof out;
+ return STNLABZ_MODULE_OK;
+}
 static const char op_put[]="put",op_get[]="get",op_delete[]="delete";
 /* [AI:GPT-6 | 2026-10-18] Startup diagnostics go to the service journal.
  * No credentials, SQL row values, or database content are logged.
@@ -155,6 +211,15 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api) {
         host->unregister_service("digit.sqlite3.put",(void *)op_put);
         goto fail;
     }
+    stage="register_diagnostic";
+    if(!host->register_service(DIGIT_SQLITE3_DIAGNOSTIC_SERVICE,
+                              diagnostic_service,NULL)){
+        startup_log(stage,SQLITE_MISUSE,"core_rejected_diagnostic_registration");
+        host->unregister_service("digit.sqlite3.delete",(void *)op_delete);
+        host->unregister_service("digit.sqlite3.get",(void *)op_get);
+        host->unregister_service("digit.sqlite3.put",(void *)op_put);
+        goto fail;
+    }
     startup_log("active",SQLITE_OK,"all_services_registered");
     return STNLABZ_MODULE_OK;
 fail:
@@ -164,6 +229,7 @@ fail:
 }
 static stnlabz_module_result_t stop(void) {
     if(!database||!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
+    host->unregister_service(DIGIT_SQLITE3_DIAGNOSTIC_SERVICE,NULL);
     host->unregister_service("digit.sqlite3.delete",(void *)op_delete);
     host->unregister_service("digit.sqlite3.get",(void *)op_get);
     host->unregister_service("digit.sqlite3.put",(void *)op_put);
@@ -220,7 +286,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="sqlite3",.name="SQLite3 persistence",
-    .version_major=0,.version_minor=1,.version_patch=2,
+    .version_major=0,.version_minor=1,.version_patch=3,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
