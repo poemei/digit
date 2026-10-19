@@ -184,7 +184,7 @@ static stnlabz_module_result_t listen_message(const message_t *m,char *out,
   size_t n=words[i].end-words[i].begin;
   const char *p=m->message+words[i].begin;
   unsigned relevant=0;char topic[64];char line[512];
-  if(n<4||n>=sizeof topic||filler(p,n))continue;
+  if(n<3||n>=sizeof topic||filler(p,n))continue;
   memcpy(topic,p,n);topic[n]=0;
   memset(&query,0,sizeof query);
   snprintf(query.query,sizeof query.query,"%s",topic);
