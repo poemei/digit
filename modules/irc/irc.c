@@ -49,6 +49,35 @@ static void irc_diag(const char *stage,const char *result) {
     fprintf(stderr,"[digit:irc] %s %s\n",stage,result);
     fflush(stderr);
 }
+/* IRC registration trace, preserving protocol lines for troubleshooting.
+ * Never emit authentication exchanges or user/chat payloads. */
+static void irc_trace(const char *way,const char *line) {
+    size_t n;
+    int safe=0;
+    const char *p=line;
+    if(!line)return;
+    if(!strncmp(line,"CAP ",4)||!strncmp(line,"NICK ",5)||
+       !strncmp(line,"USER ",5)||!strncmp(line,"JOIN ",5)||
+       !strncmp(line,"PING ",5)||!strncmp(line,"PONG ",5))safe=1;
+    if(*p==':') {
+        const char *space=strchr(p,' ');
+        if(space) {
+            const char *verb=space+1;
+            if(!strncmp(verb,"CAP ",4)||!strncmp(verb,"PING ",5)||
+               !strncmp(verb,"001 ",4)||!strncmp(verb,"433 ",4)||
+               !strncmp(verb,"903 ",4)||!strncmp(verb,"904 ",4)||
+               !strncmp(verb,"905 ",4)||!strncmp(verb,"906 ",4)||
+               !strncmp(verb,"907 ",4)||!strncmp(verb,"471 ",4)||
+               !strncmp(verb,"473 ",4)||!strncmp(verb,"474 ",4)||
+               !strncmp(verb,"475 ",4))safe=1;
+        }
+    }
+    if(!safe)return;
+    n=strcspn(line,"\\r\\n");
+    if(n>480)n=480;
+    fprintf(stderr,"[digit:irc:protocol] %s %.*s\\n",way,(int)n,line);
+    fflush(stderr);
+}
 static int assign(char *out,size_t cap,const char *in) {
     size_t n = strlen(in);
     if(n>=2 && ((in[0]=='"'&&in[n-1]=='"')||(in[0]=='\''&&in[n-1]=='\''))) {
@@ -101,6 +130,7 @@ static int config_read(irc_config_t *c) {
 }
 static int write_line(SSL *ssl,const char *line) {
     size_t off=0,len=strlen(line);
+    irc_trace("OUT",line);
     while(off<len) {
         int n=SSL_write(ssl,line+off,(int)(len-off));
         if(n<=0)return 0;
@@ -306,6 +336,7 @@ static void session(const irc_config_t *cfg) {
             line[used++]=ch;continue;
         }
         line[used]=0;used=0;
+        irc_trace("IN",line);
         if(!strncmp(line,"PING :",6)) {
             if(!command(ssl,"PONG",line+5))break;
         } else if(strstr(line," CAP ")&&strstr(line," LS ")&&strstr(line,"sasl")) {
@@ -444,7 +475,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=2,.version_patch=3,
+    .version_major=0,.version_minor=2,.version_patch=4,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
