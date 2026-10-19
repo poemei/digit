@@ -1,7 +1,7 @@
 # [AI:GPT-6 | 2026-10-18]
 CC ?= cc
 CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Wpedantic
-CPPFLAGS += -I../../core/stnlabz_abi -I../socials
+CPPFLAGS += -I../../core/stnlabz_abi -I../socials -I../s2
 LDLIBS += -lssl -lcrypto -pthread
 PREFIX ?= /opt/digit
 MODULE_DIR := $(PREFIX)/modules/irc
@@ -11,7 +11,7 @@ TEST_TARGET := bin/test_irc
 .PHONY: all clean test install
 all: $(TARGET)
 
-$(TARGET): irc.c ../socials/socials.h ../../core/stnlabz_abi/module.h
+$(TARGET): irc.c ../socials/socials.h ../s2/s2.h ../../core/stnlabz_abi/module.h
 	@mkdir -p bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared irc.c -o $@ $(LDLIBS)
 
