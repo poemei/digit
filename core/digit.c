@@ -38,7 +38,7 @@ static int register_service(const char *name,
     stnlabz_module_service_handler_fn handler, void *context) {
     size_t i,free_slot=32,n;
     if(!name||!handler)return 0;
-    n=strnlen(name,STNLABZ_MODULE_SERVICE_NAME_MAX);
+    for(n=0;n<STNLABZ_MODULE_SERVICE_NAME_MAX && name[n];n++) {}
     if(!n||n==STNLABZ_MODULE_SERVICE_NAME_MAX||
        !strncmp(name,"digit.message",sizeof("digit.message")))return 0;
     service_lock_acquire();
