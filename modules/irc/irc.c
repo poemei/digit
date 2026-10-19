@@ -467,6 +467,28 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
     strcpy(c.auntie_account,"LaurieAccount");
     check(result,!strcmp(greeting_kind(&c,"LaurieAccount"),"auntie"),0);
     check(result,!strcmp(greeting_kind(&c,"Laurie_Vo"),"unknown"),1);
+    /* RFC 4616 PLAIN fixture: empty authorization identity, account,
+     * password. Verify the same construction and base64 primitive as the
+     * production SASL path without using or logging actual credentials. */
+    {
+        const unsigned char expected[]={'\\0','u','s','e','r','\\0','p','a','s','s'};
+        unsigned char plain[sizeof expected]={0};
+        char encoded[32]={0};
+        unsigned char decoded[32]={0};
+        int length,decoded_length;
+        memcpy(plain+1,"user",4);
+        memcpy(plain+6,"pass",4);
+        length=EVP_EncodeBlock((unsigned char *)encoded,plain,(int)sizeof plain);
+        decoded_length=length>0?EVP_DecodeBlock(decoded,
+            (const unsigned char *)encoded,length):-1;
+        check(result,length==16&&!strcmp(encoded,"AHVzZXIAcGFzcw=="),0);
+        check(result,decoded_length==12&&
+            !memcmp(decoded,expected,sizeof expected),0);
+        OPENSSL_cleanse(plain,sizeof plain);
+        OPENSSL_cleanse(decoded,sizeof decoded);
+        OPENSSL_cleanse(encoded,sizeof encoded);
+    }
+
     return result->tests_executed>=20 && !result->tests_failed ?
         STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_QUALIFICATION;
 }
