@@ -11,6 +11,7 @@
 #include "module.h"
 #include "sqlite3_diagnostic.h"
 #include "corpus_search.h"
+#include "../dsd/dsd.h"
 
 #define DB_PATH "/opt/digit/data/digit_memory.db"
 #define KEY_MAX 128
@@ -20,6 +21,23 @@ typedef struct { char key[KEY_MAX]; unsigned char value[VALUE_MAX]; size_t lengt
 static sqlite3 *database;
 static const stnlabz_module_host_t *host;
 
+static void observe_search(unsigned count,int failed,unsigned line){
+ uint64_t trace=0;size_t used=0;digit_dsd_record_t rec={0};
+ if(!host||!host->invoke_service)return;
+ if(host->invoke_service(DIGIT_DSD_CURRENT_SERVICE,NULL,0,&trace,
+    sizeof trace,&used)!=STNLABZ_MODULE_OK||used!=sizeof trace||!trace)return;
+ rec.trace_id=rec.event.trace_id=trace;
+ rec.event.span_id=2;rec.event.parent_span_id=1;
+ rec.event.line=line;rec.event.result=failed?1:0;rec.event.records=count;
+ snprintf(rec.event.module,sizeof rec.event.module,"sqlite3");
+ snprintf(rec.event.method,sizeof rec.event.method,"corpus_search");
+ snprintf(rec.event.file,sizeof rec.event.file,"modules/sqlite3/sqlite3.c");
+ snprintf(rec.event.operation,sizeof rec.event.operation,"corpus_fts");
+ snprintf(rec.event.status,sizeof rec.event.status,"%s",
+          failed?"QUERY_ERROR":count?"QUERY_MATCH":"QUERY_NO_MATCH");
+ (void)host->invoke_service(DIGIT_DSD_RECORD_SERVICE,&rec,sizeof rec,
+                            NULL,0,&used);
+}
 static int key_valid(const char *key) {
     size_t i;
     if (!key || !key[0]) return 0;
@@ -127,6 +145,7 @@ static stnlabz_module_result_t service(const void *request,size_t request_size,
            response_size<sizeof result||!response_used)
             return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
         count=corpus_search(database,request,&result);
+        observe_search(count<0?0:(unsigned)count,count<0,__LINE__);
         if(count<0)return STNLABZ_MODULE_ERR_INVALID_STATE;
         memcpy(response,&result,sizeof result);
         *response_used=sizeof result;
@@ -332,7 +351,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="sqlite3",.name="SQLite3 persistence",
-    .version_major=0,.version_minor=3,.version_patch=1,
+    .version_major=0,.version_minor=4,.version_patch=0,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
