@@ -60,6 +60,13 @@ static int record(const digit_dsd_event_t *event){
 /* Human-readable statuses are presentation only; original evidence stays intact. */
 static const char *status_meaning(const char *status){
  if(!strcmp(status,"NO_RESPONSE"))return "request returned without a reply";
+ if(!strcmp(status,"SERVICE_NOT_FOUND"))return "the requested service was not registered";
+ if(!strcmp(status,"NOT_AUTHORIZED"))return "the request was not authorized";
+ if(!strcmp(status,"INVALID_ARGUMENT"))return "the service rejected its input";
+ if(!strcmp(status,"INVALID_STATE"))return "the service was not ready for this operation";
+ if(!strcmp(status,"QUARANTINED"))return "the target module was quarantined";
+ if(!strcmp(status,"NOT_QUALIFIED"))return "the target module was not qualified";
+ if(!strcmp(status,"SERVICE_ERROR"))return "the service returned an error";
  if(!strcmp(status,"SQLITE_BUSY"))return "database is locked";
  if(!strcmp(status,"SQLITE_LOCKED"))return "database table is locked";
  if(!strcmp(status,"SQLITE_CORRUPT"))return "database appears malformed";
@@ -117,6 +124,18 @@ static int diagnose(uint64_t trace_id,digit_dsd_result_t *out){
    snprintf(out->summary,sizeof out->summary,
     "IRC accepted the private request and invoked digit.message; the service returned without a reply. Last observed location: %.150s:%u (%.60s). No downstream conversational stage was observed. Cause inside the handler is not established.",
     e->file,e->line,e->method);
+  }else if(!strcmp(e->module,"irc") &&
+            !strcmp(e->operation,"digit.message") &&
+            (!strcmp(e->status,"SERVICE_NOT_FOUND") ||
+             !strcmp(e->status,"NOT_AUTHORIZED") ||
+             !strcmp(e->status,"INVALID_ARGUMENT") ||
+             !strcmp(e->status,"INVALID_STATE") ||
+             !strcmp(e->status,"QUARANTINED") ||
+             !strcmp(e->status,"NOT_QUALIFIED") ||
+             !strcmp(e->status,"SERVICE_ERROR"))){
+   snprintf(out->summary,sizeof out->summary,
+    "IRC received the private request; digit.message did not complete successfully: %s. Last observed location: %.150s:%u (%.60s). No downstream module execution is established.",
+    status_meaning(e->status),e->file,e->line,e->method);
   }else
   snprintf(out->summary,sizeof out->summary,
    "Observed failure boundary: %.47s.%.63s at %.159s:%u, operation %.63s, status %.63s (%.80s). Underlying cause not established.",
@@ -272,6 +291,21 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
   assertion(q,diagnose(55,&out) &&
     strstr(out.summary,"service returned without a reply")!=NULL &&
     strstr(out.summary,"Cause inside the handler is not established")!=NULL,0);
+  snprintf(silent.status,sizeof silent.status,"SERVICE_NOT_FOUND");
+  silent.trace_id=56;silent.span_id=2;
+  assertion(q,record(&silent),0);
+  assertion(q,diagnose(56,&out)&&
+    strstr(out.summary,"was not registered")!=NULL,0);
+  snprintf(silent.status,sizeof silent.status,"NOT_AUTHORIZED");
+  silent.trace_id=57;silent.span_id=3;
+  assertion(q,record(&silent),0);
+  assertion(q,diagnose(57,&out)&&
+    strstr(out.summary,"not authorized")!=NULL,0);
+  snprintf(silent.status,sizeof silent.status,"INVALID_ARGUMENT");
+  silent.trace_id=58;silent.span_id=4;
+  assertion(q,record(&silent),0);
+  assertion(q,diagnose(58,&out)&&
+    strstr(out.summary,"rejected its input")!=NULL,0);
  }
  for(i=0;i<DIGIT_DSD_MAX_EVENTS+2;i++){
   e.span_id=3+i;assertion(q,record(&e),0);
@@ -331,7 +365,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="dsd",.name="Developer Self-Diagnostics",
- .version_major=0,.version_minor=3,.version_patch=2,
+ .version_major=0,.version_minor=4,.version_patch=0,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
