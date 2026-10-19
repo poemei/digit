@@ -23,9 +23,9 @@ typedef struct {size_t begin,end;} word_t;
 static const stnlabz_module_host_t *host;
 static void observe(const stnlabz_module_host_t *api,const char *operation,
                     const char *status,unsigned records,unsigned line,int failed){
- uint64_t trace=0;size_t used=0;digit_dsd_record_t event={0};
+ uint64_t trace=0,query_token=1;size_t used=0;digit_dsd_record_t event={0};
  if(!api||!api->invoke_service)return;
- if(api->invoke_service(DIGIT_DSD_CURRENT_SERVICE,NULL,0,&trace,
+ if(api->invoke_service(DIGIT_DSD_CURRENT_SERVICE,&query_token,sizeof query_token,&trace,
     sizeof trace,&used)!=STNLABZ_MODULE_OK||used!=sizeof trace||!trace)return;
  event.trace_id=event.event.trace_id=trace;
  event.event.span_id=3;
