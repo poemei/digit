@@ -207,9 +207,10 @@ static void session(const irc_config_t *cfg) {
         if(!strncmp(line,"PING :",6)) {
             if(!command(ssl,"PONG",line+5))break;
         } else if(strstr(line," CAP ")&&strstr(line," LS ")&&strstr(line,"sasl")) {
-            if(!write_line(ssl,"CAP REQ :sasl\r\n"))break;
+            if(!strstr(line,"account-tag") || !write_line(ssl,"CAP REQ :sasl account-tag\r\n"))break;
         } else if(strstr(line," CAP ")&&strstr(line," ACK ")&&strstr(line,"sasl")) {
-            got_sasl=1;tags_enabled=strstr(line,"account-tag")!=NULL;\n            if(!tags_enabled || !write_line(ssl,"AUTHENTICATE PLAIN\r\n"))break;
+            got_sasl=1;tags_enabled=strstr(line,"account-tag")!=NULL;
+            if(!tags_enabled || !write_line(ssl,"AUTHENTICATE PLAIN\r\n"))break;
         } else if(got_sasl&&!strcmp(line,"AUTHENTICATE +")) {
             if(!authenticate(ssl,cfg))break;
         } else if(strstr(line," 903 ")) {
