@@ -237,20 +237,24 @@ static stnlabz_module_result_t listen_message(const message_t *m,char *out,
    }
  }
  if(!issue[0]||!other_speaker)return STNLABZ_MODULE_OK;
- /* Find an independently repeated technical subject in earlier turns.
-  * Subject must differ from the problem, rather than trusting one keyword. */
- for(i=0;i+1<history.count&&!subject[0];i++){
+ /* Prefer the newest repeatedly established subject. An old discussion
+  * must not outrank a later topic shift when selecting corpus evidence. */
+ for(i=history.count-1;i>1&&!subject[0];){
+  i--;
   count=tokens(history.items[i].text,words,WORD_CAP);
   for(j=0;j<count&&!subject[0];j++){
-   size_t n=words[j].end-words[j].begin,repeat=0;
+   size_t n=words[j].end-words[j].begin;
    const char *p=history.items[i].text+words[j].begin;
    char term[64];
    if(!candidate_word(p,n)||n>=sizeof term)continue;
    memcpy(term,p,n);term[n]=0;
    if(!strcasecmp(term,issue))continue;
-   for(k=i+1;k+1<history.count;k++)
-    if(topic_present(history.items[k].text,term))repeat++;
-   if(repeat)snprintf(subject,sizeof subject,"%s",term);
+   for(k=i;k>0;){
+    k--;
+    if(topic_present(history.items[k].text,term)){
+     snprintf(subject,sizeof subject,"%s",term);break;
+    }
+   }
   }
  }
  if(!subject[0])return STNLABZ_MODULE_OK;
@@ -405,7 +409,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="conversation",.name="Conversation knowledge retrieval",
- .version_major=0,.version_minor=4,.version_patch=10,
+ .version_major=0,.version_minor=4,.version_patch=11,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
