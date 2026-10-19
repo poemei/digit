@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 /* [AI:GPT-6 | 2026-10-19] Core hotload guard verification.
  * Includes actual Core hotload implementation: no surrogate version logic.
  * Never invokes replacement(), snapshot_candidate(), or production paths.
