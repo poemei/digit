@@ -14,6 +14,9 @@
 #include <string.h>
 #include <strings.h>
 #include <sys/socket.h>
+#include <sys/select.h>
+#include <fcntl.h>
+#include <errno.h>
 #include <sys/time.h>
 #include <unistd.h>
 #include <openssl/ssl.h>
@@ -36,6 +39,40 @@ typedef struct {
 static pthread_t worker;
 static int active_socket=-1;
 static pthread_mutex_t socket_mutex=PTHREAD_MUTEX_INITIALIZER;
+#define S2_DELIVER_SERVICE "digit.irc.deliver"
+#define S2_REPORT_BYTES 384
+#define S2_QUEUE_CAP 16
+typedef struct {char report[S2_REPORT_BYTES];} irc_s2_report_t;
+static irc_s2_report_t outbound[S2_QUEUE_CAP];
+static unsigned outbound_head,outbound_count;
+static pthread_mutex_t outbound_mutex=PTHREAD_MUTEX_INITIALIZER;
+static int wake_pipe[2]={-1,-1};
+static int irc_ready;
+static int safe_report(const char *p,size_t cap) {
+    size_t i;
+    if(!p||!memchr(p,0,cap))return 0;
+    for(i=0;p[i];i++)if(p[i]=='\\r'||p[i]=='\\n'||(unsigned char)p[i]<32)return 0;
+    return i>0&&i<=350;
+}
+static stnlabz_module_result_t deliver_service(
+ const void *request,size_t request_size,void *response,size_t response_size,
+ size_t *used,void *context) {
+    const irc_s2_report_t *r=request;
+    unsigned index;unsigned char signal_byte=1;
+    (void)response;(void)response_size;(void)context;
+    if(used)*used=0;
+    if(!r||request_size!=sizeof *r||!safe_report(r->report,sizeof r->report))
+      return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+    pthread_mutex_lock(&outbound_mutex);
+    if(!irc_ready||outbound_count==S2_QUEUE_CAP){
+      pthread_mutex_unlock(&outbound_mutex);return STNLABZ_MODULE_ERR_INVALID_STATE;
+    }
+    index=(outbound_head+outbound_count)%S2_QUEUE_CAP;
+    outbound[index]=*r;outbound_count++;
+    pthread_mutex_unlock(&outbound_mutex);
+    if(wake_pipe[1]>=0)(void)write(wake_pipe[1],&signal_byte,1);
+    return STNLABZ_MODULE_OK;
+}
 static int worker_started;
 static volatile sig_atomic_t stopping;
 static const stnlabz_module_host_t *host_api;
@@ -291,8 +328,35 @@ static void session(const irc_config_t *cfg) {
     if(!write_line(ssl,"CAP LS 302\r\n")||
         !command(ssl,"NICK",cfg->nick)||
         !command(ssl,"USER","digit 0 * :Digit IRC module"))goto done;
+    pthread_mutex_lock(&outbound_mutex);irc_ready=1;pthread_mutex_unlock(&outbound_mutex);
     while(!stopping) {
-        char ch;int n=SSL_read(ssl,&ch,1);
+        fd_set readfds;int rc;struct timeval timeout={1,0};
+        char ch;int n;
+        irc_s2_report_t pending;int have=0;
+        pthread_mutex_lock(&outbound_mutex);
+        if(outbound_count){pending=outbound[outbound_head];have=1;}
+        pthread_mutex_unlock(&outbound_mutex);
+        if(have){
+            char wire[512];int k=snprintf(wire,sizeof wire,"PRIVMSG %s :%s\\r\\n",cfg->channel,pending.report);
+            if(k<=0||(size_t)k>=sizeof wire||!write_line(ssl,wire))break;
+            pthread_mutex_lock(&outbound_mutex);
+            outbound_head=(outbound_head+1)%S2_QUEUE_CAP;outbound_count--;
+            pthread_mutex_unlock(&outbound_mutex);
+            continue;
+        }
+        FD_ZERO(&readfds);FD_SET(fd,&readfds);
+        if(wake_pipe[0]>=0)FD_SET(wake_pipe[0],&readfds);
+        if(!SSL_pending(ssl)){
+            rc=select((fd>wake_pipe[0]?fd:wake_pipe[0])+1,&readfds,NULL,NULL,&timeout);
+            if(rc<0){if(errno==EINTR)continue;break;}
+            if(rc==0)continue;
+            if(wake_pipe[0]>=0&&FD_ISSET(wake_pipe[0],&readfds)){
+                unsigned char bytes[128];(void)read(wake_pipe[0],bytes,sizeof bytes);
+                continue;
+            }
+            if(!FD_ISSET(fd,&readfds))continue;
+        }
+        n=SSL_read(ssl,&ch,1);
         if(n<=0){int error=SSL_get_error(ssl,n);if(error==SSL_ERROR_WANT_READ)continue;break;}
         if(ch=='\r')continue;
         if(ch!='\n') {
@@ -340,6 +404,7 @@ static void session(const irc_config_t *cfg) {
         }
     }
 done:
+    pthread_mutex_lock(&outbound_mutex);irc_ready=0;pthread_mutex_unlock(&outbound_mutex);
     pthread_mutex_lock(&socket_mutex);
     active_socket=-1;
     pthread_mutex_unlock(&socket_mutex);
@@ -442,9 +507,20 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
         STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_QUALIFICATION;
 }
 static stnlabz_module_result_t start(const stnlabz_module_host_t *host) {
-    if(worker_started||!host||!host->invoke_service)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+    if(worker_started||!host||!host->invoke_service||
+       !host->register_service||!host->unregister_service)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
     host_api=host;stopping=0;
+    outbound_head=0;outbound_count=0;irc_ready=0;
+    if(pipe(wake_pipe)!=0){host_api=NULL;return STNLABZ_MODULE_ERR_START_FAILED;}
+    (void)fcntl(wake_pipe[0],F_SETFL,O_NONBLOCK);
+    (void)fcntl(wake_pipe[1],F_SETFL,O_NONBLOCK);
+    if(!host->register_service(S2_DELIVER_SERVICE,deliver_service,NULL)){
+        close(wake_pipe[0]);close(wake_pipe[1]);wake_pipe[0]=wake_pipe[1]=-1;
+        host_api=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
+    }
     if(pthread_create(&worker,NULL,worker_main,NULL)) {
+        (void)host->unregister_service(S2_DELIVER_SERVICE,NULL);
+        close(wake_pipe[0]);close(wake_pipe[1]);wake_pipe[0]=wake_pipe[1]=-1;
         host_api=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
     }
     worker_started=1;return STNLABZ_MODULE_OK;
@@ -452,16 +528,18 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *host) {
 static stnlabz_module_result_t stop(void) {
     if(!worker_started)return STNLABZ_MODULE_ERR_INVALID_STATE;
     stopping=1;
+    (void)host_api->unregister_service(S2_DELIVER_SERVICE,NULL);
     pthread_mutex_lock(&socket_mutex);
     if(active_socket>=0)shutdown(active_socket,SHUT_RDWR);
     pthread_mutex_unlock(&socket_mutex);
     if(pthread_join(worker,NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
+    close(wake_pipe[0]);close(wake_pipe[1]);wake_pipe[0]=wake_pipe[1]=-1;
     worker_started=0;host_api=NULL;
     return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=2,.version_patch=6,
+    .version_major=0,.version_minor=2,.version_patch=7,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
