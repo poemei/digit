@@ -107,7 +107,7 @@ static int dsd_command(const char *message){
   !strncmp(message,"diagnose module ",16);
 }
 static void dsd_record_message(const char *account,
- uint64_t trace,int replied,int service_ok,unsigned line){
+ uint64_t trace,int replied,stnlabz_module_result_t service_result,unsigned line){
  digit_dsd_record_t record={0};
  size_t used=0;
  if(!account||!account[0]||!host_api||!host_api->invoke_service)return;
@@ -118,9 +118,20 @@ static void dsd_record_message(const char *account,
  snprintf(record.event.file,sizeof record.event.file,"modules/irc/irc.c");
  snprintf(record.event.operation,sizeof record.event.operation,"digit.message");
  record.event.line=line;
- record.event.result=(service_ok&&replied)?0:1;
- snprintf(record.event.status,sizeof record.event.status,"%s",
-  !service_ok?"SERVICE_UNAVAILABLE":replied?"RESPONSE_RETURNED":"NO_RESPONSE");
+ record.event.result=(service_result==STNLABZ_MODULE_OK&&replied)?0:1;
+ /* Record the actual ABI disposition. A non-OK return is not necessarily
+  * an unavailable service, and a successful empty return is not an error
+  * from IRC transport. */
+ const char *disposition=service_result==STNLABZ_MODULE_OK?
+     (replied?"RESPONSE_RETURNED":"NO_RESPONSE"):
+     service_result==STNLABZ_MODULE_ERR_NOT_FOUND?"SERVICE_NOT_FOUND":
+     service_result==STNLABZ_MODULE_ERR_NOT_AUTHORIZED?"NOT_AUTHORIZED":
+     service_result==STNLABZ_MODULE_ERR_INVALID_ARGUMENT?"INVALID_ARGUMENT":
+     service_result==STNLABZ_MODULE_ERR_INVALID_STATE?"INVALID_STATE":
+     service_result==STNLABZ_MODULE_ERR_QUARANTINED?"QUARANTINED":
+     service_result==STNLABZ_MODULE_ERR_NOT_QUALIFIED?"NOT_QUALIFIED":
+     "SERVICE_ERROR";
+ snprintf(record.event.status,sizeof record.event.status,"%s",disposition);
  if(host_api->invoke_service(DIGIT_DSD_RECORD_SERVICE,&record,sizeof record,
    NULL,0,&used)==STNLABZ_MODULE_OK)dsd_remember(account,trace);
 }
@@ -350,7 +361,7 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled
             trace=dsd_next_trace++;
             if(!trace)trace=dsd_next_trace++;
             dsd_record_message(input.account,trace,
-                rc==STNLABZ_MODULE_OK&&used>0,rc==STNLABZ_MODULE_OK,
+                rc==STNLABZ_MODULE_OK&&used>0,rc,
                 observation_line);
         }
         if(rc!=STNLABZ_MODULE_OK)return 1;
@@ -673,7 +684,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=2,.version_patch=13,
+    .version_major=0,.version_minor=2,.version_patch=14,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
