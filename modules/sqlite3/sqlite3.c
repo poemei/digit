@@ -156,7 +156,7 @@ static stnlabz_module_result_t diagnostic_service(
  }else{
    /* Metadata-only prepared read; no user records or values are read. */
    code=sqlite3_prepare_v2(database,
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='digit_kv'",
+      "SELECT count(*) FROM corpus_fts",
       -1,&stmt,NULL);
    if(code!=SQLITE_OK){
       snprintf(out.state,sizeof out.state,"FAILED");
@@ -166,12 +166,12 @@ static stnlabz_module_result_t diagnostic_service(
       step_code=sqlite3_step(stmt);
       if(step_code==SQLITE_ROW){
        snprintf(out.state,sizeof out.state,"OBSERVED");
-       snprintf(out.stage,sizeof out.stage,"schema_lookup");
-       snprintf(out.detail,sizeof out.detail,"digit_kv table found; data operations not tested");
+       snprintf(out.stage,sizeof out.stage,"corpus_fts");
+       snprintf(out.detail,sizeof out.detail,"indexed corpus rows=%lld; data operations not tested",(long long)sqlite3_column_int64(stmt,0));
       }else if(step_code==SQLITE_DONE){
        snprintf(out.state,sizeof out.state,"FAILED");
        snprintf(out.stage,sizeof out.stage,"schema_lookup");
-       snprintf(out.detail,sizeof out.detail,"digit_kv table not found");
+       snprintf(out.detail,sizeof out.detail,"corpus_fts returned no result");
       }else{
        snprintf(out.state,sizeof out.state,"FAILED");
        snprintf(out.stage,sizeof out.stage,"schema_step");
