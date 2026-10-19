@@ -117,10 +117,11 @@ static stnlabz_module_result_t digit_service(const char *name,
         strncmp(msg->message, "deactivate module", 17))
         return STNLABZ_MODULE_OK; /* no response; IRC ignores used == 0 */
 
-    /* 'target' is the originating channel/nick. Only direct messages
-       are passed with target equal to sender by the IRC adapter. */
-    if (strcmp(msg->target, msg->sender) ||
-        strcmp(msg->account, "STN_Boss")) {
+    /* [AI:GPT-6 | 2026-10-18] Public-channel management requests
+       are silent. Only authenticated operator DMs can execute commands. */
+    if (strcmp(msg->target, msg->sender))
+        return STNLABZ_MODULE_OK; /* no reply in public channels */
+    if (strcmp(msg->account, "STN_Boss")) {
         snprintf(reply, sizeof reply, "Module commands require authenticated STN_Boss DM.");
     } else if (!strcmp(msg->message, "show modules")) {
         size_t used = 0;
