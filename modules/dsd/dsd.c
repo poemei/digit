@@ -59,6 +59,7 @@ static int record(const digit_dsd_event_t *event){
 }
 /* Human-readable statuses are presentation only; original evidence stays intact. */
 static const char *status_meaning(const char *status){
+ if(!strcmp(status,"NO_RESPONSE"))return "request returned without a reply";
  if(!strcmp(status,"SQLITE_BUSY"))return "database is locked";
  if(!strcmp(status,"SQLITE_LOCKED"))return "database table is locked";
  if(!strcmp(status,"SQLITE_CORRUPT"))return "database appears malformed";
@@ -305,7 +306,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="dsd",.name="Developer Self-Diagnostics",
- .version_major=0,.version_minor=3,.version_patch=0,
+ .version_major=0,.version_minor=3,.version_patch=1,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
