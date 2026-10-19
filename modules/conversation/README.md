@@ -1,23 +1,11 @@
-# Conversation v1.0.0
+# Conversation — compliance hold
 
-This implementation does not contain conversational keyword triggers, prewritten chat responses, a word-based topic selector, or a rule requiring a corpus match before speaking.
+Conversation v1.0.0 includes an unauthorized local LLM integration and must not be treated as an approved implementation.
 
-## Inputs
-- Live IRC message via `digit.conversation.listen` or `digit.conversation`
-- Recent observations via `digit.sqlite3.observation_recent`
-- Corpus evidence via `digit.sqlite3.corpus_search`
+Digit's approved policy prohibits any operational LLM or inference service. No Ollama, HTTP inference endpoint, external provider, or intermediary is authorized.
 
-## Language generation
-Requires an **already running local Ollama-compatible inference service** at `127.0.0.1:11434`, and `DIGIT_CONVERSATION_MODEL` set in Digit's process environment to the name of an installed model. No remote/cloud request is made.
+The approved conversational inputs are SQLite3 Observations, SQLite3 Corpus, and surrounding IRC traffic, handled through the established MVC and ABI boundaries.
 
-The inference engine proposes a corpus lookup based on the conversation, then produces a fresh IRC utterance from the live context, observations and any available corpus evidence. Missing corpus evidence does **not** gate speech.
+**Status:** noncompliant existing implementation; replacement and requalification required before deployment. The previous 20/20 module result did not test conversational functionality or architectural compliance.
 
-The module returns a non-OK service result if inference is unavailable. It does not synthesize a fallback or claim conversational intelligence without a working model. Current C transport reads a normal HTTP/1.1 JSON response, not chunked transfer encoding.
-
-## Installation
-```sh
-make -C modules/conversation clean all test
-sudo make -C modules/conversation install
-```
-
-Core module activation and live IRC transport must still be checked by the operator. No installation or runtime qualification is claimed by this repository commit.
+No replacement intelligence mechanism, hardcoded chat response, or keyword workaround is authorized by this document.
