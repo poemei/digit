@@ -3,6 +3,17 @@
 #include "transports.h"
 
 /* [AI:GPT-6 | 2026-10-19 00:24:01 UTC] Test the transport-neutral ABI dispatch gate. */
+/* Lightweight registry lookup stub; other ABI registry behavior has separate tests. */
+const stnlabz_module_record_t *stnlabz_module_registry_find(
+    const stnlabz_module_registry_t *registry, const char *id)
+{
+    size_t i;
+    if (!registry || !id) return NULL;
+    for (i = 0; i < registry->count; ++i)
+        if (!strcmp(registry->modules[i].descriptor.id, id))
+            return &registry->modules[i];
+    return NULL;
+}
 static int calls;
 static stnlabz_module_result_t dispatch(const char *name,
     const void *request, size_t request_size, void *response,
