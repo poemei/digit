@@ -43,6 +43,23 @@ static int assign(char *out,size_t cap,const char *in) {
     if(!n||n>=cap)return 0;
     memcpy(out,in,n);out[n]=0;return 1;
 }
+static int config_valid(const irc_config_t *c) {
+    return c && !strcmp(c->server,"irc.libera.chat") &&
+        !strcmp(c->port,"6697") && !strcmp(c->channel,"#stn-labz") &&
+        c->nick[0] && c->account[0] && c->password[0] &&
+        !strpbrk(c->nick," \\r\\n") && !strpbrk(c->account,"\\r\\n");
+}
+static int reply_valid(const char *reply,size_t size) {
+    return reply && size>0 && size<512 && !memchr(reply,'\\r',size) &&
+        !memchr(reply,'\\n',size) && !memchr(reply,'\\0',size);
+}
+static int nick_mention(const char *body,const char *nick) {
+    size_t n;
+    if(!body||!nick||!*nick)return 0;
+    n=strlen(nick);
+    return strlen(body)>=n && !strncasecmp(body,nick,n) &&
+        (body[n]==':' || body[n]==',' || body[n]==' ');
+}
 static int config_read(irc_config_t *c) {
     FILE *f;char line[1024];
     memset(c,0,sizeof *c);
@@ -63,8 +80,7 @@ static int config_read(irc_config_t *c) {
         else if(!strcmp(p,"DIGIT_IRC_PASSWORD"))(void)assign(c->password,sizeof c->password,sep);
     }
     fclose(f);
-    return !strcmp(c->server,"irc.libera.chat") && !strcmp(c->channel,"#stn-labz") &&
-        c->port[0] && c->nick[0] && c->account[0] && c->password[0];
+    return config_valid(c);
 }
 static int write_line(SSL *ssl,const char *line) {
     size_t off=0,len=strlen(line);
@@ -137,7 +153,7 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line) {
         target=sender;
     } else {
         if(strcasecmp(target,cfg->channel))return 1;
-        if(strlen(body)<n||strncasecmp(body,cfg->nick,n)||!strchr(":, ",body[n]))return 1;
+        if(!nick_mention(body,cfg->nick))return 1;
         body+=n;
         if(*body==':'||*body==',')body++;
         while(*body==' ')body++;
@@ -151,7 +167,7 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line) {
         response,sizeof response,&used)!=STNLABZ_MODULE_OK)return 1;
     if(!used||used>=sizeof response)return 1;
     response[used]=0;
-    if(strchr(response,'\r')||strchr(response,'\n'))return 1;
+    if(!reply_valid(response,used))return 1;
     k=snprintf(wire,sizeof wire,"PRIVMSG %s :%s\r\n",target,response);
     return k>0&&(size_t)k<sizeof wire&&write_line(ssl,wire);
 }
@@ -205,11 +221,60 @@ static void *worker_main(void *unused) {
     OPENSSL_cleanse(&cfg,sizeof cfg);
     return NULL;
 }
+/* [AI:GPT-6 | 2026-10-18] Offline, deterministic transport qualification.
+ * Each condition is executed; negative cases verify rejection paths.
+ */
+static void check(stnlabz_module_qualification_result_t *r,int ok,int negative) {
+    r->tests_executed++;
+    if(ok)r->tests_passed++;else r->tests_failed++;
+    if(negative){r->negative_test_executed=1;if(ok)r->negative_test_passed=1;}
+}
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *result) {
+    irc_config_t c={0};
+    char target[8];
+    const char valid[]="Hello";
+    const char cr[]="bad\\r";
+    const char lf[]="bad\\n";
+    const char nul[]={'a','\\0','b'};
     if(!result)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
     memset(result,0,sizeof *result);
-    /* No unexecuted checks may be reported as passed. */
-    return STNLABZ_MODULE_ERR_QUALIFICATION;
+    check(result,assign(target,sizeof target,"test")&&!strcmp(target,"test"),0);
+    check(result,assign(target,sizeof target,"'foo'")&&!strcmp(target,"foo"),0);
+    check(result,assign(target,sizeof target,"\\"bar\\"")&&!strcmp(target,"bar"),0);
+    check(result,!assign(target,sizeof target,""),1);
+    check(result,!assign(target,sizeof target,"12345678"),1);
+    check(result,!assign(target,sizeof target,"''"),1);
+    (void)assign(c.server,sizeof c.server,"irc.libera.chat");
+    (void)assign(c.port,sizeof c.port,"6697");
+    (void)assign(c.channel,sizeof c.channel,"#stn-labz");
+    (void)assign(c.nick,sizeof c.nick,"Digit");
+    (void)assign(c.account,sizeof c.account,"Digit");
+    (void)assign(c.password,sizeof c.password,"fixture-only");
+    check(result,config_valid(&c),0);
+    check(result,!config_valid(NULL),1);
+    (void)assign(c.server,sizeof c.server,"evil.example");
+    check(result,!config_valid(&c),1);
+    (void)assign(c.server,sizeof c.server,"irc.libera.chat");
+    (void)assign(c.port,sizeof c.port,"6667");
+    check(result,!config_valid(&c),1);
+    (void)assign(c.port,sizeof c.port,"6697");
+    (void)assign(c.channel,sizeof c.channel,"#other");
+    check(result,!config_valid(&c),1);
+    (void)assign(c.channel,sizeof c.channel,"#stn-labz");
+    (void)assign(c.nick,sizeof c.nick,"bad nick");
+    check(result,!config_valid(&c),1);
+    (void)assign(c.nick,sizeof c.nick,"Digit");
+    check(result,nick_mention("Digit: hello","Digit"),0);
+    check(result,nick_mention("digit, hello","Digit"),0);
+    check(result,!nick_mention("DigitXYZ: hello","Digit"),1);
+    check(result,!nick_mention("Di","Digit"),1);
+    check(result,!nick_mention(NULL,"Digit"),1);
+    check(result,reply_valid(valid,sizeof valid-1),0);
+    check(result,!reply_valid(cr,sizeof cr-1),1);
+    check(result,!reply_valid(lf,sizeof lf-1),1);
+    check(result,!reply_valid(nul,sizeof nul),1);
+    return result->tests_executed>=20 && !result->tests_failed ?
+        STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_QUALIFICATION;
 }
 static stnlabz_module_result_t start(const stnlabz_module_host_t *host) {
     if(worker_started||!host||!host->invoke_service)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
