@@ -24,6 +24,7 @@
 #include <openssl/evp.h>
 #include "module.h"
 #include "socials.h"
+#include "../dsd/dsd.h"
 #include <time.h>
 
 #define IRC_ENV_PATH "/opt/digit/state/auth/irc.env"
@@ -73,9 +74,78 @@ static stnlabz_module_result_t deliver_service(
     if(wake_pipe[1]>=0)(void)write(wake_pipe[1],&signal_byte,1);
     return STNLABZ_MODULE_OK;
 }
+
+static const stnlabz_module_host_t *host_api;
+/* DM-only DSD bridge; trace ownership never keyed by unverified nick. */
+#define DSD_DM_SLOTS 32
+typedef struct {char account[128];uint64_t trace;} dsd_dm_t;
+static dsd_dm_t dsd_dm[DSD_DM_SLOTS];
+static uint64_t dsd_next_trace=1;
+static unsigned dsd_dm_evict;
+static uint64_t dsd_previous(const char *account){
+ unsigned i;
+ for(i=0;i<DSD_DM_SLOTS;i++)
+  if(!strcmp(dsd_dm[i].account,account))return dsd_dm[i].trace;
+ return 0;
+}
+static void dsd_remember(const char *account,uint64_t trace){
+ unsigned i,empty=DSD_DM_SLOTS;
+ if(!account||!account[0]||!trace)return;
+ for(i=0;i<DSD_DM_SLOTS;i++){
+  if(!strcmp(dsd_dm[i].account,account)){dsd_dm[i].trace=trace;return;}
+  if(!dsd_dm[i].account[0]&&empty==DSD_DM_SLOTS)empty=i;
+ }
+ if(empty==DSD_DM_SLOTS)empty=dsd_dm_evict++%DSD_DM_SLOTS;
+ memset(&dsd_dm[empty],0,sizeof dsd_dm[empty]);
+ snprintf(dsd_dm[empty].account,sizeof dsd_dm[empty].account,"%s",account);
+ dsd_dm[empty].trace=trace;
+}
+static int dsd_command(const char *message){
+ return !strcmp(message,"show dsd")||
+  !strcmp(message,"diagnose my last request")||
+  !strncmp(message,"diagnose trace ",15)||
+  !strncmp(message,"diagnose module ",16);
+}
+static void dsd_record_message(const char *account,
+ uint64_t trace,int replied,int service_ok,unsigned line){
+ digit_dsd_record_t record={0};
+ size_t used=0;
+ if(!account||!account[0]||!host_api||!host_api->invoke_service)return;
+ record.trace_id=record.event.trace_id=trace;
+ record.event.span_id=1;
+ snprintf(record.event.module,sizeof record.event.module,"irc");
+ snprintf(record.event.method,sizeof record.event.method,"incoming");
+ snprintf(record.event.file,sizeof record.event.file,"modules/irc/irc.c");
+ snprintf(record.event.operation,sizeof record.event.operation,"digit.message");
+ record.event.line=line;
+ record.event.result=service_ok?0:1;
+ snprintf(record.event.status,sizeof record.event.status,"%s",
+  !service_ok?"SERVICE_UNAVAILABLE":replied?"RESPONSE_RETURNED":"NO_RESPONSE");
+ if(host_api->invoke_service(DIGIT_DSD_RECORD_SERVICE,&record,sizeof record,
+   NULL,0,&used)==STNLABZ_MODULE_OK)dsd_remember(account,trace);
+}
+static int dsd_dm_reply(const char *account,const char *message,char *response,
+ size_t cap,size_t *used){
+ digit_dsd_command_request_t query={0};
+ digit_dsd_command_result_t answer={0};
+ size_t returned=0;
+ stnlabz_module_result_t rc;
+ if(!account||!account[0]||!message||!response||!used||!host_api)return 0;
+ *used=0;
+ query.previous_trace_id=dsd_previous(account);
+ snprintf(query.command,sizeof query.command,"%s",message);
+ rc=host_api->invoke_service(DIGIT_DSD_COMMAND_SERVICE,&query,sizeof query,
+   &answer,sizeof answer,&returned);
+ if(rc!=STNLABZ_MODULE_OK||returned!=sizeof answer||
+    !memchr(answer.text,0,sizeof answer.text)) {
+  snprintf(response,cap,"DSD is unavailable or not active.");
+ }else snprintf(response,cap,"%s",answer.text);
+ *used=strlen(response);
+ return 1;
+}
+
 static int worker_started;
 static volatile sig_atomic_t stopping;
-static const stnlabz_module_host_t *host_api;
 static time_t last_greeting;
 #define IRC_GREETING_INTERVAL 30
 
@@ -232,8 +302,25 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled
     snprintf(input.target,sizeof input.target,"%s",target);
     snprintf(input.message,sizeof input.message,"%s",body);
     if(!host_api||!host_api->invoke_service)return 1;
-    if(host_api->invoke_service(IRC_INPUT_SERVICE,&input,sizeof input,
-        response,sizeof response,&used)!=STNLABZ_MODULE_OK)return 1;
+    if(private_message&&dsd_command(input.message)){
+        /* Command is never invoked from a channel, even when mentioned. */
+        if(!dsd_dm_reply(input.account,input.message,response,sizeof response,&used))
+            return 1;
+    }else{
+        stnlabz_module_result_t rc;
+        uint64_t trace=0;
+        unsigned observation_line=__LINE__+1;
+        rc=host_api->invoke_service(IRC_INPUT_SERVICE,&input,sizeof input,
+            response,sizeof response,&used);
+        if(private_message){
+            trace=dsd_next_trace++;
+            if(!trace)trace=dsd_next_trace++;
+            dsd_record_message(input.account,trace,
+                rc==STNLABZ_MODULE_OK&&used>0,rc==STNLABZ_MODULE_OK,
+                observation_line);
+        }
+        if(rc!=STNLABZ_MODULE_OK)return 1;
+    }
     /* Core returns inventory records separated by ASCII RS (0x1e).
      * IRC cannot transmit multiline payloads: send one PRIVMSG per record.
      * Reject empty records and CR/LF injection; never interpret remote text
@@ -518,6 +605,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *host) {
        !host->register_service||!host->unregister_service)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
     host_api=host;stopping=0;
     outbound_head=0;outbound_count=0;irc_ready=0;
+    memset(dsd_dm,0,sizeof dsd_dm);dsd_next_trace=1;dsd_dm_evict=0;
     if(pipe(wake_pipe)!=0){host_api=NULL;return STNLABZ_MODULE_ERR_START_FAILED;}
     (void)fcntl(wake_pipe[0],F_SETFL,O_NONBLOCK);
     (void)fcntl(wake_pipe[1],F_SETFL,O_NONBLOCK);
@@ -541,12 +629,13 @@ static stnlabz_module_result_t stop(void) {
     pthread_mutex_unlock(&socket_mutex);
     if(pthread_join(worker,NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
     close(wake_pipe[0]);close(wake_pipe[1]);wake_pipe[0]=wake_pipe[1]=-1;
+    memset(dsd_dm,0,sizeof dsd_dm);
     worker_started=0;host_api=NULL;
     return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=2,.version_patch=10,
+    .version_major=0,.version_minor=2,.version_patch=11,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
