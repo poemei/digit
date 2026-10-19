@@ -203,7 +203,7 @@ static int command_text(const digit_dsd_command_request_t *req,
   {
    const digit_dsd_event_t *e=&diagnosis.events[0];
    snprintf(out->text,sizeof out->text,
-     "DSD trace %llu: %u observed operation(s); first: %.40s.%.55s -> %.55s, status %.55s. Last instrumented source %.110s:%u. Downstream execution not recorded unless explicitly observed.",
+     "DSD trace %llu: %u operation(s); %.24s.%.32s -> %.40s [%.32s] at %.70s:%u. Unobserved stages remain unknown.",
      (unsigned long long)id,diagnosis.count,e->module,e->method,
      e->operation,e->status,e->file,e->line);
   }
@@ -262,7 +262,7 @@ static stnlabz_module_result_t command_service(
 }
 
 static void assertion(stnlabz_module_qualification_result_t *q,int ok,int negative){
- q->tests_executed++;if(ok)q->tests_passed++;else q->tests_failed++;
+ q->tests_executed++;if(ok)q->tests_passed++;else {q->tests_failed++;fprintf(stderr,"DSD qualification assertion %u failed\n",q->tests_executed);}
  if(negative){q->negative_test_executed=1;if(ok)q->negative_test_passed=1;}
 }
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q){
@@ -284,7 +284,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  e.result=1;e.span_id=2;
  assertion(q,record(&e),0);
  assertion(q,diagnose(42,&out)&&out.failures==1&&
-    strstr(out.summary,"SQLITE_BUSY")!=NULL,0);
+    strstr(out.summary,"database is locked")!=NULL,0);
  bad=e;bad.trace_id=0;assertion(q,!valid_event(&bad),1);
  bad=e;bad.span_id=0;assertion(q,!valid_event(&bad),1);
  bad=e;bad.result=3;assertion(q,!valid_event(&bad),1);
@@ -339,12 +339,12 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  snprintf(cmd.command,sizeof cmd.command,"show trace");
  assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"No previous private request")!=NULL,0);
  cmd.previous_trace_id=42;
- assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"observed operation")!=NULL,0);
+ assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"operation(s)")!=NULL,0);
  cmd.previous_trace_id=0;
  snprintf(cmd.command,sizeof cmd.command,"diagnose my last request");
  assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"unavailable")!=NULL,0);
  cmd.previous_trace_id=42;
- assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"SQLITE_BUSY")!=NULL,0);
+ assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"database is locked")!=NULL,0);
  snprintf(cmd.command,sizeof cmd.command,"diagnose trace 42");
  assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"SQLITE_BUSY")!=NULL,0);
  snprintf(cmd.command,sizeof cmd.command,"diagnose trace nonsense");
@@ -392,7 +392,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="dsd",.name="Developer Self-Diagnostics",
- .version_major=0,.version_minor=5,.version_patch=0,
+ .version_major=0,.version_minor=5,.version_patch=1,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
