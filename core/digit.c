@@ -60,7 +60,7 @@ static stnlabz_module_result_t digit_service(const char *name,
             for (i = 0; i < live_registry->count; ++i) {
                 const stnlabz_module_record_t *entry = &live_registry->modules[i];
                 n = snprintf(reply + used, sizeof reply - used,
-                    "%s%s=%s (%u/%u)", used ? "; " : "",
+                    "%s%s=%s (%u/%u)", used ? "\x1e" : "",
                     entry->descriptor.id,
                     stnlabz_module_state_string(entry->state),
                     entry->qualification.tests_passed,
