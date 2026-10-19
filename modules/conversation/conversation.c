@@ -237,9 +237,9 @@ static stnlabz_module_result_t listen_message(const message_t *m,char *out,
  if(!issue[0]||!other_speaker)return STNLABZ_MODULE_OK;
  /* Find an independently repeated technical subject in earlier turns.
   * Subject must differ from the problem, rather than trusting one keyword. */
- for(i=0;i+1<history.count&&!subject;i++){
+ for(i=0;i+1<history.count&&!subject[0];i++){
   count=tokens(history.items[i].text,words,WORD_CAP);
-  for(j=0;j<count&&!subject;j++){
+  for(j=0;j<count&&!subject[0];j++){
    size_t n=words[j].end-words[j].begin,repeat=0;
    const char *p=history.items[i].text+words[j].begin;
    char term[64];
@@ -345,6 +345,9 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  check(q,topic_present("In PHP, a statement ends with a semicolon.","semicolon"),0);
  check(q,!topic_present("semicolons","semicolon"),1);
  check(q,topic_present("PHP echo","PHP"),0);
+ check(q,candidate_word("Python",6),0);
+ check(q,!candidate_word("where",5),1);
+ check(q,candidate_word("indentation",11),0);
  check(q,tokens("STN-Labz",w,WORD_CAP)==1,0);
  check(q,search_phrase("STN-Labz",w,0,1,&query)&&!strcmp(query.query,"STN-Labz"),0);
  check(q,tokens("alpha beta",w,WORD_CAP)==2,0);
