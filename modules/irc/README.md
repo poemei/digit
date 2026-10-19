@@ -22,3 +22,23 @@ failure because its mandatory 20 real qualification tests are not yet
 implemented. The binary MUST NOT be activated until independent qualification
 evidence, Core-side service routing, and operator authorization exist.
 No IRC connection is established by merely building or discovering it.
+
+## Build, test, and install
+
+From `modules/irc/`, the module independently supports:
+
+```sh
+make all
+make test
+make clean
+sudo make install
+```
+
+`make install` places `module.conf` and `bin/irc.so` in
+`/opt/digit/modules/irc/`, with the shared object in its `bin/` child.
+The module's `test/` folder contains its own ABI descriptor smoke test;
+**this is not the mandatory 20-test qualification suite**.
+
+From the Digit repository root, use `make`, `make test`, and
+`sudo make install`. Installation does not confer authorization,
+qualification, or module activation.
