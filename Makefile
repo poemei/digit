@@ -44,6 +44,7 @@ test: $(TARGET) $(CORE_TARGET)
 	$(CC) $(CPPFLAGS) $(CFLAGS) core/stnlabz_abi/module_registry.c test/test_core_authorization.c -o bin/test_core_authorization
 	$(CC) $(CPPFLAGS) $(CFLAGS) core/stnlabz_abi/module_registry.c test/test_core_lifecycle.c -o bin/test_core_lifecycle
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(filter-out core/digit.c,$(CORE_SOURCES)) test/test_core_services.c -o bin/test_core_services $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(filter-out core/core_hotload.c,$(CORE_SOURCES)) test/test_core_hotload.c -o bin/test_core_hotload $(LDLIBS)
 	@sh test/run_core_tests.sh
 # [End AI:GPT-6]
 clean:
