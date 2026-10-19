@@ -48,19 +48,7 @@ static int is_module_component(const char *component)
     return !strcmp(component,"MODULE")||!strcmp(component,"DISCOVERY")||
         !strcmp(component,"ACTIVATION");
 }
-/* Operator module log contract: meaningful lifecycle transitions and messages.
-   Routine inspection/request/stop chatter is not an operator-facing finding. */
-static int routine_module_event(const char *event){
- static const char *const names[]={
-  "VERIFY_ATTEMPT","VERIFY_PASS","QUALIFY_ATTEMPT",
-  "AUTHORIZE_REQUEST","AUTHORIZE_GRANTED","ACTIVATE_REQUEST",
-  "STOP_REQUEST","STOP_PASS","SCAN_START","SCAN_COMPLETE",
-  "DIRECTORY_CREATED","MANAGER_SHUTDOWN"
- };
- size_t i;
- for(i=0;i<sizeof names/sizeof names[0];i++)if(!strcmp(event,names[i]))return 1;
- return 0;
-}
+/* [AI:GPT-6 | 2026-10-18] All module lifecycle events are audited. */
 static void module_identity(const char *detail,char *id,size_t id_size,
  char *version,size_t version_size){
  const char *p;size_t n;
@@ -93,17 +81,14 @@ int stnlabz_log_event(const char *component,const char *event,const char *detail
        !strftime(stamp,sizeof stamp,"%Y-%m-%dT%H:%M:%SZ",&utc))return 0;
     if(destination==module_log_stream){
         char id[80],version[48];
-        if(routine_module_event(event))return 1;
         if(!strcmp(event,"MESSAGE")){
             written=fprintf(destination,"%s MODULE MESSAGE %s\n",stamp,detail?detail:"");
         }else{
             module_identity(detail,id,sizeof id,version,sizeof version);
             module_sequence++;
-            int failure=strstr(event,"FAILED")||strstr(event,"REJECT")||
-                strstr(event,"DENIED")||strstr(event,"ERROR");
             written=fprintf(destination,"%s MODULE %s sequence=%lu module=%s%s%s%s%s\n",
                 stamp,event,module_sequence,id,version[0]?" version=":"",version,
-                failure&&detail?" evidence=":"",failure&&detail?detail:"");
+                detail&&*detail?" detail=":"",detail&&*detail?detail:"");
         }
     }else{
         written=fprintf(destination,"%s %s %s%s%s\n",
