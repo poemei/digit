@@ -21,6 +21,8 @@ static volatile int busy;
 static time_t previous_poll;
 static char previous_signature[192];
 static long previous_lines;
+static int has_reported;
+static int last_source_state=-1;
 static void lock(void){while(__sync_lock_test_and_set(&busy,1)){}}
 static void unlock(void){__sync_lock_release(&busy);}
 static size_t collect(char *input,size_t size,size_t count,void *userdata){
@@ -110,7 +112,7 @@ static stnlabz_module_result_t poll_service(
  size_t response_size,size_t *response_used,void *context){
  digit_s2_report_t *out=response;buffer_t b={0};
  char lines[RICTUS_LINES][512];size_t stored=0;
- long count;int available,has_priority=0,matched=0,stale=0;
+ long count;int available,has_priority=0,matched=0,stale=0,source_state,first_report;
  json_object *root=NULL,*records=NULL,*entry;
  const char *severity,*relevance,*id,*first,*second,*date,*best_date="";
  char signature[192]={0};char report[DIGIT_S2_REPORT_CAP]={0};
@@ -160,6 +162,8 @@ static stnlabz_module_result_t poll_service(
    }
   }
  }
+ source_state=(available?1:0)|(count>=0?2:0);
+ lock();first_report=!has_reported;unlock();
  if(!available){
   snprintf(report,sizeof report,"[S2] Sentinel feed unavailable or unrecognized; Rictus %s. No all-clear.",
      count<0?"unavailable":"accessible");
@@ -169,6 +173,9 @@ static stnlabz_module_result_t poll_service(
   snprintf(report,sizeof report,
    "[S2] HIGH/CRITICAL severity and relevance observed in Sentinel; Rictus indicator match=%s; investigation pending (not proof of compromise).",
    matched?"yes":"not found");
+ }else if(first_report){
+  snprintf(report,sizeof report,
+   "[S2] Mission online: Rictus accessible; Sentinel accessible; no HIGH/CRITICAL paired findings in this snapshot. No all-clear implied.");
  }else if(count>previous_lines){
   snprintf(report,sizeof report,
    "[S2] Rictus has %ld new log records in current file; Sentinel available; unclassified observations require review.",
@@ -176,11 +183,14 @@ static stnlabz_module_result_t poll_service(
  }else stale=1;
  if(!stale&&report[0]){
   lock();
-  if(!strcmp(signature,previous_signature)&&count==previous_lines){
+  if(has_reported && source_state==last_source_state &&
+     !strcmp(signature,previous_signature)&&count==previous_lines){
    unlock();goto done;
   }
   snprintf(previous_signature,sizeof previous_signature,"%s",signature);
   previous_lines=count;
+  has_reported=1;
+  last_source_state=source_state;
   unlock();
   memset(out,0,sizeof *out);
   snprintf(out->report,sizeof out->report,"%s",report);
@@ -243,7 +253,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=1,.version_patch=0,
+ .version_major=0,.version_minor=1,.version_patch=1,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
