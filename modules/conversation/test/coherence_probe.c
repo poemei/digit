@@ -1,6 +1,6 @@
 /* Offline coherence probe: intentionally NOT part of module qualification.
  * Proves whether Conversation can connect a short IRC exchange to knowledge.
- * v0.4.5 should fetch context and evidence, but coherent participation stays RED.
+ * Tests limited grounded participation, not general conversational intelligence.
  * No production state, no database, no IRC connection.
  * Build: cc -I../../core/stnlabz_abi -std=c11 -Wall -Wextra -Wpedantic test/coherence_probe.c -o bin/coherence_probe -ldl
  * Run:   ./bin/coherence_probe ./bin/conversation.so
@@ -68,7 +68,7 @@ static int send(const char *sender,const char *message,int expect_speak){
  snprintf(in.message,sizeof in.message,"%s",message);
  rc=listener(&in,sizeof in,out,sizeof out,&used,listener_context);
  printf("%s: %s (%s)\n",sender,message,used?out:"SILENT");
- return rc==STNLABZ_MODULE_OK && (expect_speak ? (used>0 && strstr(out,"semicolon")!=NULL) : used==0);
+ return rc==STNLABZ_MODULE_OK && (expect_speak ? (used>0 && strstr(out,"semicolon")!=NULL && strstr(out,"corpus #")==NULL && strstr(out,"notes:")==NULL) : used==0);
 }
 int main(int argc,char **argv){
  void *handle,*sym;
@@ -89,8 +89,7 @@ int main(int argc,char **argv){
  ++total;passed+=send("PoeMei","laurie where do you upload your module to?",0);
  ++total;passed+=send("Laurie_Vo","I am learning PHP",0);
  ++total;passed+=send("PoeMei","PHP has an echo statement, remember the semicolon",0);
- /* Desired acceptance case: after this exchange Digit can offer one grounded,
-  * on-topic contribution. It currently cannot; this is a RED test. */
+ /* One grounded on-topic contribution, without exposing corpus metadata. */
  ++total;passed+=send("Laurie_Vo","I keep forgetting the semicolon!",1);
  printf("Observation reads=%u, corpus reads=%u; coherence %d/%d\n",
   observation_reads,corpus_reads,passed,total);
