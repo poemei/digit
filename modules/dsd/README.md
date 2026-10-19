@@ -88,3 +88,25 @@ record selection, or downstream module results.
 
 The operator must qualify and activate updated modules; source commits are
 not evidence of successful deployment or runtime acceptance.
+
+## On-demand SQLite3 probe (SQLite3 0.1.3 / IRC 0.2.15)
+
+When the authenticated private IRC client requests `diagnose my last request`,
+IRC reports DSD's stored request-boundary observations and, as a **separate**
+private message, calls `digit.sqlite3.diagnostic`. The SQLite3 module checks
+its own live database handle and the presence of its `digit_kv` table using
+a read-only prepared statement. Its response includes status, the inspected
+stage, a sanitized explanation and the module source location. It never
+queries record contents, modifies rows, runs migrations, or changes Core.
+
+**Important:** The probe is a current SQLite3 health observation, not a
+historical child span of the user's prior request. In this rebuild,
+`digit.message` does not dispatch ordinary `define php` queries to a
+conversational/SQLite3 pipeline. DSD must report that SQLite3 was not
+observed on that request. The separate probe cannot establish whether the
+missing pipeline is a defect. The actual request-to-database trace requires
+instrumented downstream modules and an existing approved path executing
+those modules; do not claim an end-to-end trace from a synthetic probe.
+
+The DM does not accept public-channel DSD commands. Source edits are not
+deployment or qualification evidence. Operator end-to-end acceptance is pending.
