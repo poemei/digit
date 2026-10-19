@@ -12,6 +12,7 @@
 #include <errno.h>
 #include "module.h"
 #include "s2.h"
+#include "s2_observations.h"
 #define RICTUS "/var/log/rictus/rictus.log"
 #define SENTINEL "https://api.stn-labz.com/threats"
 #define FETCH_MAX (1024u*1024u)
@@ -30,6 +31,7 @@ static char previous_signature[192];
 static long previous_lines;
 static int has_reported;
 static int last_source_state=-1;
+static int64_t observation_cursor;
 static void lock(void){while(__sync_lock_test_and_set(&busy,1)){}}
 static void unlock(void){__sync_lock_release(&busy);}
 static size_t collect(char *input,size_t size,size_t count,void *userdata){
@@ -243,10 +245,42 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  return r->tests_executed>=20&&!r->tests_failed&&r->negative_test_executed&&
    r->negative_test_passed?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_QUALIFICATION;
 }
+/* Passive, bounded observation bridge. Report contains a reference to
+ * source evidence, not an independently verified threat assertion. */
+static int observation_report(digit_s2_report_t *out,int64_t *selected){
+ digit_s2_observations_query_t query={0};
+ digit_s2_observations_result_t result={0};
+ size_t used=0;
+ const char *id;
+ char token[48]={0};
+ size_t i=0;
+ if(!out||!selected||!host||!host->invoke_service)return 0;
+ query.after_id=observation_cursor;
+ if(host->invoke_service(DIGIT_S2_OBSERVATIONS_SERVICE,&query,sizeof query,
+    &result,sizeof result,&used)!=STNLABZ_MODULE_OK||
+    used!=sizeof result||result.id<=query.after_id||
+    !memchr(result.text,0,sizeof result.text))return 0;
+ id=strstr(result.text,"INT-");
+ if(id){
+  while(id[i]&&i<sizeof token-1&&
+        ((id[i]>='A'&&id[i]<='Z')||
+         (id[i]>='0'&&id[i]<='9')||id[i]=='-')){
+   token[i]=id[i];i++;
+  }
+ }
+ if(!token[0])snprintf(token,sizeof token,"not supplied");
+ memset(out,0,sizeof *out);
+ snprintf(out->report,sizeof out->report,
+  "[S2] IRC observation #%lld: Rictus Intel report %s captured; "
+  "source unverified, follow-up pending.",(long long)result.id,token);
+ *selected=result.id;
+ return 1;
+}
 /* Dedicated scheduler: never invokes an ABI service from another service
  * handler, avoiding Core's non-recursive registry lock. */
 static void *scheduler_main(void *unused){
  digit_s2_report_t result={0},pending={0};size_t used=0;
+ int64_t pending_observation=0;
  struct timespec until;
  (void)unused;
  for(;;){
@@ -255,6 +289,10 @@ static void *scheduler_main(void *unused){
   stopping_now=scheduler_stop;
   pthread_mutex_unlock(&scheduler_mutex);
   if(stopping_now)break;
+  if(!pending.report[0]&&observation_report(&pending,&pending_observation)){
+   /* Observation delivery is prioritized; the existing Sentinel/Rictus
+    * cycle resumes when the observation queue has been drained. */
+  }
   if(!pending.report[0]){
    memset(&result,0,sizeof result);used=0;
    if(poll_service(NULL,0,&result,sizeof result,&used,NULL)==STNLABZ_MODULE_OK&&
@@ -264,8 +302,10 @@ static void *scheduler_main(void *unused){
   if(pending.report[0]&&host&&host->invoke_service){
    size_t delivered=0;
    if(host->invoke_service(DELIVER_SERVICE,&pending,sizeof pending,
-      NULL,0,&delivered)==STNLABZ_MODULE_OK)
+      NULL,0,&delivered)==STNLABZ_MODULE_OK){
+    if(pending_observation){observation_cursor=pending_observation;pending_observation=0;}
     memset(&pending,0,sizeof pending);
+   }
   }
   if(clock_gettime(CLOCK_REALTIME,&until)!=0)break;
   until.tv_sec+=pending.report[0]?5:POLL_SECONDS;
@@ -287,6 +327,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api){
  if(!api->register_service(DIGIT_S2_POLL_SERVICE,poll_service,NULL)){
   host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
  }
+ observation_cursor=0;
  scheduler_stop=0;
  if(pthread_create(&scheduler,NULL,scheduler_main,NULL)){
   (void)api->unregister_service(DIGIT_S2_POLL_SERVICE,NULL);
@@ -309,7 +350,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=1,.version_patch=2,
+ .version_major=0,.version_minor=1,.version_patch=3,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
