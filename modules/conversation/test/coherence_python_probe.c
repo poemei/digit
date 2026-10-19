@@ -76,6 +76,12 @@ int main(int argc,char **argv){
  sym=dlsym(handle,"stnlabz_module_get_descriptor");
  if(!sym){dlclose(handle);return 2;}
  memcpy(&descriptor,&sym,sizeof descriptor);mod=descriptor();
+ if(!mod){fprintf(stderr,"No module descriptor\n");dlclose(handle);return 2;}
+ printf("Conversation binary v%u.%u.%u\n",mod->version_major,mod->version_minor,mod->version_patch);
+ if(mod->version_major!=0||mod->version_minor!=4||mod->version_patch<9){
+  fprintf(stderr,"Rebuild conversation.so: this probe requires v0.4.9 or newer\n");
+  dlclose(handle);return 4;
+ }
  host.register_service=register_service;host.unregister_service=unregister_service;
  host.invoke_service=invoke;
  if(!mod||!mod->start||!mod->stop||mod->start(&host)!=STNLABZ_MODULE_OK||!listener){
@@ -90,6 +96,6 @@ int main(int argc,char **argv){
   observation_reads,corpus_reads,passed,total);
  if(mod->stop()!=STNLABZ_MODULE_OK){dlclose(handle);return 2;}
  dlclose(handle);
- if(observation_reads!=4||corpus_reads!=1){fprintf(stderr,"Expected four history requests and one corpus lookup\\n");return 3;}
+ if(observation_reads!=4||corpus_reads!=1){fprintf(stderr,"Expected four history requests and one corpus lookup\n");return 3;}
  return passed==total?0:1;
 }
