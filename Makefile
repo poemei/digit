@@ -25,6 +25,7 @@ irc-test:
 	$(MAKE) -C modules/irc test
 
 install: all
+	install -d -m 0700 "$(DESTDIR)$(PREFIX)/logs"
 	install -d "$(DESTDIR)$(PREFIX)/bin"
 	install -m 0755 $(TARGET) "$(DESTDIR)$(PREFIX)/bin/digit"
 	install -m 0755 $(CORE_TARGET) "$(DESTDIR)$(PREFIX)/bin/digit-core"
