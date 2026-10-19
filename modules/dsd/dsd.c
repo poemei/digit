@@ -394,6 +394,39 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
   CHECK(diagnose(58,&result)&&result.failures==1,0);
   CHECK(strstr(result.summary,"rejected its input")!=NULL,0);
  }
+ /* A single trace must retain real intermediate stages and outcomes. */
+ {
+  digit_dsd_event_t stage={0};
+  stage.trace_id=60;stage.span_id=1;stage.line=__LINE__;
+  snprintf(stage.module,sizeof stage.module,"sqlite3");
+  snprintf(stage.method,sizeof stage.method,"corpus_search");
+  snprintf(stage.file,sizeof stage.file,"modules/sqlite3/sqlite3.c");
+  snprintf(stage.status,sizeof stage.status,"QUERY_MATCH");
+  snprintf(stage.operation,sizeof stage.operation,"corpus_fts");
+  stage.records=3;
+  CHECK(record(&stage),0);
+  stage.span_id=2;stage.records=3;
+  snprintf(stage.module,sizeof stage.module,"conversation");
+  snprintf(stage.method,sizeof stage.method,"answer");
+  snprintf(stage.file,sizeof stage.file,"modules/conversation/conversation.c");
+  snprintf(stage.operation,sizeof stage.operation,"corpus_search");
+  CHECK(record(&stage),0);
+  stage.span_id=3;stage.records=0;
+  snprintf(stage.module,sizeof stage.module,"irc");
+  snprintf(stage.method,sizeof stage.method,"incoming");
+  snprintf(stage.file,sizeof stage.file,"modules/irc/irc.c");
+  snprintf(stage.operation,sizeof stage.operation,"digit.message");
+  snprintf(stage.status,sizeof stage.status,"RESPONSE_RETURNED");
+  CHECK(record(&stage),0);
+  CHECK(diagnose(60,&result)&&result.count==3&&!result.failures,0);
+  CHECK(strstr(result.summary,"sqlite3.corpus_search")!=NULL,0);
+  CHECK(strstr(result.summary,"conversation.answer")!=NULL,0);
+  CHECK(strstr(result.summary,"RESPONSE_RETURNED")!=NULL,0);
+  cmd.previous_trace_id=60;
+  snprintf(cmd.command,sizeof cmd.command,"show trace");
+  CHECK(command_text(&cmd,&reply)&&strstr(reply.text,"corpus_fts")!=NULL,0);
+  cmd.previous_trace_id=0;
+ }
  for(i=0;i<DIGIT_DSD_MAX_EVENTS+2;i++){
   event.span_id=3+i;
   CHECK(record(&event),0);
@@ -479,7 +512,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="dsd",.name="Developer Self-Diagnostics",
- .version_major=0,.version_minor=6,.version_patch=0,
+ .version_major=0,.version_minor=6,.version_patch=1,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
