@@ -478,7 +478,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
     {irc_s2_report_t test_report={{0}};
      snprintf(test_report.report,sizeof test_report.report,"[S2] test report");
      check(result,safe_report(test_report.report,sizeof test_report.report),0);
-     snprintf(test_report.report,sizeof test_report.report,"bad\\nline");
+     snprintf(test_report.report,sizeof test_report.report,"bad\nline");
      check(result,!safe_report(test_report.report,sizeof test_report.report),1);
      memset(test_report.report,'X',sizeof test_report.report);
      check(result,!safe_report(test_report.report,sizeof test_report.report),1);
@@ -546,7 +546,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=2,.version_patch=9,
+    .version_major=0,.version_minor=2,.version_patch=10,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
