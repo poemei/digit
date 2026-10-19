@@ -109,11 +109,79 @@ static stnlabz_module_result_t diagnose_service(
  *used=sizeof(digit_dsd_result_t);
  return STNLABZ_MODULE_OK;
 }
+
+/* Read-only command language. No implicit global "last request" shared
+ * across IRC accounts; the authorized entry adapter supplies that ID. */
+static int command_text(const digit_dsd_command_request_t *req,
+                        digit_dsd_command_result_t *out){
+ digit_dsd_result_t diagnosis;
+ uint64_t id=0;
+ char tail;
+ const char *text;
+ if(!req||!out||!memchr(req->command,0,sizeof req->command))return 0;
+ text=req->command;
+ memset(out,0,sizeof *out);
+ if(!strcmp(text,"show dsd")){
+  snprintf(out->text,sizeof out->text,
+    "DSD available: trace diagnostics, bounded evidence, source locations when instrumented. Commands: diagnose my last request | diagnose trace <id>. Uninstrumented paths remain unknown.");
+  return 1;
+ }
+ if(!strcmp(text,"diagnose my last request")){
+  id=req->previous_trace_id;
+  if(!id){
+   snprintf(out->text,sizeof out->text,
+    "DSD: Previous request trace unavailable. No diagnosis can be established.");
+   return 1;
+  }
+ }else if(!strncmp(text,"diagnose trace ",15)){
+  unsigned long long parsed=0;
+  if(sscanf(text+15,"%llu%c",&parsed,&tail)!=1||!parsed){
+   snprintf(out->text,sizeof out->text,"DSD: Invalid trace identifier.");
+   return 1;
+  }
+  id=(uint64_t)parsed;
+  if((unsigned long long)id!=parsed)return 0;
+ }else if(!strncmp(text,"diagnose module ",16)){
+  const char *module=text+16;
+  if(!valid_code(module,strlen(module)+1,0)){
+   snprintf(out->text,sizeof out->text,"DSD: Invalid module identifier.");
+   return 1;
+  }
+  snprintf(out->text,sizeof out->text,
+    "DSD: Module %.48s has no independent health probe in this version. Request-correlated instrumentation is required before a cause can be established.",module);
+  return 1;
+ }else return 0; /* Do not commandeer ordinary conversation. */
+ if(!diagnose(id,&diagnosis))return 0;
+ if(diagnosis.dropped){
+  snprintf(out->text,sizeof out->text,
+   "DSD trace %llu: %.340s %u event(s) omitted; evidence incomplete.",
+   (unsigned long long)id,diagnosis.summary,diagnosis.dropped);
+ }else{
+  snprintf(out->text,sizeof out->text,"DSD trace %llu: %.420s",
+   (unsigned long long)id,diagnosis.summary);
+ }
+ return 1;
+}
+static stnlabz_module_result_t command_service(
+ const void *request,size_t request_size,void *response,
+ size_t response_size,size_t *used,void *context){
+ (void)context;
+ if(used)*used=0;
+ if(!request||request_size!=sizeof(digit_dsd_command_request_t)||
+    !response||response_size<sizeof(digit_dsd_command_result_t)||!used||
+    !command_text((const digit_dsd_command_request_t *)request,
+     (digit_dsd_command_result_t *)response))
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ *used=sizeof(digit_dsd_command_result_t);
+ return STNLABZ_MODULE_OK;
+}
+
 static void assertion(stnlabz_module_qualification_result_t *q,int ok,int negative){
  q->tests_executed++;if(ok)q->tests_passed++;else q->tests_failed++;
  if(negative){q->negative_test_executed=1;if(ok)q->negative_test_passed=1;}
 }
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q){
+ digit_dsd_command_request_t cmd={0};digit_dsd_command_result_t reply;
  digit_dsd_event_t e={0},bad;
  digit_dsd_result_t out;
  unsigned i;
@@ -151,6 +219,20 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  }
  assertion(q,diagnose(42,&out)&&out.count==DIGIT_DSD_MAX_EVENTS&&out.dropped==4,0);
  assertion(q,out.events[0].span_id==1&&out.events[1].span_id==2,0);
+ snprintf(cmd.command,sizeof cmd.command,"show dsd");
+ assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"DSD available")!=NULL,0);
+ snprintf(cmd.command,sizeof cmd.command,"diagnose my last request");
+ assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"unavailable")!=NULL,0);
+ cmd.previous_trace_id=42;
+ assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"SQLITE_BUSY")!=NULL,0);
+ snprintf(cmd.command,sizeof cmd.command,"diagnose trace 42");
+ assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"SQLITE_BUSY")!=NULL,0);
+ snprintf(cmd.command,sizeof cmd.command,"diagnose trace nonsense");
+ assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"Invalid trace")!=NULL,1);
+ snprintf(cmd.command,sizeof cmd.command,"diagnose module s2");
+ assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"no independent health probe")!=NULL,0);
+ snprintf(cmd.command,sizeof cmd.command,"hello");
+ assertion(q,!command_text(&cmd,&reply),1);
  /* Qualification has no external side effects and resets its own fixture. */
  pthread_mutex_lock(&guard);memset(slots,0,sizeof slots);replacement=0;
  pthread_mutex_unlock(&guard);
@@ -165,10 +247,17 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
   (void)h->unregister_service(DIGIT_DSD_RECORD_SERVICE,NULL);
   return STNLABZ_MODULE_ERR_START_FAILED;
  }
+ if(!h->register_service(DIGIT_DSD_COMMAND_SERVICE,command_service,NULL)){
+  (void)h->unregister_service(DIGIT_DSD_DIAGNOSE_SERVICE,NULL);
+  (void)h->unregister_service(DIGIT_DSD_RECORD_SERVICE,NULL);
+  return STNLABZ_MODULE_ERR_START_FAILED;
+ }
  host=h;return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t stop(void){
  if(!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(!host->unregister_service(DIGIT_DSD_COMMAND_SERVICE,NULL))
+  return STNLABZ_MODULE_ERR_STOP_FAILED;
  if(!host->unregister_service(DIGIT_DSD_DIAGNOSE_SERVICE,NULL))
   return STNLABZ_MODULE_ERR_STOP_FAILED;
  if(!host->unregister_service(DIGIT_DSD_RECORD_SERVICE,NULL))
@@ -180,7 +269,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="dsd",.name="Developer Self-Diagnostics",
- .version_major=0,.version_minor=1,.version_patch=0,
+ .version_major=0,.version_minor=2,.version_patch=0,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
