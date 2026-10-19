@@ -1,4 +1,4 @@
-# Digit Developer Self-Diagnostics (DSD) 0.1.0
+# Digit Developer Self-Diagnostics (DSD) 0.3.0
 
 An independent ABI 1.5 module providing bounded, read-only, evidence-led
 trace correlation. **Source candidate; operator acceptance outstanding.**
@@ -35,3 +35,31 @@ caller submits genuine events. This is not full end-to-end tracing.
 
 Build: make -C modules/dsd clean all test
 Deploy and acceptance controlled by the operator.
+
+## On-demand commands (service-level only)
+
+The module also registers `digit.dsd.command` with a fixed-size request
+and response contract defined in `dsd.h`. Commands understood:
+
+- `show dsd`: report the DSD capabilities and limitations.
+- `diagnose my last request`: inspect the caller-provided previous trace ID;
+  no global last-request state is used.
+- `diagnose trace <id>`: inspect a trace if the authorized caller permits it.
+- `diagnose module <id>`: inspect the latest recorded trace that contains
+  an event for the specified module; **no events** is not evidence of health.
+
+Diagnostic summaries translate recognized status identifiers into readable
+descriptions (e.g., SQLITE_BUSY means database is locked). Raw numeric error
+codes are not included in conversational summaries.
+
+**Integration status:** The current Core's `digit.message` handler recognizes
+only Core module-management commands, not DSD commands. It does not delegate
+`show dsd` or `diagnose` to this module, and its module host does not
+supply register_command. Consequently those commands are **not reachable
+from IRC today**. This is a deliberate architecture limit; no Core, ABI,
+IRC or SQLite3 modifications are authorized or included here.
+
+**Security:** The command service has no independent authenticated actor
+context. A future authorized entry adapter must enforce DM scope and trace
+access before calling it. Do not expose this service to untrusted input
+without such a check. This module retains no per-user message text.
