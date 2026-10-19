@@ -6,6 +6,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <netdb.h>
 #include <pthread.h>
 #include <signal.h>
@@ -42,41 +43,55 @@ static const stnlabz_module_host_t *host_api;
 static time_t last_greeting;
 #define IRC_GREETING_INTERVAL 30
 
-/* Only fixed diagnostic labels are written; never log wire data, account
- * names, credentials, hostmasks, or server-supplied text. stderr is already
- * connected to Digit's service output; no extra file or log sink is created. */
-static void irc_diag(const char *stage,const char *result) {
-    fprintf(stderr,"[digit:irc] %s %s\n",stage,result);
-    fflush(stderr);
+/* Record sanitized IRC protocol milestones in the existing module log.
+ * The module ABI has no logging callback, and Core does not export its logger;
+ * a single O_APPEND write targets the established modules.log without
+ * altering Core, the ABI, or creating a second log file. */
+static void irc_record(const char *stage,const char *result) {
+    char message[192];int fd,n;
+    time_t now=time(NULL);struct tm utc;char stamp[32];
+    if(now==(time_t)-1||!gmtime_r(&now,&utc)||
+       !strftime(stamp,sizeof stamp,"%Y-%m-%dT%H:%M:%SZ",&utc))return;
+    n=snprintf(message,sizeof message,
+       "%s MODULE IRC_DIAG module=irc stage=%s result=%s\\n",
+       stamp,stage,result);
+    if(n<=0||(size_t)n>=sizeof message)return;
+    fd=open("/opt/digit/logs/modules.log",
+       O_WRONLY|O_APPEND|O_CLOEXEC|O_NOFOLLOW);
+    if(fd<0)return;
+    (void)write(fd,message,(size_t)n);
+    (void)close(fd);
 }
-/* IRC registration trace, preserving protocol lines for troubleshooting.
- * Never emit authentication exchanges or user/chat payloads. */
+static void irc_diag(const char *stage,const char *result) {
+    irc_record(stage,result);
+}
+/* Protocol logging intentionally records numeric codes and command
+ * categories, never raw messages, SASL payloads or user content. */
 static void irc_trace(const char *way,const char *line) {
-    size_t n;
-    int safe=0;
-    const char *p=line;
+    const char *command=line,*p;
     if(!line)return;
-    if(!strncmp(line,"CAP ",4)||!strncmp(line,"NICK ",5)||
-       !strncmp(line,"USER ",5)||!strncmp(line,"JOIN ",5)||
-       !strncmp(line,"PING ",5)||!strncmp(line,"PONG ",5))safe=1;
-    if(*p==':') {
-        const char *space=strchr(p,' ');
-        if(space) {
-            const char *verb=space+1;
-            if(!strncmp(verb,"CAP ",4)||!strncmp(verb,"PING ",5)||
-               !strncmp(verb,"001 ",4)||!strncmp(verb,"433 ",4)||
-               !strncmp(verb,"903 ",4)||!strncmp(verb,"904 ",4)||
-               !strncmp(verb,"905 ",4)||!strncmp(verb,"906 ",4)||
-               !strncmp(verb,"907 ",4)||!strncmp(verb,"471 ",4)||
-               !strncmp(verb,"473 ",4)||!strncmp(verb,"474 ",4)||
-               !strncmp(verb,"475 ",4))safe=1;
-        }
+    if(line[0]==':'){
+        p=strchr(line,' ');
+        if(!p)return;
+        command=p+1;
     }
-    if(!safe)return;
-    n=strcspn(line,"\\r\\n");
-    if(n>480)n=480;
-    fprintf(stderr,"[digit:irc:protocol] %s %.*s\\n",way,(int)n,line);
-    fflush(stderr);
+    if(!strncmp(command,"CAP ",4))irc_record(way,"CAP");
+    else if(!strncmp(command,"PING ",5))irc_record(way,"PING");
+    else if(!strncmp(command,"PONG ",5))irc_record(way,"PONG");
+    else if(!strncmp(command,"NICK ",5))irc_record(way,"NICK");
+    else if(!strncmp(command,"USER ",5))irc_record(way,"USER");
+    else if(!strncmp(command,"JOIN ",5))irc_record(way,"JOIN");
+    else if(!strncmp(command,"001 ",4))irc_record(way,"001");
+    else if(!strncmp(command,"433 ",4))irc_record(way,"433");
+    else if(!strncmp(command,"903 ",4))irc_record(way,"903");
+    else if(!strncmp(command,"904 ",4))irc_record(way,"904");
+    else if(!strncmp(command,"905 ",4))irc_record(way,"905");
+    else if(!strncmp(command,"906 ",4))irc_record(way,"906");
+    else if(!strncmp(command,"907 ",4))irc_record(way,"907");
+    else if(!strncmp(command,"471 ",4))irc_record(way,"471");
+    else if(!strncmp(command,"473 ",4))irc_record(way,"473");
+    else if(!strncmp(command,"474 ",4))irc_record(way,"474");
+    else if(!strncmp(command,"475 ",4))irc_record(way,"475");
 }
 static int assign(char *out,size_t cap,const char *in) {
     size_t n = strlen(in);
@@ -475,7 +490,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=2,.version_patch=4,
+    .version_major=0,.version_minor=2,.version_patch=5,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
