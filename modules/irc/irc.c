@@ -357,11 +357,20 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled
         stnlabz_module_result_t rc;
         uint64_t trace=0;
         unsigned observation_line=__LINE__+1;
+        if(private_message){
+            size_t trace_used=0;
+            trace=dsd_next_trace++;
+            if(!trace)trace=dsd_next_trace++;
+            /* DSD binds only the current worker thread. No Core/ABI edits. */
+            (void)host_api->invoke_service(DIGIT_DSD_BIND_SERVICE,
+                &trace,sizeof trace,NULL,0,&trace_used);
+        }
         rc=host_api->invoke_service(IRC_INPUT_SERVICE,&input,sizeof input,
             response,sizeof response,&used);
         if(private_message){
-            trace=dsd_next_trace++;
-            if(!trace)trace=dsd_next_trace++;
+            uint64_t clear=0;size_t trace_used=0;
+            (void)host_api->invoke_service(DIGIT_DSD_BIND_SERVICE,
+                &clear,sizeof clear,NULL,0,&trace_used);
             dsd_record_message(input.account,trace,
                 rc==STNLABZ_MODULE_OK&&used>0,rc,
                 observation_line);
