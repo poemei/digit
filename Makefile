@@ -40,6 +40,7 @@ test: $(TARGET) $(CORE_TARGET)
 	$(CC) $(CPPFLAGS) $(CFLAGS) core/agent_root.c core/identity_digit.c models/report.c views/irc_render.c test/test_core.c -o bin/test_core
 # [AI:GPT-6] Run shell reporter without Make dollar escaping.
 	$(CC) $(CPPFLAGS) $(CFLAGS) core/transports.c test/test_transports.c -o bin/test_transports
+	$(CC) $(CPPFLAGS) $(CFLAGS) core/logging.c test/test_logging.c -o bin/test_logging
 	@sh test/run_core_tests.sh
 # [End AI:GPT-6]
 clean:
