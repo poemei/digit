@@ -28,3 +28,27 @@ New modules may be admitted by the Core hotload watcher if configured.
 Version starts at 0.1.0. The module cannot add social expressions to
 messages on its own: a response-generation consumer must explicitly
 invoke its service via Core. Core and IRC are deliberately unchanged.
+
+## Greeting-selection service (v0.2.0)
+
+`digit.socials.greeting` takes `digit_socials_greeting_request_t` and
+returns `digit_socials_greeting_response_t` (see `socials.h`).
+Allowed trusted relationship classifications are `mommy`, `auntie`,
+`sister`, `known`, and `unknown`. The first three use the
+operator-assigned forms of address **Mommy** (PoeMei), **Auntie**
+(Laurie_Vo), and **Ezra** (Digit's younger sister).
+Socials **does not infer those classifications from nicknames**.
+Only a trusted identity-aware caller may submit them; this API
+does not authenticate callers itself.
+
+Greetings are selected with OS entropy, avoid immediately repeating the
+same phrase, and enforce a conservative 60-second cooldown per greeting
+class for an activated instance. When on cooldown the service returns
+`STNLABZ_MODULE_ERR_INVALID_STATE` with zero output bytes; callers
+must not send a message. These are presentation templates, not reasoning
+or interpretation. No automatic IRC JOIN handling is installed.
+Existing `digit.socials.select` behavior remains unchanged.
+
+The relationship mappings are **designated by the human operator**,
+not proven by IRC nickname. Deployment of Socials does not grant anyone
+an identity, relationship, or authorization.
