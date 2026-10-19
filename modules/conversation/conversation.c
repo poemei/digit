@@ -25,6 +25,7 @@ typedef struct {
 typedef struct {size_t begin,end;} word_t;
 
 static const stnlabz_module_host_t *host;
+static time_t last_passive_reply;
 static void observe(const stnlabz_module_host_t *api,const char *operation,
                     const char *status,unsigned records,unsigned line,int failed){
  uint64_t trace=0,query_token=1;size_t used=0;digit_dsd_record_t event={0};
@@ -179,6 +180,8 @@ static stnlabz_module_result_t listen_message(const message_t *m,char *out,
  if(!message_valid(m)||!out||!cap||!used||!api||!api->invoke_service)
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  if(strcmp(m->target,"#stn-labz"))return STNLABZ_MODULE_OK;
+ if(last_passive_reply&&time(NULL)>=last_passive_reply&&
+    time(NULL)-last_passive_reply<120)return STNLABZ_MODULE_OK;
  snprintf(request.channel,sizeof request.channel,"%s",m->target);
  if(api->invoke_service(DIGIT_OBSERVATION_RECENT_SERVICE,&request,
     sizeof request,&history,sizeof history,&read)!=STNLABZ_MODULE_OK||
@@ -218,8 +221,11 @@ static stnlabz_module_result_t listen_message(const message_t *m,char *out,
      !topic_present(hit->excerpt,"semicolon"))continue;
   length=snprintf(line,sizeof line,"%s, corpus #%lld notes: %.170s",
       m->sender,(long long)hit->id,hit->excerpt);
-  if(length>0&&(size_t)length<cap&&length<350)
-   return reply(out,cap,used,line);
+  if(length>0&&(size_t)length<cap&&length<350){
+   stnlabz_module_result_t rc=reply(out,cap,used,line);
+   if(rc==STNLABZ_MODULE_OK)last_passive_reply=time(NULL);
+   return rc;
+  }
  }
  return STNLABZ_MODULE_OK;
 }
@@ -331,6 +337,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api){
   (void)api->unregister_service(CONVERSATION_SERVICE,NULL);
   return STNLABZ_MODULE_ERR_START_FAILED;
  }
+ last_passive_reply=0;
  host=api;
  return STNLABZ_MODULE_OK;
 }
