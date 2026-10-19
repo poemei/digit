@@ -11,6 +11,7 @@
 #include <time.h>
 #include "module.h"
 #include "../sqlite3/corpus_search.h"
+#include "../observation/observation.h"
 #include "../dsd/dsd.h"
 
 #define CONVERSATION_SERVICE "digit.conversation"
@@ -164,13 +165,44 @@ static stnlabz_module_result_t service(const void *request,size_t request_size,
  return answer((const message_t *)request,(char *)response,response_size,
                used,host);
 }
-/* Passive event reception must not automatically create a corpus answer.
- * A matching word is not an invitation to interrupt an IRC conversation. */
+/* Evidence collection is separate from permission to speak.
+ * Read a bounded recent channel window through Core's service registry.
+ * Look for an explicit technical topic across that window, then retrieve
+ * corpus evidence for the topic. No word-match is a conversational reply. */
 static stnlabz_module_result_t listen_message(const message_t *m,char *out,
  size_t cap,size_t *used,const stnlabz_module_host_t *api){
- (void)out;(void)cap;(void)api;
+ digit_observation_recent_query_t request={0};
+ digit_observation_recent_result_t history={0};
+ digit_corpus_query_t query={0};
+ digit_corpus_result_t evidence={0};
+ size_t read=0,i;int php=0;
+ (void)out;(void)cap;
  if(used)*used=0;
- if(!message_valid(m)||!used)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ if(!message_valid(m)||!used||!api||!api->invoke_service)
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ /* The service enforces the channel again. Private messages never request
+  * another user's channel history. */
+ if(strcmp(m->target,"#stn-labz"))return STNLABZ_MODULE_OK;
+ snprintf(request.channel,sizeof request.channel,"%s",m->target);
+ if(api->invoke_service(DIGIT_OBSERVATION_RECENT_SERVICE,&request,
+       sizeof request,&history,sizeof history,&read)!=STNLABZ_MODULE_OK||
+    read!=sizeof history||history.count>DIGIT_OBSERVATION_RECENT_MAX)
+  return STNLABZ_MODULE_OK;
+ for(i=0;i<history.count;i++){
+  if(!memchr(history.items[i].text,0,sizeof history.items[i].text))
+   return STNLABZ_MODULE_OK;
+  if(topic_present(history.items[i].text,"PHP"))php=1;
+ }
+ if(topic_present(m->message,"PHP"))php=1;
+ if(!php)return STNLABZ_MODULE_OK;
+ snprintf(query.query,sizeof query.query,"PHP");
+ read=0;
+ if(api->invoke_service(DIGIT_CORPUS_SEARCH_SERVICE,&query,sizeof query,
+       &evidence,sizeof evidence,&read)!=STNLABZ_MODULE_OK||
+    read!=sizeof evidence||evidence.count>DIGIT_CORPUS_RESULTS_MAX)
+  return STNLABZ_MODULE_OK;
+ /* Evidence fetched, not a fabricated explanation. Until context
+  * interpretation is qualified, passive speech remains disabled. */
  return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t listen_service(const void *request,
@@ -295,7 +327,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="conversation",.name="Conversation knowledge retrieval",
- .version_major=0,.version_minor=4,.version_patch=4,
+ .version_major=0,.version_minor=4,.version_patch=5,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
