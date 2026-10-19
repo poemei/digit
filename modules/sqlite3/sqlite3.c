@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include "module.h"
 
-#define DB_PATH "/opt/digit/state/sqlite3/digit.db"
+#define DB_PATH "/opt/digit/data/digit_memory.db"
 #define KEY_MAX 128
 #define VALUE_MAX 1024
 
@@ -107,7 +107,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api) {
     if(database||!api||!api->register_service||!api->unregister_service)
         return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
     if(sqlite3_open_v2(DB_PATH,&database,
-        SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE|SQLITE_OPEN_FULLMUTEX,NULL)!=SQLITE_OK)
+        SQLITE_OPEN_READWRITE|SQLITE_OPEN_FULLMUTEX,NULL)!=SQLITE_OK)
         goto fail;
     if(!schema(database))goto fail;
     host=api;
@@ -185,7 +185,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="sqlite3",.name="SQLite3 persistence",
-    .version_major=0,.version_minor=1,.version_patch=0,
+    .version_major=0,.version_minor=1,.version_patch=1,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
