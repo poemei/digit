@@ -4,7 +4,7 @@ CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Wpedantic
 CPPFLAGS += -Icore -Icore/stnlabz_abi -Imodels -Iviews -Icontrollers
 LDLIBS += -lssl -lcrypto -ldl
 TARGET := bin/digit
-SOURCES := core/agent_root.c core/identity_digit.c models/report.c Views/irc_render.c controllers/irc.c controllers/main.c
+SOURCES := core/agent_root.c core/identity_digit.c models/report.c views/irc_render.c controllers/irc.c controllers/main.c
 CORE_SOURCES := $(filter-out core/main.c,$(wildcard core/*.c)) $(wildcard core/stnlabz_abi/*.c)
 CORE_TARGET := bin/digit-core
 .PHONY: all clean test
