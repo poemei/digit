@@ -42,6 +42,7 @@ test: $(TARGET) $(CORE_TARGET)
 	$(CC) $(CPPFLAGS) $(CFLAGS) core/transports.c test/test_transports.c -o bin/test_transports
 	$(CC) $(CPPFLAGS) $(CFLAGS) core/logging.c test/test_logging.c -o bin/test_logging
 	$(CC) $(CPPFLAGS) $(CFLAGS) core/stnlabz_abi/module_registry.c test/test_core_authorization.c -o bin/test_core_authorization
+	$(CC) $(CPPFLAGS) $(CFLAGS) core/stnlabz_abi/module_registry.c test/test_core_lifecycle.c -o bin/test_core_lifecycle
 	@sh test/run_core_tests.sh
 # [End AI:GPT-6]
 clean:
