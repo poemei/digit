@@ -137,9 +137,24 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  strcpy(r.text,"message");check(q,record_valid(&r),0);
  memset(r.account,'x',sizeof r.account);check(q,!record_valid(&r),1);
  r.account[0]=0;check(q,record_valid(&r),0);
+ check(q,!valid(NULL,10,1),1);
+ check(q,!valid("",1,1),1);
+ check(q,valid("",1,0),0);
+ check(q,!valid("bad\\r",5,1),1);
+ check(q,!valid("bad\\t",5,1),1);
+ strcpy(r.text,"quoted: \\"ok\\"");
+ check(q,build_line(&r,line,sizeof line,&used),0);
+ check(q,strstr(line,"\\\\\\"ok\\\\\\"")!=NULL,0);
+ strcpy(r.text,"message");
+ check(q,!build_line(&r,line,4,&used),1);
+ check(q,build_line(&r,line,sizeof line,&used),0);
+ check(q,strstr(line,"\\"sender\\":\\"Rictus\\"")!=NULL,0);
+ check(q,strstr(line,"\\"channel\\":\\"#stn-labz\\"")!=NULL,0);
  check(q,record_service(NULL,0,NULL,0,NULL,NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
  check(q,record_service(&r,sizeof r,NULL,0,NULL,NULL)==STNLABZ_MODULE_ERR_INVALID_STATE,1);
- return !q->tests_failed?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_QUALIFICATION;
+ return q->tests_executed>=STNLABZ_MODULE_MIN_TESTS && !q->tests_failed &&
+    q->negative_test_executed && q->negative_test_passed ?
+    STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_QUALIFICATION;
 }
 static stnlabz_module_result_t start(const stnlabz_module_host_t *host){
  struct stat st;
@@ -167,7 +182,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="observation",.name="IRC observation journal",
- .version_major=0,.version_minor=1,.version_patch=2,
+ .version_major=0,.version_minor=1,.version_patch=3,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
