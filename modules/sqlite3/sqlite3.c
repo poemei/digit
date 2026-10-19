@@ -1,0 +1,195 @@
+/* [AI:GPT-6 | 2026-10-18] Digit SQLite3 persistence module, ABI 1.5.
+ * The database is owned by this module; Core owns lifecycle and authorization.
+ */
+#define _POSIX_C_SOURCE 200809L
+#include <sqlite3.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdint.h>
+#include "module.h"
+
+#define DB_PATH "/opt/digit/state/sqlite3/digit.db"
+#define KEY_MAX 128
+#define VALUE_MAX 1024
+
+typedef struct { char key[KEY_MAX]; unsigned char value[VALUE_MAX]; size_t length; } sqlite3_record_t;
+static sqlite3 *database;
+static const stnlabz_module_host_t *host;
+
+static int key_valid(const char *key) {
+    size_t i;
+    if (!key || !key[0]) return 0;
+    for (i=0;i<KEY_MAX;i++) {
+        unsigned char ch=(unsigned char)key[i];
+        if (!ch) return i>0;
+        if (!(ch>='a'&&ch<='z') && !(ch>='A'&&ch<='Z') &&
+            !(ch>='0'&&ch<='9') && ch!='.' && ch!='_' && ch!='-' && ch!='/')
+            return 0;
+    }
+    return 0;
+}
+static int schema(sqlite3 *db) {
+    return sqlite3_exec(db,
+        "CREATE TABLE IF NOT EXISTS digit_kv ("
+        "key TEXT PRIMARY KEY NOT NULL,"
+        "value BLOB NOT NULL) WITHOUT ROWID",NULL,NULL,NULL)==SQLITE_OK;
+}
+static int put(sqlite3 *db,const sqlite3_record_t *r) {
+    sqlite3_stmt *stmt=NULL;int ok=0;
+    if (!db || !r || !key_valid(r->key) || r->length>VALUE_MAX) return 0;
+    if(sqlite3_prepare_v2(db,
+        "INSERT INTO digit_kv(key,value) VALUES(?1,?2) "
+        "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        -1,&stmt,NULL)!=SQLITE_OK) return 0;
+    if(sqlite3_bind_text(stmt,1,r->key,-1,SQLITE_TRANSIENT)==SQLITE_OK &&
+       sqlite3_bind_blob(stmt,2,r->value,(int)r->length,SQLITE_TRANSIENT)==SQLITE_OK)
+        ok=sqlite3_step(stmt)==SQLITE_DONE;
+    sqlite3_finalize(stmt);
+    return ok;
+}
+static int get(sqlite3 *db,sqlite3_record_t *r) {
+    sqlite3_stmt *stmt=NULL;int ok=0;
+    if (!db || !r || !key_valid(r->key)) return 0;
+    if(sqlite3_prepare_v2(db,
+        "SELECT value FROM digit_kv WHERE key=?1",-1,&stmt,NULL)!=SQLITE_OK) return 0;
+    if(sqlite3_bind_text(stmt,1,r->key,-1,SQLITE_TRANSIENT)==SQLITE_OK &&
+       sqlite3_step(stmt)==SQLITE_ROW) {
+        int bytes=sqlite3_column_bytes(stmt,0);
+        if(bytes>=0 && bytes<=VALUE_MAX) {
+            const void *data=sqlite3_column_blob(stmt,0);
+            if(bytes && data) memcpy(r->value,data,(size_t)bytes);
+            r->length=(size_t)bytes;ok=1;
+        }
+    }
+    sqlite3_finalize(stmt);
+    return ok;
+}
+static int erase(sqlite3 *db,const char *key) {
+    sqlite3_stmt *stmt=NULL;int ok=0;
+    if(!db||!key_valid(key))return 0;
+    if(sqlite3_prepare_v2(db,"DELETE FROM digit_kv WHERE key=?1",
+                          -1,&stmt,NULL)!=SQLITE_OK)return 0;
+    if(sqlite3_bind_text(stmt,1,key,-1,SQLITE_TRANSIENT)==SQLITE_OK)
+        ok=sqlite3_step(stmt)==SQLITE_DONE;
+    sqlite3_finalize(stmt);return ok;
+}
+static stnlabz_module_result_t service(const void *request,size_t request_size,
+    void *response,size_t response_size,size_t *response_used,void *context) {
+    const char *operation=context;
+    sqlite3_record_t r;
+    if(response_used)*response_used=0;
+    if(!database||!operation||!request)return STNLABZ_MODULE_ERR_INVALID_STATE;
+    if(!strcmp(operation,"put")) {
+        if(request_size!=sizeof r)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+        return put(database,(const sqlite3_record_t *)request) ?
+            STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+    }
+    if(!strcmp(operation,"get")) {
+        if(request_size!=KEY_MAX||!response||response_size<sizeof r||
+           !response_used)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+        memset(&r,0,sizeof r);
+        memcpy(r.key,request,KEY_MAX);
+        if(!get(database,&r))return STNLABZ_MODULE_ERR_NOT_FOUND;
+        memcpy(response,&r,sizeof r);*response_used=sizeof r;
+        return STNLABZ_MODULE_OK;
+    }
+    if(!strcmp(operation,"delete")) {
+        if(request_size!=KEY_MAX)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+        char key[KEY_MAX];
+        memcpy(key,request,sizeof key);
+        return erase(database,key)?STNLABZ_MODULE_OK:
+            STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+    }
+    return STNLABZ_MODULE_ERR_NOT_FOUND;
+}
+static const char op_put[]="put",op_get[]="get",op_delete[]="delete";
+static stnlabz_module_result_t start(const stnlabz_module_host_t *api) {
+    if(database||!api||!api->register_service||!api->unregister_service)
+        return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+    if(sqlite3_open_v2(DB_PATH,&database,
+        SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE|SQLITE_OPEN_FULLMUTEX,NULL)!=SQLITE_OK)
+        goto fail;
+    if(!schema(database))goto fail;
+    host=api;
+    if(!host->register_service("digit.sqlite3.put",service,(void *)op_put))
+        goto fail;
+    if(!host->register_service("digit.sqlite3.get",service,(void *)op_get)) {
+        host->unregister_service("digit.sqlite3.put",(void *)op_put);goto fail;
+    }
+    if(!host->register_service("digit.sqlite3.delete",service,(void *)op_delete)) {
+        host->unregister_service("digit.sqlite3.get",(void *)op_get);
+        host->unregister_service("digit.sqlite3.put",(void *)op_put);
+        goto fail;
+    }
+    return STNLABZ_MODULE_OK;
+fail:
+    if(database)sqlite3_close(database);
+    database=NULL;host=NULL;
+    return STNLABZ_MODULE_ERR_START_FAILED;
+}
+static stnlabz_module_result_t stop(void) {
+    if(!database||!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
+    host->unregister_service("digit.sqlite3.delete",(void *)op_delete);
+    host->unregister_service("digit.sqlite3.get",(void *)op_get);
+    host->unregister_service("digit.sqlite3.put",(void *)op_put);
+    if(sqlite3_close(database)!=SQLITE_OK)return STNLABZ_MODULE_ERR_STOP_FAILED;
+    database=NULL;host=NULL;return STNLABZ_MODULE_OK;
+}
+static void test_check(stnlabz_module_qualification_result_t *r,int ok,int negative) {
+    r->tests_executed++;
+    if(ok)r->tests_passed++;else r->tests_failed++;
+    if(negative) {r->negative_test_executed=1;if(ok)r->negative_test_passed=1;}
+}
+static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *result) {
+    sqlite3 *db=NULL;
+    sqlite3_record_t r={0},saved={0};
+    char key[KEY_MAX]={0};
+    int opened;
+    if(!result)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+    memset(result,0,sizeof *result);
+    test_check(result,key_valid("a"),0);
+    test_check(result,key_valid("digit.memory/one"),0);
+    test_check(result,key_valid("A_Z-9.0"),0);
+    test_check(result,!key_valid(NULL),1);
+    test_check(result,!key_valid(""),1);
+    test_check(result,!key_valid("a b"),1);
+    test_check(result,!key_valid("x;DROP TABLE"),1);
+    test_check(result,!key_valid("a\\nb"),1);
+    test_check(result,!key_valid("a\\rb"),1);
+    memset(key,'x',sizeof key);
+    test_check(result,!key_valid(key),1);
+    opened=sqlite3_open(":memory:",&db)==SQLITE_OK;
+    test_check(result,opened,0);
+    if(!opened) return STNLABZ_MODULE_ERR_QUALIFICATION;
+    test_check(result,schema(db),0);
+    test_check(result,schema(db),0);
+    strcpy(r.key,"test.one");r.value[0]=0;r.value[1]=255;r.length=2;
+    test_check(result,put(db,&r),0);
+    strcpy(saved.key,"test.one");
+    test_check(result,get(db,&saved),0);
+    test_check(result,saved.length==2&&saved.value[0]==0&&saved.value[1]==255,0);
+    test_check(result,!get(db,&(sqlite3_record_t){.key="missing"}),1);
+    test_check(result,!put(db,&(sqlite3_record_t){.key="bad key",.length=1}),1);
+    test_check(result,!put(db,&(sqlite3_record_t){.key="overflow",.length=VALUE_MAX+1}),1);
+    test_check(result,erase(db,"test.one"),0);
+    test_check(result,!get(db,&saved),1);
+    test_check(result,!erase(db,"bad key"),1);
+    test_check(result,!put(NULL,&r),1);
+    test_check(result,!get(NULL,&saved),1);
+    test_check(result,!erase(NULL,"test.one"),1);
+    test_check(result,sqlite3_close(db)==SQLITE_OK,0);
+    return result->tests_executed>=20 && !result->tests_failed &&
+        result->tests_passed==result->tests_executed &&
+        result->negative_test_executed&&result->negative_test_passed ?
+        STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_QUALIFICATION;
+}
+static const stnlabz_module_descriptor_t descriptor={
+    .id="sqlite3",.name="SQLite3 persistence",
+    .version_major=0,.version_minor=1,.version_patch=0,
+    .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
+    .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
+    .qualify=qualify,.start=start,.stop=stop
+};
+const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void) {
+    return &descriptor;
+}
