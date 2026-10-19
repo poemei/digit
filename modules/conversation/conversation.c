@@ -76,13 +76,13 @@ static int local_generate(const char *prompt,char *output,size_t cap){
  const char *model=getenv("DIGIT_CONVERSATION_MODEL");
  char escaped[TEXT_MAX*2],model_json[256],body[TEXT_MAX*2+1024];
  char header[256],packet[TEXT_MAX*2+2048],response[HTTP_MAX];
- struct sockaddr_in addr;struct timeval timeout={4,0};
+ struct sockaddr_in addr;struct timeval timeout={30,0};
  int fd;size_t size=0,packet_len;ssize_t got;int n;
  if(!model||!*model||strlen(model)>110)return 0;
  if(!json_escape(model_json,sizeof model_json,model)||
     !json_escape(escaped,sizeof escaped,prompt))return 0;
  n=snprintf(body,sizeof body,
-  "{\"model\":\"%s\",\"stream\":false,\"prompt\":\"%s\"}",
+  "{\"model\":\"%s\",\"stream\":false,\"options\":{\"num_predict\":90},\"prompt\":\"%s\"}",
   model_json,escaped);
  if(n<=0||(size_t)n>=sizeof body)return 0;
  n=snprintf(header,sizeof header,
