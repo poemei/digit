@@ -9,27 +9,19 @@ CORE_SOURCES := $(filter-out core/main.c,$(wildcard core/*.c)) $(wildcard core/s
 CORE_TARGET := bin/digit-core
 PREFIX ?= /opt/digit
 DESTDIR ?=
-.PHONY: all clean test install install-systemd modules irc-test
-all: $(TARGET) $(CORE_TARGET) modules
+.PHONY: all clean test install install-systemd
+all: $(TARGET) $(CORE_TARGET)
 $(TARGET): $(SOURCES)
 	@mkdir -p bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(SOURCES) -o $(TARGET) $(LDLIBS)
 $(CORE_TARGET): $(CORE_SOURCES) core/main.c
 	@mkdir -p bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(CORE_SOURCES) core/main.c -o $(CORE_TARGET) $(LDLIBS)
-# [AI:GPT-6 | 2026-10-18] Modules own their own build and test targets.
-modules:
-	$(MAKE) -C modules/irc all
-
-irc-test:
-	$(MAKE) -C modules/irc test
-
 install: all
 	install -d -m 0700 "$(DESTDIR)$(PREFIX)/logs"
 	install -d "$(DESTDIR)$(PREFIX)/bin"
 	install -m 0755 $(TARGET) "$(DESTDIR)$(PREFIX)/bin/digit"
 	install -m 0755 $(CORE_TARGET) "$(DESTDIR)$(PREFIX)/bin/digit-core"
-	$(MAKE) -C modules/irc install PREFIX="$(PREFIX)" DESTDIR="$(DESTDIR)"
 # [End AI:GPT-6]
 
 # [AI:GPT-6 | 2026-10-18] Never clobber an installed systemd service.
@@ -44,12 +36,11 @@ install-systemd:
 	@echo "Unit installed, not enabled or started. Review then run systemctl daemon-reload."
 # [End AI:GPT-6]
 
-test: $(TARGET) $(CORE_TARGET) irc-test
+test: $(TARGET) $(CORE_TARGET)
 	$(CC) $(CPPFLAGS) $(CFLAGS) core/agent_root.c core/identity_digit.c models/report.c views/irc_render.c test/test_core.c -o bin/test_core
 # [AI:GPT-6] Run shell reporter without Make dollar escaping.
 	$(CC) $(CPPFLAGS) $(CFLAGS) core/transports.c test/test_transports.c -o bin/test_transports
 	@sh test/run_core_tests.sh
 # [End AI:GPT-6]
 clean:
-	$(MAKE) -C modules/irc clean
 	rm -rf bin
