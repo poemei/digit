@@ -83,7 +83,7 @@ stnlabz_module_result_t stnlabz_core_activate(stnlabz_module_registry_t *registr
            Its combined helper repeats authorization only AFTER the explicit gate. */
         rc = stnlabz_module_abi_authorize_and_activate(registry, module_id, host);
     }
-    if (!audit(rc == STNLABZ_MODULE_OK ? "HOTLOAD_ACTIVE" : "ACTIVATE_REJECT",
+    if (!audit(rc == STNLABZ_MODULE_OK ? "MODULE_ACTIVE" : "ACTIVATE_REJECT",
                module_id, rc, stnlabz_module_registry_find(registry, module_id)))
         return STNLABZ_MODULE_ERR_INVALID_STATE;
     return rc;
