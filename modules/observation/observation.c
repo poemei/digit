@@ -1,5 +1,5 @@
-/* Digit Observation: append-only IRC channel evidence, ABI 1.5.
- * Operator owns /opt/digit/observation; this module never modifies SQLite.
+/* Digit Observation: persistent IRC channel evidence via SQLite ABI 1.5.
+ * SQLite3 owns all database writes; JSONL is optional secondary evidence.
  */
 #define _POSIX_C_SOURCE 200809L
 #include <errno.h>
@@ -100,7 +100,7 @@ static stnlabz_module_result_t record_service(
       NULL,0,response_used)!=STNLABZ_MODULE_OK)
   return STNLABZ_MODULE_ERR_INVALID_STATE;
  pthread_mutex_lock(&journal_lock);
- if(journal<0){pthread_mutex_unlock(&journal_lock);return STNLABZ_MODULE_ERR_INVALID_STATE;}
+ if(journal<0){pthread_mutex_unlock(&journal_lock);return STNLABZ_MODULE_OK;}
  while(off<length){
   ssize_t n=write(journal,line+off,length-off);
   if(n<0&&errno==EINTR)continue;
@@ -148,11 +148,10 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *host){
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  /* Operator provisions directory. Never follow a symlink or truncate a log. */
  fd=open(OBSERVATION_PATH,O_WRONLY|O_APPEND|O_CREAT|O_CLOEXEC|O_NOFOLLOW,0600);
- if(fd<0)return STNLABZ_MODULE_ERR_START_FAILED;
- if(fstat(fd,&st)!=0||!S_ISREG(st.st_mode)){close(fd);return STNLABZ_MODULE_ERR_START_FAILED;}
+ if(fd>=0&&(fstat(fd,&st)!=0||!S_ISREG(st.st_mode))){close(fd);fd=-1;}
  journal=fd;api=host;
  if(!host->register_service(DIGIT_OBSERVATION_RECORD_SERVICE,record_service,NULL)){
-  journal=-1;api=NULL;close(fd);return STNLABZ_MODULE_ERR_START_FAILED;
+  journal=-1;api=NULL;if(fd>=0)close(fd);return STNLABZ_MODULE_ERR_START_FAILED;
  }
  return STNLABZ_MODULE_OK;
 }
@@ -168,7 +167,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="observation",.name="IRC observation journal",
- .version_major=0,.version_minor=1,.version_patch=1,
+ .version_major=0,.version_minor=1,.version_patch=2,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
