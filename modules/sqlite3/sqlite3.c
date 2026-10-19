@@ -169,10 +169,9 @@ static stnlabz_module_result_t observation_insert(
  if(!conversation)return STNLABZ_MODULE_ERR_INVALID_STATE;
  rc=sqlite3_prepare_v2(observation_writer,
    "INSERT INTO observations(event_id,sender_id,conversation_id,text,timestamp,source_record_id) "
-   "VALUES (?1,?2,?3,?4,strftime('%Y-%m-%d %H:%M:%S','now'),?5)",
+   "VALUES ('irc-live-'||lower(hex(randomblob(16))),?2,?3,?4,strftime('%Y-%m-%d %H:%M:%S','now'),?5)",
    -1,&stmt,NULL);
  if(rc!=SQLITE_OK)return STNLABZ_MODULE_ERR_INVALID_STATE;
- sqlite3_bind_null(stmt,1);
  if(person)sqlite3_bind_int64(stmt,2,person);
  else sqlite3_bind_null(stmt,2);
  sqlite3_bind_int64(stmt,3,conversation);
