@@ -6,7 +6,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include <ctype.h>
 #include <errno.h>
-#include <fcntl.h>
 #include <netdb.h>
 #include <pthread.h>
 #include <signal.h>
@@ -43,57 +42,6 @@ static const stnlabz_module_host_t *host_api;
 static time_t last_greeting;
 #define IRC_GREETING_INTERVAL 30
 
-/* Record sanitized IRC protocol milestones in the existing module log.
- * The module ABI has no logging callback, and Core does not export its logger;
- * a single O_APPEND write targets the established modules.log without
- * altering Core, the ABI, or creating a second log file. */
-static void irc_record(const char *stage,const char *result) {
-    char message[192];int fd,n;
-    time_t now=time(NULL);struct tm utc;char stamp[32];
-    if(now==(time_t)-1||!gmtime_r(&now,&utc)||
-       !strftime(stamp,sizeof stamp,"%Y-%m-%dT%H:%M:%SZ",&utc))return;
-    n=snprintf(message,sizeof message,
-       "%s MODULE IRC_DIAG module=irc stage=%s result=%s\\n",
-       stamp,stage,result);
-    if(n<=0||(size_t)n>=sizeof message)return;
-    fd=open("/opt/digit/logs/modules.log",
-       O_WRONLY|O_APPEND|O_CLOEXEC|O_NOFOLLOW);
-    if(fd<0)return;
-    ssize_t written=write(fd,message,(size_t)n);
-    if(written!=n){(void)close(fd);return;}
-    (void)close(fd);
-}
-static void irc_diag(const char *stage,const char *result) {
-    irc_record(stage,result);
-}
-/* Protocol logging intentionally records numeric codes and command
- * categories, never raw messages, SASL payloads or user content. */
-static void irc_trace(const char *way,const char *line) {
-    const char *command=line,*p;
-    if(!line)return;
-    if(line[0]==':'){
-        p=strchr(line,' ');
-        if(!p)return;
-        command=p+1;
-    }
-    if(!strncmp(command,"CAP ",4))irc_record(way,"CAP");
-    else if(!strncmp(command,"PING ",5))irc_record(way,"PING");
-    else if(!strncmp(command,"PONG ",5))irc_record(way,"PONG");
-    else if(!strncmp(command,"NICK ",5))irc_record(way,"NICK");
-    else if(!strncmp(command,"USER ",5))irc_record(way,"USER");
-    else if(!strncmp(command,"JOIN ",5))irc_record(way,"JOIN");
-    else if(!strncmp(command,"001 ",4))irc_record(way,"001");
-    else if(!strncmp(command,"433 ",4))irc_record(way,"433");
-    else if(!strncmp(command,"903 ",4))irc_record(way,"903");
-    else if(!strncmp(command,"904 ",4))irc_record(way,"904");
-    else if(!strncmp(command,"905 ",4))irc_record(way,"905");
-    else if(!strncmp(command,"906 ",4))irc_record(way,"906");
-    else if(!strncmp(command,"907 ",4))irc_record(way,"907");
-    else if(!strncmp(command,"471 ",4))irc_record(way,"471");
-    else if(!strncmp(command,"473 ",4))irc_record(way,"473");
-    else if(!strncmp(command,"474 ",4))irc_record(way,"474");
-    else if(!strncmp(command,"475 ",4))irc_record(way,"475");
-}
 static int assign(char *out,size_t cap,const char *in) {
     size_t n = strlen(in);
     if(n>=2 && ((in[0]=='"'&&in[n-1]=='"')||(in[0]=='\''&&in[n-1]=='\''))) {
@@ -146,7 +94,7 @@ static int config_read(irc_config_t *c) {
 }
 static int write_line(SSL *ssl,const char *line) {
     size_t off=0,len=strlen(line);
-    irc_trace("OUT",line);
+    
     while(off<len) {
         int n=SSL_write(ssl,line+off,(int)(len-off));
         if(n<=0)return 0;
@@ -162,15 +110,15 @@ static int connect_tls(const irc_config_t *c,SSL_CTX **context,SSL **session) {
     struct addrinfo hints={0},*addresses=NULL,*p;
     SSL_CTX *ctx=NULL;SSL *ssl=NULL;int fd=-1;
     hints.ai_socktype=SOCK_STREAM;hints.ai_family=AF_UNSPEC;
-    if(getaddrinfo(c->server,c->port,&hints,&addresses)){irc_diag("dns","failed");return -1;}
+    if(getaddrinfo(c->server,c->port,&hints,&addresses)){return -1;}
     for(p=addresses;p;p=p->ai_next) {
         fd=socket(p->ai_family,p->ai_socktype,p->ai_protocol);
         if(fd>=0&&connect(fd,p->ai_addr,p->ai_addrlen)==0)break;
         if(fd>=0)close(fd);
         fd=-1;
     }
-    freeaddrinfo(addresses);if(fd<0){irc_diag("tcp","failed");return -1;}
-    irc_diag("tcp","connected");
+    freeaddrinfo(addresses);if(fd<0){return -1;}
+    
     /* Keep TLS reads blocking: SO_RCVTIMEO can make OpenSSL report an
      * idle read as SSL_ERROR_SYSCALL, provoking a reconnect loop. */
     ctx=SSL_CTX_new(TLS_client_method());
@@ -181,9 +129,9 @@ static int connect_tls(const irc_config_t *c,SSL_CTX **context,SSL **session) {
         SSL_set_tlsext_host_name(ssl,c->server)!=1||
         SSL_set1_host(ssl,c->server)!=1||
         SSL_connect(ssl)!=1||SSL_get_verify_result(ssl)!=X509_V_OK)goto fail;
-    *context=ctx;*session=ssl;irc_diag("tls","verified");return fd;
+    *context=ctx;*session=ssl;return fd;
 fail:
-    irc_diag("tls","failed");
+    
     if(ssl)SSL_free(ssl);
     if(ctx)SSL_CTX_free(ctx);
     close(fd);return -1;
@@ -339,51 +287,51 @@ static void session(const irc_config_t *cfg) {
     pthread_mutex_lock(&socket_mutex);
     active_socket=fd;
     pthread_mutex_unlock(&socket_mutex);
-    irc_diag("register","begin");
+    
     if(!write_line(ssl,"CAP LS 302\r\n")||
         !command(ssl,"NICK",cfg->nick)||
         !command(ssl,"USER","digit 0 * :Digit IRC module"))goto done;
     while(!stopping) {
         char ch;int n=SSL_read(ssl,&ch,1);
-        if(n<=0){int error=SSL_get_error(ssl,n);if(error==SSL_ERROR_WANT_READ)continue;irc_diag("tls_read",error==SSL_ERROR_ZERO_RETURN?"peer_closed":"failed");break;}
+        if(n<=0){int error=SSL_get_error(ssl,n);if(error==SSL_ERROR_WANT_READ)continue;break;}
         if(ch=='\r')continue;
         if(ch!='\n') {
             if(used+1>=sizeof line){used=0;continue;}
             line[used++]=ch;continue;
         }
         line[used]=0;used=0;
-        irc_trace("IN",line);
+        
         if(!strncmp(line,"PING :",6)) {
             if(!command(ssl,"PONG",line+5))break;
         } else if(strstr(line," CAP ")&&strstr(line," LS ")&&strstr(line,"sasl")) {
-            irc_diag("cap_ls","received");
-            if(!strstr(line,"account-tag") || !write_line(ssl,"CAP REQ :sasl account-tag\r\n")){irc_diag("cap_req","failed");break;}
-            irc_diag("cap_req","sent");
+            
+            if(!strstr(line,"account-tag") || !write_line(ssl,"CAP REQ :sasl account-tag\r\n")){break;}
+            
         } else if(strstr(line," CAP ")&&strstr(line," ACK ")&&strstr(line,"sasl")) {
             got_sasl=1;tags_enabled=strstr(line,"account-tag")!=NULL;
-            irc_diag("cap_ack",tags_enabled?"received":"missing_account_tag");
-            if(!tags_enabled || !write_line(ssl,"AUTHENTICATE PLAIN\r\n")){irc_diag("sasl_begin","failed");break;}
-            irc_diag("sasl_begin","sent");
+            
+            if(!tags_enabled || !write_line(ssl,"AUTHENTICATE PLAIN\r\n")){break;}
+            
         } else if(got_sasl&&!strcmp(line,"AUTHENTICATE +")) {
-            irc_diag("sasl_challenge","received");
-            if(!authenticate(ssl,cfg)){irc_diag("sasl_response","failed");break;}
-            irc_diag("sasl_response","sent");
+            
+            if(!authenticate(ssl,cfg)){break;}
+            
         } else if(strstr(line," 903 ")) {
-            irc_diag("sasl","success");
-            authed=1;if(!write_line(ssl,"CAP END\r\n")){irc_diag("cap_end","failed");break;}
-            if(welcomed&&!joined){if(!command(ssl,"JOIN",cfg->channel)){irc_diag("join","send_failed");break;}irc_diag("join","sent");joined=1;}
+            
+            authed=1;if(!write_line(ssl,"CAP END\r\n")){break;}
+            if(welcomed&&!joined){if(!command(ssl,"JOIN",cfg->channel)){break;}joined=1;}
         } else if(strstr(line," 904 ")||strstr(line," 905 ")||strstr(line," 906 ")||strstr(line," 907 ")) {
-            irc_diag("sasl","rejected");break;
+            break;
         } else if(strstr(line," 001 ")) {
-            irc_diag("welcome","received");welcomed=1;
-            if(authed&&!joined){if(!command(ssl,"JOIN",cfg->channel)){irc_diag("join","send_failed");break;}irc_diag("join","sent");joined=1;}
+            welcomed=1;
+            if(authed&&!joined){if(!command(ssl,"JOIN",cfg->channel)){break;}joined=1;}
         } else if(strstr(line," 433 ")) {
-            irc_diag("nickname","in_use");
+            
         } else if(strstr(line," 471 ")||strstr(line," 473 ")||
                   strstr(line," 474 ")||strstr(line," 475 ")) {
-            irc_diag("join","server_rejected");
+            
         } else if(authed&&joined&&strstr(line," JOIN ")&&strstr(line,cfg->nick)) {
-            irc_diag("join","event_received");
+            
             if(!join_greeting(ssl,cfg,line,tags_enabled,joined))break;
         } else if(authed&&joined&&strstr(line," JOIN ")) {
             if(!join_greeting(ssl,cfg,line,tags_enabled,joined))break;
@@ -401,8 +349,8 @@ done:
 }
 static void *worker_main(void *unused) {
     irc_config_t cfg; (void)unused;
-    if(!config_read(&cfg)){irc_diag("configuration","invalid_or_unreadable");return NULL;}
-    irc_diag("configuration","accepted");
+    if(!config_read(&cfg)){return NULL;}
+    
     while(!stopping) {
         unsigned i;session(&cfg);
         for(i=0;i<10&&!stopping;i++)sleep(1);
@@ -513,7 +461,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=2,.version_patch=5,
+    .version_major=0,.version_minor=2,.version_patch=6,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
