@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "module.h"
-#include "../sqlite3/corpus_search.h"
+#include "../../sqlite3/corpus_search.h"
 
 typedef struct { char sender[128],account[128],target[128],message[512]; } message_t;
 static stnlabz_module_service_handler_fn listener;
