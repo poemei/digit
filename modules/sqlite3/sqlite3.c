@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <syslog.h>
 #include "module.h"
 
 #define DB_PATH "/opt/digit/data/digit_memory.db"
@@ -103,24 +104,58 @@ static stnlabz_module_result_t service(const void *request,size_t request_size,
     return STNLABZ_MODULE_ERR_NOT_FOUND;
 }
 static const char op_put[]="put",op_get[]="get",op_delete[]="delete";
+/* [AI:GPT-6 | 2026-10-18] Startup diagnostics go to the service journal.
+ * No credentials, SQL row values, or database content are logged.
+ */
+static void startup_log(const char *stage,int code,const char *detail) {
+    syslog(code==SQLITE_OK?LOG_INFO:LOG_ERR,
+        "digit.sqlite3 stage=%s sqlite_code=%d detail=%s",
+        stage,code,detail?detail:"none");
+}
 static stnlabz_module_result_t start(const stnlabz_module_host_t *api) {
-    if(database||!api||!api->register_service||!api->unregister_service)
+    int code;
+    const char *stage="initial_validation";
+    if(database||!api||!api->register_service||!api->unregister_service) {
+        startup_log(stage,SQLITE_MISUSE,
+            "host_service_callbacks_missing_or_already_started");
         return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
-    if(sqlite3_open_v2(DB_PATH,&database,
-        SQLITE_OPEN_READWRITE|SQLITE_OPEN_FULLMUTEX,NULL)!=SQLITE_OK)
-        goto fail;
-    if(!schema(database))goto fail;
-    host=api;
-    if(!host->register_service("digit.sqlite3.put",service,(void *)op_put))
-        goto fail;
-    if(!host->register_service("digit.sqlite3.get",service,(void *)op_get)) {
-        host->unregister_service("digit.sqlite3.put",(void *)op_put);goto fail;
     }
+    stage="open";
+    code=sqlite3_open_v2(DB_PATH,&database,
+        SQLITE_OPEN_READWRITE|SQLITE_OPEN_FULLMUTEX,NULL);
+    if(code!=SQLITE_OK) {
+        startup_log(stage,code,database?sqlite3_errmsg(database):"no_handle");
+        goto fail;
+    }
+    stage="schema";
+    code=sqlite3_exec(database,
+        "CREATE TABLE IF NOT EXISTS digit_kv ("
+        "key TEXT PRIMARY KEY NOT NULL,"
+        "value BLOB NOT NULL) WITHOUT ROWID",NULL,NULL,NULL);
+    if(code!=SQLITE_OK) {
+        startup_log(stage,code,sqlite3_errmsg(database));
+        goto fail;
+    }
+    host=api;
+    stage="register_put";
+    if(!host->register_service("digit.sqlite3.put",service,(void *)op_put)) {
+        startup_log(stage,SQLITE_MISUSE,"core_rejected_service_registration");
+        goto fail;
+    }
+    stage="register_get";
+    if(!host->register_service("digit.sqlite3.get",service,(void *)op_get)) {
+        startup_log(stage,SQLITE_MISUSE,"core_rejected_service_registration");
+        host->unregister_service("digit.sqlite3.put",(void *)op_put);
+        goto fail;
+    }
+    stage="register_delete";
     if(!host->register_service("digit.sqlite3.delete",service,(void *)op_delete)) {
+        startup_log(stage,SQLITE_MISUSE,"core_rejected_service_registration");
         host->unregister_service("digit.sqlite3.get",(void *)op_get);
         host->unregister_service("digit.sqlite3.put",(void *)op_put);
         goto fail;
     }
+    startup_log("active",SQLITE_OK,"all_services_registered");
     return STNLABZ_MODULE_OK;
 fail:
     if(database)sqlite3_close(database);
@@ -185,7 +220,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="sqlite3",.name="SQLite3 persistence",
-    .version_major=0,.version_minor=1,.version_patch=1,
+    .version_major=0,.version_minor=1,.version_patch=2,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
