@@ -273,7 +273,7 @@ static int observation_report(digit_s2_report_t *out,int64_t *selected){
  description=strstr(result.text,"SUMMARY:");
  description=description?description+8:result.text;
  while(*description==' ')description++;
- for(i=0;i<sizeof summary-1&&description[i]&&description[i]!='\\n'&&description[i]!='\\r';i++)
+ for(i=0;i<sizeof summary-1&&description[i]&&description[i]!='\n'&&description[i]!='\r';i++)
   summary[i]=description[i];
  memset(out,0,sizeof *out);
  snprintf(out->report,sizeof out->report,
