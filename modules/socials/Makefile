@@ -1,7 +1,7 @@
 # Independently built Socials module. Core Makefile never builds modules.
 CC ?= cc
 CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Wpedantic
-CPPFLAGS += -I../../core/stnlabz_abi
+CPPFLAGS += -I. -I../../core/stnlabz_abi
 TARGET := bin/socials.so
 TEST_TARGET := bin/test_socials
 PREFIX ?= /opt/digit
