@@ -13,4 +13,18 @@ typedef struct {
 typedef struct {
  char expression[DIGIT_SOCIALS_EXPRESSION_MAX]; /* NUL-terminated UTF-8 */
 } digit_socials_response_t;
+/* Optional greeting composition. Identity classification must be supplied
+ * by an authorized caller; nicknames alone are not authentication.
+ * kind: mommy, auntie, sister, known, unknown.
+ * caller decides whether the greeting may be shown.
+ */
+#define DIGIT_SOCIALS_GREETING_SERVICE "digit.socials.greeting"
+#define DIGIT_SOCIALS_GREETING_KIND_MAX 16
+#define DIGIT_SOCIALS_GREETING_MAX 128
+typedef struct {
+ char kind[DIGIT_SOCIALS_GREETING_KIND_MAX];
+} digit_socials_greeting_request_t;
+typedef struct {
+ char text[DIGIT_SOCIALS_GREETING_MAX];
+} digit_socials_greeting_response_t;
 #endif
