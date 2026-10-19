@@ -7,12 +7,13 @@
 #include "dsd.h"
 #define SLOTS 64
 typedef struct {
- uint64_t id;
+ uint64_t id,updated;
  unsigned int count,dropped;
  digit_dsd_event_t events[DIGIT_DSD_MAX_EVENTS];
 } trace_slot_t;
 static trace_slot_t slots[SLOTS];
 static unsigned int replacement;
+static uint64_t chronology;
 static pthread_mutex_t guard=PTHREAD_MUTEX_INITIALIZER;
 static const stnlabz_module_host_t *host;
 static int valid_code(const char *p,size_t cap,int path){
@@ -50,6 +51,7 @@ static int record(const digit_dsd_event_t *event){
   if(!slot){slot=&slots[replacement++%SLOTS];}
   memset(slot,0,sizeof *slot);slot->id=event->trace_id;
  }
+ slot->updated=++chronology;
  if(slot->count<DIGIT_DSD_MAX_EVENTS)slot->events[slot->count++]=*event;
  else slot->dropped++;
  pthread_mutex_unlock(&guard);
@@ -68,22 +70,20 @@ static const char *status_meaning(const char *status){
  return NULL;
 }
 static int latest_module_trace(const char *module,uint64_t *id){
- unsigned i,j;
+ unsigned i,j;uint64_t newest=0;
+ int found=0;
  if(!module||!id)return 0;
  pthread_mutex_lock(&guard);
- /* Traverse ring in reverse capture order; the first match is the latest
-  * event-bearing trace, not necessarily the latest numeric trace ID. */
  for(i=0;i<SLOTS;i++){
-  unsigned index=(replacement+SLOTS-1-i)%SLOTS;
-  trace_slot_t *slot=&slots[index];
-  if(!slot->id)continue;
+  const trace_slot_t *slot=&slots[i];
+  if(!slot->id||slot->updated<=newest)continue;
   for(j=0;j<slot->count;j++)
    if(!strcmp(slot->events[j].module,module)){
-    *id=slot->id;pthread_mutex_unlock(&guard);return 1;
+    newest=slot->updated;*id=slot->id;found=1;break;
    }
  }
  pthread_mutex_unlock(&guard);
- return 0;
+ return found;
 }
 static int diagnose(uint64_t trace_id,digit_dsd_result_t *out){
  trace_slot_t *slot;
@@ -270,7 +270,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  snprintf(cmd.command,sizeof cmd.command,"hello");
  assertion(q,!command_text(&cmd,&reply),1);
  /* Qualification has no external side effects and resets its own fixture. */
- pthread_mutex_lock(&guard);memset(slots,0,sizeof slots);replacement=0;
+ pthread_mutex_lock(&guard);memset(slots,0,sizeof slots);replacement=0;chronology=0;
  pthread_mutex_unlock(&guard);
  return q->tests_executed>=20&&!q->tests_failed?
   STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_QUALIFICATION;
