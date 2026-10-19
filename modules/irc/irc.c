@@ -30,6 +30,7 @@
 
 #define IRC_ENV_PATH "/opt/digit/state/auth/irc.env"
 #define IRC_INPUT_SERVICE "digit.message"
+#define IRC_CONVERSATION_LISTEN "digit.conversation.listen"
 typedef struct {
     char server[256], port[16], nick[64], channel[128];
     char account[128], password[256];
@@ -388,7 +389,7 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled
     char response[512],wire[1024];
     irc_input_t input={0};
     size_t used=0,n;
-    int k,private_message;
+    int k,private_message,passive_channel=0;
     if (!tags_enabled || line[0]!='@') return 1;
     {
         char *end=strchr(line,' ');
@@ -416,10 +417,12 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled
     if(private_message) target=sender;
     else {
         if(strcasecmp(target,cfg->channel))return 1;
-        if(!nick_mention(body,cfg->nick))return 1;
-        body+=n;
-        if(*body==':'||*body==',')body++;
-        while(*body==' ')body++;
+        if(!nick_mention(body,cfg->nick))passive_channel=1;
+        else {
+            body+=n;
+            if(*body==':'||*body==',')body++;
+            while(*body==' ')body++;
+        }
     }
     snprintf(input.sender,sizeof input.sender,"%s",sender);
     snprintf(input.target,sizeof input.target,"%s",target);
@@ -475,8 +478,8 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled
                     &warning,sizeof warning,NULL,0,&warning_used);
             }
         }
-        rc=host_api->invoke_service(IRC_INPUT_SERVICE,&input,sizeof input,
-            response,sizeof response,&used);
+        rc=host_api->invoke_service(passive_channel?IRC_CONVERSATION_LISTEN:IRC_INPUT_SERVICE,
+            &input,sizeof input,response,sizeof response,&used);
         if(private_message){
             uint64_t clear=0;size_t trace_used=0;
             (void)host_api->invoke_service(DIGIT_DSD_BIND_SERVICE,
