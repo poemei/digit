@@ -16,6 +16,7 @@ static unsigned int replacement;
 static uint64_t chronology;
 static pthread_mutex_t guard=PTHREAD_MUTEX_INITIALIZER;
 static const stnlabz_module_host_t *host;
+static _Thread_local uint64_t current_trace;
 static int valid_code(const char *p,size_t cap,int path){
  size_t i;
  if(!p||!memchr(p,0,cap)||!p[0])return 0;
@@ -59,6 +60,11 @@ static int record(const digit_dsd_event_t *event){
 }
 /* Human-readable statuses are presentation only; original evidence stays intact. */
 static const char *status_meaning(const char *status){
+ if(!strcmp(status,"RESPONSE_RETURNED"))return "a response was returned by the service";
+ if(!strcmp(status,"QUERY_MATCH"))return "a corpus match was returned";
+ if(!strcmp(status,"QUERY_NO_MATCH"))return "the corpus search returned no matching records";
+ if(!strcmp(status,"QUERY_ERROR"))return "the corpus search failed";
+ if(!strcmp(status,"SERVICE_OK"))return "the service completed without reporting an error";
  if(!strcmp(status,"NO_RESPONSE"))return "request returned without a reply";
  if(!strcmp(status,"SERVICE_NOT_FOUND"))return "the requested service was not registered";
  if(!strcmp(status,"NOT_AUTHORIZED"))return "the request was not authorized";
@@ -133,17 +139,65 @@ static int diagnose(uint64_t trace_id,digit_dsd_result_t *out){
  if(!out->failures)selected=out->count-1;
  e=&out->events[selected];
  meaning=status_meaning(e->status);
- /* Print the full readable status; reserve bounded space for source.
-  * The original, unmodified event remains available through diagnose. */
- n=snprintf(out->summary,sizeof out->summary,
-    "%u observed operation(s), %u failed. %s: %.32s.%.42s -> %.42s, "
-    "status %.48s (%.75s), source %.75s:%u. %s",
-    out->count,out->failures,out->failures?"First failure":"Last observation",
-    e->module,e->method,e->operation,e->status,
-    meaning?meaning:"status has no verified explanation",e->file,e->line,
-    out->failures?"Underlying cause unverified.":
-    "End-to-end completion unverified.");
- return n>=0&&(size_t)n<sizeof out->summary;
+ /* Report a bounded timeline, not just the final IRC observation. */
+ {
+  size_t used=0;unsigned j;
+  n=snprintf(out->summary,sizeof out->summary,
+    "%u observed operation(s), %u failed. ",
+    out->count,out->failures);
+  if(n<0||(size_t)n>=sizeof out->summary)return 0;
+  used=(size_t)n;
+  for(j=0;j<out->count;j++){
+   const digit_dsd_event_t *step=&out->events[j];
+   n=snprintf(out->summary+used,sizeof out->summary-used,
+     "%s%.20s.%.22s -> %.28s [%.25s, records=%u] at %.37s:%u;",
+     j?" ":"",step->module,step->method,step->operation,
+     step->status,step->records,step->file,step->line);
+   if(n<0)return 0;
+   if((size_t)n>=sizeof out->summary-used)break;
+   used+=(size_t)n;
+  }
+  if(j<out->count&&used+36<sizeof out->summary){
+   n=snprintf(out->summary+used,sizeof out->summary-used,
+      " %u more retained event(s);",out->count-j);
+   if(n>0&&(size_t)n<sizeof out->summary-used)used+=(size_t)n;
+  }
+  meaning=status_meaning(e->status);
+  if(used+110<sizeof out->summary){
+   n=snprintf(out->summary+used,sizeof out->summary-used,
+     " %s: %.56s. %s",
+     out->failures?"First failure":"Last observation",
+     meaning?meaning:e->status,
+     out->failures?"Underlying cause unverified.":"End-to-end completion unverified.");
+   if(n>0&&(size_t)n<sizeof out->summary-used)used+=(size_t)n;
+  }
+  if(out->dropped&&used+32<sizeof out->summary)
+   (void)snprintf(out->summary+used,sizeof out->summary-used,
+     " %u event(s) dropped.",out->dropped);
+ }
+
+ return 1;
+}
+static stnlabz_module_result_t bind_service(
+ const void *request,size_t request_size,void *response,
+ size_t response_size,size_t *used,void *ctx){
+ (void)response;(void)response_size;(void)ctx;
+ if(used)*used=0;
+ if(!request||request_size!=sizeof(uint64_t))
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ memcpy(&current_trace,request,sizeof current_trace);
+ return STNLABZ_MODULE_OK;
+}
+static stnlabz_module_result_t current_service(
+ const void *request,size_t request_size,void *response,
+ size_t response_size,size_t *used,void *ctx){
+ (void)ctx;
+ if(used)*used=0;
+ if(request||request_size||!response||response_size<sizeof current_trace||!used)
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ memcpy(response,&current_trace,sizeof current_trace);
+ *used=sizeof current_trace;
+ return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t record_service(
  const void *request,size_t request_size,void *response,
@@ -386,7 +440,20 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
   (void)h->unregister_service(DIGIT_DSD_RECORD_SERVICE,NULL);
   return STNLABZ_MODULE_ERR_START_FAILED;
  }
+ if(!h->register_service(DIGIT_DSD_BIND_SERVICE,bind_service,NULL)){
+  (void)h->unregister_service(DIGIT_DSD_DIAGNOSE_SERVICE,NULL);
+  (void)h->unregister_service(DIGIT_DSD_RECORD_SERVICE,NULL);
+  return STNLABZ_MODULE_ERR_START_FAILED;
+ }
+ if(!h->register_service(DIGIT_DSD_CURRENT_SERVICE,current_service,NULL)){
+  (void)h->unregister_service(DIGIT_DSD_BIND_SERVICE,NULL);
+  (void)h->unregister_service(DIGIT_DSD_DIAGNOSE_SERVICE,NULL);
+  (void)h->unregister_service(DIGIT_DSD_RECORD_SERVICE,NULL);
+  return STNLABZ_MODULE_ERR_START_FAILED;
+ }
  if(!h->register_service(DIGIT_DSD_COMMAND_SERVICE,command_service,NULL)){
+  (void)h->unregister_service(DIGIT_DSD_CURRENT_SERVICE,NULL);
+  (void)h->unregister_service(DIGIT_DSD_BIND_SERVICE,NULL);
   (void)h->unregister_service(DIGIT_DSD_DIAGNOSE_SERVICE,NULL);
   (void)h->unregister_service(DIGIT_DSD_RECORD_SERVICE,NULL);
   return STNLABZ_MODULE_ERR_START_FAILED;
@@ -396,6 +463,10 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
 static stnlabz_module_result_t stop(void){
  if(!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
  if(!host->unregister_service(DIGIT_DSD_COMMAND_SERVICE,NULL))
+  return STNLABZ_MODULE_ERR_STOP_FAILED;
+ if(!host->unregister_service(DIGIT_DSD_CURRENT_SERVICE,NULL))
+  return STNLABZ_MODULE_ERR_STOP_FAILED;
+ if(!host->unregister_service(DIGIT_DSD_BIND_SERVICE,NULL))
   return STNLABZ_MODULE_ERR_STOP_FAILED;
  if(!host->unregister_service(DIGIT_DSD_DIAGNOSE_SERVICE,NULL))
   return STNLABZ_MODULE_ERR_STOP_FAILED;
@@ -408,7 +479,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="dsd",.name="Developer Self-Diagnostics",
- .version_major=0,.version_minor=5,.version_patch=2,
+ .version_major=0,.version_minor=6,.version_patch=0,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
