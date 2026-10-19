@@ -136,8 +136,8 @@ static int diagnose(uint64_t trace_id,digit_dsd_result_t *out){
  /* Print the full readable status; reserve bounded space for source.
   * The original, unmodified event remains available through diagnose. */
  n=snprintf(out->summary,sizeof out->summary,
-    "%u observed operation(s), %u failed. %s: %.47s.%.63s -> %.63s, "
-    "status %s (%.96s), source %.100s:%u. %s",
+    "%u observed operation(s), %u failed. %s: %.32s.%.42s -> %.42s, "
+    "status %.48s (%.75s), source %.75s:%u. %s",
     out->count,out->failures,out->failures?"First failure":"Last observation",
     e->module,e->method,e->operation,e->status,
     meaning?meaning:"status has no verified explanation",e->file,e->line,
