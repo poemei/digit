@@ -42,6 +42,13 @@ static const stnlabz_module_host_t *host_api;
 static time_t last_greeting;
 #define IRC_GREETING_INTERVAL 30
 
+/* Only fixed diagnostic labels are written; never log wire data, account
+ * names, credentials, hostmasks, or server-supplied text. stderr is already
+ * connected to Digit's service output; no extra file or log sink is created. */
+static void irc_diag(const char *stage,const char *result) {
+    fprintf(stderr,"[digit:irc] %s %s\\n",stage,result);
+    fflush(stderr);
+}
 static int assign(char *out,size_t cap,const char *in) {
     size_t n = strlen(in);
     if(n>=2 && ((in[0]=='"'&&in[n-1]=='"')||(in[0]=='\''&&in[n-1]=='\''))) {
@@ -109,14 +116,15 @@ static int connect_tls(const irc_config_t *c,SSL_CTX **context,SSL **session) {
     struct addrinfo hints={0},*addresses=NULL,*p;
     SSL_CTX *ctx=NULL;SSL *ssl=NULL;int fd=-1;
     hints.ai_socktype=SOCK_STREAM;hints.ai_family=AF_UNSPEC;
-    if(getaddrinfo(c->server,c->port,&hints,&addresses))return -1;
+    if(getaddrinfo(c->server,c->port,&hints,&addresses)){irc_diag("dns","failed");return -1;}
     for(p=addresses;p;p=p->ai_next) {
         fd=socket(p->ai_family,p->ai_socktype,p->ai_protocol);
         if(fd>=0&&connect(fd,p->ai_addr,p->ai_addrlen)==0)break;
         if(fd>=0)close(fd);
         fd=-1;
     }
-    freeaddrinfo(addresses);if(fd<0)return -1;
+    freeaddrinfo(addresses);if(fd<0){irc_diag("tcp","failed");return -1;}
+    irc_diag("tcp","connected");
     /* Keep TLS reads blocking: SO_RCVTIMEO can make OpenSSL report an
      * idle read as SSL_ERROR_SYSCALL, provoking a reconnect loop. */
     ctx=SSL_CTX_new(TLS_client_method());
@@ -127,8 +135,9 @@ static int connect_tls(const irc_config_t *c,SSL_CTX **context,SSL **session) {
         SSL_set_tlsext_host_name(ssl,c->server)!=1||
         SSL_set1_host(ssl,c->server)!=1||
         SSL_connect(ssl)!=1||SSL_get_verify_result(ssl)!=X509_V_OK)goto fail;
-    *context=ctx;*session=ssl;return fd;
+    *context=ctx;*session=ssl;irc_diag("tls","verified");return fd;
 fail:
+    irc_diag("tls","failed");
     if(ssl)SSL_free(ssl);
     if(ctx)SSL_CTX_free(ctx);
     close(fd);return -1;
@@ -284,12 +293,13 @@ static void session(const irc_config_t *cfg) {
     pthread_mutex_lock(&socket_mutex);
     active_socket=fd;
     pthread_mutex_unlock(&socket_mutex);
+    irc_diag("register","begin");
     if(!write_line(ssl,"CAP LS 302\r\n")||
         !command(ssl,"NICK",cfg->nick)||
         !command(ssl,"USER","digit 0 * :Digit IRC module"))goto done;
     while(!stopping) {
         char ch;int n=SSL_read(ssl,&ch,1);
-        if(n<=0){if(SSL_get_error(ssl,n)==SSL_ERROR_WANT_READ)continue;break;}
+        if(n<=0){int error=SSL_get_error(ssl,n);if(error==SSL_ERROR_WANT_READ)continue;irc_diag("tls_read",error==SSL_ERROR_ZERO_RETURN?"peer_closed":"failed");break;}
         if(ch=='\r')continue;
         if(ch!='\n') {
             if(used+1>=sizeof line){used=0;continue;}
@@ -299,20 +309,32 @@ static void session(const irc_config_t *cfg) {
         if(!strncmp(line,"PING :",6)) {
             if(!command(ssl,"PONG",line+5))break;
         } else if(strstr(line," CAP ")&&strstr(line," LS ")&&strstr(line,"sasl")) {
-            if(!strstr(line,"account-tag") || !write_line(ssl,"CAP REQ :sasl account-tag\r\n"))break;
+            irc_diag("cap_ls","received");
+            if(!strstr(line,"account-tag") || !write_line(ssl,"CAP REQ :sasl account-tag\r\n")){irc_diag("cap_req","failed");break;}
+            irc_diag("cap_req","sent");
         } else if(strstr(line," CAP ")&&strstr(line," ACK ")&&strstr(line,"sasl")) {
             got_sasl=1;tags_enabled=strstr(line,"account-tag")!=NULL;
-            if(!tags_enabled || !write_line(ssl,"AUTHENTICATE PLAIN\r\n"))break;
+            irc_diag("cap_ack",tags_enabled?"received":"missing_account_tag");
+            if(!tags_enabled || !write_line(ssl,"AUTHENTICATE PLAIN\r\n")){irc_diag("sasl_begin","failed");break;}
+            irc_diag("sasl_begin","sent");
         } else if(got_sasl&&!strcmp(line,"AUTHENTICATE +")) {
-            if(!authenticate(ssl,cfg))break;
+            irc_diag("sasl_challenge","received");
+            if(!authenticate(ssl,cfg)){irc_diag("sasl_response","failed");break;}
+            irc_diag("sasl_response","sent");
         } else if(strstr(line," 903 ")) {
-            authed=1;if(!write_line(ssl,"CAP END\r\n"))break;
-            if(welcomed&&!joined){if(!command(ssl,"JOIN",cfg->channel))break;joined=1;}
+            irc_diag("sasl","success");
+            authed=1;if(!write_line(ssl,"CAP END\r\n")){irc_diag("cap_end","failed");break;}
+            if(welcomed&&!joined){if(!command(ssl,"JOIN",cfg->channel)){irc_diag("join","send_failed");break;}irc_diag("join","sent");joined=1;}
         } else if(strstr(line," 904 ")||strstr(line," 905 ")||strstr(line," 906 ")||strstr(line," 907 ")) {
-            break;
+            irc_diag("sasl","rejected");break;
         } else if(strstr(line," 001 ")) {
-            welcomed=1;
+            irc_diag("welcome","received");welcomed=1;
             if(authed&&!joined){if(!command(ssl,"JOIN",cfg->channel))break;joined=1;}
+        } else if(strstr(line," 433 ")) {
+            irc_diag("nickname","in_use");
+        } else if(strstr(line," 471 ")||strstr(line," 473 ")||
+                  strstr(line," 474 ")||strstr(line," 475 ")) {
+            irc_diag("join","server_rejected");
         } else if(authed&&joined&&strstr(line," JOIN ")) {
             if(!join_greeting(ssl,cfg,line,tags_enabled,joined))break;
         } else if(authed&&strstr(line," PRIVMSG ")) {
@@ -329,7 +351,8 @@ done:
 }
 static void *worker_main(void *unused) {
     irc_config_t cfg; (void)unused;
-    if(!config_read(&cfg))return NULL;
+    if(!config_read(&cfg)){irc_diag("configuration","invalid_or_unreadable");return NULL;}
+    irc_diag("configuration","accepted");
     while(!stopping) {
         unsigned i;session(&cfg);
         for(i=0;i<10&&!stopping;i++)sleep(1);
@@ -418,7 +441,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=2,.version_patch=2,
+    .version_major=0,.version_minor=2,.version_patch=3,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
