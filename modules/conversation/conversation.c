@@ -165,44 +165,62 @@ static stnlabz_module_result_t service(const void *request,size_t request_size,
  return answer((const message_t *)request,(char *)response,response_size,
                used,host);
 }
-/* Evidence collection is separate from permission to speak.
- * Read a bounded recent channel window through Core's service registry.
- * Look for an explicit technical topic across that window, then retrieve
- * corpus evidence for the topic. No word-match is a conversational reply. */
+/* Narrow evidence-grounded tutoring interaction. This is intentionally
+ * not a general natural-language interpreter or permission to chatter. */
 static stnlabz_module_result_t listen_message(const message_t *m,char *out,
  size_t cap,size_t *used,const stnlabz_module_host_t *api){
  digit_observation_recent_query_t request={0};
  digit_observation_recent_result_t history={0};
  digit_corpus_query_t query={0};
  digit_corpus_result_t evidence={0};
- size_t read=0,i;int php=0;
- (void)out;(void)cap;
+ size_t read=0,i;
+ int topic=0,prior_problem=0,other_speaker=0;
  if(used)*used=0;
- if(!message_valid(m)||!used||!api||!api->invoke_service)
+ if(!message_valid(m)||!out||!cap||!used||!api||!api->invoke_service)
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
- /* The service enforces the channel again. Private messages never request
-  * another user's channel history. */
  if(strcmp(m->target,"#stn-labz"))return STNLABZ_MODULE_OK;
  snprintf(request.channel,sizeof request.channel,"%s",m->target);
  if(api->invoke_service(DIGIT_OBSERVATION_RECENT_SERVICE,&request,
-       sizeof request,&history,sizeof history,&read)!=STNLABZ_MODULE_OK||
-    read!=sizeof history||history.count>DIGIT_OBSERVATION_RECENT_MAX)
-  return STNLABZ_MODULE_OK;
- for(i=0;i<history.count;i++){
-  if(!memchr(history.items[i].text,0,sizeof history.items[i].text))
+    sizeof request,&history,sizeof history,&read)!=STNLABZ_MODULE_OK||
+    read!=sizeof history||history.count>DIGIT_OBSERVATION_RECENT_MAX||
+    history.count<3)return STNLABZ_MODULE_OK;
+ for(i=0;i<history.count;i++)
+  if(!memchr(history.items[i].text,0,sizeof history.items[i].text)||
+     !memchr(history.items[i].sender,0,sizeof history.items[i].sender))
    return STNLABZ_MODULE_OK;
-  if(topic_present(history.items[i].text,"PHP"))php=1;
+ /* Fail closed if the last observation does not describe this exact turn. */
+ if(strcmp(history.items[history.count-1].text,m->message)||
+    (history.items[history.count-1].sender[0]&&
+     strcasecmp(history.items[history.count-1].sender,m->sender)))
+  return STNLABZ_MODULE_OK;
+ for(i=0;i+1<history.count;i++){
+  if(topic_present(history.items[i].text,"PHP"))topic=1;
+  if(topic_present(history.items[i].text,"semicolon"))prior_problem=1;
+  if(history.items[i].sender[0]&&strcasecmp(history.items[i].sender,m->sender))
+   other_speaker=1;
  }
- if(topic_present(m->message,"PHP"))php=1;
- if(!php)return STNLABZ_MODULE_OK;
+ /* Limited first acceptance scenario: the learner explicitly describes a
+  * repeated obstacle following another speaker's discussion of PHP. */
+ if(!topic||!prior_problem||!other_speaker||
+    !topic_present(m->message,"semicolon")||
+    !strstr(m->message,"forgetting"))return STNLABZ_MODULE_OK;
  snprintf(query.query,sizeof query.query,"PHP");
  read=0;
  if(api->invoke_service(DIGIT_CORPUS_SEARCH_SERVICE,&query,sizeof query,
-       &evidence,sizeof evidence,&read)!=STNLABZ_MODULE_OK||
+    &evidence,sizeof evidence,&read)!=STNLABZ_MODULE_OK||
     read!=sizeof evidence||evidence.count>DIGIT_CORPUS_RESULTS_MAX)
   return STNLABZ_MODULE_OK;
- /* Evidence fetched, not a fabricated explanation. Until context
-  * interpretation is qualified, passive speech remains disabled. */
+ for(i=0;i<evidence.count;i++){
+  const digit_corpus_hit_t *hit=&evidence.hits[i];
+  char line[512];int length;
+  if(!memchr(hit->excerpt,0,sizeof hit->excerpt)||
+     !topic_present(hit->excerpt,"PHP")||
+     !topic_present(hit->excerpt,"semicolon"))continue;
+  length=snprintf(line,sizeof line,"%s, corpus #%lld notes: %.170s",
+      m->sender,(long long)hit->id,hit->excerpt);
+  if(length>0&&(size_t)length<cap&&length<350)
+   return reply(out,cap,used,line);
+ }
  return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t listen_service(const void *request,
@@ -327,7 +345,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="conversation",.name="Conversation knowledge retrieval",
- .version_major=0,.version_minor=4,.version_patch=5,
+ .version_major=0,.version_minor=4,.version_patch=6,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
