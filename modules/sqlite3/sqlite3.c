@@ -3,6 +3,7 @@
  */
 #define _POSIX_C_SOURCE 200809L
 #include <sqlite3.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
@@ -331,7 +332,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="sqlite3",.name="SQLite3 persistence",
-    .version_major=0,.version_minor=3,.version_patch=0,
+    .version_major=0,.version_minor=3,.version_patch=1,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
