@@ -79,8 +79,17 @@ stnlabz_module_result_t stnlabz_module_discovery_get_path(char *modules_path,siz
     if(modules_path==NULL||modules_path_size==0)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
     length=readlink("/proc/self/exe",executable_path,sizeof(executable_path)-1);
     if(length<=0||(size_t)length>=sizeof(executable_path)-1)return STNLABZ_MODULE_ERR_NOT_FOUND;
-    executable_path[length]='\0';separator=strrchr(executable_path,'/');if(separator==NULL)return STNLABZ_MODULE_ERR_NOT_FOUND;
-    *separator='\0';written=snprintf(modules_path,modules_path_size,"%s/modules",executable_path);
+    executable_path[length]='\0';
+    separator=strrchr(executable_path,'/');
+    if(separator==NULL)return STNLABZ_MODULE_ERR_NOT_FOUND;
+    /* Executable lives in <installation-root>/bin/.
+       Modules are a sibling of bin, never a child of it. */
+    *separator='\0';
+    separator=strrchr(executable_path,'/');
+    if(separator==NULL || strcmp(separator+1,"bin")!=0)
+        return STNLABZ_MODULE_ERR_NOT_FOUND;
+    *separator='\0';
+    written=snprintf(modules_path,modules_path_size,"%s/modules",executable_path);
     if(written<0||(size_t)written>=modules_path_size)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
     return STNLABZ_MODULE_OK;
 }
