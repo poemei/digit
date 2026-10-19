@@ -126,7 +126,7 @@ static void startup_log(const char *stage,int code,const char *detail) {
 static stnlabz_module_result_t start(const stnlabz_module_host_t *api) {
     int code;
     const char *stage="initial_validation";
-    if(database||!api||!api->register_service||!api->unregister_service) {
+    if(database||host||!api||!api->register_service||!api->unregister_service) {
         startup_log(stage,SQLITE_MISUSE,
             "host_service_callbacks_missing_or_already_started");
         return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
@@ -156,7 +156,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api) {
                               diagnostic_service,NULL)){
         startup_log(stage,SQLITE_MISUSE,"core_rejected_diagnostic_registration");
         host->unregister_service("digit.sqlite3.get",(void *)op_get);
-            goto fail;
+        goto fail;
     }
     startup_log("active",SQLITE_OK,"all_services_registered");
     return STNLABZ_MODULE_OK;
@@ -169,7 +169,6 @@ static stnlabz_module_result_t stop(void) {
     if(!database||!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
     host->unregister_service(DIGIT_SQLITE3_DIAGNOSTIC_SERVICE,NULL);
     host->unregister_service("digit.sqlite3.get",(void *)op_get);
-    host->unregister_service("digit.sqlite3.put",(void *)op_put);
     if(sqlite3_close(database)!=SQLITE_OK)return STNLABZ_MODULE_ERR_STOP_FAILED;
     database=NULL;host=NULL;return STNLABZ_MODULE_OK;
 }
@@ -236,7 +235,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="sqlite3",.name="SQLite3 persistence",
-    .version_major=0,.version_minor=2,.version_patch=0,
+    .version_major=0,.version_minor=2,.version_patch=1,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
