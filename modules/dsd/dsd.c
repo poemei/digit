@@ -60,6 +60,7 @@ static int record(const digit_dsd_event_t *event){
 }
 /* Human-readable statuses are presentation only; original evidence stays intact. */
 static const char *status_meaning(const char *status){
+ if(!strcmp(status,"TRACE_BIND_FAILED"))return "request trace binding or verification failed";
  if(!strcmp(status,"TRACE_BOUND"))return "request trace was bound to the dispatch thread";
  if(!strcmp(status,"RESPONSE_RETURNED"))return "a response was returned by the service";
  if(!strcmp(status,"QUERY_MATCH"))return "a corpus match was returned";
@@ -413,6 +414,19 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
   CHECK(diagnose(58,&result)&&result.failures==1,0);
   CHECK(strstr(result.summary,"rejected its input")!=NULL,0);
  }
+ /* The live binding API must produce a retained trace and return the same ID. */
+ {
+  uint64_t tid=64,observed=0,clear=0;
+  size_t used=0;
+  CHECK(bind_service(&tid,sizeof tid,NULL,0,&used,NULL)==STNLABZ_MODULE_OK,0);
+  CHECK(current_service(&tid,sizeof tid,&observed,sizeof observed,&used,NULL)==STNLABZ_MODULE_OK&&observed==tid&&used==sizeof observed,0);
+  CHECK(diagnose(tid,&result)&&result.found&&result.count==1,0);
+  CHECK(!strcmp(result.events[0].status,"TRACE_BOUND"),0);
+  CHECK(bind_service(&clear,sizeof clear,NULL,0,&used,NULL)==STNLABZ_MODULE_OK,0);
+  observed=123;
+  CHECK(current_service(&tid,sizeof tid,&observed,sizeof observed,&used,NULL)==STNLABZ_MODULE_OK&&observed==0,0);
+  CHECK(current_service(NULL,sizeof tid,&observed,sizeof observed,&used,NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
+ }
  /* A single trace must retain real intermediate stages and outcomes. */
  {
   digit_dsd_event_t stage={0};
@@ -531,7 +545,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="dsd",.name="Developer Self-Diagnostics",
- .version_major=0,.version_minor=7,.version_patch=0,
+ .version_major=0,.version_minor=7,.version_patch=1,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
