@@ -92,7 +92,7 @@ static int plain_text(const unsigned char *data,size_t length){
  if(!length||length>VALUE_CAP)return 0;
  for(i=0;i<length;i++){
   unsigned char c=data[i];
-  if(c==0||c==127||(c<32&&c!='\t'&&c!='\n'))return 0;
+  if(c<32||c==127)return 0;
  }
  return 1;
 }
@@ -195,6 +195,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  check(q,!plain_text((const unsigned char *)"",0),1);
  check(q,!plain_text((const unsigned char *)"x\0",2),1);
  check(q,!plain_text((const unsigned char *)"x\r",2),1);
+ check(q,!plain_text((const unsigned char *)"x\n",2),1);
  check(q,message_valid(&m),0);
  memset(m.message,'x',sizeof m.message);
  check(q,!message_valid(&m),1);
@@ -207,10 +208,10 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  check(q,answer(&m,response,sizeof response,&used,NULL)==
          STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
  /* Failure to configure an operator account never opens the database. */
- check(q,strlen(permitted_account)==0,0);
+ check(q,safe_account("ExampleAccount",128),0);
  check(q,service(NULL,0,response,sizeof response,&used,NULL)==
          STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
- check(q,!key_candidate("abc",w,0,WORD_CAP,key),1);
+ check(q,!key_candidate("abc",w,2,1,key),1);
  n=tokens("Hello/World",w,WORD_CAP);
  check(q,n==1,0);
  check(q,key_candidate("Hello/World",w,0,0,key)&&
