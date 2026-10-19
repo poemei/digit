@@ -25,6 +25,7 @@
 #include "module.h"
 #include "socials.h"
 #include "../dsd/dsd.h"
+#include "../observation/observation.h"
 #include <time.h>
 
 #define IRC_ENV_PATH "/opt/digit/state/auth/irc.env"
@@ -342,6 +343,46 @@ static int dsd_send_full_trace(SSL *ssl,const char *target,const char *account){
     (unsigned long long)result.trace_id,i,result.dropped);
  return dsd_send_line(ssl,target,line);
 }
+/* Capture every channel PRIVMSG before intent/mention filtering.
+ * Observation owns persistence; IRC only submits the transport envelope.
+ * Private messages and non-channel traffic are never journaled. */
+static void observe_channel(const irc_config_t *cfg,const char *raw,int tags_enabled){
+ char copy[2048],*p,*end,*tags,*prefix,*cmd,*target,*message,*bang;
+ digit_observation_record_t rec={0};
+ size_t used=0;
+ if(!cfg||!raw||!tags_enabled||strlen(raw)>=sizeof copy||
+    !host_api||!host_api->invoke_service)return;
+ memcpy(copy,raw,strlen(raw)+1);p=copy;
+ if(*p=='@'){
+  tags=++p;end=strchr(tags,' ');
+  if(!end)return;*end++=0;p=end;
+  while(tags&&*tags){
+   char *next=strchr(tags,';');
+   if(next)*next++=0;
+   if(!strncmp(tags,"account=",8)&&strcmp(tags+8,"*")&&
+      strlen(tags+8)<sizeof rec.account)
+    snprintf(rec.account,sizeof rec.account,"%s",tags+8);
+   tags=next;
+  }
+ }
+ if(*p!=':')return;
+ prefix=++p;end=strchr(prefix,' ');
+ if(!end)return;*end++=0;p=end;
+ bang=strchr(prefix,'!');if(!bang)return;*bang=0;
+ if(!*prefix||strlen(prefix)>=sizeof rec.sender)return;
+ cmd=p;end=strchr(cmd,' ');if(!end)return;*end++=0;
+ if(strcmp(cmd,"PRIVMSG"))return;
+ target=end;end=strchr(target,' ');if(!end)return;*end++=0;
+ if(strcasecmp(target,cfg->channel)||*end!=':')return;
+ message=end+1;
+ if(!*message||strlen(message)>=sizeof rec.text)return;
+ snprintf(rec.transport,sizeof rec.transport,"irc");
+ snprintf(rec.channel,sizeof rec.channel,"%s",cfg->channel);
+ snprintf(rec.sender,sizeof rec.sender,"%s",prefix);
+ snprintf(rec.text,sizeof rec.text,"%s",message);
+ (void)host_api->invoke_service(DIGIT_OBSERVATION_RECORD_SERVICE,
+   &rec,sizeof rec,NULL,0,&used);
+}
 static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled) {
     char *sender,*bang,*cmd,*target,*body,*space;
     char response[512],wire[1024];
@@ -612,6 +653,7 @@ static void session(const irc_config_t *cfg) {
         } else if(authed&&joined&&strstr(line," JOIN ")) {
             if(!join_greeting(ssl,cfg,line,tags_enabled,joined))break;
         } else if(authed&&strstr(line," PRIVMSG ")) {
+            observe_channel(cfg,line,tags_enabled);
             if(!incoming(ssl,cfg,line,tags_enabled))break;
         }
     }
@@ -767,7 +809,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=2,.version_patch=19,
+    .version_major=0,.version_minor=2,.version_patch=20,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
