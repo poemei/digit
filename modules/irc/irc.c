@@ -59,7 +59,8 @@ static void irc_record(const char *stage,const char *result) {
     fd=open("/opt/digit/logs/modules.log",
        O_WRONLY|O_APPEND|O_CLOEXEC|O_NOFOLLOW);
     if(fd<0)return;
-    (void)write(fd,message,(size_t)n);
+    ssize_t written=write(fd,message,(size_t)n);
+    if(written!=n){(void)close(fd);return;}
     (void)close(fd);
 }
 static void irc_diag(const char *stage,const char *result) {
@@ -471,7 +472,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
      * password. Verify the same construction and base64 primitive as the
      * production SASL path without using or logging actual credentials. */
     {
-        const unsigned char expected[]={'\\0','u','s','e','r','\\0','p','a','s','s'};
+        const unsigned char expected[]={'\0','u','s','e','r','\0','p','a','s','s'};
         unsigned char plain[sizeof expected]={0};
         char encoded[32]={0};
         unsigned char decoded[32]={0};
