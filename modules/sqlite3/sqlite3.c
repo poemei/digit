@@ -9,6 +9,7 @@
 #include <syslog.h>
 #include "module.h"
 #include "sqlite3_diagnostic.h"
+#include "corpus_search.h"
 
 #define DB_PATH "/opt/digit/data/digit_memory.db"
 #define KEY_MAX 128
@@ -47,6 +48,63 @@ static int get(sqlite3 *db,sqlite3_record_t *r) {
     sqlite3_finalize(stmt);
     return ok;
 }
+/* Literal FTS5 phrase from request text. Bind as parameter; never embed
+ * user input in SQL. The verified schema supplies corpus_fts and corpus. */
+static int fts_phrase(const char *input,char *out,size_t cap){
+ size_t i=0,j=0;int in_word=0,seen=0;
+ if(!input||!out||cap<4)return 0;
+ out[j++]='"';
+ while(input[i]){
+  unsigned char c=(unsigned char)input[i++];
+  if(isalnum(c)||c=='_'){
+   if(j+3>=cap)return 0;
+   out[j++]=(char)c;in_word=1;seen=1;
+  }else if(in_word){
+   if(j+3>=cap)return 0;
+   out[j++]=' ';in_word=0;
+  }
+ }
+ if(!seen)return 0;
+ if(j>1&&out[j-1]==' ')j--;
+ out[j++]='"';out[j]=0;return 1;
+}
+static void copy_column(sqlite3_stmt *stmt,int index,char *dest,size_t cap){
+ const unsigned char *src=sqlite3_column_text(stmt,index);
+ size_t i=0;
+ if(!cap)return;
+ if(src)while(src[i]&&i+1<cap){
+  unsigned char c=src[i];dest[i]=(c<32||c==127)?' ':(char)c;i++;
+ }
+ dest[i]=0;
+}
+static int corpus_search(sqlite3 *db,const digit_corpus_query_t *query,
+                         digit_corpus_result_t *out){
+ static const char sql[]=
+  "SELECT c.id,c.category,c.verification_status,substr(c.text,1,900) "
+  "FROM corpus_fts JOIN corpus c ON c.id=corpus_fts.rowid "
+  "WHERE corpus_fts MATCH ?1 ORDER BY bm25(corpus_fts) LIMIT 3";
+ sqlite3_stmt *stmt=NULL;
+ char phrase[2*DIGIT_CORPUS_QUERY_MAX+4];int rc;
+ if(!db||!query||!out||!memchr(query->query,0,sizeof query->query)||
+    !fts_phrase(query->query,phrase,sizeof phrase))return -1;
+ memset(out,0,sizeof *out);
+ rc=sqlite3_prepare_v2(db,sql,-1,&stmt,NULL);
+ if(rc!=SQLITE_OK)return -1;
+ if(sqlite3_bind_text(stmt,1,phrase,-1,SQLITE_TRANSIENT)!=SQLITE_OK){
+  sqlite3_finalize(stmt);return -1;
+ }
+ while((rc=sqlite3_step(stmt))==SQLITE_ROW){
+  digit_corpus_hit_t *hit;
+  if(out->count>=DIGIT_CORPUS_RESULTS_MAX)break;
+  hit=&out->hits[out->count++];
+  hit->id=sqlite3_column_int64(stmt,0);
+  copy_column(stmt,1,hit->category,sizeof hit->category);
+  copy_column(stmt,2,hit->verification_status,sizeof hit->verification_status);
+  copy_column(stmt,3,hit->excerpt,sizeof hit->excerpt);
+ }
+ sqlite3_finalize(stmt);
+ return (rc==SQLITE_DONE||rc==SQLITE_ROW)?(int)out->count:-1;
+}
 static stnlabz_module_result_t service(const void *request,size_t request_size,
     void *response,size_t response_size,size_t *response_used,void *context) {
     const char *operation=context;
@@ -60,6 +118,17 @@ static stnlabz_module_result_t service(const void *request,size_t request_size,
         memcpy(r.key,request,KEY_MAX);
         if(!get(database,&r))return STNLABZ_MODULE_ERR_NOT_FOUND;
         memcpy(response,&r,sizeof r);*response_used=sizeof r;
+        return STNLABZ_MODULE_OK;
+    }
+    if(!strcmp(operation,"search")){
+        digit_corpus_result_t result;int count;
+        if(request_size!=sizeof(digit_corpus_query_t)||!response||
+           response_size<sizeof result||!response_used)
+            return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+        count=corpus_search(database,request,&result);
+        if(count<0)return STNLABZ_MODULE_ERR_INVALID_STATE;
+        memcpy(response,&result,sizeof result);
+        *response_used=sizeof result;
         return STNLABZ_MODULE_OK;
     }
     return STNLABZ_MODULE_ERR_NOT_FOUND;
@@ -114,7 +183,7 @@ static stnlabz_module_result_t diagnostic_service(
  memcpy(response,&out,sizeof out);*response_used=sizeof out;
  return STNLABZ_MODULE_OK;
 }
-static const char op_get[]="get";
+static const char op_get[]="get",op_search[]="search";
 /* [AI:GPT-6 | 2026-10-18] Startup diagnostics go to the service journal.
  * No credentials, SQL row values, or database content are logged.
  */
@@ -151,10 +220,16 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api) {
         startup_log(stage,SQLITE_MISUSE,"core_rejected_service_registration");
         goto fail;
     }
+    stage="register_corpus_search";
+    if(!host->register_service(DIGIT_CORPUS_SEARCH_SERVICE,service,(void *)op_search)){
+        host->unregister_service("digit.sqlite3.get",(void *)op_get);
+        goto fail;
+    }
     stage="register_diagnostic";
     if(!host->register_service(DIGIT_SQLITE3_DIAGNOSTIC_SERVICE,
                               diagnostic_service,NULL)){
         startup_log(stage,SQLITE_MISUSE,"core_rejected_diagnostic_registration");
+        host->unregister_service(DIGIT_CORPUS_SEARCH_SERVICE,(void *)op_search);
         host->unregister_service("digit.sqlite3.get",(void *)op_get);
         goto fail;
     }
@@ -168,6 +243,7 @@ fail:
 static stnlabz_module_result_t stop(void) {
     if(!database||!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
     host->unregister_service(DIGIT_SQLITE3_DIAGNOSTIC_SERVICE,NULL);
+    host->unregister_service(DIGIT_CORPUS_SEARCH_SERVICE,(void *)op_search);
     host->unregister_service("digit.sqlite3.get",(void *)op_get);
     if(sqlite3_close(database)!=SQLITE_OK)return STNLABZ_MODULE_ERR_STOP_FAILED;
     database=NULL;host=NULL;return STNLABZ_MODULE_OK;
@@ -226,6 +302,26 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
     test_check(result,!get(NULL,&record),1);
     test_check(result,!get(db,NULL),1);
     test_check(result,sqlite3_db_readonly(db,"main")==0,0);
+    test_check(result,sqlite3_exec(db,
+      "CREATE TABLE corpus(id INTEGER PRIMARY KEY,category TEXT,source TEXT,text TEXT,verification_status TEXT,source_record_id TEXT)",NULL,NULL,NULL)==SQLITE_OK,0);
+    test_check(result,sqlite3_exec(db,
+      "CREATE VIRTUAL TABLE corpus_fts USING fts5(text,content='corpus',content_rowid='id')",NULL,NULL,NULL)==SQLITE_OK,0);
+    test_check(result,sqlite3_exec(db,
+      "CREATE TRIGGER corpus_fts_ai AFTER INSERT ON corpus BEGIN INSERT INTO corpus_fts(rowid,text) VALUES(new.id,new.text); END",NULL,NULL,NULL)==SQLITE_OK,0);
+    test_check(result,sqlite3_exec(db,
+      "INSERT INTO corpus(category,text,verification_status) VALUES('test','STN-Labz knowledge record','verified')",NULL,NULL,NULL)==SQLITE_OK,0);
+    {
+      digit_corpus_query_t query={0};
+      digit_corpus_result_t findings={0};
+      strcpy(query.query,"STN-Labz");
+      test_check(result,corpus_search(db,&query,&findings)==1,0);
+      test_check(result,findings.count==1&&findings.hits[0].id==1,0);
+      test_check(result,strstr(findings.hits[0].excerpt,"STN-Labz")!=NULL,0);
+      strcpy(query.query,"unmatchedrecord");
+      test_check(result,corpus_search(db,&query,&findings)==0,0);
+      strcpy(query.query,"???");
+      test_check(result,corpus_search(db,&query,&findings)==-1,1);
+    }
     test_check(result,sqlite3_close(db)==SQLITE_OK,0);
     test_check(result,result->tests_executed>=20,0);
     return result->tests_executed>=20 && !result->tests_failed &&
@@ -235,7 +331,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="sqlite3",.name="SQLite3 persistence",
-    .version_major=0,.version_minor=2,.version_patch=1,
+    .version_major=0,.version_minor=3,.version_patch=0,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
