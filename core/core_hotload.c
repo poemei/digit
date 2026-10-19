@@ -7,6 +7,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <time.h>
+#include <errno.h>
 /* [AI:GPT-6 | 2026-10-18 23:53:12 UTC] */
 #include <openssl/sha.h>
 #include <openssl/evp.h>
@@ -21,6 +23,7 @@ typedef struct {
  char sha[SHA256_DIGEST_LENGTH*2+1];
  char rejected_sha[SHA256_DIGEST_LENGTH*2+1];
  unsigned major,minor,patch;
+ time_t retry_after;
 } observed_t;
 struct stnlabz_hotload {
  char directory[1024];
@@ -96,7 +99,8 @@ static int snapshot_candidate(const char *path,char *staged,size_t cap,
  char buf[16384];int in=-1,out=-1;ssize_t n,k;size_t off,i;
  EVP_MD_CTX *ctx=NULL;unsigned int hash_len=0;
  unsigned char hash[SHA256_DIGEST_LENGTH];int ok=0;
- if(snprintf(staged,cap,"%s.candidate.XXXXXX",path)>=(int)cap)return 0;
+ /* Stage outside the protected module tree. The service owns this directory. */
+ if(snprintf(staged,cap,"/opt/digit/state/hotload/candidate.XXXXXX")>=(int)cap)return 0;
  out=mkstemp(staged);if(out<0)return 0;
  in=open(path,O_RDONLY|O_CLOEXEC);
  if(in<0)goto done;
@@ -111,6 +115,7 @@ static int snapshot_candidate(const char *path,char *staged,size_t cap,
   }
  }
  if(n<0)goto done;
+ if(fsync(out)!=0)goto done;
  if(close(out)!=0){out=-1;goto done;}
  out=-1;
  if(EVP_DigestFinal_ex(ctx,hash,&hash_len)!=1||
@@ -134,7 +139,7 @@ static void replacement(stnlabz_hotload_t *w,const char *id,const char *path,
  stnlabz_module_qualification_result_t q={0};
  stnlabz_module_result_t rc;
  stnlabz_loaded_module_t previous;
- size_t pos;int found=0,old_stopped=0;
+ size_t pos;int found=0,old_stopped=0,incumbent_active=0;
  if(!snapshot_candidate(path,staged,sizeof staged,sha)){
   char detail[400];
   snprintf(detail,sizeof detail,"module=%s path=%.230s reason=candidate_snapshot_failed",id,path);
@@ -169,10 +174,12 @@ static void replacement(stnlabz_hotload_t *w,const char *id,const char *path,
    "candidate_qualification_failed","incumbent_retained");goto end;
  }
  inc=stnlabz_module_registry_find(w->registry,id);
- if(!inc||inc->state!=STNLABZ_MODULE_STATE_ACTIVE){
+ if(!inc||(inc->state!=STNLABZ_MODULE_STATE_ACTIVE &&
+           inc->state!=STNLABZ_MODULE_STATE_FAILED)){
   (void)log_report(w,"HOTLOAD_DENIED",id,original,desc,original->sha,sha,
    "incumbent_not_active","incumbent_status_unverified");goto end;
  }
+ incumbent_active=inc->state==STNLABZ_MODULE_STATE_ACTIVE;
  saved=*inc;
  for(pos=0;pos<w->loader->count;pos++)
   if(!strcmp(w->loader->modules[pos].module_id,id)){found=1;break;}
@@ -188,11 +195,11 @@ static void replacement(stnlabz_hotload_t *w,const char *id,const char *path,
   (void)log_report(w,"HOTLOAD_DENIED",id,original,desc,original->sha,sha,
    "authorization_denied","incumbent_retained");goto end;
  }
- if(!stnlabz_core_stop(w->registry,id)){
+ if(incumbent_active&&!stnlabz_core_stop(w->registry,id)){
   (void)log_report(w,"HOTLOAD_FAILED",id,original,desc,original->sha,sha,
    "incumbent_stop_failed","incumbent_status_unverified");goto end;
  }
- old_stopped=1;
+ old_stopped=incumbent_active;
  /* Keep the old library loaded for rollback; replace only the registry record. */
  for(size_t j=0;j<w->registry->count;j++)
   if(!strcmp(w->registry->modules[j].descriptor.id,id)){
@@ -206,21 +213,25 @@ static void replacement(stnlabz_hotload_t *w,const char *id,const char *path,
   w->loader->modules[pos]=candidate.modules[0];
   candidate.count=0;
   (void)remember(w,id,sha,desc);
-  (void)log_report(w,"HOTLOAD_ACTIVE",id,original,desc,original->sha,sha,
+  (void)log_report(w,"HOTLOAD_REPLACED",id,original,desc,original->sha,sha,
    "qualification_and_activation_passed","replacement_active");
   (void)previous;
  }else{
   for(size_t j=0;j<w->registry->count;j++)
    if(!strcmp(w->registry->modules[j].descriptor.id,id)){
     w->registry->modules[j]=saved;
-    w->registry->modules[j].state=STNLABZ_MODULE_STATE_STOPPED;
+    w->registry->modules[j].state=incumbent_active ?
+       STNLABZ_MODULE_STATE_STOPPED : STNLABZ_MODULE_STATE_FAILED;
     w->registry->modules[j].activation_authorized=0;break;
    }
-  rc=stnlabz_core_authorize(w->registry,id,&w->policy);
-  if(rc==STNLABZ_MODULE_OK)rc=stnlabz_core_activate(w->registry,id,w->host,&w->policy);
+  rc=STNLABZ_MODULE_ERR_INVALID_STATE;
+  if(incumbent_active){
+   rc=stnlabz_core_authorize(w->registry,id,&w->policy);
+   if(rc==STNLABZ_MODULE_OK)rc=stnlabz_core_activate(w->registry,id,w->host,&w->policy);
+  }
   (void)log_report(w,"HOTLOAD_FAILED",id,original,desc,original->sha,sha,
     "candidate_activation_failed",rc==STNLABZ_MODULE_OK?
-    "incumbent_restored":"incumbent_restore_failed");
+    "incumbent_restored":incumbent_active?"incumbent_restore_failed":"failed_state_retained");
  }
  (void)old_stopped;
 end:
@@ -232,6 +243,15 @@ stnlabz_hotload_t *stnlabz_hotload_create(const char *directory,
  const stnlabz_module_host_t *host,const stnlabz_policy_request_t *policy){
  stnlabz_hotload_t *w;size_t i;
  if(!directory||!registry||!loader||!host||!policy)return NULL;
+ /* Never stage executable code alongside installed modules. */
+ {
+  struct stat state;
+  if(stat("/opt/digit/state",&state)!=0||!S_ISDIR(state.st_mode))return NULL;
+  if(mkdir("/opt/digit/state/hotload",0700)!=0 && errno!=EEXIST)return NULL;
+  if(stat("/opt/digit/state/hotload",&state)!=0||!S_ISDIR(state.st_mode)||
+     (state.st_mode & 0077)!=0||access("/opt/digit/state/hotload",W_OK|X_OK)!=0)
+   return NULL;
+ }
  w=calloc(1,sizeof *w);if(!w)return NULL;
  if(strlen(directory)>=sizeof w->directory){free(w);return NULL;}
  snprintf(w->directory,sizeof w->directory,"%s",directory);
@@ -248,7 +268,8 @@ stnlabz_hotload_t *stnlabz_hotload_create(const char *directory,
   const stnlabz_module_record_t *r=&registry->modules[i];
   const stnlabz_loaded_module_t *m=stnlabz_module_loader_find(loader,r->descriptor.id);
   char sha[65],path[1200],detail[450];
-  if(r->state!=STNLABZ_MODULE_STATE_ACTIVE||!m)continue;
+  if((r->state!=STNLABZ_MODULE_STATE_ACTIVE &&
+      r->state!=STNLABZ_MODULE_STATE_FAILED)||!m)continue;
   if(snprintf(path,sizeof path,"%s/%s/bin/%s.so",directory,
     r->descriptor.id,r->descriptor.id)>=(int)sizeof path)continue;
   if(!digest(path,sha)){
@@ -344,7 +365,7 @@ static void discover_new(stnlabz_hotload_t *w){
   (void)remember(w,id,sha,desc);
   snprintf(detail,sizeof detail,"module=%s version=%u.%u.%u candidate_sha256=%s reason=new_module_activated",
    id,desc->version_major,desc->version_minor,desc->version_patch,sha);
-  (void)log_report(w,"HOTLOAD_ACTIVE",id,NULL,desc,"none",sha,
+  (void)log_report(w,"HOTLOAD_ADMITTED",id,NULL,desc,"none",sha,
    "new_module_activated","module_active");
 rollback:
   if(!admitted){
@@ -369,7 +390,8 @@ void stnlabz_hotload_poll(stnlabz_hotload_t *w){
   const stnlabz_loaded_module_t *loaded;
   observed_t *known,baseline;
   char path[1200],hash[65],detail[450];
-  if(r->state!=STNLABZ_MODULE_STATE_ACTIVE)continue;
+  if(r->state!=STNLABZ_MODULE_STATE_ACTIVE &&
+     r->state!=STNLABZ_MODULE_STATE_FAILED)continue;
   loaded=stnlabz_module_loader_find(w->loader,r->descriptor.id);
   if(!loaded)continue;
   if(snprintf(path,sizeof path,"%s/%s/bin/%s.so",w->directory,
