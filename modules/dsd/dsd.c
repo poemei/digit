@@ -60,6 +60,7 @@ static int record(const digit_dsd_event_t *event){
 }
 /* Human-readable statuses are presentation only; original evidence stays intact. */
 static const char *status_meaning(const char *status){
+ if(!strcmp(status,"TRACE_BOUND"))return "request trace was bound to the dispatch thread";
  if(!strcmp(status,"RESPONSE_RETURNED"))return "a response was returned by the service";
  if(!strcmp(status,"QUERY_MATCH"))return "a corpus match was returned";
  if(!strcmp(status,"QUERY_NO_MATCH"))return "the corpus search returned no matching records";
@@ -187,6 +188,21 @@ static stnlabz_module_result_t bind_service(
  if(!request||request_size!=sizeof(uint64_t))
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memcpy(&current_trace,request,sizeof current_trace);
+ if(current_trace){
+  digit_dsd_event_t e={0};
+  e.trace_id=current_trace;
+  e.span_id=1;
+  e.line=__LINE__;
+  snprintf(e.module,sizeof e.module,"dsd");
+  snprintf(e.method,sizeof e.method,"bind");
+  snprintf(e.file,sizeof e.file,"modules/dsd/dsd.c");
+  snprintf(e.status,sizeof e.status,"TRACE_BOUND");
+  snprintf(e.operation,sizeof e.operation,"request_trace");
+  if(!record(&e)){
+   current_trace=0;
+   return STNLABZ_MODULE_ERR_INVALID_STATE;
+  }
+ }
  return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t current_service(
@@ -515,7 +531,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="dsd",.name="Developer Self-Diagnostics",
- .version_major=0,.version_minor=6,.version_patch=3,
+ .version_major=0,.version_minor=7,.version_patch=0,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
