@@ -125,10 +125,10 @@ fail:
 static int authenticate(SSL *ssl,const irc_config_t *c) {
     unsigned char plain[512];char encoded[720],line[750];
     size_t a=strlen(c->account),p=strlen(c->password);int n,ok;
-    if(a*2+p+2>sizeof plain)return 0;
+    if(a+p+2>sizeof plain)return 0;
     plain[0]=0;memcpy(plain+1,c->account,a);plain[a+1]=0;
     memcpy(plain+a+2,c->password,p);
-    n=EVP_EncodeBlock((unsigned char *)encoded,plain,(int)(a*2+p+2));
+    n=EVP_EncodeBlock((unsigned char *)encoded,plain,(int)(a+p+2));
     OPENSSL_cleanse(plain,sizeof plain);
     if(n<0||n>400){OPENSSL_cleanse(encoded,sizeof encoded);return 0;}
     (void)snprintf(line,sizeof line,"AUTHENTICATE %s\r\n",encoded);
@@ -172,7 +172,7 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line) {
     return k>0&&(size_t)k<sizeof wire&&write_line(ssl,wire);
 }
 static void session(const irc_config_t *cfg) {
-    SSL_CTX *ctx=NULL;SSL *ssl=NULL;int fd,authed=0,joined=0,got_sasl=0;
+    SSL_CTX *ctx=NULL;SSL *ssl=NULL;int fd,authed=0,joined=0,got_sasl=0,welcomed=0;
     char line[2048];size_t used=0;
     fd=connect_tls(cfg,&ctx,&ssl);if(fd<0)return;
     if(!write_line(ssl,"CAP LS 302\r\n")||
@@ -197,11 +197,12 @@ static void session(const irc_config_t *cfg) {
             if(!authenticate(ssl,cfg))break;
         } else if(strstr(line," 903 ")) {
             authed=1;if(!write_line(ssl,"CAP END\r\n"))break;
+            if(welcomed&&!joined){if(!command(ssl,"JOIN",cfg->channel))break;joined=1;}
         } else if(strstr(line," 904 ")||strstr(line," 905 ")||strstr(line," 906 ")||strstr(line," 907 ")) {
             break;
-        } else if(authed&&!joined&&strstr(line," 001 ")) {
-            if(!command(ssl,"JOIN",cfg->channel))break;
-            joined=1;
+        } else if(strstr(line," 001 ")) {
+            welcomed=1;
+            if(authed&&!joined){if(!command(ssl,"JOIN",cfg->channel))break;joined=1;}
         } else if(authed&&strstr(line," PRIVMSG ")) {
             if(!incoming(ssl,cfg,line))break;
         }
