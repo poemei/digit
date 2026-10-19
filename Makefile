@@ -9,7 +9,7 @@ CORE_SOURCES := $(filter-out core/main.c,$(wildcard core/*.c)) $(wildcard core/s
 CORE_TARGET := bin/digit-core
 PREFIX ?= /opt/digit
 DESTDIR ?=
-.PHONY: all clean test install modules irc-test
+.PHONY: all clean test install install-systemd modules irc-test
 all: $(TARGET) $(CORE_TARGET) modules
 $(TARGET): $(SOURCES)
 	@mkdir -p bin
@@ -30,6 +30,18 @@ install: all
 	install -m 0755 $(TARGET) "$(DESTDIR)$(PREFIX)/bin/digit"
 	install -m 0755 $(CORE_TARGET) "$(DESTDIR)$(PREFIX)/bin/digit-core"
 	$(MAKE) -C modules/irc install PREFIX="$(PREFIX)" DESTDIR="$(DESTDIR)"
+# [End AI:GPT-6]
+
+# [AI:GPT-6 | 2026-10-18] Never clobber an installed systemd service.
+install-systemd:
+	@if [ -e /etc/systemd/system/digit.service ] || \
+	    [ -e /lib/systemd/system/digit.service ] || \
+	    [ -e /usr/lib/systemd/system/digit.service ]; then \
+	    echo "digit.service already exists; refusing to overwrite it"; exit 1; \
+	fi
+	install -d /etc/systemd/system
+	install -m 0644 systemd/digit.service /etc/systemd/system/digit.service
+	@echo "Unit installed, not enabled or started. Review then run systemctl daemon-reload."
 # [End AI:GPT-6]
 
 test: $(TARGET) $(CORE_TARGET) irc-test
