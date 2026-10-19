@@ -21,6 +21,7 @@
 #include <openssl/evp.h>
 #include "module.h"
 #include "socials.h"
+#include "s2.h"
 #include <time.h>
 
 #define IRC_ENV_PATH "/opt/digit/state/auth/irc.env"
@@ -38,6 +39,7 @@ static int worker_started;
 static volatile sig_atomic_t stopping;
 static const stnlabz_module_host_t *host_api;
 static time_t last_greeting;
+static time_t last_s2_poll;
 #define IRC_GREETING_INTERVAL 30
 
 static int assign(char *out,size_t cap,const char *in) {
@@ -273,16 +275,39 @@ static int join_greeting(SSL *ssl,const irc_config_t *cfg,char *line,
  last_greeting=now;
  return 1;
 }
+/* [AI:GPT-6 | 2026-10-19] IRC is transport only; S2 owns evidence.
+ * Delivers only a bounded, sanitized service report to the configured channel.
+ */
+static int s2_report(SSL *ssl,const irc_config_t *cfg,int ready){
+ digit_s2_report_t result={0};
+ size_t used=0,n;
+ char wire[640];
+ time_t now=time(NULL);
+ int written;
+ if(!ready||!host_api||!host_api->invoke_service||now==(time_t)-1)return 1;
+ if(last_s2_poll&&now>=last_s2_poll&&now-last_s2_poll<300)return 1;
+ last_s2_poll=now;
+ if(host_api->invoke_service(DIGIT_S2_POLL_SERVICE,NULL,0,&result,sizeof result,
+     &used)!=STNLABZ_MODULE_OK||used!=sizeof result)return 1;
+ n=strnlen(result.report,sizeof result.report);
+ if(!n||n>=sizeof result.report||!reply_valid(result.report,n))return 1;
+ written=snprintf(wire,sizeof wire,"PRIVMSG %s :%s\r\n",cfg->channel,result.report);
+ if(written<=0||(size_t)written>=sizeof wire)return 1;
+ return write_line(ssl,wire);
+}
 static void session(const irc_config_t *cfg) {
     SSL_CTX *ctx=NULL;SSL *ssl=NULL;int fd,authed=0,joined=0,got_sasl=0,welcomed=0,tags_enabled=0;
     char line[2048];size_t used=0;
     last_greeting=0;
+    last_s2_poll=0;
     fd=connect_tls(cfg,&ctx,&ssl);if(fd<0)return;
     if(!write_line(ssl,"CAP LS 302\r\n")||
         !command(ssl,"NICK",cfg->nick)||
         !command(ssl,"USER","digit 0 * :Digit IRC module"))goto done;
     while(!stopping) {
-        char ch;int n=SSL_read(ssl,&ch,1);
+        char ch;int n;
+        if(!s2_report(ssl,cfg,authed&&joined))break;
+        n=SSL_read(ssl,&ch,1);
         if(n<=0){if(SSL_get_error(ssl,n)==SSL_ERROR_WANT_READ)continue;break;}
         if(ch=='\r')continue;
         if(ch!='\n') {
@@ -406,7 +431,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=2,.version_patch=1,
+    .version_major=0,.version_minor=3,.version_patch=0,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
