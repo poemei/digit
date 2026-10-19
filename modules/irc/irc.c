@@ -267,7 +267,7 @@ static int join_greeting(SSL *ssl,const irc_config_t *cfg,char *line,
     used!=sizeof reply)return 1;
  n=(int)strnlen(reply.text,sizeof reply.text);
  if(n<=0||n>350||!reply_valid(reply.text,(size_t)n))return 1;
- n=snprintf(wire,sizeof wire,"PRIVMSG %s :%s\\r\\n",cfg->channel,reply.text);
+ n=snprintf(wire,sizeof wire,"PRIVMSG %s :%s\r\n",cfg->channel,reply.text);
  if(n<=0||(size_t)n>=sizeof wire)return 1;
  if(!write_line(ssl,wire))return 0;
  last_greeting=now;
@@ -406,7 +406,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=2,.version_patch=0,
+    .version_major=0,.version_minor=2,.version_patch=1,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
