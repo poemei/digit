@@ -118,7 +118,7 @@ static void dsd_record_message(const char *account,
  snprintf(record.event.file,sizeof record.event.file,"modules/irc/irc.c");
  snprintf(record.event.operation,sizeof record.event.operation,"digit.message");
  record.event.line=line;
- record.event.result=service_ok?0:1;
+ record.event.result=(service_ok&&replied)?0:1;
  snprintf(record.event.status,sizeof record.event.status,"%s",
   !service_ok?"SERVICE_UNAVAILABLE":replied?"RESPONSE_RETURNED":"NO_RESPONSE");
  if(host_api->invoke_service(DIGIT_DSD_RECORD_SERVICE,&record,sizeof record,
@@ -133,6 +133,11 @@ static int dsd_dm_reply(const char *account,const char *message,char *response,
  if(!account||!account[0]||!message||!response||!used||!host_api)return 0;
  *used=0;
  query.previous_trace_id=dsd_previous(account);
+ /* Trace IDs and module-wide history cannot bypass DM ownership. */
+ if(strcmp(message,"show dsd")&&strcmp(message,"diagnose my last request")){
+  snprintf(response,cap,"DSD: Use diagnose my last request. Other trace investigations require scoped authorization.");
+  *used=strlen(response);return 1;
+ }
  snprintf(query.command,sizeof query.command,"%s",message);
  rc=host_api->invoke_service(DIGIT_DSD_COMMAND_SERVICE,&query,sizeof query,
    &answer,sizeof answer,&returned);
@@ -635,7 +640,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=2,.version_patch=11,
+    .version_major=0,.version_minor=2,.version_patch=12,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
