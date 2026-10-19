@@ -63,7 +63,7 @@ static int send(const char *sender,const char *message,int expect_speak){
  snprintf(in.message,sizeof in.message,"%s",message);
  rc=listener(&in,sizeof in,out,sizeof out,&used,listener_context);
  printf("%s: %s (%s)\n",sender,message,used?out:"SILENT");
- return rc==STNLABZ_MODULE_OK && (expect_speak ? (used>0 && strstr(out,"indentation")!=NULL && strstr(out,"corpus #")==NULL && strstr(out,"notes:")==NULL) : used==0);
+ return rc==STNLABZ_MODULE_OK && (expect_speak ? (used>0 && strstr(out,"I'm here with you lot")!=NULL && strstr(out,"Python")==NULL && strstr(out,"corpus #")==NULL && strstr(out,"notes:")==NULL) : used==0);
 }
 int main(int argc,char **argv){
  void *handle,*sym;
@@ -91,8 +91,8 @@ int main(int argc,char **argv){
  ++total;passed+=send("Laurie_Vo","I am learning Python",0);
  ++total;passed+=send("PoeMei","Python uses indentation, remember the indentation",0);
  /* With empty corpus evidence the learner must not receive a fabricated reply. */
- ++total;passed+=send("Laurie_Vo","I keep forgetting the indentation!",0);
- printf("Observation reads=%u, corpus reads=%u; no-knowledge safety %d/%d\n",
+ ++total;passed+=send("Laurie_Vo","I keep forgetting the indentation!",1);
+ printf("Observation reads=%u, corpus reads=%u; no-invented-knowledge social participation %d/%d\n",
   observation_reads,corpus_reads,passed,total);
  if(mod->stop()!=STNLABZ_MODULE_OK){dlclose(handle);return 2;}
  dlclose(handle);
