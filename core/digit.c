@@ -11,6 +11,7 @@
 #include "core_activation.h"
 #include "core_inventory.h"
 #include "core_hotload.h"
+#include "core_router.h"
 #include "stnlabz_abi/module_registry.h"
 #include "stnlabz_abi/module_loader.h"
 
@@ -144,7 +145,7 @@ static stnlabz_module_result_t digit_service(const char *name,
     if (strcmp(msg->message, "show modules") &&
         strncmp(msg->message, "activate module", 15) &&
         strncmp(msg->message, "deactivate module", 17))
-        return digit_service("digit.conversation",request,request_size,
+        return digit_service(DIGIT_MESSAGE_ROUTE,request,request_size,
                              response,response_size,response_used);
 
     /* [AI:GPT-6 | 2026-10-18] Public-channel management requests
