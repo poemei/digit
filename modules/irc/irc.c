@@ -20,12 +20,15 @@
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include "module.h"
+#include "socials.h"
+#include <time.h>
 
 #define IRC_ENV_PATH "/opt/digit/state/auth/irc.env"
 #define IRC_INPUT_SERVICE "digit.message"
 typedef struct {
     char server[256], port[16], nick[64], channel[128];
     char account[128], password[256];
+    char mommy_account[128], auntie_account[128], sister_account[128];
 } irc_config_t;
 typedef struct {
     char sender[128], account[128], target[128], message[512];
@@ -34,6 +37,8 @@ static pthread_t worker;
 static int worker_started;
 static volatile sig_atomic_t stopping;
 static const stnlabz_module_host_t *host_api;
+static time_t last_greeting;
+#define IRC_GREETING_INTERVAL 30
 
 static int assign(char *out,size_t cap,const char *in) {
     size_t n = strlen(in);
@@ -78,6 +83,9 @@ static int config_read(irc_config_t *c) {
         else if(!strcmp(p,"DIGIT_IRC_CHANNEL"))(void)assign(c->channel,sizeof c->channel,sep);
         else if(!strcmp(p,"DIGIT_IRC_ACCOUNT"))(void)assign(c->account,sizeof c->account,sep);
         else if(!strcmp(p,"DIGIT_IRC_PASSWORD"))(void)assign(c->password,sizeof c->password,sep);
+        else if(!strcmp(p,"DIGIT_IRC_MOMMY_ACCOUNT"))(void)assign(c->mommy_account,sizeof c->mommy_account,sep);
+        else if(!strcmp(p,"DIGIT_IRC_AUNTIE_ACCOUNT"))(void)assign(c->auntie_account,sizeof c->auntie_account,sep);
+        else if(!strcmp(p,"DIGIT_IRC_SISTER_ACCOUNT"))(void)assign(c->sister_account,sizeof c->sister_account,sep);
     }
     fclose(f);
     return config_valid(c);
@@ -205,9 +213,70 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled
     }
     return 1;
 }
+/* JOIN notifications are transport events, not conversational intents.
+ * Family classification is based only on explicitly configured IRC account
+ * identities, never nickname, hostmask or channel privileges.
+ */
+static const char *greeting_kind(const irc_config_t *cfg,const char *account){
+ if(!cfg||!account||!*account||!strcmp(account,"*"))return NULL;
+ if(cfg->mommy_account[0]&&!strcmp(cfg->mommy_account,account))return "mommy";
+ if(cfg->auntie_account[0]&&!strcmp(cfg->auntie_account,account))return "auntie";
+ if(cfg->sister_account[0]&&!strcmp(cfg->sister_account,account))return "sister";
+ return "unknown";
+}
+static int join_greeting(SSL *ssl,const irc_config_t *cfg,char *line,
+ int tags_enabled,int channel_ready){
+ char account[128]={0},nick[128]={0},wire[512];
+ char *end,*tag,*next,*prefix,*bang,*command,*channel,*space;
+ digit_socials_greeting_request_t request={0};
+ digit_socials_greeting_response_t reply={0};
+ size_t used=0;
+ time_t now;
+ const char *kind;
+ int n;
+ if(!tags_enabled||!channel_ready||!line||line[0]!='@')return 1;
+ end=strchr(line,' ');if(!end)return 1;
+ *end=0;tag=line+1;
+ while(tag&&*tag){
+  next=strchr(tag,';');if(next)*next++=0;
+  if(!strncmp(tag,"account=",8)&&tag[8]&&
+     strlen(tag+8)<sizeof account)
+   snprintf(account,sizeof account,"%s",tag+8);
+  tag=next;
+ }
+ prefix=end+1;
+ if(*prefix!=':')return 1;
+ prefix++;bang=strchr(prefix,'!');if(!bang)return 1;
+ *bang=0;
+ if(strlen(prefix)>=sizeof nick)return 1;
+ snprintf(nick,sizeof nick,"%s",prefix);
+ space=strchr(bang+1,' ');if(!space)return 1;
+ command=space+1;
+ if(strncmp(command,"JOIN ",5))return 1;
+ channel=command+5;
+ space=strchr(channel,' ');if(space)*space=0;
+ if(strcasecmp(channel,cfg->channel)||!strcasecmp(nick,cfg->nick))return 1;
+ kind=greeting_kind(cfg,account);
+ if(!kind||!host_api||!host_api->invoke_service)return 1;
+ now=time(NULL);
+ if(now==(time_t)-1||(last_greeting&&now>=last_greeting&&
+   now-last_greeting<IRC_GREETING_INTERVAL))return 1;
+ snprintf(request.kind,sizeof request.kind,"%s",kind);
+ if(host_api->invoke_service(DIGIT_SOCIALS_GREETING_SERVICE,&request,
+    sizeof request,&reply,sizeof reply,&used)!=STNLABZ_MODULE_OK||
+    used!=sizeof reply)return 1;
+ n=(int)strnlen(reply.text,sizeof reply.text);
+ if(n<=0||n>350||!reply_valid(reply.text,(size_t)n))return 1;
+ n=snprintf(wire,sizeof wire,"PRIVMSG %s :%s\\r\\n",cfg->channel,reply.text);
+ if(n<=0||(size_t)n>=sizeof wire)return 1;
+ if(!write_line(ssl,wire))return 0;
+ last_greeting=now;
+ return 1;
+}
 static void session(const irc_config_t *cfg) {
     SSL_CTX *ctx=NULL;SSL *ssl=NULL;int fd,authed=0,joined=0,got_sasl=0,welcomed=0,tags_enabled=0;
     char line[2048];size_t used=0;
+    last_greeting=0;
     fd=connect_tls(cfg,&ctx,&ssl);if(fd<0)return;
     if(!write_line(ssl,"CAP LS 302\r\n")||
         !command(ssl,"NICK",cfg->nick)||
@@ -238,6 +307,8 @@ static void session(const irc_config_t *cfg) {
         } else if(strstr(line," 001 ")) {
             welcomed=1;
             if(authed&&!joined){if(!command(ssl,"JOIN",cfg->channel))break;joined=1;}
+        } else if(authed&&joined&&strstr(line," JOIN ")) {
+            if(!join_greeting(ssl,cfg,line,tags_enabled,joined))break;
         } else if(authed&&strstr(line," PRIVMSG ")) {
             if(!incoming(ssl,cfg,line,tags_enabled))break;
         }
@@ -310,6 +381,11 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
     check(result,!reply_valid(cr,sizeof cr-1),1);
     check(result,!reply_valid(lf,sizeof lf-1),1);
     check(result,!reply_valid(nul,sizeof nul),1);
+    check(result,greeting_kind(&c,"") == NULL,1);
+    check(result,!strcmp(greeting_kind(&c,"registered"),"unknown"),0);
+    strcpy(c.auntie_account,"LaurieAccount");
+    check(result,!strcmp(greeting_kind(&c,"LaurieAccount"),"auntie"),0);
+    check(result,!strcmp(greeting_kind(&c,"Laurie_Vo"),"unknown"),1);
     return result->tests_executed>=20 && !result->tests_failed ?
         STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_QUALIFICATION;
 }
@@ -330,7 +406,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=1,.version_patch=0,
+    .version_major=0,.version_minor=2,.version_patch=0,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
