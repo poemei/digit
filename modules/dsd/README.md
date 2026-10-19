@@ -1,4 +1,4 @@
-# Digit Developer Self-Diagnostics (DSD) 0.3.0
+# Digit Developer Self-Diagnostics (DSD) 0.3.2
 
 An independent ABI 1.5 module providing bounded, read-only, evidence-led
 trace correlation. **Source candidate; operator acceptance outstanding.**
@@ -63,3 +63,12 @@ IRC or SQLite3 modifications are authorized or included here.
 context. A future authorized entry adapter must enforce DM scope and trace
 access before calling it. Do not expose this service to untrusted input
 without such a check. This module retains no per-user message text.
+
+## Silent request boundary
+
+When IRC records `NO_RESPONSE` from `digit.message`, DSD now reports
+that the request reached the service boundary and returned no reply. It
+identifies the last instrumented IRC source location, but **does not** claim
+to have traced execution within Core. Regression qualifications cover this
+case. Further internal drill-down requires separate observed module events
+through the existing ABI; Core and its governance remain untouched.
