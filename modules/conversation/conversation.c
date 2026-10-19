@@ -169,10 +169,8 @@ static stnlabz_module_result_t service(const void *request,size_t request_size,
  return answer((const message_t *)request,(char *)response,response_size,
                used,host);
 }
-/* Conservative topic-independent context matching, not full semantic
- * understanding. Only a repeated learner difficulty can solicit a reply.
- * Require two preceding references to a subject, a shared problem term,
- * another speaker, and a corpus excerpt containing both. */
+/* Technical contributions use contextual corpus matching when available.
+ * Social participation is a separate fallback, not a knowledge claim. */
 static int candidate_word(const char *p,size_t n){
  static const char *const stop[]={"that","this","with","from","have",
   "your","just","when","where","what","there","they","their","would",
@@ -185,6 +183,18 @@ static int candidate_word(const char *p,size_t n){
  for(i=0;i<sizeof stop/sizeof stop[0];i++)
   if(strlen(stop[i])==n&&!strncasecmp(stop[i],p,n))return 0;
  return 1;
+}
+/* Social participation does not require a technical corpus hit.
+ * Keep the response explicitly conversational; never imply learned facts. */
+static stnlabz_module_result_t social_reply(const message_t *m,char *out,
+ size_t cap,size_t *used){
+ char line[512];
+ int n=snprintf(line,sizeof line,"%s, I'm here with you lot. 😼",
+                m->sender);
+ if(n<0||(size_t)n>=sizeof line)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ stnlabz_module_result_t rc=reply(out,cap,used,line);
+ if(rc==STNLABZ_MODULE_OK)last_passive_reply=time(NULL);
+ return rc;
 }
 static stnlabz_module_result_t listen_message(const message_t *m,char *out,
  size_t cap,size_t *used,const stnlabz_module_host_t *api){
@@ -206,7 +216,7 @@ static stnlabz_module_result_t listen_message(const message_t *m,char *out,
  if(api->invoke_service(DIGIT_OBSERVATION_RECENT_SERVICE,&request,
     sizeof request,&history,sizeof history,&read)!=STNLABZ_MODULE_OK||
     read!=sizeof history||history.count>DIGIT_OBSERVATION_RECENT_MAX||
-    history.count<3)return STNLABZ_MODULE_OK;
+    history.count<1)return STNLABZ_MODULE_OK;
  for(i=0;i<history.count;i++)
   if(!memchr(history.items[i].text,0,sizeof history.items[i].text)||
      !memchr(history.items[i].sender,0,sizeof history.items[i].sender))
@@ -233,7 +243,7 @@ static stnlabz_module_result_t listen_message(const message_t *m,char *out,
     snprintf(issue,sizeof issue,"%s",term);other_speaker=1;break;
    }
  }
- if(!issue[0]||!other_speaker)return STNLABZ_MODULE_OK;
+ if(!issue[0]||!other_speaker)return social_reply(m,out,cap,used);
  /* Prefer the newest repeatedly established subject. An old discussion
   * must not outrank a later topic shift when selecting corpus evidence. */
  for(i=history.count-1;i>1&&!subject[0];){
@@ -254,13 +264,13 @@ static stnlabz_module_result_t listen_message(const message_t *m,char *out,
    }
   }
  }
- if(!subject[0])return STNLABZ_MODULE_OK;
+ if(!subject[0])return social_reply(m,out,cap,used);
  snprintf(query.query,sizeof query.query,"%s",subject);
  read=0;
  if(api->invoke_service(DIGIT_CORPUS_SEARCH_SERVICE,&query,sizeof query,
     &evidence,sizeof evidence,&read)!=STNLABZ_MODULE_OK||
     read!=sizeof evidence||evidence.count>DIGIT_CORPUS_RESULTS_MAX)
-  return STNLABZ_MODULE_OK;
+  return social_reply(m,out,cap,used);
  for(i=0;i<evidence.count;i++){
   const digit_corpus_hit_t *hit=&evidence.hits[i];
   char line[512];int length;
@@ -275,7 +285,7 @@ static stnlabz_module_result_t listen_message(const message_t *m,char *out,
    return rc;
   }
  }
- return STNLABZ_MODULE_OK;
+ return social_reply(m,out,cap,used);
 }
 static stnlabz_module_result_t listen_service(const void *request,
  size_t size,void *response,size_t cap,size_t *used,void *context){
@@ -406,7 +416,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="conversation",.name="Conversation knowledge retrieval",
- .version_major=0,.version_minor=4,.version_patch=12,
+ .version_major=0,.version_minor=4,.version_patch=13,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
