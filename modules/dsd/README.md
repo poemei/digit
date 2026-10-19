@@ -1,4 +1,4 @@
-# Digit Developer Self-Diagnostics (DSD) 0.4.1
+# Digit Developer Self-Diagnostics (DSD) 0.5.0
 
 An independent ABI 1.5 module providing bounded, read-only, evidence-led
 trace correlation. **Source candidate; operator acceptance outstanding.**
@@ -125,3 +125,28 @@ The independent SQLite3 schema probe in the diagnosis is not part of the
 original request's execution trail. A complete module-to-database trace
 requires an actual running conversational service chain; the current Core
 handler does not route ordinary conversation to one. Core is unchanged.
+
+## Generic request observations (DSD 0.5.0 / IRC 0.2.18)
+
+All ordinary authenticated private messages are forwarded unchanged through
+`digit.message`; no initial word such as 'define', 'ask', or 'show' is used
+to decide whether to instrument the request. IRC records the actual ABI
+result as a bounded, account-scoped observation. A successful ABI service
+return with no reply is an **observed empty reply**, not an ABI failure.
+Special DM developer commands (`diagnose my last request`, `show trace`,
+`show dsd`) are read-only inquiries and do not replace the prior request.
+
+DSD aggregates every event supplied for the trace, reporting source file,
+line, module, function, operation and result without service-specific
+diagnosis branches. Event producers must instrument actual execution;
+DSD cannot manufacture missing spans. An event naming SQLite3 must originate
+from an observed SQLite3 operation on that request, not from a later schema
+probe. The unrelated SQLite3 schema probe has been removed from the automatic
+diagnosis output; the SQLite3 module's independent diagnostics remain
+available at their own service boundary.
+
+**Architectural constraint:** Under the unchanged Core, the ordinary
+`digit.message` handler does not dispatch general conversational requests
+to database-backed modules. Consequently end-to-end database evidence for
+such a request cannot be generated until a real participating module path
+executes. DSD does not control or extend Core dispatch.
