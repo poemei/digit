@@ -150,7 +150,7 @@ static int diagnose(uint64_t trace_id,digit_dsd_result_t *out){
  }
  return 1;
 }
-static stnlabz_module_result_t record_service;
+static stnlabz_module_result_t record_service(
  const void *request,size_t request_size,void *response,
  size_t response_size,size_t *used,void *ctx){
  const digit_dsd_record_t *r=request;
