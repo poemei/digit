@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <pthread.h>
+#include <errno.h>
 #include "module.h"
 #include "s2.h"
 #define RICTUS "/var/log/rictus/rictus.log"
@@ -15,9 +17,14 @@
 #define FETCH_MAX (1024u*1024u)
 #define RICTUS_LINES 128u
 #define POLL_SECONDS 300
+#define DELIVER_SERVICE "digit.irc.deliver"
 typedef struct {char *data;size_t length;} buffer_t;
 static const stnlabz_module_host_t *host;
 static volatile int busy;
+static pthread_t scheduler;
+static pthread_mutex_t scheduler_mutex=PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t scheduler_cond=PTHREAD_COND_INITIALIZER;
+static int scheduler_stop,scheduler_started;
 static time_t previous_poll;
 static char previous_signature[192];
 static long previous_lines;
@@ -236,6 +243,43 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  return r->tests_executed>=20&&!r->tests_failed&&r->negative_test_executed&&
    r->negative_test_passed?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_QUALIFICATION;
 }
+/* Dedicated scheduler: never invokes an ABI service from another service
+ * handler, avoiding Core's non-recursive registry lock. */
+static void *scheduler_main(void *unused){
+ digit_s2_report_t result={0},pending={0};size_t used=0;
+ struct timespec until;
+ (void)unused;
+ for(;;){
+  int stopping_now;
+  pthread_mutex_lock(&scheduler_mutex);
+  stopping_now=scheduler_stop;
+  pthread_mutex_unlock(&scheduler_mutex);
+  if(stopping_now)break;
+  if(!pending.report[0]){
+   memset(&result,0,sizeof result);used=0;
+   if(poll_service(NULL,0,&result,sizeof result,&used,NULL)==STNLABZ_MODULE_OK&&
+      used==sizeof result&&memchr(result.report,0,sizeof result.report))
+    pending=result;
+  }
+  if(pending.report[0]&&host&&host->invoke_service){
+   size_t delivered=0;
+   if(host->invoke_service(DELIVER_SERVICE,&pending,sizeof pending,
+      NULL,0,&delivered)==STNLABZ_MODULE_OK)
+    memset(&pending,0,sizeof pending);
+  }
+  if(clock_gettime(CLOCK_REALTIME,&until)!=0)break;
+  until.tv_sec+=pending.report[0]?5:POLL_SECONDS;
+  pthread_mutex_lock(&scheduler_mutex);
+  while(!scheduler_stop){
+   int rc=pthread_cond_timedwait(&scheduler_cond,&scheduler_mutex,&until);
+   if(rc==ETIMEDOUT||rc!=0)break;
+  }
+  stopping_now=scheduler_stop;
+  pthread_mutex_unlock(&scheduler_mutex);
+  if(stopping_now)break;
+ }
+ return NULL;
+}
 static stnlabz_module_result_t start(const stnlabz_module_host_t *api){
  if(host||!api||!api->register_service||!api->unregister_service)
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
@@ -243,17 +287,29 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api){
  if(!api->register_service(DIGIT_S2_POLL_SERVICE,poll_service,NULL)){
   host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
  }
+ scheduler_stop=0;
+ if(pthread_create(&scheduler,NULL,scheduler_main,NULL)){
+  (void)api->unregister_service(DIGIT_S2_POLL_SERVICE,NULL);
+  host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
+ }
+ scheduler_started=1;
  return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t stop(void){
- if(!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(!host||!scheduler_started)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ pthread_mutex_lock(&scheduler_mutex);
+ scheduler_stop=1;
+ pthread_cond_signal(&scheduler_cond);
+ pthread_mutex_unlock(&scheduler_mutex);
+ if(pthread_join(scheduler,NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
+ scheduler_started=0;
  if(!host->unregister_service(DIGIT_S2_POLL_SERVICE,NULL))
   return STNLABZ_MODULE_ERR_STOP_FAILED;
  host=NULL;return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=1,.version_patch=1,
+ .version_major=0,.version_minor=1,.version_patch=2,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
