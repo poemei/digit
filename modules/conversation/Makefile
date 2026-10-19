@@ -1,0 +1,20 @@
+CC ?= cc
+CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Wpedantic
+CPPFLAGS += -I../../core/stnlabz_abi
+TARGET := bin/conversation.so
+PREFIX ?= /opt/digit
+MODULE_DIR := $(PREFIX)/modules/conversation
+
+.PHONY: all test install clean
+all: $(TARGET)
+$(TARGET): conversation.c ../sqlite3/corpus_search.h ../observation/observation.h ../../core/stnlabz_abi/module.h
+	@mkdir -p bin
+	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared conversation.c -o $@
+test: $(TARGET)
+	@echo "Built Conversation v1.0.0; run qualification through Digit Core."
+install: $(TARGET)
+	install -d "$(DESTDIR)$(MODULE_DIR)/bin"
+	install -m 0644 module.conf "$(DESTDIR)$(MODULE_DIR)/module.conf"
+	install -m 0755 $(TARGET) "$(DESTDIR)$(MODULE_DIR)/bin/conversation.so"
+clean:
+	rm -rf bin
