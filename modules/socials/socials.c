@@ -6,6 +6,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <stdio.h>
+#include <time.h>
 #include "module.h"
 #include "socials.h"
 
@@ -126,19 +128,92 @@ static stnlabz_module_result_t select_expression(
  *response_used=sizeof *out;
  return STNLABZ_MODULE_OK;
 }
+/* This is presentation-only: classification comes from the caller.
+ * Do not derive family roles from unverified nicknames.
+ */
+typedef struct {
+ const char *kind;
+ const char *address;
+ const char *const *phrases;
+ size_t count;
+ size_t previous;
+ time_t last;
+} greeting_t;
+static const char *const family_phrases[]={"Hi %s!","Hey %s!","Good to see you, %s!","Welcome back, %s!","Hello %s!"};
+static const char *const known_phrases[]={"Hello again!","Hey, welcome back!","Good to see you!","Hi there!"};
+static const char *const unknown_phrases[]={"Hello there!","Welcome!","Hi!","Hey there!"};
+static greeting_t greetings[]={
+ {"mommy","Mommy",family_phrases,COUNT(family_phrases),SIZE_MAX,0},
+ {"auntie","Auntie",family_phrases,COUNT(family_phrases),SIZE_MAX,0},
+ {"sister","Ezra",family_phrases,COUNT(family_phrases),SIZE_MAX,0},
+ {"known",NULL,known_phrases,COUNT(known_phrases),SIZE_MAX,0},
+ {"unknown",NULL,unknown_phrases,COUNT(unknown_phrases),SIZE_MAX,0}
+};
+#define GREETING_COOLDOWN_SECONDS 60
+static stnlabz_module_result_t greeting_service(
+ const void *request,size_t request_size,void *response,
+ size_t response_size,size_t *response_used,void *context){
+ const digit_socials_greeting_request_t *req=request;
+ digit_socials_greeting_response_t *out=response;
+ size_t i,index;
+ time_t now;
+ int n;
+ (void)context;
+ if(response_used)*response_used=0;
+ if(!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(!req||request_size!=sizeof *req||!out||
+    response_size<sizeof *out||!response_used||
+    !memchr(req->kind,0,sizeof req->kind))
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ for(i=0;i<COUNT(greetings);i++)
+  if(!strcmp(req->kind,greetings[i].kind))break;
+ if(i==COUNT(greetings))return STNLABZ_MODULE_ERR_NOT_FOUND;
+ now=time(NULL);
+ if(now==(time_t)-1)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ lock();
+ if(greetings[i].last && now>=greetings[i].last &&
+    now-greetings[i].last<GREETING_COOLDOWN_SECONDS){
+  unlock();
+  return STNLABZ_MODULE_ERR_INVALID_STATE; /* caller must stay silent */
+ }
+ {category_t temp={greetings[i].kind,greetings[i].phrases,
+      greetings[i].count,greetings[i].previous};
+  if(!pick(&temp,&index)){unlock();return STNLABZ_MODULE_ERR_INVALID_STATE;}
+ }
+ memset(out,0,sizeof *out);
+ n=snprintf(out->text,sizeof out->text,greetings[i].phrases[index],
+   greetings[i].address?greetings[i].address:"");
+ if(n<0||(size_t)n>=sizeof out->text){
+  unlock();return STNLABZ_MODULE_ERR_INVALID_STATE;
+ }
+ greetings[i].previous=index;
+ greetings[i].last=now;
+ unlock();
+ *response_used=sizeof *out;
+ return STNLABZ_MODULE_OK;
+}
 static stnlabz_module_result_t start(const stnlabz_module_host_t *api) {
  size_t i;
  if(host||!api||!api->register_service||!api->unregister_service)
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  for(i=0;i<COUNT(catalog);i++)catalog[i].previous=SIZE_MAX;
+ for(i=0;i<COUNT(greetings);i++){
+  greetings[i].previous=SIZE_MAX;greetings[i].last=0;
+ }
  host=api;
  if(!api->register_service(DIGIT_SOCIALS_SERVICE,select_expression,NULL)) {
+  host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
+ }
+ if(!api->register_service(DIGIT_SOCIALS_GREETING_SERVICE,greeting_service,NULL)){
+  api->unregister_service(DIGIT_SOCIALS_SERVICE,NULL);
   host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
  }
  return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t stop(void) {
  if(!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(!host->unregister_service(DIGIT_SOCIALS_GREETING_SERVICE,NULL))
+  return STNLABZ_MODULE_ERR_STOP_FAILED;
  if(!host->unregister_service(DIGIT_SOCIALS_SERVICE,NULL))
   return STNLABZ_MODULE_ERR_STOP_FAILED;
  host=NULL;
@@ -167,6 +242,10 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
   }
  }
  check(r,total>=100,0);
+ for(i=0;i<COUNT(greetings);i++){
+  check(r,strlen(greetings[i].kind)<DIGIT_SOCIALS_GREETING_KIND_MAX,0);
+  check(r,greetings[i].count>=4,0);
+ }
  check(r,sizeof(digit_socials_response_t)==DIGIT_SOCIALS_EXPRESSION_MAX,0);
  check(r,sizeof(digit_socials_request_t)==DIGIT_SOCIALS_CATEGORY_MAX,0);
  check(r,!memchr("hearts",0,6),1); /* invalid 6-byte nonterminated buffer */
@@ -177,7 +256,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="socials",.name="Social expression vocabulary",
- .version_major=0,.version_minor=1,.version_patch=0,
+ .version_major=0,.version_minor=2,.version_patch=0,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
