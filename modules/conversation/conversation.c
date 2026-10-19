@@ -114,7 +114,7 @@ static stnlabz_module_result_t answer(const message_t *m,char *response,
     char line[512];int n;
     const digit_corpus_hit_t *hit=&results.hits[0];
     n=snprintf(line,sizeof line,"Corpus #%lld (%s): %s",
-      (long long)hit->id,"operator-verified",hit->excerpt);
+      (long long)hit->id,hit->verification_status[0]?hit->verification_status:"status-unknown",hit->excerpt);
     if(n<0)return STNLABZ_MODULE_ERR_INVALID_STATE;
     line[sizeof line-1]=0;
     return reply(response,capacity,used,line);
@@ -190,7 +190,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="conversation",.name="Conversation knowledge retrieval",
- .version_major=0,.version_minor=4,.version_patch=0,
+ .version_major=0,.version_minor=4,.version_patch=1,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
