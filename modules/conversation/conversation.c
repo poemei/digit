@@ -191,7 +191,7 @@ static stnlabz_module_result_t listen_message(const message_t *m,char *out,
   memset(&results,0,sizeof results);returned=0;
   if(api->invoke_service(DIGIT_CORPUS_SEARCH_SERVICE,&query,sizeof query,
      &results,sizeof results,&returned)!=STNLABZ_MODULE_OK)
-   return STNLABZ_MODULE_OK; /* Unavailable intelligence means silence. */
+   continue; /* An unknown term must not block later topics. */
   if(returned!=sizeof results||results.count>DIGIT_CORPUS_RESULTS_MAX)
    return STNLABZ_MODULE_OK;
   for(j=0;j<results.count;j++)
@@ -300,6 +300,18 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
   check(q,answer(&m,response,sizeof response,&used,&fixture)==STNLABZ_MODULE_OK,0);
   check(q,strstr(response,"No relevant corpus evidence")!=NULL,1);
   check(q,!strstr(response,"#17:"),1);
+  fixture.invoke_service=fixture_search;
+  snprintf(m.message,sizeof m.message,"we discuss PHP");
+  last_spoken=0;
+  check(q,listen_message(&m,response,sizeof response,&used,&fixture)==STNLABZ_MODULE_OK,0);
+  check(q,used>0&&strstr(response,"On PHP, corpus #")!=NULL,0);
+  check(q,listen_message(&m,response,sizeof response,&used,&fixture)==STNLABZ_MODULE_OK&&used==0,1);
+  last_spoken=0;
+  fixture.invoke_service=fixture_irrelevant;
+  check(q,listen_message(&m,response,sizeof response,&used,&fixture)==STNLABZ_MODULE_OK&&used==0,1);
+  snprintf(m.message,sizeof m.message,"kk");
+  check(q,listen_message(&m,response,sizeof response,&used,&fixture)==STNLABZ_MODULE_OK&&used==0,1);
+  last_spoken=0;
  }
  check(q,q->tests_executed>=20,0);
  return q->tests_executed>=20&&!q->tests_failed&&q->tests_passed==q->tests_executed&&
