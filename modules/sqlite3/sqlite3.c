@@ -359,6 +359,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api) {
         startup_log(stage,SQLITE_MISUSE,"core_rejected_diagnostic_registration");
         host->unregister_service(DIGIT_CORPUS_SEARCH_SERVICE,(void *)op_search);
         host->unregister_service("digit.sqlite3.get",(void *)op_get);
+        host->unregister_service(DIGIT_S2_OBSERVATIONS_SERVICE,NULL);
         host->unregister_service(DIGIT_OBSERVATION_INSERT_SERVICE,NULL);
         goto fail;
     }
