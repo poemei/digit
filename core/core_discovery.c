@@ -22,26 +22,12 @@ int stnlabz_core_discover(stnlabz_module_registry_t *registry,
         struct stat st;
         if (stat(path, &st) != 0) {
             int error = errno;
-            if (error != ENOENT) {
-                (void)snprintf(detail, sizeof detail,
-                    "path=%.360s errno=%d reason=%s", path, error, strerror(error));
-                (void)audit("DIRECTORY_FAILED", detail);
-                return 0;
-            }
-            if (mkdir(path, 0755) != 0) {
-                error = errno;
-                /* A concurrent creator is fine only if the result is a directory. */
-                if (error != EEXIST || stat(path, &st) != 0 || !S_ISDIR(st.st_mode)) {
-                    (void)snprintf(detail, sizeof detail,
-                        "path=%.360s errno=%d reason=%s", path, error, strerror(error));
-                    (void)audit("DIRECTORY_FAILED", detail);
-                    return 0;
-                }
-            } else {
-                (void)snprintf(detail, sizeof detail, "path=%.400s status=created", path);
-                if (!audit("DIRECTORY_CREATED", detail)) return 0;
-            }
-        } else if (!S_ISDIR(st.st_mode)) {
+            (void)snprintf(detail, sizeof detail,
+                "path=%.360s errno=%d reason=%s", path, error, strerror(error));
+            (void)audit("DIRECTORY_FAILED", detail);
+            return 0;
+        }
+        if (!S_ISDIR(st.st_mode)) {
             (void)snprintf(detail, sizeof detail,
                 "path=%.400s reason=not_a_directory", path);
             (void)audit("DIRECTORY_FAILED", detail);
