@@ -240,7 +240,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
     memset(result,0,sizeof *result);
     check(result,assign(target,sizeof target,"test")&&!strcmp(target,"test"),0);
     check(result,assign(target,sizeof target,"'foo'")&&!strcmp(target,"foo"),0);
-    check(result,assign(target,sizeof target,"\\"bar\\"")&&!strcmp(target,"bar"),0);
+    check(result,assign(target,sizeof target,"\"bar\"")&&!strcmp(target,"bar"),0);
     check(result,!assign(target,sizeof target,""),1);
     check(result,!assign(target,sizeof target,"12345678"),1);
     check(result,!assign(target,sizeof target,"''"),1);
