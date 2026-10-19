@@ -222,8 +222,8 @@ static stnlabz_module_result_t listen_message(const message_t *m,char *out,
   if(!memchr(hit->excerpt,0,sizeof hit->excerpt)||
      !topic_present(hit->excerpt,"PHP")||
      !topic_present(hit->excerpt,"semicolon"))continue;
-  length=snprintf(line,sizeof line,"%s, corpus #%lld notes: %.170s",
-      m->sender,(long long)hit->id,hit->excerpt);
+  length=snprintf(line,sizeof line,"%s, a quick reminder: %.170s",
+      m->sender,hit->excerpt);
   if(length>0&&(size_t)length<cap&&length<350){
    stnlabz_module_result_t rc=reply(out,cap,used,line);
    if(rc==STNLABZ_MODULE_OK)last_passive_reply=time(NULL);
@@ -358,7 +358,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="conversation",.name="Conversation knowledge retrieval",
- .version_major=0,.version_minor=4,.version_patch=7,
+ .version_major=0,.version_minor=4,.version_patch=8,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
