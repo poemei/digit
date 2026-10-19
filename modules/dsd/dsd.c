@@ -1,4 +1,4 @@
-/* Digit DSD 0.1.0: bounded trace diagnostics; no repair authority. */
+/* Digit DSD: generic bounded trace diagnostics; no repair authority. */
 #define _POSIX_C_SOURCE 200809L
 #include <pthread.h>
 #include <ctype.h>
@@ -93,62 +93,57 @@ static int latest_module_trace(const char *module,uint64_t *id){
  pthread_mutex_unlock(&guard);
  return found;
 }
+/* The entire retained event trail is returned in out->events. The bounded
+ * summary describes the earliest recorded failure (or final observation),
+ * without truncating its status meaning or inventing deeper execution. */
 static int diagnose(uint64_t trace_id,digit_dsd_result_t *out){
- trace_slot_t *slot;
- unsigned i,first_failure=DIGIT_DSD_MAX_EVENTS;
+ const trace_slot_t *slot;
+ unsigned i,selected=0;
+ const digit_dsd_event_t *e;
+ const char *meaning;
+ int n;
  if(!out||!trace_id)return 0;
- memset(out,0,sizeof *out);out->trace_id=trace_id;
+ memset(out,0,sizeof *out);
+ out->trace_id=trace_id;
  pthread_mutex_lock(&guard);
  slot=find(trace_id);
  if(slot){
-  out->found=1;out->count=slot->count;out->dropped=slot->dropped;
+  out->found=1;
+  out->count=slot->count;
+  out->dropped=slot->dropped;
   memcpy(out->events,slot->events,slot->count*sizeof slot->events[0]);
  }
  pthread_mutex_unlock(&guard);
  if(!out->found){
-  snprintf(out->summary,sizeof out->summary,"Trace not retained or not observed.");
+  snprintf(out->summary,sizeof out->summary,
+           "Trace not retained or not observed.");
   return 1;
  }
- for(i=0;i<out->count;i++)if(out->events[i].result){
-  out->failures++;
-  if(first_failure==DIGIT_DSD_MAX_EVENTS)first_failure=i;
- }
- /* Summarize all observed stages, not a hardcoded request or service.
-  * The record's result field is the actual operation disposition. A
-  * successful invocation without an answer is not a fabricated failure. */
- {
-  size_t used=0;
-  int n;
-  const char *assessment=first_failure==DIGIT_DSD_MAX_EVENTS?
-     "No recorded operation failed; end-to-end completion unverified.":
-     "A recorded operation failed; underlying cause unverified.";
-  n=snprintf(out->summary,sizeof out->summary,
-    "Observed %u operation(s), %u failure(s). ",out->count,out->failures);
-  if(n<0||(size_t)n>=sizeof out->summary)return 0;
-  used=(size_t)n;
-  for(i=0;i<out->count&&used+78<sizeof out->summary;i++){
-   const digit_dsd_event_t *e=&out->events[i];
-   const char *meaning=status_meaning(e->status);
-   n=snprintf(out->summary+used,sizeof out->summary-used,
-     "%s%.32s.%.42s -> %.42s [%s%.38s] at %.80s:%u.",
-     i?" ":"",e->module,e->method,e->operation,
-     e->result?"FAILED: ":"",meaning?meaning:e->status,e->file,e->line);
-   if(n<0)return 0;
-   if((size_t)n>=sizeof out->summary-used){
-    used=sizeof out->summary-1;
-    break;
-   }
-   used+=(size_t)n;
+ for(i=0;i<out->count;i++){
+  if(out->events[i].result){
+   if(!out->failures)selected=i;
+   out->failures++;
   }
-  if(i<out->count&&used+40<sizeof out->summary){
-   n=snprintf(out->summary+used,sizeof out->summary-used,
-      " %u additional operation(s) retained.",out->count-i);
-   if(n>0&&(size_t)n<sizeof out->summary-used)used+=(size_t)n;
-  }
-  if(used+strlen(assessment)+2<sizeof out->summary)
-   snprintf(out->summary+used,sizeof out->summary-used," %s",assessment);
  }
- return 1;
+ if(!out->count){
+  snprintf(out->summary,sizeof out->summary,
+           "Trace contains no recorded operations.");
+  return 1;
+ }
+ if(!out->failures)selected=out->count-1;
+ e=&out->events[selected];
+ meaning=status_meaning(e->status);
+ /* Print the full readable status; reserve bounded space for source.
+  * The original, unmodified event remains available through diagnose. */
+ n=snprintf(out->summary,sizeof out->summary,
+    "%u observed operation(s), %u failed. %s: %.47s.%.63s -> %.63s, "
+    "status %s (%.96s), source %.100s:%u. %s",
+    out->count,out->failures,out->failures?"First failure":"Last observation",
+    e->module,e->method,e->operation,e->status,
+    meaning?meaning:"status has no verified explanation",e->file,e->line,
+    out->failures?"Underlying cause unverified.":
+    "End-to-end completion unverified.");
+ return n>=0&&(size_t)n<sizeof out->summary;
 }
 static stnlabz_module_result_t record_service(
  const void *request,size_t request_size,void *response,
@@ -175,77 +170,74 @@ static stnlabz_module_result_t diagnose_service(
 
 /* Read-only command language. No implicit global "last request" shared
  * across IRC accounts; the authorized entry adapter supplies that ID. */
+/* The caller authenticates the account and selects its previous trace.
+ * Command words are developer-query controls, never request-entry verbs. */
 static int command_text(const digit_dsd_command_request_t *req,
                         digit_dsd_command_result_t *out){
  digit_dsd_result_t diagnosis;
  uint64_t id=0;
+ unsigned long long parsed=0;
  char tail;
- const char *text;
+ const char *cmd;
+ int n;
  if(!req||!out||!memchr(req->command,0,sizeof req->command))return 0;
- text=req->command;
  memset(out,0,sizeof *out);
- if(!strcmp(text,"show dsd")){
+ cmd=req->command;
+ if(!strcmp(cmd,"show dsd")){
   snprintf(out->text,sizeof out->text,
-    "DSD available: trace diagnostics, bounded evidence, source locations when instrumented. Commands: show trace | diagnose my last request. Uninstrumented paths remain unknown.");
+   "DSD available: bounded observed trace events. Commands: show trace | "
+   "diagnose my last request. Unobserved execution cannot be diagnosed.");
   return 1;
  }
- if(!strcmp(text,"show trace")){
-  id=req->previous_trace_id;
-  if(!id){
-   snprintf(out->text,sizeof out->text,"DSD: No previous private request trace is retained.");
-   return 1;
-  }
-  if(!diagnose(id,&diagnosis))return 0;
-  if(!diagnosis.found||!diagnosis.count){
-   snprintf(out->text,sizeof out->text,"DSD: Previous request trace is no longer retained.");
-   return 1;
-  }
-  {
-   const digit_dsd_event_t *e=&diagnosis.events[0];
-   snprintf(out->text,sizeof out->text,
-     "DSD trace %llu: %u operation(s); %.24s.%.32s -> %.40s [%.32s] at %.70s:%u. Unobserved stages remain unknown.",
-     (unsigned long long)id,diagnosis.count,e->module,e->method,
-     e->operation,e->status,e->file,e->line);
-  }
-  return 1;
- }
- if(!strcmp(text,"diagnose my last request")){
+ if(!strcmp(cmd,"show trace")||!strcmp(cmd,"diagnose my last request")){
   id=req->previous_trace_id;
   if(!id){
    snprintf(out->text,sizeof out->text,
-    "DSD: Previous request trace unavailable. No diagnosis can be established.");
+     "DSD: Previous private request trace unavailable.");
    return 1;
   }
- }else if(!strncmp(text,"diagnose trace ",15)){
-  unsigned long long parsed=0;
-  if(sscanf(text+15,"%llu%c",&parsed,&tail)!=1||!parsed){
+ }else if(!strncmp(cmd,"diagnose trace ",15)){
+  if(sscanf(cmd+15,"%llu%c",&parsed,&tail)!=1||!parsed){
    snprintf(out->text,sizeof out->text,"DSD: Invalid trace identifier.");
    return 1;
   }
   id=(uint64_t)parsed;
   if((unsigned long long)id!=parsed)return 0;
- }else if(!strncmp(text,"diagnose module ",16)){
-  const char *module=text+16;
+ }else if(!strncmp(cmd,"diagnose module ",16)){
+  const char *module=cmd+16;
   if(!valid_code(module,strlen(module)+1,0)){
    snprintf(out->text,sizeof out->text,"DSD: Invalid module identifier.");
    return 1;
   }
   if(!latest_module_trace(module,&id)){
    snprintf(out->text,sizeof out->text,
-    "DSD: No recorded observations for module %.48s. This does not establish module health.",module);
+    "DSD: No recorded observations for module %.48s. This does not establish module health.",
+    module);
    return 1;
   }
- }else return 0; /* Do not commandeer ordinary conversation. */
+ }else return 0;
  if(!diagnose(id,&diagnosis))return 0;
- if(diagnosis.dropped){
+ if(!diagnosis.found){
   snprintf(out->text,sizeof out->text,
-   "DSD trace %llu: %.340s %u event(s) omitted; evidence incomplete.",
+    "DSD: Previous request trace is no longer retained.");
+  return 1;
+ }
+ if(!strcmp(cmd,"show trace")){
+  /* A full list of events remains in digit.dsd.diagnose; this reply
+   * is a bounded summary of their observed timeline. */
+  n=snprintf(out->text,sizeof out->text,
+   "DSD trace %llu: %.420s",
+   (unsigned long long)id,diagnosis.summary);
+ }else if(diagnosis.dropped){
+  n=snprintf(out->text,sizeof out->text,
+   "DSD trace %llu: %.355s %u event(s) omitted; evidence incomplete.",
    (unsigned long long)id,diagnosis.summary,diagnosis.dropped);
  }else{
-  snprintf(out->text,sizeof out->text,"DSD trace %llu: %.420s",
+  n=snprintf(out->text,sizeof out->text,
+   "DSD trace %llu: %.420s",
    (unsigned long long)id,diagnosis.summary);
  }
- return 1;
+ return n>=0&&(size_t)n<sizeof out->text;
 }
 static stnlabz_module_result_t command_service(
  const void *request,size_t request_size,void *response,
@@ -261,107 +253,131 @@ static stnlabz_module_result_t command_service(
  return STNLABZ_MODULE_OK;
 }
 
-static void assertion(stnlabz_module_qualification_result_t *q,int ok,int negative){
- q->tests_executed++;if(ok)q->tests_passed++;else {q->tests_failed++;fprintf(stderr,"DSD qualification assertion %u failed\n",q->tests_executed);}
- if(negative){q->negative_test_executed=1;if(ok)q->negative_test_passed=1;}
+/* Qualifications exercise real code paths with synthetic sanitized events.
+ * They never operate on the live database or assume an input verb. */
+static void assertion(stnlabz_module_qualification_result_t *q,
+                      int ok,int negative,const char *description){
+ q->tests_executed++;
+ if(ok)q->tests_passed++;
+ else{
+  q->tests_failed++;
+  fprintf(stderr,"DSD qualification %u FAILED: %s\n",
+          q->tests_executed,description);
+ }
+ if(negative){
+  q->negative_test_executed=1;
+  if(ok)q->negative_test_passed=1;
+ }
 }
+#define CHECK(condition,negative) assertion(q,!!(condition),negative,#condition)
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q){
- digit_dsd_command_request_t cmd={0};digit_dsd_command_result_t reply;
- digit_dsd_event_t e={0},bad;
- digit_dsd_result_t out;
+ digit_dsd_command_request_t cmd={0};
+ digit_dsd_command_result_t reply;
+ digit_dsd_event_t event={0},bad;
+ digit_dsd_result_t result;
  unsigned i;
  if(!q)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(q,0,sizeof *q);
- e.trace_id=42;e.span_id=1;e.line=17;
- snprintf(e.module,sizeof e.module,"sqlite3");
- snprintf(e.method,sizeof e.method,"get");
- snprintf(e.file,sizeof e.file,"modules/sqlite3/sqlite3.c");
- snprintf(e.status,sizeof e.status,"SQLITE_BUSY");
- snprintf(e.operation,sizeof e.operation,"select");
- assertion(q,valid_event(&e),0);
- assertion(q,record(&e),0);
- assertion(q,diagnose(42,&out)&&out.found&&out.count==1&&!out.failures,0);
- e.result=1;e.span_id=2;
- assertion(q,record(&e),0);
- assertion(q,diagnose(42,&out)&&out.failures==1&&
-    strstr(out.summary,"database is locked")!=NULL,0);
- bad=e;bad.trace_id=0;assertion(q,!valid_event(&bad),1);
- bad=e;bad.span_id=0;assertion(q,!valid_event(&bad),1);
- bad=e;bad.result=3;assertion(q,!valid_event(&bad),1);
- bad=e;bad.line=0;assertion(q,!valid_event(&bad),1);
- bad=e;snprintf(bad.method,sizeof bad.method,"a b");
- assertion(q,!valid_event(&bad),1);
- bad=e;snprintf(bad.operation,sizeof bad.operation,"key=private");
- assertion(q,!valid_event(&bad),1);
- bad=e;snprintf(bad.file,sizeof bad.file,"../../x");
- assertion(q,valid_event(&bad),0); /* location is never treated as verified */
- bad=e;memset(bad.status,'x',sizeof bad.status);
- assertion(q,!valid_event(&bad),1);
- assertion(q,!diagnose(0,&out),1);
- assertion(q,diagnose(999,&out)&&!out.found,0);
- /* Silent digit.message is a service-boundary observation, not proof
-  * of a faulty IRC transport or a particular Core line. */
+ event.trace_id=42;
+ event.span_id=1;
+ event.line=__LINE__;
+ snprintf(event.module,sizeof event.module,"testmodule");
+ snprintf(event.method,sizeof event.method,"read");
+ snprintf(event.file,sizeof event.file,"test/diagnostics.c");
+ snprintf(event.status,sizeof event.status,"SQLITE_BUSY");
+ snprintf(event.operation,sizeof event.operation,"db.read");
+ CHECK(valid_event(&event),0);
+ CHECK(record(&event),0);
+ CHECK(diagnose(42,&result)&&result.found&&result.count==1&&!result.failures,0);
+ CHECK(strstr(result.summary,"database is locked")!=NULL,0);
+ CHECK(strstr(result.summary,"End-to-end completion unverified")!=NULL,0);
+ event.result=1;
+ event.span_id=2;
+ CHECK(record(&event),0);
+ CHECK(diagnose(42,&result)&&result.count==2&&result.failures==1,0);
+ CHECK(strstr(result.summary,"database is locked")!=NULL,0);
+ CHECK(strstr(result.summary,"Underlying cause unverified")!=NULL,0);
+ bad=event;bad.trace_id=0;CHECK(!valid_event(&bad),1);
+ bad=event;bad.span_id=0;CHECK(!valid_event(&bad),1);
+ bad=event;bad.result=3;CHECK(!valid_event(&bad),1);
+ bad=event;bad.line=0;CHECK(!valid_event(&bad),1);
+ bad=event;snprintf(bad.method,sizeof bad.method,"bad method");
+ CHECK(!valid_event(&bad),1);
+ bad=event;snprintf(bad.operation,sizeof bad.operation,"private=key");
+ CHECK(!valid_event(&bad),1);
+ bad=event;memset(bad.status,'x',sizeof bad.status);
+ CHECK(!valid_event(&bad),1);
+ CHECK(!diagnose(0,&result),1);
+ CHECK(diagnose(999,&result)&&!result.found,0);
  {
-  digit_dsd_event_t silent={0};
-  silent.trace_id=55;silent.span_id=1;silent.line=347;silent.result=1;
-  snprintf(silent.module,sizeof silent.module,"irc");
-  snprintf(silent.method,sizeof silent.method,"incoming");
-  snprintf(silent.file,sizeof silent.file,"modules/irc/irc.c");
-  snprintf(silent.operation,sizeof silent.operation,"digit.message");
-  snprintf(silent.status,sizeof silent.status,"NO_RESPONSE");
-  assertion(q,record(&silent),0);
-  assertion(q,diagnose(55,&out) &&
-    strstr(out.summary,"request returned without a reply")!=NULL &&
-    strstr(out.summary,"underlying cause unverified")!=NULL,0);
-  snprintf(silent.status,sizeof silent.status,"SERVICE_NOT_FOUND");
-  silent.trace_id=56;silent.span_id=2;
-  assertion(q,record(&silent),0);
-  assertion(q,diagnose(56,&out)&&
-    strstr(out.summary,"was not registered")!=NULL,0);
-  snprintf(silent.status,sizeof silent.status,"NOT_AUTHORIZED");
-  silent.trace_id=57;silent.span_id=3;
-  assertion(q,record(&silent),0);
-  assertion(q,diagnose(57,&out)&&
-    strstr(out.summary,"not authorized")!=NULL,0);
-  snprintf(silent.status,sizeof silent.status,"INVALID_ARGUMENT");
-  silent.trace_id=58;silent.span_id=4;
-  assertion(q,record(&silent),0);
-  assertion(q,diagnose(58,&out)&&
-    strstr(out.summary,"rejected its input")!=NULL,0);
+  digit_dsd_event_t observed={0};
+  observed.trace_id=55;
+  observed.span_id=1;
+  observed.line=__LINE__;
+  snprintf(observed.module,sizeof observed.module,"adapter");
+  snprintf(observed.method,sizeof observed.method,"dispatch");
+  snprintf(observed.file,sizeof observed.file,"test/adapter.c");
+  snprintf(observed.operation,sizeof observed.operation,"service.call");
+  snprintf(observed.status,sizeof observed.status,"NO_RESPONSE");
+  /* No reply is not a failed ABI service invocation. */
+  CHECK(record(&observed),0);
+  CHECK(diagnose(55,&result)&&result.count==1&&!result.failures,0);
+  CHECK(strstr(result.summary,"request returned without a reply")!=NULL,0);
+  CHECK(strstr(result.summary,"End-to-end completion unverified")!=NULL,0);
+  observed.trace_id=56;observed.span_id=2;observed.result=1;
+  snprintf(observed.status,sizeof observed.status,"SERVICE_NOT_FOUND");
+  CHECK(record(&observed),0);
+  CHECK(diagnose(56,&result)&&result.failures==1,0);
+  CHECK(strstr(result.summary,"was not registered")!=NULL,0);
+  observed.trace_id=57;observed.span_id=3;
+  snprintf(observed.status,sizeof observed.status,"NOT_AUTHORIZED");
+  CHECK(record(&observed),0);
+  CHECK(diagnose(57,&result)&&result.failures==1,0);
+  CHECK(strstr(result.summary,"not authorized")!=NULL,0);
+  observed.trace_id=58;observed.span_id=4;
+  snprintf(observed.status,sizeof observed.status,"INVALID_ARGUMENT");
+  CHECK(record(&observed),0);
+  CHECK(diagnose(58,&result)&&result.failures==1,0);
+  CHECK(strstr(result.summary,"rejected its input")!=NULL,0);
  }
  for(i=0;i<DIGIT_DSD_MAX_EVENTS+2;i++){
-  e.span_id=3+i;assertion(q,record(&e),0);
+  event.span_id=3+i;
+  CHECK(record(&event),0);
  }
- assertion(q,diagnose(42,&out)&&out.count==DIGIT_DSD_MAX_EVENTS&&out.dropped==4,0);
- assertion(q,out.events[0].span_id==1&&out.events[1].span_id==2,0);
+ CHECK(diagnose(42,&result)&&result.count==DIGIT_DSD_MAX_EVENTS&&result.dropped==4,0);
+ CHECK(result.events[0].span_id==1&&result.events[1].span_id==2,0);
  snprintf(cmd.command,sizeof cmd.command,"show dsd");
- assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"DSD available")!=NULL,0);
+ CHECK(command_text(&cmd,&reply)&&strstr(reply.text,"DSD available")!=NULL,0);
  snprintf(cmd.command,sizeof cmd.command,"show trace");
- assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"No previous private request")!=NULL,0);
+ CHECK(command_text(&cmd,&reply)&&strstr(reply.text,"unavailable")!=NULL,0);
  cmd.previous_trace_id=42;
- assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"operation(s)")!=NULL,0);
+ CHECK(command_text(&cmd,&reply)&&strstr(reply.text,"DSD trace 42")!=NULL,0);
  cmd.previous_trace_id=0;
  snprintf(cmd.command,sizeof cmd.command,"diagnose my last request");
- assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"unavailable")!=NULL,0);
+ CHECK(command_text(&cmd,&reply)&&strstr(reply.text,"unavailable")!=NULL,0);
  cmd.previous_trace_id=42;
- assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"database is locked")!=NULL,0);
+ CHECK(command_text(&cmd,&reply)&&strstr(reply.text,"database is locked")!=NULL,0);
  snprintf(cmd.command,sizeof cmd.command,"diagnose trace 42");
- assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"SQLITE_BUSY")!=NULL,0);
+ CHECK(command_text(&cmd,&reply)&&strstr(reply.text,"database is locked")!=NULL,0);
  snprintf(cmd.command,sizeof cmd.command,"diagnose trace nonsense");
- assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"Invalid trace")!=NULL,1);
- snprintf(cmd.command,sizeof cmd.command,"diagnose module s2");
- assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"No recorded observations")!=NULL,0);
- snprintf(cmd.command,sizeof cmd.command,"diagnose module sqlite3");
- assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"SQLITE_BUSY")!=NULL,0);
- assertion(q,strstr(reply.text,"database is locked")!=NULL,0);
+ CHECK(command_text(&cmd,&reply)&&strstr(reply.text,"Invalid trace")!=NULL,1);
+ snprintf(cmd.command,sizeof cmd.command,"diagnose module nonexistent");
+ CHECK(command_text(&cmd,&reply)&&strstr(reply.text,"No recorded observations")!=NULL,0);
+ snprintf(cmd.command,sizeof cmd.command,"diagnose module testmodule");
+ CHECK(command_text(&cmd,&reply)&&strstr(reply.text,"database is locked")!=NULL,0);
  snprintf(cmd.command,sizeof cmd.command,"hello");
- assertion(q,!command_text(&cmd,&reply),1);
- /* Qualification has no external side effects and resets its own fixture. */
- pthread_mutex_lock(&guard);memset(slots,0,sizeof slots);replacement=0;chronology=0;
+ CHECK(!command_text(&cmd,&reply),1);
+ pthread_mutex_lock(&guard);
+ memset(slots,0,sizeof slots);
+ replacement=0;
+ chronology=0;
  pthread_mutex_unlock(&guard);
- return q->tests_executed>=20&&!q->tests_failed?
-  STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_QUALIFICATION;
+ return q->tests_executed>=20&&!q->tests_failed&&
+        q->tests_executed==q->tests_passed&&
+        q->negative_test_executed&&q->negative_test_passed?
+        STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_QUALIFICATION;
 }
+#undef CHECK
 static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
  if(host||!h||!h->register_service||!h->unregister_service)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  if(!h->register_service(DIGIT_DSD_RECORD_SERVICE,record_service,NULL))
@@ -392,7 +408,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="dsd",.name="Developer Self-Diagnostics",
- .version_major=0,.version_minor=5,.version_patch=1,
+ .version_major=0,.version_minor=5,.version_patch=2,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
