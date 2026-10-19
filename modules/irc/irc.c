@@ -300,6 +300,48 @@ static int authenticate(SSL *ssl,const irc_config_t *c) {
 }
 /* IRCv3 account-tag is supplied by Libera.Chat after CAP ACK. Never
  * treat a nickname or user-controlled message as an authenticated account. */
+/* Each retained DSD event is transmitted as its own IRC PRIVMSG.
+ * The ABI diagnosis contains the full event array; its 512-byte summary
+ * is deliberately not used as a transport for the complete trace. */
+static int dsd_send_line(SSL *ssl,const char *target,const char *body){
+ char wire[850];int n;
+ size_t size=strlen(body);
+ if(size>350||!reply_valid(body,size))return 0;
+ n=snprintf(wire,sizeof wire,"PRIVMSG %s :%s\r\n",target,body);
+ if(n<=0||(size_t)n>=sizeof wire)return 0;
+ if(!write_line(ssl,wire))return 0;
+ /* Avoid blasting up to 34 lines into IRC in a single burst. */
+ {struct timespec delay={0,200000000L};(void)nanosleep(&delay,NULL);}
+ return 1;
+}
+static int dsd_send_full_trace(SSL *ssl,const char *target,const char *account){
+ digit_dsd_query_t request={0};
+ digit_dsd_result_t result={0};
+ char line[400];size_t used=0;unsigned i;
+ if(!account||!account[0]||!target)return 0;
+ request.trace_id=dsd_previous(account);
+ if(!request.trace_id)
+  return dsd_send_line(ssl,target,"DSD: Previous private request trace unavailable.");
+ if(host_api->invoke_service(DIGIT_DSD_DIAGNOSE_SERVICE,&request,sizeof request,
+    &result,sizeof result,&used)!=STNLABZ_MODULE_OK||used!=sizeof result)
+  return dsd_send_line(ssl,target,"DSD: Trace retrieval failed.");
+ if(!result.found)
+  return dsd_send_line(ssl,target,"DSD: Previous request trace is no longer retained.");
+ snprintf(line,sizeof line,"DSD trace %llu: %u recorded event(s), %u failure(s), %u dropped.",
+    (unsigned long long)result.trace_id,result.count,result.failures,result.dropped);
+ if(!dsd_send_line(ssl,target,line))return 0;
+ for(i=0;i<result.count&&i<DIGIT_DSD_MAX_EVENTS;i++){
+  const digit_dsd_event_t *e=&result.events[i];
+  snprintf(line,sizeof line,
+    "DSD %llu [%u/%u] %s.%s -> %s; status=%s; records=%u; source=%s:%u",
+    (unsigned long long)result.trace_id,i+1,result.count,
+    e->module,e->method,e->operation,e->status,e->records,e->file,e->line);
+  if(!dsd_send_line(ssl,target,line))return 0;
+ }
+ snprintf(line,sizeof line,"DSD trace %llu complete: %u event(s) displayed; %u dropped.",
+    (unsigned long long)result.trace_id,i,result.dropped);
+ return dsd_send_line(ssl,target,line);
+}
 static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled) {
     char *sender,*bang,*cmd,*target,*body,*space;
     char response[512],wire[1024];
@@ -342,6 +384,13 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled
     snprintf(input.target,sizeof input.target,"%s",target);
     snprintf(input.message,sizeof input.message,"%s",body);
     if(!host_api||!host_api->invoke_service)return 1;
+    if(private_message&&
+       (!strcmp(input.message,"show trace")||
+        !strcmp(input.message,"diagnose my last request"))){
+        /* Only the authenticated account's previous private trace is exposed.
+         * Transport the entire retained event array as numbered IRC lines. */
+        return dsd_send_full_trace(ssl,target,input.account);
+    }
     if(private_message&&dsd_command(input.message)){
         /* Command is never invoked from a channel, even when mentioned. */
         if(!dsd_dm_reply(input.account,input.message,response,sizeof response,&used))
