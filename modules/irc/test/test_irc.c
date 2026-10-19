@@ -29,12 +29,16 @@ int main(int argc, char **argv)
         dlclose(handle);
         return 3;
     }
-    /* An unfinished suite must not grant qualification or activation. */
-    if (descriptor->qualify(&result) == STNLABZ_MODULE_OK) {
+    /* Qualification executes a minimum of 20 distinct offline checks. */
+    if (descriptor->qualify(&result) != STNLABZ_MODULE_OK ||
+        result.tests_executed < 20 || result.tests_failed ||
+        result.tests_passed != result.tests_executed ||
+        !result.negative_test_executed || !result.negative_test_passed) {
         dlclose(handle);
         return 4;
     }
-    puts("IRC module smoke test: PASS (descriptor/load/qualification gate)");
+    printf("IRC module qualification: PASS (%u/%u checks, negative paths included)\n",
+           result.tests_passed, result.tests_executed);
     dlclose(handle);
     return 0;
 }
