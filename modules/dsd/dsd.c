@@ -113,38 +113,41 @@ static int diagnose(uint64_t trace_id,digit_dsd_result_t *out){
   out->failures++;
   if(first_failure==DIGIT_DSD_MAX_EVENTS)first_failure=i;
  }
- if(first_failure!=DIGIT_DSD_MAX_EVENTS){
-  const digit_dsd_event_t *e=&out->events[first_failure];
-  /* This is the *observable service boundary*, not a diagnosis of Core
-   * internals. Do not attribute an internal method or defect without a
-   * distinct instrumented observation. */
-  if(!strcmp(e->status,"NO_RESPONSE") &&
-     !strcmp(e->module,"irc") &&
-     !strcmp(e->operation,"digit.message")){
-   snprintf(out->summary,sizeof out->summary,
-    "IRC accepted the private request and invoked digit.message; the service returned without a reply. Last observed location: %.150s:%u (%.60s). No downstream conversational stage was observed. Cause inside the handler is not established.",
-    e->file,e->line,e->method);
-  }else if(!strcmp(e->module,"irc") &&
-            !strcmp(e->operation,"digit.message") &&
-            (!strcmp(e->status,"SERVICE_NOT_FOUND") ||
-             !strcmp(e->status,"NOT_AUTHORIZED") ||
-             !strcmp(e->status,"INVALID_ARGUMENT") ||
-             !strcmp(e->status,"INVALID_STATE") ||
-             !strcmp(e->status,"QUARANTINED") ||
-             !strcmp(e->status,"NOT_QUALIFIED") ||
-             !strcmp(e->status,"SERVICE_ERROR"))){
-   snprintf(out->summary,sizeof out->summary,
-    "IRC received the private request; digit.message did not complete successfully: %s. Last observed location: %.150s:%u (%.60s). No downstream module execution is established.",
-    status_meaning(e->status),e->file,e->line,e->method);
-  }else
-  snprintf(out->summary,sizeof out->summary,
-   "Observed failure boundary: %.47s.%.63s at %.159s:%u, operation %.63s, status %.63s (%.80s). Underlying cause not established.",
-   e->module,e->method,e->file,e->line,e->operation,e->status,
-   status_meaning(e->status)?status_meaning(e->status):"no verified explanation");
- }else{
-  snprintf(out->summary,sizeof out->summary,
-   "No failure recorded in %u observed event(s). This is not proof of end-to-end success.",
-   out->count);
+ /* Summarize all observed stages, not a hardcoded request or service.
+  * The record's result field is the actual operation disposition. A
+  * successful invocation without an answer is not a fabricated failure. */
+ {
+  size_t used=0;
+  int n;
+  const char *assessment=first_failure==DIGIT_DSD_MAX_EVENTS?
+     "No recorded operation failed; end-to-end completion unverified.":
+     "A recorded operation failed; underlying cause unverified.";
+  n=snprintf(out->summary,sizeof out->summary,
+    "Observed %u operation(s), %u failure(s). ",out->count,out->failures);
+  if(n<0||(size_t)n>=sizeof out->summary)return 0;
+  used=(size_t)n;
+  for(i=0;i<out->count&&used+78<sizeof out->summary;i++){
+   const digit_dsd_event_t *e=&out->events[i];
+   const char *meaning=status_meaning(e->status);
+   n=snprintf(out->summary+used,sizeof out->summary-used,
+     "%s%.32s.%.42s -> %.42s [%s%.38s] at %.80s:%u.",
+     i?" ":"",e->module,e->method,e->operation,
+     e->result?"FAILED: ":"",meaning?meaning:e->status,e->file,e->line);
+   if(n<0)return 0;
+   if((size_t)n>=sizeof out->summary-used){
+    used=sizeof out->summary-1;
+    break;
+   }
+   used+=(size_t)n;
+  }
+  if(i<out->count&&used+40<sizeof out->summary){
+   n=snprintf(out->summary+used,sizeof out->summary-used,
+      " %u additional operation(s) retained.",out->count-i);
+   if(n>0&&(size_t)n<sizeof out->summary-used)used+=(size_t)n;
+  }
+  if(used+strlen(assessment)+2<sizeof out->summary)
+   snprintf(out->summary+used,sizeof out->summary-used," %s",assessment);
+ }
  }
  return 1;
 }
@@ -309,8 +312,8 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
   snprintf(silent.status,sizeof silent.status,"NO_RESPONSE");
   assertion(q,record(&silent),0);
   assertion(q,diagnose(55,&out) &&
-    strstr(out.summary,"service returned without a reply")!=NULL &&
-    strstr(out.summary,"Cause inside the handler is not established")!=NULL,0);
+    strstr(out.summary,"request returned without a reply")!=NULL &&
+    strstr(out.summary,"underlying cause unverified")!=NULL,0);
   snprintf(silent.status,sizeof silent.status,"SERVICE_NOT_FOUND");
   silent.trace_id=56;silent.span_id=2;
   assertion(q,record(&silent),0);
@@ -390,7 +393,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="dsd",.name="Developer Self-Diagnostics",
- .version_major=0,.version_minor=4,.version_patch=1,
+ .version_major=0,.version_minor=5,.version_patch=0,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
