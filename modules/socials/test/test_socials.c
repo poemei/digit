@@ -7,15 +7,27 @@
 #include "socials.h"
 
 static stnlabz_module_service_handler_fn callback;
+static stnlabz_module_service_handler_fn greeting_callback;
 static void *registered_context;
 static int registrations;
 static int reg(const char *name,stnlabz_module_service_handler_fn fn,void *ctx) {
- if(strcmp(name,DIGIT_SOCIALS_SERVICE)||!fn||callback)return 0;
- callback=fn;registered_context=ctx;registrations++;return 1;
+ if(!fn)return 0;
+ if(!strcmp(name,DIGIT_SOCIALS_SERVICE)&&!callback){
+  callback=fn;registered_context=ctx;registrations++;return 1;
+ }
+ if(!strcmp(name,DIGIT_SOCIALS_GREETING_SERVICE)&&!greeting_callback){
+  greeting_callback=fn;registrations++;return 1;
+ }
+ return 0;
 }
 static int unreg(const char *name,void *ctx) {
- if(strcmp(name,DIGIT_SOCIALS_SERVICE)||!callback||ctx!=registered_context)return 0;
- callback=NULL;return 1;
+ if(!strcmp(name,DIGIT_SOCIALS_SERVICE)&&callback&&ctx==registered_context){
+  callback=NULL;return 1;
+ }
+ if(!strcmp(name,DIGIT_SOCIALS_GREETING_SERVICE)&&greeting_callback&&ctx==NULL){
+  greeting_callback=NULL;return 1;
+ }
+ return 0;
 }
 static void demand(int condition,const char *what) {
  if(!condition){fprintf(stderr,"FAIL: %s\n",what);exit(1);}
@@ -45,7 +57,7 @@ int main(int argc,char **argv) {
         "qualification checks");
  api.register_service=reg;api.unregister_service=unreg;
  demand(d->start(&api)==STNLABZ_MODULE_OK,"start");
- demand(registrations==1&&callback!=NULL,"registration");
+ demand(registrations==2&&callback!=NULL&&greeting_callback!=NULL,"registration");
  for(i=0;i<sizeof categories/sizeof categories[0];i++){
   unsigned trial;
   memset(&request,0,sizeof request);
@@ -65,8 +77,29 @@ int main(int argc,char **argv) {
  strcpy(request.category,"unknown");
  demand(callback(&request,sizeof request,&output,sizeof output,&used,NULL)==
         STNLABZ_MODULE_ERR_NOT_FOUND,"unknown category");
+ {digit_socials_greeting_request_t greeting={0};
+  digit_socials_greeting_response_t result={0};
+  const char *kinds[]={"mommy","auntie","sister","known","unknown"};
+  for(i=0;i<sizeof kinds/sizeof kinds[0];i++){
+   memset(&greeting,0,sizeof greeting);
+   strcpy(greeting.kind,kinds[i]);used=0;
+   demand(greeting_callback(&greeting,sizeof greeting,&result,sizeof result,
+     &used,NULL)==STNLABZ_MODULE_OK,"greeting selection");
+   demand(used==sizeof result&&result.text[0],"greeting output");
+   if(i==0)demand(strstr(result.text,"Mommy")!=NULL,"mommy address");
+   if(i==1)demand(strstr(result.text,"Auntie")!=NULL,"auntie address");
+   if(i==2)demand(strstr(result.text,"Ezra")!=NULL,"sister address");
+   used=0;
+   demand(greeting_callback(&greeting,sizeof greeting,&result,sizeof result,
+     &used,NULL)==STNLABZ_MODULE_ERR_INVALID_STATE&&used==0,"cooldown");
+  }
+  memset(&greeting,0,sizeof greeting);
+  strcpy(greeting.kind,"untrusted");
+  demand(greeting_callback(&greeting,sizeof greeting,&result,sizeof result,
+    &used,NULL)==STNLABZ_MODULE_ERR_NOT_FOUND,"invalid relationship");
+ }
  demand(d->stop()==STNLABZ_MODULE_OK,"stop");
- demand(callback==NULL,"unregistration");
+ demand(callback==NULL&&greeting_callback==NULL,"unregistration");
  dlclose(library);
  printf("socials qualification %u/%u; service tests PASS\n",
         qualification.tests_passed,qualification.tests_executed);
