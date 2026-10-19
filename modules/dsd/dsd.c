@@ -142,9 +142,12 @@ static int diagnose(uint64_t trace_id,digit_dsd_result_t *out){
  /* Report a bounded timeline, not just the final IRC observation. */
  {
   size_t used=0;unsigned j;
+  meaning=status_meaning(e->status);
   n=snprintf(out->summary,sizeof out->summary,
-    "%u observed operation(s), %u failed. ",
-    out->count,out->failures);
+    "%u observed operation(s), %u failed. %s: %.48s. ",
+    out->count,out->failures,
+    out->failures?"First failure":"Last observation",
+    meaning?meaning:e->status);
   if(n<0||(size_t)n>=sizeof out->summary)return 0;
   used=(size_t)n;
   for(j=0;j<out->count;j++){
@@ -163,11 +166,9 @@ static int diagnose(uint64_t trace_id,digit_dsd_result_t *out){
    if(n>0&&(size_t)n<sizeof out->summary-used)used+=(size_t)n;
   }
   meaning=status_meaning(e->status);
-  if(used+110<sizeof out->summary){
+  if(used+92<sizeof out->summary){
    n=snprintf(out->summary+used,sizeof out->summary-used,
-     " %s: %.56s. %s",
-     out->failures?"First failure":"Last observation",
-     meaning?meaning:e->status,
+     " %s",
      out->failures?"Underlying cause unverified.":"End-to-end completion unverified.");
    if(n>0&&(size_t)n<sizeof out->summary-used)used+=(size_t)n;
   }
@@ -512,7 +513,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="dsd",.name="Developer Self-Diagnostics",
- .version_major=0,.version_minor=6,.version_patch=1,
+ .version_major=0,.version_minor=6,.version_patch=2,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
