@@ -9,6 +9,7 @@
 #include <string.h>
 #include "module.h"
 #include "../sqlite3/corpus_search.h"
+#include "../dsd/dsd.h"
 
 #define CONVERSATION_SERVICE "digit.conversation"
 #define WORD_CAP 48
@@ -20,6 +21,26 @@ typedef struct {
 typedef struct {size_t begin,end;} word_t;
 
 static const stnlabz_module_host_t *host;
+static void observe(const stnlabz_module_host_t *api,const char *operation,
+                    const char *status,unsigned records,unsigned line,int failed){
+ uint64_t trace=0;size_t used=0;digit_dsd_record_t event={0};
+ if(!api||!api->invoke_service)return;
+ if(api->invoke_service(DIGIT_DSD_CURRENT_SERVICE,NULL,0,&trace,
+    sizeof trace,&used)!=STNLABZ_MODULE_OK||used!=sizeof trace||!trace)return;
+ event.trace_id=event.event.trace_id=trace;
+ event.event.span_id=3;
+ event.event.parent_span_id=1;
+ event.event.result=failed?1:0;
+ event.event.records=records;
+ event.event.line=line;
+ snprintf(event.event.module,sizeof event.event.module,"conversation");
+ snprintf(event.event.method,sizeof event.event.method,"answer");
+ snprintf(event.event.file,sizeof event.event.file,"modules/conversation/conversation.c");
+ snprintf(event.event.operation,sizeof event.event.operation,"%s",operation);
+ snprintf(event.event.status,sizeof event.event.status,"%s",status);
+ (void)api->invoke_service(DIGIT_DSD_RECORD_SERVICE,&event,sizeof event,
+                          NULL,0,&used);
+}
 static int message_valid(const message_t *m){
  return m&&memchr(m->sender,0,sizeof m->sender)&&
   memchr(m->account,0,sizeof m->account)&&
@@ -82,21 +103,25 @@ static stnlabz_module_result_t answer(const message_t *m,char *response,
    returned=0;
    rc=api->invoke_service(DIGIT_CORPUS_SEARCH_SERVICE,&query,sizeof query,
                           &results,sizeof results,&returned);
-   if(rc!=STNLABZ_MODULE_OK)return rc;
+   if(rc!=STNLABZ_MODULE_OK){
+    observe(api,"corpus_search","SERVICE_ERROR",0,__LINE__,1);
+    return rc;
+   }
    if(returned!=sizeof results||results.count>DIGIT_CORPUS_RESULTS_MAX)
     return STNLABZ_MODULE_ERR_INVALID_STATE;
    if(results.count){
+    observe(api,"corpus_search","QUERY_MATCH",results.count,__LINE__,0);
     char line[512];int n;
     const digit_corpus_hit_t *hit=&results.hits[0];
     n=snprintf(line,sizeof line,"Corpus #%lld (%s): %s",
-      (long long)hit->id,hit->verification_status[0]?
-      hit->verification_status:"status unknown",hit->excerpt);
+      (long long)hit->id,"operator-verified",hit->excerpt);
     if(n<0)return STNLABZ_MODULE_ERR_INVALID_STATE;
     line[sizeof line-1]=0;
     return reply(response,capacity,used,line);
    }
   }
  }
+ observe(api,"corpus_search","QUERY_NO_MATCH",0,__LINE__,0);
  return reply(response,capacity,used,"No matching corpus evidence was found.");
 }
 static stnlabz_module_result_t service(const void *request,size_t request_size,
@@ -165,7 +190,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="conversation",.name="Conversation knowledge retrieval",
- .version_major=0,.version_minor=3,.version_patch=0,
+ .version_major=0,.version_minor=4,.version_patch=0,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
