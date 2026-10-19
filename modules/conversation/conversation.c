@@ -167,6 +167,37 @@ static void check(stnlabz_module_qualification_result_t *q,int good,int negative
  if(good)q->tests_passed++;else q->tests_failed++;
  if(negative){q->negative_test_executed=1;if(good)q->negative_test_passed=1;}
 }
+/* Isolated relevance/three-record evidence tests: no SQLite connection. */
+static stnlabz_module_result_t fixture_search(const char *name,
+ const void *request,size_t size,void *response,size_t cap,size_t *used){
+ digit_corpus_result_t out={0};
+ const digit_corpus_query_t *query=request;
+ if(strcmp(name,DIGIT_CORPUS_SEARCH_SERVICE)||!query||size!=sizeof *query||
+    !response||cap<sizeof out||!used)return STNLABZ_MODULE_ERR_NOT_FOUND;
+ if(strcmp(query->query,"PHP"))return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ out.count=3;
+ out.hits[0].id=1;snprintf(out.hits[0].excerpt,sizeof out.hits[0].excerpt,
+    "PHP supports PDO databases.");
+ out.hits[1].id=2;snprintf(out.hits[1].excerpt,sizeof out.hits[1].excerpt,
+    "PHP includes a SQLite PDO driver.");
+ out.hits[2].id=3;snprintf(out.hits[2].excerpt,sizeof out.hits[2].excerpt,
+    "PHP configuration controls extensions.");
+ memcpy(response,&out,sizeof out);*used=sizeof out;return STNLABZ_MODULE_OK;
+}
+static stnlabz_module_result_t fixture_irrelevant(const char *name,
+ const void *request,size_t size,void *response,size_t cap,size_t *used){
+ digit_corpus_result_t out={0};
+ const digit_corpus_query_t *query=request;
+ if(strcmp(name,DIGIT_CORPUS_SEARCH_SERVICE)||!query||size!=sizeof *query||
+    !response||cap<sizeof out||!used)return STNLABZ_MODULE_ERR_NOT_FOUND;
+ out.count=3;out.hits[0].id=17;
+ snprintf(out.hits[0].excerpt,sizeof out.hits[0].excerpt,"tell me what X means");
+ out.hits[1].id=18;
+ snprintf(out.hits[1].excerpt,sizeof out.hits[1].excerpt,"unrelated greeting");
+ out.hits[2].id=19;
+ snprintf(out.hits[2].excerpt,sizeof out.hits[2].excerpt,"general information");
+ memcpy(response,&out,sizeof out);*used=sizeof out;return STNLABZ_MODULE_OK;
+}
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q){
  char response[512];word_t w[WORD_CAP];digit_corpus_query_t query;
  message_t m={0};size_t used=0,n;
@@ -197,6 +228,19 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  check(q,tokens("alpha beta",w,WORD_CAP)==2,0);
  check(q,search_phrase("alpha beta",w,0,2,&query)&&!strcmp(query.query,"alpha beta"),0);
  n=tokens("1",w,WORD_CAP);check(q,n==1,0);
+ {
+  stnlabz_module_host_t fixture={0};
+  snprintf(m.message,sizeof m.message,"tell me about PHP");
+  fixture.invoke_service=fixture_search;
+  check(q,answer(&m,response,sizeof response,&used,&fixture)==STNLABZ_MODULE_OK,0);
+  check(q,strstr(response,"#1:")&&strstr(response,"#2:")&&
+          strstr(response,"#3:"),0);
+  check(q,!strstr(response,"tell me what X means"),1);
+  fixture.invoke_service=fixture_irrelevant;
+  check(q,answer(&m,response,sizeof response,&used,&fixture)==STNLABZ_MODULE_OK,0);
+  check(q,strstr(response,"No relevant corpus evidence")!=NULL,1);
+  check(q,!strstr(response,"#17:"),1);
+ }
  check(q,q->tests_executed>=20,0);
  return q->tests_executed>=20&&!q->tests_failed&&q->tests_passed==q->tests_executed&&
  q->negative_test_executed&&q->negative_test_passed?
