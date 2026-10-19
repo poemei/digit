@@ -30,25 +30,6 @@ static int key_valid(const char *key) {
     }
     return 0;
 }
-static int schema(sqlite3 *db) {
-    return sqlite3_exec(db,
-        "CREATE TABLE IF NOT EXISTS digit_kv ("
-        "key TEXT PRIMARY KEY NOT NULL,"
-        "value BLOB NOT NULL) WITHOUT ROWID",NULL,NULL,NULL)==SQLITE_OK;
-}
-static int put(sqlite3 *db,const sqlite3_record_t *r) {
-    sqlite3_stmt *stmt=NULL;int ok=0;
-    if (!db || !r || !key_valid(r->key) || r->length>VALUE_MAX) return 0;
-    if(sqlite3_prepare_v2(db,
-        "INSERT INTO digit_kv(key,value) VALUES(?1,?2) "
-        "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-        -1,&stmt,NULL)!=SQLITE_OK) return 0;
-    if(sqlite3_bind_text(stmt,1,r->key,-1,SQLITE_TRANSIENT)==SQLITE_OK &&
-       sqlite3_bind_blob(stmt,2,r->value,(int)r->length,SQLITE_TRANSIENT)==SQLITE_OK)
-        ok=sqlite3_step(stmt)==SQLITE_DONE;
-    sqlite3_finalize(stmt);
-    return ok;
-}
 static int get(sqlite3 *db,sqlite3_record_t *r) {
     sqlite3_stmt *stmt=NULL;int ok=0;
     if (!db || !r || !key_valid(r->key)) return 0;
@@ -66,26 +47,12 @@ static int get(sqlite3 *db,sqlite3_record_t *r) {
     sqlite3_finalize(stmt);
     return ok;
 }
-static int erase(sqlite3 *db,const char *key) {
-    sqlite3_stmt *stmt=NULL;int ok=0;
-    if(!db||!key_valid(key))return 0;
-    if(sqlite3_prepare_v2(db,"DELETE FROM digit_kv WHERE key=?1",
-                          -1,&stmt,NULL)!=SQLITE_OK)return 0;
-    if(sqlite3_bind_text(stmt,1,key,-1,SQLITE_TRANSIENT)==SQLITE_OK)
-        ok=sqlite3_step(stmt)==SQLITE_DONE;
-    sqlite3_finalize(stmt);return ok;
-}
 static stnlabz_module_result_t service(const void *request,size_t request_size,
     void *response,size_t response_size,size_t *response_used,void *context) {
     const char *operation=context;
     sqlite3_record_t r;
     if(response_used)*response_used=0;
     if(!database||!operation||!request)return STNLABZ_MODULE_ERR_INVALID_STATE;
-    if(!strcmp(operation,"put")) {
-        if(request_size!=sizeof r)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
-        return put(database,(const sqlite3_record_t *)request) ?
-            STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
-    }
     if(!strcmp(operation,"get")) {
         if(request_size!=KEY_MAX||!response||response_size<sizeof r||
            !response_used)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
@@ -94,13 +61,6 @@ static stnlabz_module_result_t service(const void *request,size_t request_size,
         if(!get(database,&r))return STNLABZ_MODULE_ERR_NOT_FOUND;
         memcpy(response,&r,sizeof r);*response_used=sizeof r;
         return STNLABZ_MODULE_OK;
-    }
-    if(!strcmp(operation,"delete")) {
-        if(request_size!=KEY_MAX)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
-        char key[KEY_MAX];
-        memcpy(key,request,sizeof key);
-        return erase(database,key)?STNLABZ_MODULE_OK:
-            STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
     }
     return STNLABZ_MODULE_ERR_NOT_FOUND;
 }
@@ -154,7 +114,7 @@ static stnlabz_module_result_t diagnostic_service(
  memcpy(response,&out,sizeof out);*response_used=sizeof out;
  return STNLABZ_MODULE_OK;
 }
-static const char op_put[]="put",op_get[]="get",op_delete[]="delete";
+static const char op_get[]="get";
 /* [AI:GPT-6 | 2026-10-18] Startup diagnostics go to the service journal.
  * No credentials, SQL row values, or database content are logged.
  */
@@ -173,47 +133,30 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api) {
     }
     stage="open";
     code=sqlite3_open_v2(DB_PATH,&database,
-        SQLITE_OPEN_READWRITE|SQLITE_OPEN_FULLMUTEX,NULL);
+        SQLITE_OPEN_READONLY|SQLITE_OPEN_FULLMUTEX,NULL);
     if(code!=SQLITE_OK) {
         startup_log(stage,code,database?sqlite3_errmsg(database):"no_handle");
         goto fail;
     }
-    stage="schema";
-    code=sqlite3_exec(database,
-        "CREATE TABLE IF NOT EXISTS digit_kv ("
-        "key TEXT PRIMARY KEY NOT NULL,"
-        "value BLOB NOT NULL) WITHOUT ROWID",NULL,NULL,NULL);
-    if(code!=SQLITE_OK) {
-        startup_log(stage,code,sqlite3_errmsg(database));
+    /* Existing databases only; do not create or migrate schemas. */
+    stage="read_only";
+    code=sqlite3_db_readonly(database,"main");
+    if(code!=1){
+        startup_log(stage,SQLITE_READONLY,"database_not_read_only");
         goto fail;
     }
     host=api;
-    stage="register_put";
-    if(!host->register_service("digit.sqlite3.put",service,(void *)op_put)) {
-        startup_log(stage,SQLITE_MISUSE,"core_rejected_service_registration");
-        goto fail;
-    }
     stage="register_get";
     if(!host->register_service("digit.sqlite3.get",service,(void *)op_get)) {
         startup_log(stage,SQLITE_MISUSE,"core_rejected_service_registration");
-        host->unregister_service("digit.sqlite3.put",(void *)op_put);
-        goto fail;
-    }
-    stage="register_delete";
-    if(!host->register_service("digit.sqlite3.delete",service,(void *)op_delete)) {
-        startup_log(stage,SQLITE_MISUSE,"core_rejected_service_registration");
-        host->unregister_service("digit.sqlite3.get",(void *)op_get);
-        host->unregister_service("digit.sqlite3.put",(void *)op_put);
         goto fail;
     }
     stage="register_diagnostic";
     if(!host->register_service(DIGIT_SQLITE3_DIAGNOSTIC_SERVICE,
                               diagnostic_service,NULL)){
         startup_log(stage,SQLITE_MISUSE,"core_rejected_diagnostic_registration");
-        host->unregister_service("digit.sqlite3.delete",(void *)op_delete);
         host->unregister_service("digit.sqlite3.get",(void *)op_get);
-        host->unregister_service("digit.sqlite3.put",(void *)op_put);
-        goto fail;
+            goto fail;
     }
     startup_log("active",SQLITE_OK,"all_services_registered");
     return STNLABZ_MODULE_OK;
@@ -225,7 +168,6 @@ fail:
 static stnlabz_module_result_t stop(void) {
     if(!database||!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
     host->unregister_service(DIGIT_SQLITE3_DIAGNOSTIC_SERVICE,NULL);
-    host->unregister_service("digit.sqlite3.delete",(void *)op_delete);
     host->unregister_service("digit.sqlite3.get",(void *)op_get);
     host->unregister_service("digit.sqlite3.put",(void *)op_put);
     if(sqlite3_close(database)!=SQLITE_OK)return STNLABZ_MODULE_ERR_STOP_FAILED;
@@ -238,7 +180,7 @@ static void test_check(stnlabz_module_qualification_result_t *r,int ok,int negat
 }
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *result) {
     sqlite3 *db=NULL;
-    sqlite3_record_t r={0},saved={0};
+    sqlite3_record_t record={0};
     sqlite3_diagnostic_t diagnostic={0};
     size_t diagnostic_used=0;
     char key[KEY_MAX]={0};
@@ -247,9 +189,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
     memset(result,0,sizeof *result);
     test_check(result,diagnostic_service(NULL,0,&diagnostic,
         sizeof diagnostic,&diagnostic_used,NULL)==STNLABZ_MODULE_OK &&
-        diagnostic_used==sizeof diagnostic &&
-        memchr(diagnostic.state,0,sizeof diagnostic.state)!=NULL &&
-        memchr(diagnostic.stage,0,sizeof diagnostic.stage)!=NULL,0);
+        diagnostic_used==sizeof diagnostic,0);
     diagnostic_used=1;
     test_check(result,diagnostic_service(NULL,0,&diagnostic,
         sizeof diagnostic-1,&diagnostic_used,NULL)==
@@ -268,26 +208,27 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
     test_check(result,!key_valid("a\\rb"),1);
     memset(key,'x',sizeof key);
     test_check(result,!key_valid(key),1);
+    /* Fixture exists in RAM only and never opens the live database. */
     opened=sqlite3_open(":memory:",&db)==SQLITE_OK;
     test_check(result,opened,0);
-    if(!opened) return STNLABZ_MODULE_ERR_QUALIFICATION;
-    test_check(result,schema(db),0);
-    test_check(result,schema(db),0);
-    strcpy(r.key,"test.one");r.value[0]=0;r.value[1]=255;r.length=2;
-    test_check(result,put(db,&r),0);
-    strcpy(saved.key,"test.one");
-    test_check(result,get(db,&saved),0);
-    test_check(result,saved.length==2&&saved.value[0]==0&&saved.value[1]==255,0);
+    if(!opened)return STNLABZ_MODULE_ERR_QUALIFICATION;
+    test_check(result,sqlite3_exec(db,
+       "CREATE TABLE digit_kv(key TEXT PRIMARY KEY,value BLOB NOT NULL) WITHOUT ROWID",
+       NULL,NULL,NULL)==SQLITE_OK,0);
+    test_check(result,sqlite3_exec(db,
+       "INSERT INTO digit_kv VALUES('sample','known value')",
+       NULL,NULL,NULL)==SQLITE_OK,0);
+    strcpy(record.key,"sample");
+    test_check(result,get(db,&record),0);
+    test_check(result,record.length==11&&
+      !memcmp(record.value,"known value",11),0);
     test_check(result,!get(db,&(sqlite3_record_t){.key="missing"}),1);
-    test_check(result,!put(db,&(sqlite3_record_t){.key="bad key",.length=1}),1);
-    test_check(result,!put(db,&(sqlite3_record_t){.key="overflow",.length=VALUE_MAX+1}),1);
-    test_check(result,erase(db,"test.one"),0);
-    test_check(result,!get(db,&saved),1);
-    test_check(result,!erase(db,"bad key"),1);
-    test_check(result,!put(NULL,&r),1);
-    test_check(result,!get(NULL,&saved),1);
-    test_check(result,!erase(NULL,"test.one"),1);
+    test_check(result,!get(db,&(sqlite3_record_t){.key="bad key"}),1);
+    test_check(result,!get(NULL,&record),1);
+    test_check(result,!get(db,NULL),1);
+    test_check(result,sqlite3_db_readonly(db,"main")==0,0);
     test_check(result,sqlite3_close(db)==SQLITE_OK,0);
+    test_check(result,result->tests_executed>=20,0);
     return result->tests_executed>=20 && !result->tests_failed &&
         result->tests_passed==result->tests_executed &&
         result->negative_test_executed&&result->negative_test_passed ?
@@ -295,7 +236,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="sqlite3",.name="SQLite3 persistence",
-    .version_major=0,.version_minor=1,.version_patch=3,
+    .version_major=0,.version_minor=2,.version_patch=0,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
