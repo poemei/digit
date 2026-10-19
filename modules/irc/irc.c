@@ -47,11 +47,11 @@ static int config_valid(const irc_config_t *c) {
     return c && !strcmp(c->server,"irc.libera.chat") &&
         !strcmp(c->port,"6697") && !strcmp(c->channel,"#stn-labz") &&
         c->nick[0] && c->account[0] && c->password[0] &&
-        !strpbrk(c->nick," \\r\\n") && !strpbrk(c->account,"\\r\\n");
+        !strpbrk(c->nick," \r\n") && !strpbrk(c->account,"\r\n");
 }
 static int reply_valid(const char *reply,size_t size) {
-    return reply && size>0 && size<512 && !memchr(reply,'\\r',size) &&
-        !memchr(reply,'\\n',size) && !memchr(reply,'\\0',size);
+    return reply && size>0 && size<512 && !memchr(reply,'\r',size) &&
+        !memchr(reply,'\n',size) && !memchr(reply,'\0',size);
 }
 static int nick_mention(const char *body,const char *nick) {
     size_t n;
@@ -233,9 +233,9 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
     irc_config_t c={0};
     char target[8];
     const char valid[]="Hello";
-    const char cr[]="bad\\r";
-    const char lf[]="bad\\n";
-    const char nul[]={'a','\\0','b'};
+    const char cr[]="bad\r";
+    const char lf[]="bad\n";
+    const char nul[]={'a','\0','b'};
     if(!result)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
     memset(result,0,sizeof *result);
     check(result,assign(target,sizeof target,"test")&&!strcmp(target,"test"),0);
@@ -269,6 +269,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
     check(result,!nick_mention("DigitXYZ: hello","Digit"),1);
     check(result,!nick_mention("Di","Digit"),1);
     check(result,!nick_mention(NULL,"Digit"),1);
+    check(result,!nick_mention("Digit",""),1);
     check(result,reply_valid(valid,sizeof valid-1),0);
     check(result,!reply_valid(cr,sizeof cr-1),1);
     check(result,!reply_valid(lf,sizeof lf-1),1);
