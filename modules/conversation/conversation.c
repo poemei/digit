@@ -8,11 +8,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <time.h>
 #include "module.h"
 #include "../sqlite3/corpus_search.h"
 #include "../dsd/dsd.h"
 
 #define CONVERSATION_SERVICE "digit.conversation"
+#define CONVERSATION_LISTEN_SERVICE "digit.conversation.listen"
 #define WORD_CAP 48
 #define QUERY_TERMS_MAX 4
 
@@ -22,6 +24,7 @@ typedef struct {
 typedef struct {size_t begin,end;} word_t;
 
 static const stnlabz_module_host_t *host;
+static time_t last_spoken;
 static void observe(const stnlabz_module_host_t *api,const char *operation,
                     const char *status,unsigned records,unsigned line,int failed){
  uint64_t trace=0,query_token=1;size_t used=0;digit_dsd_record_t event={0};
@@ -162,6 +165,63 @@ static stnlabz_module_result_t service(const void *request,size_t request_size,
  return answer((const message_t *)request,(char *)response,response_size,
                used,host);
 }
+/* Passive channel participation. The controller, not IRC or Core,
+ * determines whether corpus evidence justifies speaking. */
+static stnlabz_module_result_t listen_message(const message_t *m,char *out,
+ size_t cap,size_t *used,const stnlabz_module_host_t *api){
+ word_t words[WORD_CAP];size_t count,i,j,returned;
+ digit_corpus_query_t query;digit_corpus_result_t results;
+ time_t now=time(NULL);
+ if(used)*used=0;
+ if(!message_valid(m)||!out||!cap||!used||!api||!api->invoke_service)
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ if(now==(time_t)-1||(last_spoken&&now>=last_spoken&&now-last_spoken<120))
+  return STNLABZ_MODULE_OK;
+ count=tokens(m->message,words,WORD_CAP);
+ /* No implicit response to short casual chatter or commands. */
+ if(count<3||count>WORD_CAP)return STNLABZ_MODULE_OK;
+ for(i=0;i<count&&i<12;i++){
+  size_t n=words[i].end-words[i].begin;
+  const char *p=m->message+words[i].begin;
+  unsigned relevant=0;char topic[64];char line[512];
+  if(n<4||n>=sizeof topic||filler(p,n))continue;
+  memcpy(topic,p,n);topic[n]=0;
+  memset(&query,0,sizeof query);
+  snprintf(query.query,sizeof query.query,"%s",topic);
+  memset(&results,0,sizeof results);returned=0;
+  if(api->invoke_service(DIGIT_CORPUS_SEARCH_SERVICE,&query,sizeof query,
+     &results,sizeof results,&returned)!=STNLABZ_MODULE_OK)
+   return STNLABZ_MODULE_OK; /* Unavailable intelligence means silence. */
+  if(returned!=sizeof results||results.count>DIGIT_CORPUS_RESULTS_MAX)
+   return STNLABZ_MODULE_OK;
+  for(j=0;j<results.count;j++)
+   if(memchr(results.hits[j].excerpt,0,sizeof results.hits[j].excerpt)&&
+      topic_present(results.hits[j].excerpt,topic))relevant++;
+  /* One hit is not sufficient evidence to interrupt other people. */
+  if(relevant<2)continue;
+  for(j=0;j<results.count;j++){
+   const digit_corpus_hit_t *hit=&results.hits[j];
+   int length;
+   if(!memchr(hit->excerpt,0,sizeof hit->excerpt)||
+      !topic_present(hit->excerpt,topic))continue;
+   length=snprintf(line,sizeof line,"On %s, corpus #%lld: %.170s",
+       topic,(long long)hit->id,hit->excerpt);
+   if(length<=0||(size_t)length>=cap||length>350)continue;
+   if(reply(out,cap,used,line)==STNLABZ_MODULE_OK){
+    last_spoken=now;
+    return STNLABZ_MODULE_OK;
+   }
+  }
+ }
+ return STNLABZ_MODULE_OK;
+}
+static stnlabz_module_result_t listen_service(const void *request,
+ size_t size,void *response,size_t cap,size_t *used,void *context){
+ (void)context;
+ if(used)*used=0;
+ if(!request||size!=sizeof(message_t))return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ return listen_message(request,response,cap,used,host);
+}
 static void check(stnlabz_module_qualification_result_t *q,int good,int negative){
  q->tests_executed++;
  if(good)q->tests_passed++;else q->tests_failed++;
@@ -251,11 +311,18 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api){
     !api->unregister_service)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  if(!api->register_service(CONVERSATION_SERVICE,service,NULL))
   return STNLABZ_MODULE_ERR_START_FAILED;
+ if(!api->register_service(CONVERSATION_LISTEN_SERVICE,listen_service,NULL)){
+  (void)api->unregister_service(CONVERSATION_SERVICE,NULL);
+  return STNLABZ_MODULE_ERR_START_FAILED;
+ }
+ last_spoken=0;
  host=api;
  return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t stop(void){
  if(!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(!host->unregister_service(CONVERSATION_LISTEN_SERVICE,NULL))
+  return STNLABZ_MODULE_ERR_STOP_FAILED;
  if(!host->unregister_service(CONVERSATION_SERVICE,NULL))
   return STNLABZ_MODULE_ERR_STOP_FAILED;
  host=NULL;
@@ -263,7 +330,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="conversation",.name="Conversation knowledge retrieval",
- .version_major=0,.version_minor=4,.version_patch=2,
+ .version_major=0,.version_minor=4,.version_patch=3,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
