@@ -137,7 +137,7 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line) {
         target=sender;
     } else {
         if(strcasecmp(target,cfg->channel))return 1;
-        if(strncasecmp(body,cfg->nick,n)||!strchr(":, ",body[n]))return 1;
+        if(strlen(body)<n||strncasecmp(body,cfg->nick,n)||!strchr(":, ",body[n]))return 1;
         body+=n;
         if(*body==':'||*body==',')body++;
         while(*body==' ')body++;
