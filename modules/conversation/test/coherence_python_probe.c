@@ -1,9 +1,9 @@
 /* Offline coherence probe: intentionally NOT part of module qualification.
  * Proves whether Conversation can connect a short IRC exchange to knowledge.
- * Independent non-PHP case for context-grounded participation.
+ * Python with EMPTY corpus fixture: context should be recognized, no speech.\n * This does not inspect or establish live corpus coverage.
  * No production state, no database, no IRC connection.
- * Build: cc -I../../core/stnlabz_abi -std=c11 -Wall -Wextra -Wpedantic test/coherence_probe.c -o bin/coherence_probe -ldl
- * Run:   ./bin/coherence_probe ./bin/conversation.so
+ * Build: cc -I../../core/stnlabz_abi -std=c11 -Wall -Wextra -Wpedantic test/coherence_python_probe.c -o bin/coherence_python_probe -ldl
+ * Run:   ./bin/coherence_python_probe ./bin/conversation.so
  */
 #include <dlfcn.h>
 #include <stdio.h>
@@ -50,14 +50,9 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t re
  if(strcmp(name,DIGIT_CORPUS_SEARCH_SERVICE))return STNLABZ_MODULE_ERR_NOT_FOUND;
  corpus_reads++;
  if(!resp||!used||cap<sizeof hits)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
- hits.count=2;
- hits.hits[0].id=1;
- snprintf(hits.hits[0].excerpt,sizeof hits.hits[0].excerpt,
-  "In Python, indentation determines code blocks.");
- hits.hits[1].id=2;
- snprintf(hits.hits[1].excerpt,sizeof hits.hits[1].excerpt,
-  "Python uses indentation to group statements.");
+ /* Intentionally no Python records: a valid zero-result corpus lookup. */
  memcpy(resp,&hits,sizeof hits);*used=sizeof hits;return STNLABZ_MODULE_OK;
+
 }
 static int send(const char *sender,const char *message,int expect_speak){
  message_t in={0};char out[512]={0};size_t used=111;
@@ -88,9 +83,9 @@ int main(int argc,char **argv){
  }
  ++total;passed+=send("PoeMei","laurie where do you upload your module to?",0);
  ++total;passed+=send("Laurie_Vo","I am learning Python",0);
- ++total;passed+=send("PoeMei","Python has an indentation rule, remember the indentation",0);
+ ++total;passed+=send("PoeMei","Python uses indentation, remember the indentation",0);
  /* One grounded on-topic contribution, without exposing corpus metadata. */
- ++total;passed+=send("Laurie_Vo","I keep forgetting the indentation!",1);
+ ++total;passed+=send("Laurie_Vo","I keep forgetting the indentation!",0);
  printf("Observation reads=%u, corpus reads=%u; coherence %d/%d\n",
   observation_reads,corpus_reads,passed,total);
  if(mod->stop()!=STNLABZ_MODULE_OK){dlclose(handle);return 2;}
