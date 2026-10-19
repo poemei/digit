@@ -1,0 +1,187 @@
+/* [AI:GPT-6 | 2026-10-18] Social expression vocabulary; no conversational logic. */
+#define _POSIX_C_SOURCE 200809L
+#include <fcntl.h>
+#include <stdint.h>
+#include <stddef.h>
+#include <string.h>
+#include <unistd.h>
+#include <errno.h>
+#include "module.h"
+#include "socials.h"
+
+typedef struct {
+ const char *name;
+ const char *const *tokens;
+ size_t count;
+ size_t previous;
+} category_t;
+
+static const char *const hearts[] = {
+ "❤️","🩷","🧡","💛","💚","💙","💜","🤍","🖤","🤎",
+ "💖","💗","💕","💞","💓","💘","💝","💟","❣️","🫶"
+};
+static const char *const smiles[] = {
+ "😀","😃","😄","😁","😊","🙂","☺️","😇","😍","🥰",
+ "😘","😌","😋","😺","🤩","😆","😅","😸"
+};
+static const char *const cats[] = {
+ "🐱","😺","😸","😹","😻","😼","😽","🙀","😿","😾",
+ "🐈","🐈‍⬛","=^.^=","ฅ^•ﻌ•^ฅ"
+};
+static const char *const paws[] = {
+ "🐾","🐈","🐈‍⬛","🐱","😺","😸","😻","😽",
+ "🐶","🐰","🦊","🐻","ฅ^•ﻌ•^ฅ"
+};
+static const char *const playful[] = {
+ "😜","😝","😛","😉","🤭","🤪","😏","😎",
+ "😸","😼","🐾",":3","^_^","=^.^="
+};
+static const char *const comfort[] = {
+ "🫂","🤗","🥹","💗","💕","🩷","🤍","🫶",
+ "💖","😊","🥰","🐾"
+};
+static const char *const sad[] = {
+ "😢","😭","🥺","😔","😞","💔","😿","😥",
+ "😓","☹️","🙁","🫂"
+};
+static const char *const celebrate[] = {
+ "🎉","✨","🌟","🎊","🥳","🙌","💃","🎈",
+ "🎆","🎇","💖","😄"
+};
+static const char *const gestures[] = {
+ "👋","👍","👏","🙌","🤝","🫶","💪","👌",
+ "✌️","🤞","🙏","🤗"
+};
+static const char *const text_expr[] = {
+ ":)",":D",";)","<3","^_^",":3","=^.^=",
+ "ฅ^•ﻌ•^ฅ","ʕ•ᴥ•ʔ","^-^","(=^･ω･^=)"
+};
+#define COUNT(x) (sizeof(x)/sizeof((x)[0]))
+static category_t catalog[] = {
+ {"hearts",hearts,COUNT(hearts),SIZE_MAX},
+ {"smiles",smiles,COUNT(smiles),SIZE_MAX},
+ {"cats",cats,COUNT(cats),SIZE_MAX},
+ {"paws",paws,COUNT(paws),SIZE_MAX},
+ {"playful",playful,COUNT(playful),SIZE_MAX},
+ {"comfort",comfort,COUNT(comfort),SIZE_MAX},
+ {"sad",sad,COUNT(sad),SIZE_MAX},
+ {"celebrate",celebrate,COUNT(celebrate),SIZE_MAX},
+ {"gestures",gestures,COUNT(gestures),SIZE_MAX},
+ {"text",text_expr,COUNT(text_expr),SIZE_MAX}
+};
+static const stnlabz_module_host_t *host;
+static volatile int busy;
+static void lock(void){while(__sync_lock_test_and_set(&busy,1)){}}
+static void unlock(void){__sync_lock_release(&busy);}
+static int entropy32(uint32_t *value) {
+ unsigned char *dst=(unsigned char *)value;
+ size_t read_count=0;
+ int fd=open("/dev/urandom",O_RDONLY|O_CLOEXEC);
+ if(fd<0)return 0;
+ while(read_count<sizeof *value) {
+  ssize_t got=read(fd,dst+read_count,sizeof *value-read_count);
+  if(got<0&&errno==EINTR)continue;
+  if(got<=0){close(fd);return 0;}
+  read_count+=(size_t)got;
+ }
+ close(fd);return 1;
+}
+static int pick(category_t *c,size_t *index) {
+ uint32_t rnd,range,limit;
+ size_t options;
+ if(!c||!index||!c->count||c->count>UINT32_MAX)return 0;
+ options=c->count-(c->previous<c->count?1u:0u);
+ range=(uint32_t)options;
+ limit=UINT32_MAX-(UINT32_MAX%range);
+ do {if(!entropy32(&rnd))return 0;} while(rnd>=limit);
+ *index=(size_t)(rnd%range);
+ if(c->previous<c->count&&*index>=c->previous)(*index)++;
+ return 1;
+}
+static stnlabz_module_result_t select_expression(
+ const void *request,size_t request_size,void *response,
+ size_t response_size,size_t *response_used,void *context) {
+ const digit_socials_request_t *req=request;
+ digit_socials_response_t *out=response;
+ size_t i,index,n;
+ (void)context;
+ if(response_used)*response_used=0;
+ if(!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(!request||request_size!=sizeof *req||!response||
+    response_size<sizeof *out||!response_used)
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ if(!memchr(req->category,0,sizeof req->category))
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ for(i=0;i<COUNT(catalog);i++)
+  if(!strcmp(req->category,catalog[i].name))break;
+ if(i==COUNT(catalog))return STNLABZ_MODULE_ERR_NOT_FOUND;
+ lock();
+ if(!pick(&catalog[i],&index)){unlock();return STNLABZ_MODULE_ERR_INVALID_STATE;}
+ n=strlen(catalog[i].tokens[index]);
+ if(n>=sizeof out->expression){unlock();return STNLABZ_MODULE_ERR_INVALID_STATE;}
+ memset(out,0,sizeof *out);
+ memcpy(out->expression,catalog[i].tokens[index],n);
+ catalog[i].previous=index;
+ unlock();
+ *response_used=sizeof *out;
+ return STNLABZ_MODULE_OK;
+}
+static stnlabz_module_result_t start(const stnlabz_module_host_t *api) {
+ size_t i;
+ if(host||!api||!api->register_service||!api->unregister_service)
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ for(i=0;i<COUNT(catalog);i++)catalog[i].previous=SIZE_MAX;
+ host=api;
+ if(!api->register_service(DIGIT_SOCIALS_SERVICE,select_expression,NULL)) {
+  host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
+ }
+ return STNLABZ_MODULE_OK;
+}
+static stnlabz_module_result_t stop(void) {
+ if(!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(!host->unregister_service(DIGIT_SOCIALS_SERVICE,NULL))
+  return STNLABZ_MODULE_ERR_STOP_FAILED;
+ host=NULL;
+ return STNLABZ_MODULE_OK;
+}
+static void check(stnlabz_module_qualification_result_t *r,int ok,int negative) {
+ ++r->tests_executed;
+ if(ok)++r->tests_passed;else ++r->tests_failed;
+ if(negative){r->negative_test_executed=1;
+  if(ok)r->negative_test_passed=1;}
+}
+static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r) {
+ size_t i,j,k,total=0;
+ if(!r)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ memset(r,0,sizeof *r);
+ for(i=0;i<COUNT(catalog);i++) {
+  check(r,catalog[i].count>=10,0);
+  check(r,strlen(catalog[i].name)<DIGIT_SOCIALS_CATEGORY_MAX,0);
+  for(j=0;j<catalog[i].count;j++) {
+   size_t n=strlen(catalog[i].tokens[j]);
+   check(r,n>0&&n<DIGIT_SOCIALS_EXPRESSION_MAX,0);
+   for(k=0;k<j;k++)
+    if(!strcmp(catalog[i].tokens[k],catalog[i].tokens[j]))break;
+   check(r,k==j,0);
+   total++;
+  }
+ }
+ check(r,total>=100,0);
+ check(r,sizeof(digit_socials_response_t)==DIGIT_SOCIALS_EXPRESSION_MAX,0);
+ check(r,sizeof(digit_socials_request_t)==DIGIT_SOCIALS_CATEGORY_MAX,0);
+ check(r,!memchr("hearts",0,6),1); /* invalid 6-byte nonterminated buffer */
+ check(r,memchr("hearts",0,7)!=NULL,1);
+ return r->tests_executed>=STNLABZ_MODULE_MIN_TESTS && !r->tests_failed &&
+   r->negative_test_executed&&r->negative_test_passed?
+   STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_QUALIFICATION;
+}
+static const stnlabz_module_descriptor_t descriptor={
+ .id="socials",.name="Social expression vocabulary",
+ .version_major=0,.version_minor=1,.version_patch=0,
+ .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
+ .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
+ .qualify=qualify,.start=start,.stop=stop
+};
+const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){
+ return &descriptor;
+}
