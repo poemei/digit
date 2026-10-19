@@ -95,6 +95,10 @@ static stnlabz_module_result_t record_service(
  if(response_used)*response_used=0;
  if(request_size!=sizeof *r||!build_line(r,line,sizeof line,&length))
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ if(!api||!api->invoke_service||api->invoke_service(
+      DIGIT_OBSERVATION_INSERT_SERVICE,r,sizeof *r,
+      NULL,0,response_used)!=STNLABZ_MODULE_OK)
+  return STNLABZ_MODULE_ERR_INVALID_STATE;
  pthread_mutex_lock(&journal_lock);
  if(journal<0){pthread_mutex_unlock(&journal_lock);return STNLABZ_MODULE_ERR_INVALID_STATE;}
  while(off<length){
@@ -104,7 +108,7 @@ static stnlabz_module_result_t record_service(
   off+=(size_t)n;
  }
  pthread_mutex_unlock(&journal_lock);
- return off==length?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
+ return STNLABZ_MODULE_OK; /* DB committed; JSONL is secondary. */
 }
 static void check(stnlabz_module_qualification_result_t *q,int yes,int negative){
  q->tests_executed++;
@@ -164,7 +168,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="observation",.name="IRC observation journal",
- .version_major=0,.version_minor=1,.version_patch=0,
+ .version_major=0,.version_minor=1,.version_patch=1,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
