@@ -55,6 +55,36 @@ static int record(const digit_dsd_event_t *event){
  pthread_mutex_unlock(&guard);
  return 1;
 }
+/* Human-readable statuses are presentation only; original evidence stays intact. */
+static const char *status_meaning(const char *status){
+ if(!strcmp(status,"SQLITE_BUSY"))return "database is locked";
+ if(!strcmp(status,"SQLITE_LOCKED"))return "database table is locked";
+ if(!strcmp(status,"SQLITE_CORRUPT"))return "database appears malformed";
+ if(!strcmp(status,"SQLITE_READONLY"))return "database is read-only";
+ if(!strcmp(status,"SQLITE_IOERR"))return "database I/O failed";
+ if(!strcmp(status,"SERVICE_TIMEOUT"))return "service did not respond in time";
+ if(!strcmp(status,"SERVICE_UNAVAILABLE"))return "service is unavailable";
+ if(!strcmp(status,"MODULE_NOT_FOUND"))return "module was not found";
+ return NULL;
+}
+static int latest_module_trace(const char *module,uint64_t *id){
+ unsigned i,j;
+ if(!module||!id)return 0;
+ pthread_mutex_lock(&guard);
+ /* Traverse ring in reverse capture order; the first match is the latest
+  * event-bearing trace, not necessarily the latest numeric trace ID. */
+ for(i=0;i<SLOTS;i++){
+  unsigned index=(replacement+SLOTS-1-i)%SLOTS;
+  trace_slot_t *slot=&slots[index];
+  if(!slot->id)continue;
+  for(j=0;j<slot->count;j++)
+   if(!strcmp(slot->events[j].module,module)){
+    *id=slot->id;pthread_mutex_unlock(&guard);return 1;
+   }
+ }
+ pthread_mutex_unlock(&guard);
+ return 0;
+}
 static int diagnose(uint64_t trace_id,digit_dsd_result_t *out){
  trace_slot_t *slot;
  unsigned i,first_failure=DIGIT_DSD_MAX_EVENTS;
@@ -78,8 +108,9 @@ static int diagnose(uint64_t trace_id,digit_dsd_result_t *out){
  if(first_failure!=DIGIT_DSD_MAX_EVENTS){
   const digit_dsd_event_t *e=&out->events[first_failure];
   snprintf(out->summary,sizeof out->summary,
-   "Observed failure boundary: %.47s.%.63s at %.159s:%u, operation %.63s, status %.63s. Underlying cause not established.",
-   e->module,e->method,e->file,e->line,e->operation,e->status);
+   "Observed failure boundary: %.47s.%.63s at %.159s:%u, operation %.63s, status %.63s (%.80s). Underlying cause not established.",
+   e->module,e->method,e->file,e->line,e->operation,e->status,
+   status_meaning(e->status)?status_meaning(e->status):"no verified explanation");
  }else{
   snprintf(out->summary,sizeof out->summary,
    "No failure recorded in %u observed event(s). This is not proof of end-to-end success.",
@@ -147,9 +178,11 @@ static int command_text(const digit_dsd_command_request_t *req,
    snprintf(out->text,sizeof out->text,"DSD: Invalid module identifier.");
    return 1;
   }
-  snprintf(out->text,sizeof out->text,
-    "DSD: Module %.48s has no independent health probe in this version. Request-correlated instrumentation is required before a cause can be established.",module);
-  return 1;
+  if(!latest_module_trace(module,&id)){
+   snprintf(out->text,sizeof out->text,
+    "DSD: No recorded observations for module %.48s. This does not establish module health.",module);
+   return 1;
+  }
  }else return 0; /* Do not commandeer ordinary conversation. */
  if(!diagnose(id,&diagnosis))return 0;
  if(diagnosis.dropped){
@@ -230,7 +263,10 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  snprintf(cmd.command,sizeof cmd.command,"diagnose trace nonsense");
  assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"Invalid trace")!=NULL,1);
  snprintf(cmd.command,sizeof cmd.command,"diagnose module s2");
- assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"no independent health probe")!=NULL,0);
+ assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"No recorded observations")!=NULL,0);
+ snprintf(cmd.command,sizeof cmd.command,"diagnose module sqlite3");
+ assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"SQLITE_BUSY")!=NULL,0);
+ assertion(q,strstr(reply.text,"database is locked")!=NULL,0);
  snprintf(cmd.command,sizeof cmd.command,"hello");
  assertion(q,!command_text(&cmd,&reply),1);
  /* Qualification has no external side effects and resets its own fixture. */
@@ -269,7 +305,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="dsd",.name="Developer Self-Diagnostics",
- .version_major=0,.version_minor=2,.version_patch=0,
+ .version_major=0,.version_minor=3,.version_patch=0,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
