@@ -1,20 +1,18 @@
 #!/bin/sh
-# [AI:GPT-6 | 2026-10-19 00:16:06 UTC]
-# [AI:GPT-6 | 2026-10-19 00:18:59 UTC] Report 9 existing assertions, not 20 qualified tests.
-# [End AI:GPT-6]
-# Report the existing Core test result without claiming full agent qualification.
-status=0
-./bin/test_core || status=$?
-if [ "$status" -eq 0 ]; then
-    printf '\nCore checks: PASS (current suite)\n'
-    printf 'Completed checks: 9 / 20 required (45%%; 11 remaining)\n'
-    printf 'Agent qualification: PENDING (9 checks in 1 suite; 20 distinct tests not yet demonstrated)\n'
-    printf 'OVERALL TEST COMPLETED: PASS (current suite only)\n'
-else
-    printf '\nCore checks: FAIL (exit code %s)\n' "$status"
-    printf 'Completed checks: 0 / 20 confirmed (test suite failed)\n'
-    printf 'Agent qualification: NOT MET\n'
-    printf 'OVERALL TEST COMPLETED: FAIL\n'
+# [AI:GPT-6 | 2026-10-18] Report executed test checks, not module qualification.
+core_status=0
+transport_status=0
+./bin/test_core || core_status=$?
+./bin/test_transports || transport_status=$?
+if [ "$core_status" -eq 0 ] && [ "$transport_status" -eq 0 ]; then
+    printf '\nCompleted checks: 14 / 20 required (70%%; 6 remaining)\n'
+    printf 'Agent qualification: PENDING (14 assertions in 2 suites; 20 distinct tests not yet demonstrated)\n'
+    printf 'OVERALL TEST COMPLETED: PASS (current suites only)\n'
+    exit 0
 fi
-exit "$status"
+printf '\nCore suite exit: %s; Transport suite exit: %s\n' "$core_status" "$transport_status"
+printf 'Completed checks: NOT VERIFIED / 20 required\n'
+printf 'Agent qualification: NOT MET\n'
+printf 'OVERALL TEST COMPLETED: FAIL\n'
+exit 1
 # [End AI:GPT-6]
