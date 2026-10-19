@@ -184,7 +184,27 @@ static int command_text(const digit_dsd_command_request_t *req,
  memset(out,0,sizeof *out);
  if(!strcmp(text,"show dsd")){
   snprintf(out->text,sizeof out->text,
-    "DSD available: trace diagnostics, bounded evidence, source locations when instrumented. Commands: diagnose my last request | diagnose trace <id>. Uninstrumented paths remain unknown.");
+    "DSD available: trace diagnostics, bounded evidence, source locations when instrumented. Commands: show trace | diagnose my last request. Uninstrumented paths remain unknown.");
+  return 1;
+ }
+ if(!strcmp(text,"show trace")){
+  id=req->previous_trace_id;
+  if(!id){
+   snprintf(out->text,sizeof out->text,"DSD: No previous private request trace is retained.");
+   return 1;
+  }
+  if(!diagnose(id,&diagnosis))return 0;
+  if(!diagnosis.found||!diagnosis.count){
+   snprintf(out->text,sizeof out->text,"DSD: Previous request trace is no longer retained.");
+   return 1;
+  }
+  {
+   const digit_dsd_event_t *e=&diagnosis.events[0];
+   snprintf(out->text,sizeof out->text,
+     "DSD trace %llu: %u observed operation(s); first: %.40s.%.55s -> %.55s, status %.55s. Last instrumented source %.110s:%u. Downstream execution not recorded unless explicitly observed.",
+     (unsigned long long)id,diagnosis.count,e->module,e->method,
+     e->operation,e->status,e->file,e->line);
+  }
   return 1;
  }
  if(!strcmp(text,"diagnose my last request")){
@@ -314,6 +334,11 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  assertion(q,out.events[0].span_id==1&&out.events[1].span_id==2,0);
  snprintf(cmd.command,sizeof cmd.command,"show dsd");
  assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"DSD available")!=NULL,0);
+ snprintf(cmd.command,sizeof cmd.command,"show trace");
+ assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"No previous private request")!=NULL,0);
+ cmd.previous_trace_id=42;
+ assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"observed operation")!=NULL,0);
+ cmd.previous_trace_id=0;
  snprintf(cmd.command,sizeof cmd.command,"diagnose my last request");
  assertion(q,command_text(&cmd,&reply)&&strstr(reply.text,"unavailable")!=NULL,0);
  cmd.previous_trace_id=42;
@@ -365,7 +390,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="dsd",.name="Developer Self-Diagnostics",
- .version_major=0,.version_minor=4,.version_patch=0,
+ .version_major=0,.version_minor=4,.version_patch=1,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
