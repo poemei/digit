@@ -358,12 +358,32 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled
         uint64_t trace=0;
         unsigned observation_line=__LINE__+1;
         if(private_message){
-            size_t trace_used=0;
+            size_t trace_used=0,seen_size=0;
+            uint64_t seen=0,query_token=1;
+            stnlabz_module_result_t bound;
             trace=dsd_next_trace++;
             if(!trace)trace=dsd_next_trace++;
-            /* DSD binds only the current worker thread. No Core/ABI edits. */
-            (void)host_api->invoke_service(DIGIT_DSD_BIND_SERVICE,
+            bound=host_api->invoke_service(DIGIT_DSD_BIND_SERVICE,
                 &trace,sizeof trace,NULL,0,&trace_used);
+            if(bound==STNLABZ_MODULE_OK){
+                bound=host_api->invoke_service(DIGIT_DSD_CURRENT_SERVICE,
+                    &query_token,sizeof query_token,&seen,sizeof seen,&seen_size);
+            }
+            if(bound!=STNLABZ_MODULE_OK||seen_size!=sizeof seen||seen!=trace){
+                digit_dsd_record_t warning={0};
+                size_t warning_used=0;
+                warning.trace_id=warning.event.trace_id=trace;
+                warning.event.span_id=1;
+                warning.event.result=1;
+                warning.event.line=__LINE__;
+                snprintf(warning.event.module,sizeof warning.event.module,"irc");
+                snprintf(warning.event.method,sizeof warning.event.method,"incoming");
+                snprintf(warning.event.file,sizeof warning.event.file,"modules/irc/irc.c");
+                snprintf(warning.event.operation,sizeof warning.event.operation,"request_trace");
+                snprintf(warning.event.status,sizeof warning.event.status,"TRACE_BIND_FAILED");
+                (void)host_api->invoke_service(DIGIT_DSD_RECORD_SERVICE,
+                    &warning,sizeof warning,NULL,0,&warning_used);
+            }
         }
         rc=host_api->invoke_service(IRC_INPUT_SERVICE,&input,sizeof input,
             response,sizeof response,&used);
