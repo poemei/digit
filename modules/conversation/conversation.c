@@ -214,9 +214,11 @@ static stnlabz_module_result_t listen_message(const message_t *m,char *out,
   if(!memchr(history.items[i].text,0,sizeof history.items[i].text)||
      !memchr(history.items[i].sender,0,sizeof history.items[i].sender))
    return STNLABZ_MODULE_OK;
- if(strcmp(history.items[history.count-1].text,m->message)||
-    (history.items[history.count-1].sender[0]&&
-     strcasecmp(history.items[history.count-1].sender,m->sender)))
+ /* Require attributed current evidence before deciding to interrupt.
+  * A missing sender is not proof that a matching line came from m->sender. */
+ if(!history.items[history.count-1].sender[0]||
+    strcmp(history.items[history.count-1].text,m->message)||
+    strcasecmp(history.items[history.count-1].sender,m->sender))
   return STNLABZ_MODULE_OK;
  /* Choose the shared difficulty from current message and a different
   * speaker's preceding turn. This prevents replying merely to a topic. */
@@ -403,7 +405,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="conversation",.name="Conversation knowledge retrieval",
- .version_major=0,.version_minor=4,.version_patch=9,
+ .version_major=0,.version_minor=4,.version_patch=10,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
