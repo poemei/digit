@@ -51,7 +51,7 @@ static int irc_ready;
 static int safe_report(const char *p,size_t cap) {
     size_t i;
     if(!p||!memchr(p,0,cap))return 0;
-    for(i=0;p[i];i++)if(p[i]=='\\r'||p[i]=='\\n'||(unsigned char)p[i]<32)return 0;
+    for(i=0;p[i];i++)if(p[i]=='\r'||p[i]=='\n'||(unsigned char)p[i]<32)return 0;
     return i>0&&i<=350;
 }
 static stnlabz_module_result_t deliver_service(
@@ -336,7 +336,7 @@ static void session(const irc_config_t *cfg) {
         if(outbound_count){pending=outbound[outbound_head];have=1;}
         pthread_mutex_unlock(&outbound_mutex);
         if(have){
-            char wire[512];int k=snprintf(wire,sizeof wire,"PRIVMSG %s :%s\\r\\n",cfg->channel,pending.report);
+            char wire[512];int k=snprintf(wire,sizeof wire,"PRIVMSG %s :%s\r\n",cfg->channel,pending.report);
             if(k<=0||(size_t)k>=sizeof wire||!write_line(ssl,wire))break;
             pthread_mutex_lock(&outbound_mutex);
             outbound_head=(outbound_head+1)%S2_QUEUE_CAP;outbound_count--;
@@ -538,7 +538,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=2,.version_patch=8,
+    .version_major=0,.version_minor=2,.version_patch=9,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
