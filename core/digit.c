@@ -25,6 +25,8 @@ typedef struct {
     char name[STNLABZ_MODULE_SERVICE_NAME_MAX];
     stnlabz_module_service_handler_fn handler;
     void *context;
+    unsigned int in_flight;
+    int withdrawing;
 } digit_registered_service_t;
 static digit_registered_service_t services[32];
 static atomic_flag service_lock = ATOMIC_FLAG_INIT;
@@ -55,18 +57,34 @@ static int register_service(const char *name,
     service_lock_release();
     return 1;
 }
+/* Never unload a callback while another thread is executing it.
+ * No registry lock is held across a module callback: a module may invoke
+ * another registered service through ABI 1.5 (e.g., persistence). */
 static int unregister_service(const char *name,void *context) {
-    size_t i;int removed=0;
+    size_t i;
+    digit_registered_service_t *entry=NULL;
     if(!name)return 0;
     service_lock_acquire();
     for(i=0;i<32;i++) {
         if(services[i].handler && !strcmp(services[i].name,name) &&
-           services[i].context==context) {
-            memset(&services[i],0,sizeof services[i]);removed=1;break;
+           services[i].context==context && !services[i].withdrawing) {
+            entry=&services[i];
+            entry->withdrawing=1;
+            break;
         }
     }
     service_lock_release();
-    return removed;
+    if(!entry)return 0;
+    /* The owner must unregister from outside its own active callback. */
+    for(;;) {
+        service_lock_acquire();
+        if(!entry->in_flight){
+            memset(entry,0,sizeof *entry);
+            service_lock_release();
+            return 1;
+        }
+        service_lock_release();
+    }
 }
 static stnlabz_module_registry_t *live_registry;
 static atomic_flag command_lock = ATOMIC_FLAG_INIT;
@@ -86,19 +104,28 @@ static stnlabz_module_result_t digit_service(const char *name,
     if (!name)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
     if (strcmp(name, "digit.message")) {
         stnlabz_module_service_handler_fn handler=NULL;
-        void *context=NULL;size_t i;
+        digit_registered_service_t *entry=NULL;
+        void *context=NULL;
+        stnlabz_module_result_t rc;
         service_lock_acquire();
-        for(i=0;i<32;i++)if(services[i].handler && !strcmp(services[i].name,name)){
-            handler=services[i].handler;context=services[i].context;break;
+        for(i=0;i<32;i++) {
+            if(services[i].handler && !services[i].withdrawing &&
+               !strcmp(services[i].name,name)) {
+                entry=&services[i];
+                entry->in_flight++;
+                handler=entry->handler;
+                context=entry->context;
+                break;
+            }
         }
-        /* Keep handler registered while invoked. SQLite uses FULLMUTEX.
-           Service handlers must never register/unregister recursively. */
-        if(!handler){service_lock_release();return STNLABZ_MODULE_ERR_NOT_FOUND;}
-        {
-            stnlabz_module_result_t rc=handler(request,request_size,
-                response,response_size,response_used,context);
-            service_lock_release();return rc;
-        }
+        service_lock_release();
+        if(!handler)return STNLABZ_MODULE_ERR_NOT_FOUND;
+        rc=handler(request,request_size,response,response_size,response_used,
+                   context);
+        service_lock_acquire();
+        entry->in_flight--;
+        service_lock_release();
+        return rc;
     }
     if (!request || request_size != sizeof(digit_message_t) ||
         !response || !response_used || !live_registry)
@@ -109,13 +136,16 @@ static stnlabz_module_result_t digit_service(const char *name,
         !memchr(msg->target, 0, sizeof msg->target) ||
         !memchr(msg->message, 0, sizeof msg->message))
         return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
-    /* [AI:GPT-6 | 2026-10-18] Only module-management requests enter
-       the privileged command path. Ordinary conversation is not an
-       authorization failure; the response pipeline is not wired yet. */
+    /* Core retains its privileged management path. Every other message
+     * is forwarded unchanged to the registered conversational capability.
+     * Core never interprets conversational trigger words or accesses SQL.
+     * With no registered processor, return a missing-service disposition
+     * so clients and DSD do not mistake silence for processed success. */
     if (strcmp(msg->message, "show modules") &&
         strncmp(msg->message, "activate module", 15) &&
         strncmp(msg->message, "deactivate module", 17))
-        return STNLABZ_MODULE_OK; /* no response; IRC ignores used == 0 */
+        return digit_service("digit.conversation",request,request_size,
+                             response,response_size,response_used);
 
     /* [AI:GPT-6 | 2026-10-18] Public-channel management requests
        are silent. Only authenticated operator DMs can execute commands. */
