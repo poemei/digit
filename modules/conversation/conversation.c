@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include "module.h"
 #include "../sqlite3/corpus_search.h"
 #include "../dsd/dsd.h"
@@ -80,49 +81,77 @@ static stnlabz_module_result_t reply(char *buffer,size_t cap,size_t *used,const 
  if(n>=cap)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memcpy(buffer,text,n+1);*used=n;return STNLABZ_MODULE_OK;
 }
+/* Search only content-bearing terms; conversational filler is not evidence.
+ * A returned corpus hit must contain the searched topic as a whole token.
+ * Do not treat three FTS matches as three agreeing sources. */
+static int filler(const char *p,size_t n){
+ static const char *const ignored[]={"tell","me","about","what","is","are",
+  "the","a","an","please","can","you","explain","do","does","of","to",
+  "some","info","information","on","give","and","for","i","we","know"};
+ size_t i;
+ for(i=0;i<sizeof ignored/sizeof ignored[0];i++)
+  if(strlen(ignored[i])==n&&!strncasecmp(p,ignored[i],n))return 1;
+ return 0;
+}
+static int topic_present(const char *text,const char *term){
+ size_t n=strlen(term),i;
+ if(!n)return 0;
+ for(i=0;text[i];i++){
+  if(!strncasecmp(text+i,term,n) &&
+   (i==0||!token_character((unsigned char)text[i-1])) &&
+   (!text[i+n]||!token_character((unsigned char)text[i+n])))return 1;
+ }
+ return 0;
+}
 static stnlabz_module_result_t answer(const message_t *m,char *response,
                                       size_t capacity,size_t *used,
                                       const stnlabz_module_host_t *api){
- word_t words[WORD_CAP];
- size_t count,width,start,returned;
+ word_t words[WORD_CAP];size_t count,i,returned,added=0;
  stnlabz_module_result_t rc;
  digit_corpus_query_t query;
  digit_corpus_result_t results;
+ char topic[DIGIT_CORPUS_QUERY_MAX]={0},line[512]={0};
  if(used)*used=0;
  if(!message_valid(m)||!response||!capacity||!used||!api||
     !api->invoke_service)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  count=tokens(m->message,words,WORD_CAP);
  if(!count)return reply(response,capacity,used,"I couldn't identify searchable terms.");
- /* Search literal phrases, longest first, without a fixed command vocabulary.
-  * Query terms remain data bound by the SQLite3 service, never raw SQL. */
- for(width=count<QUERY_TERMS_MAX?count:QUERY_TERMS_MAX;width>0;width--){
-  for(start=count-width+1;start>0;){
-   start--;
-   if(!search_phrase(m->message,words,start,width,&query))continue;
-   memset(&results,0,sizeof results);
-   returned=0;
-   rc=api->invoke_service(DIGIT_CORPUS_SEARCH_SERVICE,&query,sizeof query,
-                          &results,sizeof results,&returned);
-   if(rc!=STNLABZ_MODULE_OK){
-    observe(api,"corpus_search","SERVICE_ERROR",0,__LINE__,1);
-    return rc;
-   }
-   if(returned!=sizeof results||results.count>DIGIT_CORPUS_RESULTS_MAX)
-    return STNLABZ_MODULE_ERR_INVALID_STATE;
-   if(results.count){
-    observe(api,"corpus_search","QUERY_MATCH",results.count,__LINE__,0);
-    char line[512];int n;
-    const digit_corpus_hit_t *hit=&results.hits[0];
-    n=snprintf(line,sizeof line,"Corpus #%lld (%s): %s",
-      (long long)hit->id,hit->verification_status[0]?hit->verification_status:"status-unknown",hit->excerpt);
-    if(n<0)return STNLABZ_MODULE_ERR_INVALID_STATE;
-    line[sizeof line-1]=0;
-    return reply(response,capacity,used,line);
-   }
+ /* Prefer the last meaningful topic term. Do not fall back to "tell", "me",
+  * etc., because those produce irrelevant answers that appear successful. */
+ for(i=count;i>0;i--){
+  size_t n=words[i-1].end-words[i-1].begin;
+  const char *p=m->message+words[i-1].begin;
+  if(n>1&&n<sizeof topic&&!filler(p,n)){
+   memcpy(topic,p,n);topic[n]=0;break;
   }
  }
- observe(api,"corpus_search","QUERY_NO_MATCH",0,__LINE__,0);
- return reply(response,capacity,used,"No matching corpus evidence was found.");
+ if(!topic[0])return reply(response,capacity,used,"I couldn't identify a topic.");
+ memset(&query,0,sizeof query);snprintf(query.query,sizeof query.query,"%s",topic);
+ memset(&results,0,sizeof results);returned=0;
+ rc=api->invoke_service(DIGIT_CORPUS_SEARCH_SERVICE,&query,sizeof query,
+                        &results,sizeof results,&returned);
+ if(rc!=STNLABZ_MODULE_OK){
+  observe(api,"corpus_search","SERVICE_ERROR",0,__LINE__,1);return rc;
+ }
+ if(returned!=sizeof results||results.count>DIGIT_CORPUS_RESULTS_MAX)
+  return STNLABZ_MODULE_ERR_INVALID_STATE;
+ for(i=0;i<results.count;i++){
+  const digit_corpus_hit_t *hit=&results.hits[i];
+  char entry[160];int n;
+  if(!memchr(hit->excerpt,0,sizeof hit->excerpt) ||
+     !topic_present(hit->excerpt,topic))continue;
+  n=snprintf(entry,sizeof entry,"%s#%lld: %.105s",
+    added?" | ":"Corpus ",(long long)hit->id,hit->excerpt);
+  if(n<0||(size_t)n>=sizeof entry)return STNLABZ_MODULE_ERR_INVALID_STATE;
+  if(strlen(line)+strlen(entry)>=sizeof line-1)break;
+  strcat(line,entry);added++;
+ }
+ if(!added){
+  observe(api,"corpus_search","QUERY_NO_RELEVANT_EVIDENCE",results.count,__LINE__,0);
+  return reply(response,capacity,used,"No relevant corpus evidence was found for that topic.");
+ }
+ observe(api,"corpus_search","QUERY_MATCH",added,__LINE__,0);
+ return reply(response,capacity,used,line);
 }
 static stnlabz_module_result_t service(const void *request,size_t request_size,
  void *response,size_t response_size,size_t *used,void *context){
@@ -190,7 +219,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="conversation",.name="Conversation knowledge retrieval",
- .version_major=0,.version_minor=4,.version_patch=1,
+ .version_major=0,.version_minor=4,.version_patch=2,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
