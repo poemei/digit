@@ -252,7 +252,8 @@ static int observation_report(digit_s2_report_t *out,int64_t *selected){
  digit_s2_observations_result_t result={0};
  size_t used=0;
  const char *id;
- char token[48]={0};
+ char token[48]={0},summary[140]={0};
+ const char *description;
  size_t i=0;
  if(!out||!selected||!host||!host->invoke_service)return 0;
  query.after_id=observation_cursor;
@@ -269,10 +270,16 @@ static int observation_report(digit_s2_report_t *out,int64_t *selected){
   }
  }
  if(!token[0])snprintf(token,sizeof token,"not supplied");
+ description=strstr(result.text,"SUMMARY:");
+ description=description?description+8:result.text;
+ while(*description==' ')description++;
+ for(i=0;i<sizeof summary-1&&description[i]&&description[i]!='\\n'&&description[i]!='\\r';i++)
+  summary[i]=description[i];
  memset(out,0,sizeof *out);
  snprintf(out->report,sizeof out->report,
-  "[S2] IRC observation #%lld: Rictus Intel report %s captured; "
-  "source unverified, follow-up pending.",(long long)result.id,token);
+  "[S2] IRC observation #%lld, Rictus Intel %s: %.130s "
+  "(IRC-origin, not independently verified).",
+  (long long)result.id,token,summary);
  *selected=result.id;
  return 1;
 }
@@ -281,6 +288,7 @@ static int observation_report(digit_s2_report_t *out,int64_t *selected){
 static void *scheduler_main(void *unused){
  digit_s2_report_t result={0},pending={0};size_t used=0;
  int64_t pending_observation=0;
+ int drain_observations=0;
  struct timespec until;
  (void)unused;
  for(;;){
@@ -303,12 +311,13 @@ static void *scheduler_main(void *unused){
    size_t delivered=0;
    if(host->invoke_service(DELIVER_SERVICE,&pending,sizeof pending,
       NULL,0,&delivered)==STNLABZ_MODULE_OK){
-    if(pending_observation){observation_cursor=pending_observation;pending_observation=0;}
+    if(pending_observation){observation_cursor=pending_observation;pending_observation=0;drain_observations=1;}
     memset(&pending,0,sizeof pending);
    }
   }
   if(clock_gettime(CLOCK_REALTIME,&until)!=0)break;
-  until.tv_sec+=pending.report[0]?5:POLL_SECONDS;
+  until.tv_sec+=pending.report[0]||drain_observations?5:POLL_SECONDS;
+  drain_observations=0;
   pthread_mutex_lock(&scheduler_mutex);
   while(!scheduler_stop){
    int rc=pthread_cond_timedwait(&scheduler_cond,&scheduler_mutex,&until);
@@ -350,7 +359,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=1,.version_patch=3,
+ .version_major=0,.version_minor=1,.version_patch=4,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
