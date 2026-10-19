@@ -20,6 +20,54 @@
 typedef struct {
     char sender[128], account[128], target[128], message[512];
 } digit_message_t;
+/* Core-owned, bounded ABI service registry. No module-to-module symbol lookup. */
+typedef struct {
+    char name[STNLABZ_MODULE_SERVICE_NAME_MAX];
+    stnlabz_module_service_handler_fn handler;
+    void *context;
+} digit_registered_service_t;
+static digit_registered_service_t services[32];
+static atomic_flag service_lock = ATOMIC_FLAG_INIT;
+static void service_lock_acquire(void) {
+    while (atomic_flag_test_and_set_explicit(&service_lock,memory_order_acquire)) {}
+}
+static void service_lock_release(void) {
+    atomic_flag_clear_explicit(&service_lock,memory_order_release);
+}
+static int register_service(const char *name,
+    stnlabz_module_service_handler_fn handler, void *context) {
+    size_t i,free_slot=32,n;
+    if(!name||!handler)return 0;
+    n=strnlen(name,STNLABZ_MODULE_SERVICE_NAME_MAX);
+    if(!n||n==STNLABZ_MODULE_SERVICE_NAME_MAX||
+       !strncmp(name,"digit.message",sizeof("digit.message")))return 0;
+    service_lock_acquire();
+    for(i=0;i<32;i++) {
+        if(services[i].handler && !strcmp(services[i].name,name)) {
+            service_lock_release();return 0;
+        }
+        if(!services[i].handler && free_slot==32)free_slot=i;
+    }
+    if(free_slot==32){service_lock_release();return 0;}
+    memcpy(services[free_slot].name,name,n+1);
+    services[free_slot].context=context;
+    services[free_slot].handler=handler;
+    service_lock_release();
+    return 1;
+}
+static int unregister_service(const char *name,void *context) {
+    size_t i;int removed=0;
+    if(!name)return 0;
+    service_lock_acquire();
+    for(i=0;i<32;i++) {
+        if(services[i].handler && !strcmp(services[i].name,name) &&
+           services[i].context==context) {
+            memset(&services[i],0,sizeof services[i]);removed=1;break;
+        }
+    }
+    service_lock_release();
+    return removed;
+}
 static stnlabz_module_registry_t *live_registry;
 static atomic_flag command_lock = ATOMIC_FLAG_INIT;
 static char pending_id[64];
@@ -35,8 +83,23 @@ static stnlabz_module_result_t digit_service(const char *name,
     int action = 0, n;
     size_t i;
     if (response_used) *response_used = 0;
-    if (!name || strcmp(name, "digit.message"))
-        return STNLABZ_MODULE_ERR_NOT_FOUND;
+    if (!name)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+    if (strcmp(name, "digit.message")) {
+        stnlabz_module_service_handler_fn handler=NULL;
+        void *context=NULL;size_t i;
+        service_lock_acquire();
+        for(i=0;i<32;i++)if(services[i].handler && !strcmp(services[i].name,name)){
+            handler=services[i].handler;context=services[i].context;break;
+        }
+        /* Keep handler registered while invoked. SQLite uses FULLMUTEX.
+           Service handlers must never register/unregister recursively. */
+        if(!handler){service_lock_release();return STNLABZ_MODULE_ERR_NOT_FOUND;}
+        {
+            stnlabz_module_result_t rc=handler(request,request_size,
+                response,response_size,response_used,context);
+            service_lock_release();return rc;
+        }
+    }
     if (!request || request_size != sizeof(digit_message_t) ||
         !response || !response_used || !live_registry)
         return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
@@ -107,6 +170,8 @@ static stnlabz_module_result_t digit_service(const char *name,
 }
 
 static const stnlabz_module_host_t startup_host = {
+    .register_service = register_service,
+    .unregister_service = unregister_service,
     .invoke_service = digit_service
 };
 
