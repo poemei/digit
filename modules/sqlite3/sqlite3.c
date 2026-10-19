@@ -7,10 +7,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <time.h>
 #include <syslog.h>
 #include "module.h"
 #include "sqlite3_diagnostic.h"
 #include "corpus_search.h"
+#include "../observation/observation.h"
 #include "../dsd/dsd.h"
 
 #define DB_PATH "/opt/digit/data/digit_memory.db"
@@ -19,6 +21,7 @@
 
 typedef struct { char key[KEY_MAX]; unsigned char value[VALUE_MAX]; size_t length; } sqlite3_record_t;
 static sqlite3 *database;
+static sqlite3 *observation_writer;
 static const stnlabz_module_host_t *host;
 
 static void observe_search(unsigned count,int failed,unsigned line){
@@ -125,6 +128,59 @@ static int corpus_search(sqlite3 *db,const digit_corpus_query_t *query,
  }
  sqlite3_finalize(stmt);
  return (rc==SQLITE_DONE||rc==SQLITE_ROW)?(int)out->count:-1;
+}
+/* Observation is the only permitted write operation. Keep the main corpus
+ * connection READONLY. The writer must never execute caller-provided SQL. */
+static stnlabz_module_result_t observation_insert(
+ const void *request,size_t request_size,void *response,size_t response_size,
+ size_t *response_used,void *context){
+ const digit_observation_record_t *r=request;
+ sqlite3_stmt *stmt=NULL;
+ sqlite3_int64 person=0,conversation=0;
+ int rc;
+ (void)response;(void)response_size;(void)context;
+ if(response_used)*response_used=0;
+ if(!observation_writer||!r||request_size!=sizeof *r||
+    !memchr(r->sender,0,sizeof r->sender)||
+    !memchr(r->channel,0,sizeof r->channel)||
+    !memchr(r->transport,0,sizeof r->transport)||
+    !memchr(r->account,0,sizeof r->account)||
+    !memchr(r->text,0,sizeof r->text)||
+    !r->sender[0]||!r->text[0]||
+    strcmp(r->transport,"irc")||strcmp(r->channel,"#stn-labz"))
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ /* Source identities must exist; never guess an identity or create a person. */
+ rc=sqlite3_prepare_v2(observation_writer,
+   "SELECT id FROM people WHERE display_name=?1 LIMIT 1",-1,&stmt,NULL);
+ if(rc!=SQLITE_OK)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ sqlite3_bind_text(stmt,1,r->sender,-1,SQLITE_TRANSIENT);
+ if(sqlite3_step(stmt)==SQLITE_ROW)person=sqlite3_column_int64(stmt,0);
+ sqlite3_finalize(stmt);stmt=NULL;
+ /* Unrecognized speakers must still be observed. A NULL sender_id is
+  * preferable to falsely attributing an event to someone else. */
+ rc=sqlite3_prepare_v2(observation_writer,
+   "SELECT id FROM conversations WHERE transport=?1 AND channel=?2 LIMIT 1",
+   -1,&stmt,NULL);
+ if(rc!=SQLITE_OK)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ sqlite3_bind_text(stmt,1,r->transport,-1,SQLITE_TRANSIENT);
+ sqlite3_bind_text(stmt,2,r->channel,-1,SQLITE_TRANSIENT);
+ if(sqlite3_step(stmt)==SQLITE_ROW)conversation=sqlite3_column_int64(stmt,0);
+ sqlite3_finalize(stmt);stmt=NULL;
+ if(!conversation)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ rc=sqlite3_prepare_v2(observation_writer,
+   "INSERT INTO observations(event_id,sender_id,conversation_id,text,timestamp,source_record_id) "
+   "VALUES (?1,?2,?3,?4,strftime('%Y-%m-%d %H:%M:%S','now'),?5)",
+   -1,&stmt,NULL);
+ if(rc!=SQLITE_OK)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ sqlite3_bind_null(stmt,1);
+ if(person)sqlite3_bind_int64(stmt,2,person);
+ else sqlite3_bind_null(stmt,2);
+ sqlite3_bind_int64(stmt,3,conversation);
+ sqlite3_bind_text(stmt,4,r->text,-1,SQLITE_TRANSIENT);
+ sqlite3_bind_text(stmt,5,r->account,-1,SQLITE_TRANSIENT);
+ rc=sqlite3_step(stmt);
+ sqlite3_finalize(stmt);
+ return rc==SQLITE_DONE?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
 }
 static stnlabz_module_result_t service(const void *request,size_t request_size,
     void *response,size_t response_size,size_t *response_used,void *context) {
@@ -236,15 +292,26 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api) {
         startup_log(stage,SQLITE_READONLY,"database_not_read_only");
         goto fail;
     }
+    /* Narrow dedicated RW handle, strictly restricted to observations INSERT.
+     * Existing corpus handle remains explicitly read-only. */
+    code=sqlite3_open_v2(DB_PATH,&observation_writer,
+        SQLITE_OPEN_READWRITE|SQLITE_OPEN_FULLMUTEX,NULL);
+    if(code!=SQLITE_OK)goto fail;
+    sqlite3_busy_timeout(observation_writer,1500);
     host=api;
+    stage="register_observation";
+    if(!host->register_service(DIGIT_OBSERVATION_INSERT_SERVICE,
+                               observation_insert,NULL))goto fail;
     stage="register_get";
     if(!host->register_service("digit.sqlite3.get",service,(void *)op_get)) {
         startup_log(stage,SQLITE_MISUSE,"core_rejected_service_registration");
+        host->unregister_service(DIGIT_OBSERVATION_INSERT_SERVICE,NULL);
         goto fail;
     }
     stage="register_corpus_search";
     if(!host->register_service(DIGIT_CORPUS_SEARCH_SERVICE,service,(void *)op_search)){
         host->unregister_service("digit.sqlite3.get",(void *)op_get);
+        host->unregister_service(DIGIT_OBSERVATION_INSERT_SERVICE,NULL);
         goto fail;
     }
     stage="register_diagnostic";
@@ -253,22 +320,27 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api) {
         startup_log(stage,SQLITE_MISUSE,"core_rejected_diagnostic_registration");
         host->unregister_service(DIGIT_CORPUS_SEARCH_SERVICE,(void *)op_search);
         host->unregister_service("digit.sqlite3.get",(void *)op_get);
+        host->unregister_service(DIGIT_OBSERVATION_INSERT_SERVICE,NULL);
         goto fail;
     }
     startup_log("active",SQLITE_OK,"all_services_registered");
     return STNLABZ_MODULE_OK;
 fail:
     if(database)sqlite3_close(database);
-    database=NULL;host=NULL;
+    if(observation_writer)sqlite3_close(observation_writer);
+    database=NULL;observation_writer=NULL;host=NULL;
     return STNLABZ_MODULE_ERR_START_FAILED;
 }
 static stnlabz_module_result_t stop(void) {
     if(!database||!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
+    host->unregister_service(DIGIT_OBSERVATION_INSERT_SERVICE,NULL);
     host->unregister_service(DIGIT_SQLITE3_DIAGNOSTIC_SERVICE,NULL);
     host->unregister_service(DIGIT_CORPUS_SEARCH_SERVICE,(void *)op_search);
     host->unregister_service("digit.sqlite3.get",(void *)op_get);
     if(sqlite3_close(database)!=SQLITE_OK)return STNLABZ_MODULE_ERR_STOP_FAILED;
-    database=NULL;host=NULL;return STNLABZ_MODULE_OK;
+    if(observation_writer&&sqlite3_close(observation_writer)!=SQLITE_OK)
+      return STNLABZ_MODULE_ERR_STOP_FAILED;
+    database=NULL;observation_writer=NULL;host=NULL;return STNLABZ_MODULE_OK;
 }
 static void test_check(stnlabz_module_qualification_result_t *r,int ok,int negative) {
     r->tests_executed++;
@@ -354,7 +426,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="sqlite3",.name="SQLite3 persistence",
-    .version_major=0,.version_minor=4,.version_patch=1,
+    .version_major=0,.version_minor=4,.version_patch=2,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
