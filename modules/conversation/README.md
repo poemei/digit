@@ -1,24 +1,29 @@
-# Digit Conversation 0.2.0
+# Digit Conversation 0.3.0 — corpus retrieval
 
-Generic request text is passed unchanged through Core's `digit.message`
-dispatch to `digit.conversation`. This module reads existing SQLite3
-key/value records through `digit.sqlite3.get`, selecting candidates from
-request text without hardcoded initial verbs.
+Core dispatches ordinary digit.message requests to digit.conversation.
+Conversation uses the ABI 1.5 service digit.sqlite3.corpus_search to query
+the **existing** corpus_fts(text) index joined by rowid to corpus(id).
 
-**No additional server configuration file is required.** No account allowlist,
-new authentication configuration, database writes, schema installation or
-migrations are performed by Conversation.
+The database contains 48,362 corpus rows and the corpus_fts index also
+reports 48,362 entries (operator-supplied observations, 2026-10-19).
+No new tables, configuration files, migrations, or database writes.
 
-SQLite3 0.2.0 opens the existing database with `SQLITE_OPEN_READONLY` and
-exposes only `digit.sqlite3.get` and the read-only diagnostic service.
-It does not register put/delete services. This intentionally disables
-writes previously offered by the SQLite3 module. The code cannot prevent
-an entirely separate process with filesystem write permissions from altering
-the database; that requires operating-system permissions.
+Requests are split into literal contiguous phrases; up to four terms are
+searched, longest phrase first, with no fixed conversational trigger words.
+SQLite3 builds a quoted FTS5 phrase, binds it as a SQL parameter, and
+returns a bounded set of corpus IDs, verification statuses and excerpts.
+The reply shows source evidence, not a fabricated generative explanation.
+A no-hit response means no matching phrase was found, not an empty database.
 
-This is bounded literal key retrieval, not semantic search or generated
-conversation. Existing keys must match candidates derived from the request.
-Values that cannot safely be sent on IRC are not shown.
+No put/delete service is registered; the database is opened READONLY.
+The existing digit.sqlite3.get service remains for backward compatibility.
 
-Build: `make -C modules/conversation clean all test`.
-The operator controls deployment, testing, and acceptance.
+Offline qualification tests use in-memory fixtures. Full DSD drill-down
+into individual retrieval attempts is not yet supported: IRC's current
+recording observes the outer digit.message result only.
+
+Operator-controlled verification:
+make -C modules/sqlite3 clean all test
+make -C modules/conversation clean all test
+
+Live corpus lookup and deployment remain subject to operator acceptance.
