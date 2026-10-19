@@ -13,6 +13,7 @@
 #include "sqlite3_diagnostic.h"
 #include "corpus_search.h"
 #include "../observation/observation.h"
+#include "../s2/s2_observations.h"
 #include "../dsd/dsd.h"
 
 #define DB_PATH "/opt/digit/data/digit_memory.db"
@@ -181,6 +182,38 @@ static stnlabz_module_result_t observation_insert(
  sqlite3_finalize(stmt);
  return rc==SQLITE_DONE?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
 }
+/* Return newest IRC Rictus Intel observation after an explicit cursor.
+ * No rows are modified; callers receive text and provenance ID only. */
+static stnlabz_module_result_t s2_observations(
+ const void *request,size_t request_size,void *response,size_t response_size,
+ size_t *response_used,void *context){
+ const digit_s2_observations_query_t *q=request;
+ digit_s2_observations_result_t out={0};
+ sqlite3_stmt *stmt=NULL;
+ int rc;
+ (void)context;
+ if(response_used)*response_used=0;
+ if(!database||!q||request_size!=sizeof *q||q->after_id<0||
+    !response||response_size<sizeof out||!response_used)
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ rc=sqlite3_prepare_v2(database,
+  "SELECT o.id,o.text FROM observations o "
+  "JOIN conversations c ON c.id=o.conversation_id "
+  "WHERE o.id>?1 AND c.transport='irc' AND c.channel='#stn-labz' "
+  "AND o.text LIKE '[Rictus Intel] %' "
+  "ORDER BY o.id ASC LIMIT 1",-1,&stmt,NULL);
+ if(rc!=SQLITE_OK)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ sqlite3_bind_int64(stmt,1,q->after_id);
+ rc=sqlite3_step(stmt);
+ if(rc==SQLITE_ROW){
+  out.id=sqlite3_column_int64(stmt,0);
+  copy_column(stmt,1,out.text,sizeof out.text);
+ }
+ sqlite3_finalize(stmt);
+ if(rc!=SQLITE_ROW&&rc!=SQLITE_DONE)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ memcpy(response,&out,sizeof out);*response_used=sizeof out;
+ return STNLABZ_MODULE_OK;
+}
 static stnlabz_module_result_t service(const void *request,size_t request_size,
     void *response,size_t response_size,size_t *response_used,void *context) {
     const char *operation=context;
@@ -301,15 +334,22 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api) {
     stage="register_observation";
     if(!host->register_service(DIGIT_OBSERVATION_INSERT_SERVICE,
                                observation_insert,NULL))goto fail;
+    stage="register_s2_observations";
+    if(!host->register_service(DIGIT_S2_OBSERVATIONS_SERVICE,s2_observations,NULL)){
+        host->unregister_service(DIGIT_OBSERVATION_INSERT_SERVICE,NULL);
+        goto fail;
+    }
     stage="register_get";
     if(!host->register_service("digit.sqlite3.get",service,(void *)op_get)) {
         startup_log(stage,SQLITE_MISUSE,"core_rejected_service_registration");
+        host->unregister_service(DIGIT_S2_OBSERVATIONS_SERVICE,NULL);
         host->unregister_service(DIGIT_OBSERVATION_INSERT_SERVICE,NULL);
         goto fail;
     }
     stage="register_corpus_search";
     if(!host->register_service(DIGIT_CORPUS_SEARCH_SERVICE,service,(void *)op_search)){
         host->unregister_service("digit.sqlite3.get",(void *)op_get);
+        host->unregister_service(DIGIT_S2_OBSERVATIONS_SERVICE,NULL);
         host->unregister_service(DIGIT_OBSERVATION_INSERT_SERVICE,NULL);
         goto fail;
     }
@@ -332,6 +372,7 @@ fail:
 }
 static stnlabz_module_result_t stop(void) {
     if(!database||!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
+    host->unregister_service(DIGIT_S2_OBSERVATIONS_SERVICE,NULL);
     host->unregister_service(DIGIT_OBSERVATION_INSERT_SERVICE,NULL);
     host->unregister_service(DIGIT_SQLITE3_DIAGNOSTIC_SERVICE,NULL);
     host->unregister_service(DIGIT_CORPUS_SEARCH_SERVICE,(void *)op_search);
@@ -425,7 +466,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="sqlite3",.name="SQLite3 persistence",
-    .version_major=0,.version_minor=4,.version_patch=2,
+    .version_major=0,.version_minor=4,.version_patch=3,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
