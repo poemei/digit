@@ -137,42 +137,59 @@ static int authenticate(SSL *ssl,const irc_config_t *c) {
     OPENSSL_cleanse(line,sizeof line);
     return ok;
 }
-static int incoming(SSL *ssl,const irc_config_t *cfg,char *line) {
+/* IRCv3 account-tag is supplied by Libera.Chat after CAP ACK. Never
+ * treat a nickname or user-controlled message as an authenticated account. */
+static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled) {
     char *sender,*bang,*cmd,*target,*body,*space;
     char response[512],wire[1024];
     irc_input_t input={0};
-    size_t used=0,n;int k;
-    if(line[0]!=':')return 1;
+    size_t used=0,n;
+    int k,private_message;
+    if (!tags_enabled || line[0]!='@') return 1;
+    {
+        char *end=strchr(line,' ');
+        char *tag=line+1,*next;
+        if(!end)return 1;
+        *end=0;
+        while(tag && *tag) {
+            next=strchr(tag,';');
+            if(next)*next++=0;
+            if(!strncmp(tag,"account=",8) && tag[8] &&
+                strcmp(tag+8,"*") && strlen(tag+8)<sizeof input.account)
+                snprintf(input.account,sizeof input.account,"%s",tag+8);
+            tag=next;
+        }
+        line=end+1;
+    }
+    if(line[0]!=':' || !input.account[0])return 1;
     sender=line+1;bang=strchr(sender,'!');if(!bang)return 1;
     *bang=0;space=strchr(bang+1,' ');if(!space)return 1;
     cmd=space+1;if(strncmp(cmd,"PRIVMSG ",8))return 1;
     target=cmd+8;space=strchr(target,' ');if(!space)return 1;
     *space++=0;if(*space!=':')return 1;body=space+1;
     n=strlen(cfg->nick);
-    if(!strcasecmp(target,cfg->nick)) {
-        target=sender;
-    } else {
+    private_message=!strcasecmp(target,cfg->nick);
+    if(private_message) target=sender;
+    else {
         if(strcasecmp(target,cfg->channel))return 1;
         if(!nick_mention(body,cfg->nick))return 1;
         body+=n;
         if(*body==':'||*body==',')body++;
         while(*body==' ')body++;
     }
-    (void)snprintf(input.sender,sizeof input.sender,"%s",sender);
-    (void)snprintf(input.target,sizeof input.target,"%s",target);
-    (void)snprintf(input.message,sizeof input.message,"%s",body);
-    /* Account is intentionally not inferred from nick; identity requires trusted IRC account tags. */
+    snprintf(input.sender,sizeof input.sender,"%s",sender);
+    snprintf(input.target,sizeof input.target,"%s",target);
+    snprintf(input.message,sizeof input.message,"%s",body);
     if(!host_api||!host_api->invoke_service)return 1;
     if(host_api->invoke_service(IRC_INPUT_SERVICE,&input,sizeof input,
         response,sizeof response,&used)!=STNLABZ_MODULE_OK)return 1;
-    if(!used||used>=sizeof response)return 1;
-    response[used]=0;
     if(!reply_valid(response,used))return 1;
+    response[used]=0;
     k=snprintf(wire,sizeof wire,"PRIVMSG %s :%s\r\n",target,response);
     return k>0&&(size_t)k<sizeof wire&&write_line(ssl,wire);
 }
 static void session(const irc_config_t *cfg) {
-    SSL_CTX *ctx=NULL;SSL *ssl=NULL;int fd,authed=0,joined=0,got_sasl=0,welcomed=0;
+    SSL_CTX *ctx=NULL;SSL *ssl=NULL;int fd,authed=0,joined=0,got_sasl=0,welcomed=0,tags_enabled=0;
     char line[2048];size_t used=0;
     fd=connect_tls(cfg,&ctx,&ssl);if(fd<0)return;
     if(!write_line(ssl,"CAP LS 302\r\n")||
@@ -192,7 +209,7 @@ static void session(const irc_config_t *cfg) {
         } else if(strstr(line," CAP ")&&strstr(line," LS ")&&strstr(line,"sasl")) {
             if(!write_line(ssl,"CAP REQ :sasl\r\n"))break;
         } else if(strstr(line," CAP ")&&strstr(line," ACK ")&&strstr(line,"sasl")) {
-            got_sasl=1;if(!write_line(ssl,"AUTHENTICATE PLAIN\r\n"))break;
+            got_sasl=1;tags_enabled=strstr(line,"account-tag")!=NULL;\n            if(!tags_enabled || !write_line(ssl,"AUTHENTICATE PLAIN\r\n"))break;
         } else if(got_sasl&&!strcmp(line,"AUTHENTICATE +")) {
             if(!authenticate(ssl,cfg))break;
         } else if(strstr(line," 903 ")) {
@@ -204,7 +221,7 @@ static void session(const irc_config_t *cfg) {
             welcomed=1;
             if(authed&&!joined){if(!command(ssl,"JOIN",cfg->channel))break;joined=1;}
         } else if(authed&&strstr(line," PRIVMSG ")) {
-            if(!incoming(ssl,cfg,line))break;
+            if(!incoming(ssl,cfg,line,tags_enabled))break;
         }
     }
 done:
