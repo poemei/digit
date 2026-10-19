@@ -2,7 +2,7 @@
 #include <dlfcn.h>
 #include <stdio.h>
 #include <string.h>
-#include "module.h"
+#include "module_loader.h"
 
 int main(int argc, char **argv)
 {
