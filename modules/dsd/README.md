@@ -1,4 +1,4 @@
-# Digit Developer Self-Diagnostics (DSD) 0.3.2
+# Digit Developer Self-Diagnostics (DSD) 0.4.0
 
 An independent ABI 1.5 module providing bounded, read-only, evidence-led
 trace correlation. **Source candidate; operator acceptance outstanding.**
@@ -27,8 +27,8 @@ these services without Core changes. **Consumers must not invoke
 digit.dsd.record inside another ABI service handler** because the current
 Digit Core holds the service-registry lock during a callback.
 
-This version supplies the diagnosis engine and contract, not instrumentation
-of Core, SQLite3, request-entry adapters, or a private-DM command. The source
+This version supplies the diagnosis engine and contract, with a bounded
+request-entry observation from IRC; Core and SQLite3 internals are not instrumented. The source
 line is trustworthy only when the caller instruments the real execution site
 and records its matching build revision. No data is produced until such a
 caller submits genuine events. This is not full end-to-end tracing.
@@ -52,12 +52,13 @@ Diagnostic summaries translate recognized status identifiers into readable
 descriptions (e.g., SQLITE_BUSY means database is locked). Raw numeric error
 codes are not included in conversational summaries.
 
-**Integration status:** The current Core's `digit.message` handler recognizes
-only Core module-management commands, not DSD commands. It does not delegate
-`show dsd` or `diagnose` to this module, and its module host does not
-supply register_command. Consequently those commands are **not reachable
-from IRC today**. This is a deliberate architecture limit; no Core, ABI,
-IRC or SQLite3 modifications are authorized or included here.
+**Integration status:** IRC 0.2.14 routes `show dsd` and
+`diagnose my last request` to DSD only from authenticated private messages.
+The IRC adapter records a bounded previous request per IRC account. It
+still cannot trace through the implementation of `digit.message` inside Core;
+Core and ABI are unchanged. Trace-ID and arbitrary-module commands are not
+exposed by the IRC adapter because cross-account trace authorization is not
+implemented.
 
 **Security:** The command service has no independent authenticated actor
 context. A future authorized entry adapter must enforce DM scope and trace
@@ -72,3 +73,18 @@ identifies the last instrumented IRC source location, but **does not** claim
 to have traced execution within Core. Regression qualifications cover this
 case. Further internal drill-down requires separate observed module events
 through the existing ABI; Core and its governance remain untouched.
+
+## ABI disposition evidence (0.4.0)
+
+IRC 0.2.14 records the actual returned ABI disposition rather than labelling
+all non-success returns as an unavailable service. DSD reports the evidence
+in plain language: a missing service, a rejected argument, unauthorized or
+invalid-state requests, module qualification/quarantine status, or a successful
+service invocation with no reply. It does **not** claim these results prove
+where the defect originated, or that a missing conversational response is a
+Core fault. These observations identify only the boundary the IRC adapter
+was able to measure. Separate instrumentation is needed for database lookup,
+record selection, or downstream module results.
+
+The operator must qualify and activate updated modules; source commits are
+not evidence of successful deployment or runtime acceptance.
