@@ -194,7 +194,9 @@ static stnlabz_module_result_t current_service(
  size_t response_size,size_t *used,void *ctx){
  (void)ctx;
  if(used)*used=0;
- if(request||request_size||!response||response_size<sizeof current_trace||!used)
+ if((request_size!=sizeof(uint64_t)&&request_size!=0)||
+    (request_size==sizeof(uint64_t)&&!request)||
+    !response||response_size<sizeof current_trace||!used)
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memcpy(response,&current_trace,sizeof current_trace);
  *used=sizeof current_trace;
@@ -513,7 +515,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="dsd",.name="Developer Self-Diagnostics",
- .version_major=0,.version_minor=6,.version_patch=2,
+ .version_major=0,.version_minor=6,.version_patch=3,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
