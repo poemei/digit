@@ -22,15 +22,15 @@ For get and delete, the request is exactly 128 bytes holding a NUL-terminated ke
 For get, the response buffer must be at least `sizeof(sqlite3_record_t)`.
 Use the same C ABI and word size as Core. No general-purpose raw-SQL service is exposed.
 
-Database: `/opt/digit/state/sqlite3/digit.db`.
-The service account must have write access to that directory before activation.
+Database: `/opt/digit/data/digit_memory.db`.
+The existing database must already exist. Digit needs read/write access to the file and its parent directory for SQLite journaling. The module opens the file without SQLITE_OPEN_CREATE.
 The module creates its own `digit_kv` table using prepared statements and
 supports binary values of 0–1024 bytes.
 
 ## Operator-controlled setup
 
 ```sh
-sudo install -d -o digit -g digit -m 0700 /opt/digit/state/sqlite3
+sudo ls -l /opt/digit/data/digit_memory.db
 cd ~/digit/modules/sqlite3
 make clean && make && make test
 sudo make install
@@ -44,8 +44,4 @@ The qualification suite is deterministic, uses `:memory:`, and does not
 open the persistent database. The module's 26 checks cover schema, binary
 round-trips, key validation, missing keys and negative/failure behavior.
 
-**Integration limitation:** Digit's current Core host exposes only
-`invoke_service`; it does not yet implement `register_service` and
-`unregister_service`. This module consequently fails activation closed
-until Core provides the ABI service registry. Do not bypass that boundary
-or change Core without operator authorization.
+Core now provides the ABI service registry. Startup may add the module-owned `digit_kv` table to the existing database using `CREATE TABLE IF NOT EXISTS`, but does not drop or replace other tables. Back up the database before deployment.
