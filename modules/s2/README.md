@@ -7,7 +7,11 @@ Sources (read-only):
 - `https://api.stn-labz.com/threats` via TLS, certificate verification enabled.
 
 Service `digit.s2.poll` returns at most one sanitised report for IRC.
-The IRC adapter polls this service at most once every 5 minutes.
+The IRC adapter uses a one-second idle socket check to trigger service polls
+at most once every 5 minutes, including periods with no IRC messages.
+A first-run mission-status report is emitted once source collection completes;
+subsequent unchanged snapshots are suppressed. IRC 0.3.1 and S2 0.1.1
+must both be installed for this behavior.
 This first milestone reads the last 128 Rictus lines, parses bounded Sentinel
 JSON, considers the two IP fields separately, and correlates only exact IPv4
 tokens appearing in local log lines. Rictus-only observations are **never
@@ -33,7 +37,13 @@ Build: `cd modules/s2 && make clean && make && make test`.
 Install only after tests: `sudo make install`. Install upgraded IRC separately.
 Do not restart Core merely to test this module; hotload may admit it.
 
-**Known limitations**: Rictus grammar not yet supplied, so its unmatched lines
+**Known limitations**: Neither a passive status nor ACTIVE proves the endpoint
+returned usable threat data; the operator must test with representative records.
+The IRC adapter still performs S2's bounded API fetch synchronously (up to
+8 seconds); asynchronous investigation and durable event cursor are not part
+of this authorized repair. No new standalone logging sink is introduced.
+
+Additional limitations: Rictus grammar not yet supplied, so its unmatched lines
 are not individually classified; a line count is not a definitive attack finding.
 TLS read and parsing may fail on an undocumented API response. No persisted
 cross-restart cursor, no distributed investigative queries beyond the documented
