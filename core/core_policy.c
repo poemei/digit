@@ -38,7 +38,15 @@ int stnlabz_core_policy_evaluate(const stnlabz_policy_request_t *request,
                valid(request->operation) && valid(request->module_id) &&
                valid(request->verification_source) &&
                request->context_verified == 1) {
-        if (!request->within_mission) {
+        /* [AI:GPT-6 | 2026-10-18] Core module management is reserved
+           exclusively for the verified STN_Boss account. Callers must
+           authenticate account identity before setting context_verified.
+           No IRC nickname or user-supplied actor text is evidence. */
+        if (strncmp(request->operation, "module.", 7) == 0 &&
+            strcmp(request->actor, "STN_Boss") != 0) {
+            result->policy_id = "CORE.MODULE_OWNER";
+            result->reason = "module_administration_reserved_for_STN_Boss";
+        } else if (!request->within_mission) {
             result->policy_id = "CORE.GO1";
             result->reason = "outside_assigned_mission";
         } else if (!request->complies_with_policy || !request->instruction_authorized) {
