@@ -328,7 +328,6 @@ static void session(const irc_config_t *cfg) {
     if(!write_line(ssl,"CAP LS 302\r\n")||
         !command(ssl,"NICK",cfg->nick)||
         !command(ssl,"USER","digit 0 * :Digit IRC module"))goto done;
-    pthread_mutex_lock(&outbound_mutex);irc_ready=1;pthread_mutex_unlock(&outbound_mutex);
     while(!stopping) {
         fd_set readfds;int rc;struct timeval timeout={1,0};
         char ch;int n;
@@ -395,7 +394,7 @@ static void session(const irc_config_t *cfg) {
                   strstr(line," 474 ")||strstr(line," 475 ")) {
             
         } else if(authed&&joined&&strstr(line," JOIN ")&&strstr(line,cfg->nick)) {
-            
+            pthread_mutex_lock(&outbound_mutex);irc_ready=1;pthread_mutex_unlock(&outbound_mutex);
             if(!join_greeting(ssl,cfg,line,tags_enabled,joined))break;
         } else if(authed&&joined&&strstr(line," JOIN ")) {
             if(!join_greeting(ssl,cfg,line,tags_enabled,joined))break;
@@ -539,7 +538,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=2,.version_patch=7,
+    .version_major=0,.version_minor=2,.version_patch=8,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
