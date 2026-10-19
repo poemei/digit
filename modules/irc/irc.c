@@ -475,6 +475,14 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
     check(result,!reply_valid(cr,sizeof cr-1),1);
     check(result,!reply_valid(lf,sizeof lf-1),1);
     check(result,!reply_valid(nul,sizeof nul),1);
+    {irc_s2_report_t test_report={{0}};
+     snprintf(test_report.report,sizeof test_report.report,"[S2] test report");
+     check(result,safe_report(test_report.report,sizeof test_report.report),0);
+     snprintf(test_report.report,sizeof test_report.report,"bad\\nline");
+     check(result,!safe_report(test_report.report,sizeof test_report.report),1);
+     memset(test_report.report,'X',sizeof test_report.report);
+     check(result,!safe_report(test_report.report,sizeof test_report.report),1);
+    }
     check(result,greeting_kind(&c,"") == NULL,1);
     check(result,!strcmp(greeting_kind(&c,"registered"),"unknown"),0);
     strcpy(c.auntie_account,"LaurieAccount");
