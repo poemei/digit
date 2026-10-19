@@ -124,6 +124,28 @@ static void dsd_record_message(const char *account,
  if(host_api->invoke_service(DIGIT_DSD_RECORD_SERVICE,&record,sizeof record,
    NULL,0,&used)==STNLABZ_MODULE_OK)dsd_remember(account,trace);
 }
+/* Capture "show dsd" as the prior DM request after its service returns.
+ * A diagnosis itself must never replace the request it investigates. */
+static int dsd_tracks_previous(const char *message){
+ return message&&!strcmp(message,"show dsd");
+}
+static void dsd_record_command(const char *account,uint64_t trace,
+ const char *status,unsigned line){
+ digit_dsd_record_t record={0};
+ size_t used=0;
+ if(!account||!account[0]||!trace||!host_api||!host_api->invoke_service)return;
+ record.trace_id=record.event.trace_id=trace;
+ record.event.span_id=1;
+ record.event.line=line;
+ record.event.result=!strcmp(status,"RESPONSE_RETURNED")?0:1;
+ snprintf(record.event.module,sizeof record.event.module,"dsd");
+ snprintf(record.event.method,sizeof record.event.method,"command");
+ snprintf(record.event.file,sizeof record.event.file,"modules/irc/irc.c");
+ snprintf(record.event.operation,sizeof record.event.operation,"digit.dsd.command");
+ snprintf(record.event.status,sizeof record.event.status,"%s",status);
+ if(host_api->invoke_service(DIGIT_DSD_RECORD_SERVICE,&record,sizeof record,
+    NULL,0,&used)==STNLABZ_MODULE_OK)dsd_remember(account,trace);
+}
 static int dsd_dm_reply(const char *account,const char *message,char *response,
  size_t cap,size_t *used){
  digit_dsd_command_request_t query={0};
@@ -311,6 +333,13 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled
         /* Command is never invoked from a channel, even when mentioned. */
         if(!dsd_dm_reply(input.account,input.message,response,sizeof response,&used))
             return 1;
+        if(dsd_tracks_previous(input.message)){
+            uint64_t trace=dsd_next_trace++;
+            if(!trace)trace=dsd_next_trace++;
+            dsd_record_command(input.account,trace,
+                !strcmp(response,"DSD is unavailable or not active.")?
+                  "SERVICE_UNAVAILABLE":"RESPONSE_RETURNED",__LINE__);
+        }
     }else{
         stnlabz_module_result_t rc;
         uint64_t trace=0;
@@ -557,6 +586,10 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
     (void)assign(c.nick,sizeof c.nick,"bad nick");
     check(result,!config_valid(&c),1);
     (void)assign(c.nick,sizeof c.nick,"Digit");
+    check(result,dsd_tracks_previous("show dsd"),0);
+    check(result,!dsd_tracks_previous("diagnose my last request"),1);
+    check(result,!dsd_tracks_previous("diagnose trace 10"),1);
+    check(result,!dsd_tracks_previous("show modules"),1);
     check(result,nick_mention("Digit: hello","Digit"),0);
     check(result,nick_mention("digit, hello","Digit"),0);
     check(result,!nick_mention("DigitXYZ: hello","Digit"),1);
@@ -640,7 +673,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=2,.version_patch=12,
+    .version_major=0,.version_minor=2,.version_patch=13,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
