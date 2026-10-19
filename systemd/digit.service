@@ -1,0 +1,23 @@
+# [AI:GPT-6 | 2026-10-18]
+# Reference unit. Do not overwrite an existing Digit unit without operator review.
+[Unit]
+Description=Digit Core (STN-LABZ)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=digit
+Group=digit
+WorkingDirectory=/opt/digit
+ExecStart=/opt/digit/bin/digit
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+KillSignal=SIGTERM
+NoNewPrivileges=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
+# [End AI:GPT-6]
