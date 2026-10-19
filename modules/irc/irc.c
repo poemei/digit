@@ -34,6 +34,8 @@ typedef struct {
     char sender[128], account[128], target[128], message[512];
 } irc_input_t;
 static pthread_t worker;
+static int active_socket=-1;
+static pthread_mutex_t socket_mutex=PTHREAD_MUTEX_INITIALIZER;
 static int worker_started;
 static volatile sig_atomic_t stopping;
 static const stnlabz_module_host_t *host_api;
@@ -115,7 +117,8 @@ static int connect_tls(const irc_config_t *c,SSL_CTX **context,SSL **session) {
         fd=-1;
     }
     freeaddrinfo(addresses);if(fd<0)return -1;
-    { struct timeval timeout={1,0}; (void)setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof timeout); }
+    /* Keep TLS reads blocking: SO_RCVTIMEO can make OpenSSL report an
+     * idle read as SSL_ERROR_SYSCALL, provoking a reconnect loop. */
     ctx=SSL_CTX_new(TLS_client_method());
     if(!ctx||SSL_CTX_set_default_verify_paths(ctx)!=1)goto fail;
     SSL_CTX_set_verify(ctx,SSL_VERIFY_PEER,NULL);
@@ -278,6 +281,9 @@ static void session(const irc_config_t *cfg) {
     char line[2048];size_t used=0;
     last_greeting=0;
     fd=connect_tls(cfg,&ctx,&ssl);if(fd<0)return;
+    pthread_mutex_lock(&socket_mutex);
+    active_socket=fd;
+    pthread_mutex_unlock(&socket_mutex);
     if(!write_line(ssl,"CAP LS 302\r\n")||
         !command(ssl,"NICK",cfg->nick)||
         !command(ssl,"USER","digit 0 * :Digit IRC module"))goto done;
@@ -314,7 +320,10 @@ static void session(const irc_config_t *cfg) {
         }
     }
 done:
-    if(ssl){SSL_shutdown(ssl);SSL_free(ssl);}
+    pthread_mutex_lock(&socket_mutex);
+    active_socket=-1;
+    pthread_mutex_unlock(&socket_mutex);
+    if(ssl){if(!stopping)SSL_shutdown(ssl);SSL_free(ssl);}
     if(ctx)SSL_CTX_free(ctx);
     close(fd);
 }
@@ -400,13 +409,16 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *host) {
 static stnlabz_module_result_t stop(void) {
     if(!worker_started)return STNLABZ_MODULE_ERR_INVALID_STATE;
     stopping=1;
+    pthread_mutex_lock(&socket_mutex);
+    if(active_socket>=0)shutdown(active_socket,SHUT_RDWR);
+    pthread_mutex_unlock(&socket_mutex);
     if(pthread_join(worker,NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
     worker_started=0;host_api=NULL;
     return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=2,.version_patch=1,
+    .version_major=0,.version_minor=2,.version_patch=2,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
