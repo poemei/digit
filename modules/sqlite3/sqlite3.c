@@ -239,10 +239,24 @@ static void test_check(stnlabz_module_qualification_result_t *r,int ok,int negat
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *result) {
     sqlite3 *db=NULL;
     sqlite3_record_t r={0},saved={0};
+    sqlite3_diagnostic_t diagnostic={0};
+    size_t diagnostic_used=0;
     char key[KEY_MAX]={0};
     int opened;
     if(!result)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
     memset(result,0,sizeof *result);
+    test_check(result,diagnostic_service(NULL,0,&diagnostic,
+        sizeof diagnostic,&diagnostic_used,NULL)==STNLABZ_MODULE_OK &&
+        diagnostic_used==sizeof diagnostic &&
+        memchr(diagnostic.state,0,sizeof diagnostic.state)!=NULL &&
+        memchr(diagnostic.stage,0,sizeof diagnostic.stage)!=NULL,0);
+    diagnostic_used=1;
+    test_check(result,diagnostic_service(NULL,0,&diagnostic,
+        sizeof diagnostic-1,&diagnostic_used,NULL)==
+        STNLABZ_MODULE_ERR_INVALID_ARGUMENT&&diagnostic_used==0,1);
+    test_check(result,diagnostic_service(&diagnostic,1,&diagnostic,
+        sizeof diagnostic,&diagnostic_used,NULL)==
+        STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
     test_check(result,key_valid("a"),0);
     test_check(result,key_valid("digit.memory/one"),0);
     test_check(result,key_valid("A_Z-9.0"),0);
