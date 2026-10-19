@@ -22,9 +22,9 @@ static sqlite3 *database;
 static const stnlabz_module_host_t *host;
 
 static void observe_search(unsigned count,int failed,unsigned line){
- uint64_t trace=0;size_t used=0;digit_dsd_record_t rec={0};
+ uint64_t trace=0,query_token=1;size_t used=0;digit_dsd_record_t rec={0};
  if(!host||!host->invoke_service)return;
- if(host->invoke_service(DIGIT_DSD_CURRENT_SERVICE,NULL,0,&trace,
+ if(host->invoke_service(DIGIT_DSD_CURRENT_SERVICE,&query_token,sizeof query_token,&trace,
     sizeof trace,&used)!=STNLABZ_MODULE_OK||used!=sizeof trace||!trace)return;
  rec.trace_id=rec.event.trace_id=trace;
  rec.event.span_id=2;rec.event.parent_span_id=1;
