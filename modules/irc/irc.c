@@ -119,8 +119,8 @@ static void dsd_record_message(const char *account,
  snprintf(record.event.file,sizeof record.event.file,"modules/irc/irc.c");
  snprintf(record.event.operation,sizeof record.event.operation,"digit.message");
  record.event.line=line;
- record.event.result=(service_result==STNLABZ_MODULE_OK&&replied)?0:1;
- /* Record the actual ABI disposition. A non-OK return is not necessarily
+ record.event.result=service_result==STNLABZ_MODULE_OK?0:1;
+ /* Record the actual ABI disposition. No reply is not an ABI failure. A non-OK return is not necessarily
   * an unavailable service, and a successful empty return is not an error
   * from IRC transport. */
  const char *disposition=service_result==STNLABZ_MODULE_OK?
@@ -689,7 +689,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=2,.version_patch=17,
+    .version_major=0,.version_minor=2,.version_patch=18,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
