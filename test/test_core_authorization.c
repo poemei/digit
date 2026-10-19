@@ -6,6 +6,7 @@
 #include "module_registry.h"
 
 static int failures, positives, negatives;
+static stnlabz_module_result_t fixture_qualify(stnlabz_module_qualification_result_t *r);
 static void check(int condition,const char *description,int negative){
  if(negative)negatives++;else positives++;
  if(!condition){fprintf(stderr,"FAIL: %s\n",description);failures++;}
@@ -23,12 +24,7 @@ int main(void){
  descriptor.required_core_api_minor=STNLABZ_MODULE_API_MINOR;
  /* A non-null qualification callback is required for discovery.
   * This fixture restores deterministic qualification evidence directly. */
- descriptor.qualify=(stnlabz_module_qualify_fn)NULL;
- /* Set a genuine callback below instead of bypassing discovery validation. */
- {
-  extern stnlabz_module_result_t core_auth_fixture_qualify(stnlabz_module_qualification_result_t *);
-  descriptor.qualify=core_auth_fixture_qualify;
- }
+ descriptor.qualify=fixture_qualify;
  rc=stnlabz_module_registry_discover(&registry,&descriptor);
  check(rc==STNLABZ_MODULE_OK,"Fixture discovered",0);
  if(rc!=STNLABZ_MODULE_OK)goto done;
@@ -70,7 +66,7 @@ done:
         positives,negatives,failures);
  return failures?1:0;
 }
-stnlabz_module_result_t core_auth_fixture_qualify(stnlabz_module_qualification_result_t *r){
+static stnlabz_module_result_t fixture_qualify(stnlabz_module_qualification_result_t *r){
  if(!r)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(r,0,sizeof *r);
  r->tests_executed=20;r->tests_passed=20;
