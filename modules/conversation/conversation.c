@@ -97,13 +97,16 @@ static int filler(const char *p,size_t n){
   if(strlen(ignored[i])==n&&!strncasecmp(p,ignored[i],n))return 1;
  return 0;
 }
+static int topic_word_character(unsigned char c){
+ return isalnum(c)||c=='_';
+}
 static int topic_present(const char *text,const char *term){
- size_t n=strlen(term),i;
+ size_t n=strlen(term),i,len=strlen(text);
  if(!n)return 0;
- for(i=0;text[i];i++){
+ for(i=0;i+n<=len;i++){
   if(!strncasecmp(text+i,term,n) &&
-   (i==0||!token_character((unsigned char)text[i-1])) &&
-   (!text[i+n]||!token_character((unsigned char)text[i+n])))return 1;
+   (i==0||!topic_word_character((unsigned char)text[i-1])) &&
+   (i+n==len||!topic_word_character((unsigned char)text[i+n])))return 1;
  }
  return 0;
 }
@@ -297,6 +300,9 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  check(q,answer(NULL,response,sizeof response,&used,NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
  check(q,answer(&m,response,sizeof response,&used,NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
  check(q,service(NULL,0,response,sizeof response,&used,NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
+ check(q,topic_present("In PHP, a statement ends with a semicolon.","semicolon"),0);
+ check(q,!topic_present("semicolons","semicolon"),1);
+ check(q,topic_present("PHP echo","PHP"),0);
  check(q,tokens("STN-Labz",w,WORD_CAP)==1,0);
  check(q,search_phrase("STN-Labz",w,0,1,&query)&&!strcmp(query.query,"STN-Labz"),0);
  check(q,tokens("alpha beta",w,WORD_CAP)==2,0);
@@ -352,7 +358,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="conversation",.name="Conversation knowledge retrieval",
- .version_major=0,.version_minor=4,.version_patch=6,
+ .version_major=0,.version_minor=4,.version_patch=7,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
