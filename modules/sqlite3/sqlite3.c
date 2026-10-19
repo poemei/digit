@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <syslog.h>
 #include "module.h"
+#include "sqlite3_diagnostic.h"
 
 #define DB_PATH "/opt/digit/data/digit_memory.db"
 #define KEY_MAX 128
@@ -106,12 +107,6 @@ static stnlabz_module_result_t service(const void *request,size_t request_size,
 
 /* Read-only diagnostic service. This probes SQLite3 at the time requested;
  * it is NOT evidence that a historical user request reached the database. */
-#define DIGIT_SQLITE3_DIAGNOSTIC_SERVICE "digit.sqlite3.diagnostic"
-typedef struct {
- char state[32],stage[48],detail[96];
- char source[96],method[48];
- unsigned int line;
-} sqlite3_diagnostic_t;
 static stnlabz_module_result_t diagnostic_service(
  const void *request,size_t request_size,void *response,
  size_t response_size,size_t *response_used,void *context){
