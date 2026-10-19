@@ -11,7 +11,7 @@ TEST_TARGET := bin/test_irc
 .PHONY: all clean test install
 all: $(TARGET)
 
-$(TARGET): irc.c ../socials/socials.h ../dsd/dsd.h ../sqlite3/sqlite3_diagnostic.h ../../core/stnlabz_abi/module.h
+$(TARGET): irc.c ../socials/socials.h ../dsd/dsd.h ../../core/stnlabz_abi/module.h
 	@mkdir -p bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared irc.c -o $@ $(LDLIBS)
 
