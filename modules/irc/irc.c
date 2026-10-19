@@ -25,6 +25,7 @@
 #include "module.h"
 #include "socials.h"
 #include "../dsd/dsd.h"
+#include "../sqlite3/sqlite3_diagnostic.h"
 #include <time.h>
 
 #define IRC_ENV_PATH "/opt/digit/state/auth/irc.env"
@@ -386,6 +387,39 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled
             part=separator?separator+1:end;
         }
     }
+    /* Separate on-demand SQLite3 health probe. It is not a child span
+     * of the earlier message: that message may never have reached SQLite3.
+     * One bounded extra private line, no channel output or record values. */
+    if(private_message&&!strcmp(input.message,"diagnose my last request")){
+        sqlite3_diagnostic_t db={0};
+        size_t db_used=0;
+        stnlabz_module_result_t db_rc=host_api->invoke_service(
+          DIGIT_SQLITE3_DIAGNOSTIC_SERVICE,NULL,0,
+          &db,sizeof db,&db_used);
+        const char *db_text;
+        if(db_rc==STNLABZ_MODULE_ERR_NOT_FOUND)
+            db_text="SQLite3 probe unavailable; no database evidence was collected.";
+        else if(db_rc!=STNLABZ_MODULE_OK || db_used!=sizeof db ||
+                !memchr(db.state,0,sizeof db.state) ||
+                !memchr(db.stage,0,sizeof db.stage) ||
+                !memchr(db.detail,0,sizeof db.detail))
+            db_text="SQLite3 probe failed; database status could not be verified.";
+        else{
+            char detail[360];
+            int n=snprintf(detail,sizeof detail,
+                "DSD separate SQLite3 probe: %.24s, %.44s: %.90s. This does not prove the previous request reached SQLite3.",
+                db.state,db.stage,db.detail);
+            if(n>0&&(size_t)n<sizeof detail && safe_report(detail,sizeof detail)){
+                int w=snprintf(wire,sizeof wire,"PRIVMSG %s :%s\r\n",target,detail);
+                if(w>0&&(size_t)w<sizeof wire && !write_line(ssl,wire))return 0;
+            }
+            return 1;
+        }
+        {
+            int w=snprintf(wire,sizeof wire,"PRIVMSG %s :DSD: %s\r\n",target,db_text);
+            if(w>0&&(size_t)w<sizeof wire && !write_line(ssl,wire))return 0;
+        }
+    }
     return 1;
 }
 /* JOIN notifications are transport events, not conversational intents.
@@ -684,7 +718,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=2,.version_patch=14,
+    .version_major=0,.version_minor=2,.version_patch=15,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
