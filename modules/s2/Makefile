@@ -10,7 +10,7 @@ MODULE_DIR := $(PREFIX)/modules/s2
 all: $(TARGET)
 $(TARGET): s2.c s2.h ../../core/stnlabz_abi/module.h
 	@mkdir -p bin
-	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared s2.c -o $@ -lcurl -ljson-c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared s2.c -o $@ -lcurl -ljson-c -pthread
 $(TEST_TARGET): test/test_s2.c s2.h ../../core/stnlabz_abi/module.h
 	@mkdir -p bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) test/test_s2.c -o $@ -ldl
