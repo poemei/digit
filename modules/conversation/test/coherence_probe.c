@@ -1,6 +1,6 @@
 /* Offline coherence probe: intentionally NOT part of module qualification.
  * Proves whether Conversation can connect a short IRC exchange to knowledge.
- * Expected on v0.4.4: the safety cases pass, coherent participation fails.
+ * v0.4.5 should fetch context and evidence, but coherent participation stays RED.
  * No production state, no database, no IRC connection.
  * Build: cc -I../../core/stnlabz_abi -std=c11 -Wall -Wextra -Wpedantic test/coherence_probe.c -o bin/coherence_probe -ldl
  * Run:   ./bin/coherence_probe ./bin/conversation.so
@@ -10,6 +10,7 @@
 #include <string.h>
 #include "module.h"
 #include "../../sqlite3/corpus_search.h"
+#include "../../observation/observation.h"
 
 typedef struct { char sender[128],account[128],target[128],message[512]; } message_t;
 static stnlabz_module_service_handler_fn listener;
@@ -29,7 +30,23 @@ static stnlabz_module_result_t invoke(const char *name,const void *req,size_t re
  digit_corpus_result_t hits={0};
  (void)req;(void)req_size;
  if(used)*used=0;
- if(strstr(name,"observation")){observation_reads++;return STNLABZ_MODULE_ERR_NOT_FOUND;}
+ if(!strcmp(name,DIGIT_OBSERVATION_RECENT_SERVICE)){
+  digit_observation_recent_result_t history={0};
+  const digit_observation_recent_query_t *query=req;
+  observation_reads++;
+  if(!query||req_size!=sizeof *query||strcmp(query->channel,"#stn-labz")||
+     !resp||!used||cap<sizeof history)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+  history.count=3;
+  snprintf(history.items[0].sender,sizeof history.items[0].sender,"Laurie_Vo");
+  snprintf(history.items[0].text,sizeof history.items[0].text,"I am learning PHP");
+  snprintf(history.items[1].sender,sizeof history.items[1].sender,"PoeMei");
+  snprintf(history.items[1].text,sizeof history.items[1].text,
+    "PHP has an echo statement, remember the semicolon");
+  snprintf(history.items[2].sender,sizeof history.items[2].sender,"Laurie_Vo");
+  snprintf(history.items[2].text,sizeof history.items[2].text,
+    "I keep forgetting the semicolon!");
+  memcpy(resp,&history,sizeof history);*used=sizeof history;return STNLABZ_MODULE_OK;
+ }
  if(strcmp(name,DIGIT_CORPUS_SEARCH_SERVICE))return STNLABZ_MODULE_ERR_NOT_FOUND;
  corpus_reads++;
  if(!resp||!used||cap<sizeof hits)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
@@ -79,5 +96,6 @@ int main(int argc,char **argv){
   observation_reads,corpus_reads,passed,total);
  if(mod->stop()!=STNLABZ_MODULE_OK){dlclose(handle);return 2;}
  dlclose(handle);
+ if(!observation_reads||!corpus_reads){fprintf(stderr,"Evidence integration missing\\n");return 3;}
  return passed==total?0:1;
 }
