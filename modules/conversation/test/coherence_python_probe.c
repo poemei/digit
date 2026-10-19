@@ -96,6 +96,6 @@ int main(int argc,char **argv){
   observation_reads,corpus_reads,passed,total);
  if(mod->stop()!=STNLABZ_MODULE_OK){dlclose(handle);return 2;}
  dlclose(handle);
- if(observation_reads!=4||corpus_reads!=1){fprintf(stderr,"Expected four history requests and one corpus lookup\n");return 3;}
+ if(observation_reads!=1||corpus_reads!=1){fprintf(stderr,"Expected one history request and one corpus lookup\n");return 3;}
  return passed==total?0:1;
 }
