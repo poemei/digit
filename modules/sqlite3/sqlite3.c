@@ -674,7 +674,39 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
         "INSERT INTO conversations VALUES(7,'irc','#stn-labz');"
         "INSERT INTO observations VALUES(1,'irc-event-1',7,'Can you help?','laurie');",
         NULL,NULL,NULL)==SQLITE_OK,0);
+      /* Exercise the real atomic Observation -> context writer with
+       * the production-shaped schema, not a mocked service. */
+      test_check(result,sqlite3_exec(db,
+        "ALTER TABLE observations ADD COLUMN sender_id INTEGER;"
+        "ALTER TABLE observations ADD COLUMN timestamp TEXT;"
+        "CREATE TABLE people(id INTEGER PRIMARY KEY,display_name TEXT);",
+        NULL,NULL,NULL)==SQLITE_OK,0);
       database=db;observation_writer=db;
+      {
+        digit_observation_record_t rec={0};
+        sqlite3_stmt *verify=NULL;
+        int rc;
+        strcpy(rec.transport,"irc");
+        strcpy(rec.channel,"#stn-labz");
+        strcpy(rec.sender,"UnknownSpeaker");
+        strcpy(rec.account,"unknown-account");
+        strcpy(rec.text,"Atomic context fixture");
+        test_check(result,observation_insert(&rec,sizeof rec,NULL,0,
+          &used,NULL)==STNLABZ_MODULE_OK,0);
+        rc=sqlite3_prepare_v2(db,
+          "SELECT count(*) FROM context x JOIN observations o "
+          "ON o.event_id=x.source_id WHERE o.text='Atomic context fixture' "
+          "AND x.context_type='utterance.observed' AND x.subject_id=7",
+          -1,&verify,NULL);
+        test_check(result,rc==SQLITE_OK,0);
+        rc=rc==SQLITE_OK?sqlite3_step(verify):SQLITE_ERROR;
+        test_check(result,rc==SQLITE_ROW &&
+          sqlite3_column_int(verify,0)==1,0);
+        if(verify)sqlite3_finalize(verify);
+        strcpy(rec.channel,"#other");
+        test_check(result,observation_insert(&rec,sizeof rec,NULL,0,
+          &used,NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
+      }
       strcpy(request.channel,"#stn-labz");
       strcpy(request.source_account,"laurie");
       strcpy(request.sender,"Laurie");
