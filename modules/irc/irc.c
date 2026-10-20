@@ -27,6 +27,7 @@
 #include "../dsd/dsd.h"
 #include "../observation/observation.h"
 #include <time.h>
+#include <syslog.h>
 
 #define IRC_ENV_PATH "/opt/digit/state/auth/irc.env"
 #define IRC_INPUT_SERVICE "digit.message"
@@ -344,13 +345,31 @@ static int dsd_send_full_trace(SSL *ssl,const char *target,const char *account){
     (unsigned long long)result.trace_id,i,result.dropped);
  return dsd_send_line(ssl,target,line);
 }
+/* The Observation module owns the write. Always preserve its disposition;
+ * never claim that IRC accepted a message as persisted merely because the
+ * transport received it. No message content or account is written to logs. */
+static stnlabz_module_result_t submit_observation(
+ const stnlabz_module_host_t *api,const digit_observation_record_t *rec){
+ size_t used=0;
+ stnlabz_module_result_t rc;
+ if(!api||!api->invoke_service||!rec)
+     return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ rc=api->invoke_service(DIGIT_OBSERVATION_RECORD_SERVICE,
+     rec,sizeof *rec,NULL,0,&used);
+ if(rc!=STNLABZ_MODULE_OK)return rc;
+ return used==0?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
+}
+static void observation_status(stnlabz_module_result_t rc) {
+ syslog(rc==STNLABZ_MODULE_OK?LOG_INFO:LOG_ERR,
+    "digit.irc observation_service status=%d persisted=%d",
+    (int)rc,rc==STNLABZ_MODULE_OK);
+}
 /* Capture every channel PRIVMSG before intent/mention filtering.
  * Observation owns persistence; IRC only submits the transport envelope.
  * Private messages and non-channel traffic are never journaled. */
 static void observe_channel(const irc_config_t *cfg,const char *raw,int tags_enabled){
  char copy[2048],*p,*end,*tags,*prefix,*cmd,*target,*message,*bang;
  digit_observation_record_t rec={0};
- size_t used=0;
  if(!cfg||!raw||!tags_enabled||strlen(raw)>=sizeof copy||
     !host_api||!host_api->invoke_service)return;
  memcpy(copy,raw,strlen(raw)+1);p=copy;
@@ -381,8 +400,7 @@ static void observe_channel(const irc_config_t *cfg,const char *raw,int tags_ena
  snprintf(rec.channel,sizeof rec.channel,"%s",cfg->channel);
  snprintf(rec.sender,sizeof rec.sender,"%s",prefix);
  snprintf(rec.text,sizeof rec.text,"%s",message);
- (void)host_api->invoke_service(DIGIT_OBSERVATION_RECORD_SERVICE,
-   &rec,sizeof rec,NULL,0,&used);
+ observation_status(submit_observation(host_api,&rec));
 }
 static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled) {
     char *sender,*bang,*cmd,*target,*body,*space;
@@ -747,6 +765,14 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
      memset(test_report.report,'X',sizeof test_report.report);
      check(result,!safe_report(test_report.report,sizeof test_report.report),1);
     }
+    /* Real service-dispatch contract tests; no SQLite or network side effects. */
+    {
+      digit_observation_record_t rec={0};
+      check(result,submit_observation(NULL,&rec)==
+        STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
+      check(result,submit_observation(host_api,NULL)==
+        STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
+    }
     check(result,greeting_kind(&c,"") == NULL,1);
     check(result,!strcmp(greeting_kind(&c,"registered"),"unknown"),0);
     strcpy(c.auntie_account,"LaurieAccount");
@@ -812,7 +838,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=2,.version_patch=21,
+    .version_major=0,.version_minor=3,.version_patch=0,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
