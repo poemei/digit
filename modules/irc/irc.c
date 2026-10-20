@@ -74,7 +74,11 @@ static stnlabz_module_result_t deliver_service(
     index=(outbound_head+outbound_count)%S2_QUEUE_CAP;
     outbound[index]=*r;outbound_count++;
     pthread_mutex_unlock(&outbound_mutex);
-    if(wake_pipe[1]>=0)(void)write(wake_pipe[1],&signal_byte,1);
+    if(wake_pipe[1]>=0){
+        ssize_t signaled=write(wake_pipe[1],&signal_byte,1);
+        if(signaled<0 && errno!=EAGAIN && errno!=EWOULDBLOCK && errno!=EINTR)
+            syslog(LOG_WARNING,"digit.irc wake notification failed: %d",errno);
+    }
     return STNLABZ_MODULE_OK;
 }
 
@@ -482,7 +486,9 @@ static void observe_channel(const irc_config_t *cfg,const char *raw,int tags_ena
  memcpy(copy,raw,strlen(raw)+1);p=copy;
  if(*p=='@'){
   tags=++p;end=strchr(tags,' ');
-  if(!end)return;*end++=0;p=end;
+  if(!end)return;
+  *end++=0;
+  p=end;
   while(tags&&*tags){
    char *next=strchr(tags,';');
    if(next)*next++=0;
@@ -494,12 +500,16 @@ static void observe_channel(const irc_config_t *cfg,const char *raw,int tags_ena
  }
  if(*p!=':')return;
  prefix=++p;end=strchr(prefix,' ');
- if(!end)return;*end++=0;p=end;
+ if(!end)return;
+ *end++=0;
+ p=end;
  bang=strchr(prefix,'!');if(!bang)return;*bang=0;
  if(!*prefix||strlen(prefix)>=sizeof rec.sender)return;
- cmd=p;end=strchr(cmd,' ');if(!end)return;*end++=0;
+ cmd=p;end=strchr(cmd,' ');if(!end)return;
+ *end++=0;
  if(strcmp(cmd,"PRIVMSG"))return;
- target=end;end=strchr(target,' ');if(!end)return;*end++=0;
+ target=end;end=strchr(target,' ');if(!end)return;
+ *end++=0;
  if(strcasecmp(target,cfg->channel)||*end!=':')return;
  message=end+1;
  if(!*message||strlen(message)>=sizeof rec.text)return;
@@ -737,7 +747,10 @@ static void session(const irc_config_t *cfg) {
             if(rc<0){if(errno==EINTR)continue;break;}
             if(rc==0)continue;
             if(wake_pipe[0]>=0&&FD_ISSET(wake_pipe[0],&readfds)){
-                unsigned char bytes[128];(void)read(wake_pipe[0],bytes,sizeof bytes);
+                unsigned char bytes[128];
+                 ssize_t drained=read(wake_pipe[0],bytes,sizeof bytes);
+                 if(drained<0 && errno!=EAGAIN && errno!=EWOULDBLOCK && errno!=EINTR)
+                     syslog(LOG_WARNING,"digit.irc wake drain failed: %d",errno);
                 continue;
             }
             if(!FD_ISSET(fd,&readfds))continue;
@@ -863,10 +876,10 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
     check(result,address_prefix("digit who is your creator?","digicat")==5,0);
     check(result,address_prefix("digicat who are you?","digicat")==7,0);
     check(result,address_prefix("digital keyboard","digicat")==0,1);
-    check(result,!nick_mention("DigitXYZ: hello","Digit"),1);
-    check(result,!nick_mention("Di","Digit"),1);
-    check(result,!nick_mention(NULL,"Digit"),1);
-    check(result,!nick_mention("Digit",""),1);
+    check(result,address_prefix("DigitXYZ: hello","Digit")==0,1);
+    check(result,address_prefix("Di","Digit")==0,1);
+    check(result,address_prefix(NULL,"Digit")==0,1);
+    check(result,address_prefix("unrelated","")==0,1);
     check(result,reply_valid(valid,sizeof valid-1),0);
     check(result,!reply_valid(cr,sizeof cr-1),1);
     check(result,!reply_valid(lf,sizeof lf-1),1);
@@ -978,7 +991,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=3,.version_patch=7,
+    .version_major=0,.version_minor=3,.version_patch=8,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
