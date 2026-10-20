@@ -67,3 +67,8 @@ Qualification now covers primary success without fallback and the invalid-argume
 ## Direct fallback completion diagnosis (v0.3.2)
 
 IRC logs `observation_route=sqlite3_direct completed=1 status=... response_bytes=...` **after** the fallback service returns. If only the earlier `reason=observation_invalid_argument` entry appears, completion has not been observed. This release adds instrumentation without changing the existing fallback decision.
+
+
+## Verified SQLite receipt (v0.3.3)
+
+On the existing `digit.observation.record` invalid-argument fallback, IRC now requires a complete SQLite3 `digit_observation_receipt_t` with positive Observation/context row IDs and a NUL-terminated, nonempty event ID. A service return of OK without a valid receipt is treated as invalid state, not logged as persistence verified. The mock qualification tests valid and malformed receipt paths. Activate SQLite3 0.4.9 before IRC 0.3.3.
