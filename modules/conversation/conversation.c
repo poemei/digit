@@ -299,7 +299,7 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
         digit_reasoning_result_t decision={0};
         digit_corpus_query_t search={0};
         digit_corpus_result_t found={0};
-        size_t search_used=0,decision_used=0;
+        size_t decision_used=0;
         unsigned i;
         reasoning.interpretation=result;
         /* Search content-bearing terms, not merely the final word.
@@ -331,7 +331,6 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
             reasoning.retrieval_succeeded=1;
             if(candidate.count){
                 found=candidate;reasoning.corpus=found;
-                search_used=candidate_used;
                 break;
             }
         }
