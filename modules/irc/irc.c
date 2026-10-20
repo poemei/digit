@@ -359,6 +359,23 @@ static stnlabz_module_result_t submit_observation(
  if(rc!=STNLABZ_MODULE_OK)return rc;
  return used==0?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
 }
+static int observation_fixture_mode;
+static stnlabz_module_result_t observation_fixture_invoke(
+ const char *service,const void *request,size_t size,
+ void *response,size_t capacity,size_t *used){
+ (void)response;(void)capacity;
+ if(used)*used=0;
+ if(!service||strcmp(service,DIGIT_OBSERVATION_RECORD_SERVICE)||
+    !request||size!=sizeof(digit_observation_record_t))
+    return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ if(observation_fixture_mode==1)return STNLABZ_MODULE_ERR_NOT_FOUND;
+ if(observation_fixture_mode==2)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(observation_fixture_mode==3){
+    if(used)*used=1;
+    return STNLABZ_MODULE_OK;
+ }
+ return STNLABZ_MODULE_OK;
+}
 static void observation_status(stnlabz_module_result_t rc) {
  syslog(rc==STNLABZ_MODULE_OK?LOG_INFO:LOG_ERR,
     "digit.irc observation_service status=%d persisted=%d",
@@ -765,13 +782,28 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
      memset(test_report.report,'X',sizeof test_report.report);
      check(result,!safe_report(test_report.report,sizeof test_report.report),1);
     }
-    /* Real service-dispatch contract tests; no SQLite or network side effects. */
+    /* Dispatch outcomes are tested against the actual ABI shape.
+     * A service success with an unexpected response size is rejected. */
     {
       digit_observation_record_t rec={0};
+      stnlabz_module_host_t mock={0};
+      mock.invoke_service=observation_fixture_invoke;
       check(result,submit_observation(NULL,&rec)==
         STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
-      check(result,submit_observation(host_api,NULL)==
+      check(result,submit_observation(&mock,NULL)==
         STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
+      observation_fixture_mode=0;
+      check(result,submit_observation(&mock,&rec)==STNLABZ_MODULE_OK,0);
+      observation_fixture_mode=1;
+      check(result,submit_observation(&mock,&rec)==
+        STNLABZ_MODULE_ERR_NOT_FOUND,1);
+      observation_fixture_mode=2;
+      check(result,submit_observation(&mock,&rec)==
+        STNLABZ_MODULE_ERR_INVALID_STATE,1);
+      observation_fixture_mode=3;
+      check(result,submit_observation(&mock,&rec)==
+        STNLABZ_MODULE_ERR_INVALID_STATE,1);
+      observation_fixture_mode=0;
     }
     check(result,greeting_kind(&c,"") == NULL,1);
     check(result,!strcmp(greeting_kind(&c,"registered"),"unknown"),0);
