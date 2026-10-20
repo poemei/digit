@@ -442,7 +442,7 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
         }else if(!response||!capacity){
             trace_stage(host,"process","response.view","OUTPUT_UNAVAILABLE",2,0,__LINE__);
         }else{
-            int rendered=digit_response_render(&decision,&found,&result,response,capacity,used);
+            int rendered=digit_response_render(&decision,&found,&result,msg->message,response,capacity,used);
             const char *status=rendered?
                 (decision.outcome==DIGIT_REASONING_OUTCOME_UNKNOWN?
                   "UNKNOWN_STATED":decision.outcome==DIGIT_REASONING_OUTCOME_CLARIFY?
@@ -924,7 +924,16 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
         strcpy(data.hits[0].excerpt,"PHP is a server-side language. Additional text.");
         decision.outcome=DIGIT_REASONING_OUTCOME_EVIDENCE;
         decision.reference_count=1;decision.corpus_ids[0]=42;
-        check(q,digit_response_render(&decision,&data,&question,render,sizeof render,&length)
+        strcpy(data.hits[0].excerpt,"KItten and Furry speak are their own languages.");
+        check(q,digit_response_render(&decision,&data,&question,
+            "or is it KItten?",render,sizeof render,&length)&&
+            strstr(render,"writes it as \"KItten\"")!=NULL,0);
+        check(q,digit_response_render(&decision,&data,&question,
+            "or is it kitten?",render,sizeof render,&length)&&
+            strstr(render,"writes it as \"KItten\"")!=NULL,0);
+        strcpy(data.hits[0].excerpt,"PHP is a server-side language. Additional text.");
+
+        check(q,digit_response_render(&decision,&data,&question,"What is PHP?",render,sizeof render,&length)
            &&length>0&&strstr(render,"Corpus #42 excerpt: \"PHP is a server-side language.")!=NULL,0);
         decision.requires_verification=1;length=9;
         check(q,!digit_response_render(&decision,&data,&question,render,sizeof render,&length)
@@ -999,7 +1008,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 12,
+    .version_major = 1, .version_minor = 1, .version_patch = 13,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
