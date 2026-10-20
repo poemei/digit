@@ -302,37 +302,67 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
         size_t decision_used=0;
         unsigned i;
         reasoning.interpretation=result;
-        /* Search content-bearing terms, not merely the final word.
-         * FTS matches are candidates; their verification and relevance
-         * remain Reasoning's responsibility. No pronoun-to-person mapping. */
-        for(i=result.term_count;i>0;i--){
-            const char *term=result.terms[i-1];
-            static const char *const function_words[]={
+        /* Evaluate all informative candidate searches before choosing a
+         * retrieval set. FTS rank within a single word is not evidence
+         * relevance to the complete question. Keep only verified records
+         * that overlap more of the question's content-bearing subjects. */
+        {
+            static const char *const grammatical[]={
                 "a","an","the","do","does","did","is","are","was","were",
                 "she","he","they","them","her","him","it","this","that",
                 "you","your","my","our","who","what","where","when",
                 "why","how","can","could","would","should","will",
-                "understand","about","of","to","and","or","in","on"
+                "about","of","to","and","or","in","on"
             };
-            unsigned j;int skip=0;
-            digit_corpus_result_t candidate={0};
-            size_t candidate_used=0;
-            if(!term[0]||strlen(term)<3)continue;
-            for(j=0;j<sizeof function_words/sizeof function_words[0];j++)
-                if(!strcmp(term,function_words[j])){skip=1;break;}
-            if(skip)continue;
-            memset(&search,0,sizeof search);
-            snprintf(search.query,sizeof search.query,"%s",term);
-            reasoning.retrieval_attempted=1;
-            rc=host->invoke_service(DIGIT_CORPUS_SEARCH_SERVICE,&search,
-                sizeof search,&candidate,sizeof candidate,&candidate_used);
-            if(rc!=STNLABZ_MODULE_OK||candidate_used!=sizeof candidate||
-               candidate.count>DIGIT_CORPUS_RESULTS_MAX)continue;
-            reasoning.retrieval_succeeded=1;
-            if(candidate.count){
-                found=candidate;reasoning.corpus=found;
-                break;
+            unsigned best_score=0;
+            for(i=0;i<result.term_count;i++){
+                const char *term=result.terms[i];
+                unsigned j,skip=0;
+                digit_corpus_result_t candidate={0};
+                size_t candidate_used=0;
+                if(strlen(term)<3)continue;
+                for(j=0;j<sizeof grammatical/sizeof grammatical[0];j++)
+                    if(!strcmp(term,grammatical[j])){skip=1;break;}
+                if(skip)continue;
+                memset(&search,0,sizeof search);
+                snprintf(search.query,sizeof search.query,"%s",term);
+                reasoning.retrieval_attempted=1;
+                rc=host->invoke_service(DIGIT_CORPUS_SEARCH_SERVICE,&search,
+                    sizeof search,&candidate,sizeof candidate,&candidate_used);
+                if(rc!=STNLABZ_MODULE_OK||candidate_used!=sizeof candidate||
+                   candidate.count>DIGIT_CORPUS_RESULTS_MAX)continue;
+                reasoning.retrieval_succeeded=1;
+                for(j=0;j<candidate.count;j++){
+                    const digit_corpus_hit_t *hit=&candidate.hits[j];
+                    unsigned k,score=0;
+                    if(strcmp(hit->verification_status,"verified")&&
+                       strcmp(hit->verification_status,"operator-verified"))
+                        continue;
+                    if(!memchr(hit->excerpt,0,sizeof hit->excerpt))continue;
+                    for(k=0;k<result.term_count;k++){
+                        const char *word=result.terms[k];
+                        size_t n=strlen(word),pos;
+                        if(n<3)continue;
+                        for(pos=0;hit->excerpt[pos];pos++){
+                            size_t m=0;
+                            if(pos&&isalnum((unsigned char)hit->excerpt[pos-1]))
+                                continue;
+                            while(m<n&&hit->excerpt[pos+m]&&
+                                  tolower((unsigned char)hit->excerpt[pos+m])==
+                                  (unsigned char)word[m])m++;
+                            if(m==n&&!isalnum((unsigned char)hit->excerpt[pos+m])){
+                                score++;break;
+                            }
+                        }
+                    }
+                    if(score>best_score){
+                        memset(&found,0,sizeof found);
+                        found.count=1;found.hits[0]=*hit;
+                        best_score=score;
+                    }
+                }
             }
+            if(found.count)reasoning.corpus=found;
         }
         /* If the current referential question yielded no evidence, use
          * recently observed discourse as additional search candidates.
@@ -946,7 +976,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 9,
+    .version_major = 1, .version_minor = 1, .version_patch = 10,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
