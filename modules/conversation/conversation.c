@@ -14,6 +14,7 @@
 #include "dsd.h"
 #include "../reasoning/reasoning.h"
 #include "../sqlite3/corpus_search.h"
+#include "response_view.h"
 
 #define LISTEN "digit.conversation.listen"
 #define DIRECT "digit.conversation"
@@ -174,6 +175,17 @@ static stnlabz_module_result_t process(const stnlabz_module_host_t *host,
            decision.outcome>DIGIT_REASONING_OUTCOME_CONFLICT||
            decision.reference_count>DIGIT_REASONING_MAX_REFERENCES)
             return STNLABZ_MODULE_ERR_INVALID_STATE;
+        /* View expresses a verified, evidence-bound decision. It may
+         * abstain; it must not invent a sentence to conceal missing data.
+         * Passive channel messages remain observational, not replies. */
+        if(response&&capacity&&!strcmp(msg->sender,msg->target)&&
+           decision.outcome==DIGIT_REASONING_OUTCOME_EVIDENCE&&
+           reasoning.retrieval_succeeded){
+            int rendered=digit_response_render(&decision,&found,response,capacity,used);
+            trace_stage(host,"process","response.view",
+                rendered?"RESPONSE_COMPOSED":"RENDER_ABSTAIN",
+                rendered?0:2,rendered?(unsigned)*used:0,__LINE__);
+        }
     }
     /* Observation persistence and context creation are atomic in SQLite3.
      * Conversation reads that context; it never duplicates observation writes.
@@ -208,12 +220,10 @@ static stnlabz_module_result_t process(const stnlabz_module_host_t *host,
             (void)code_diagnostic(msg, &visible, response, capacity, used);
         }
     }
-    /* The current Conversation implementation has no general response
-     * generator or autonomous participation decision. The only positive
-     * response path above is the narrow code diagnostic. Report the actual
-     * capability boundary rather than a generic transport silence. */
+    /* A grounded View response is possible when Reasoning selected
+     * complete source evidence; otherwise the response is withheld. */
     trace_stage(host,"process","participation",
-      used&&*used?"RESPONSE_RETURNED":"NO_GENERATOR",0,
+      used&&*used?"RESPONSE_RETURNED":"RESPONSE_ABSTAIN",0,
       used?(unsigned)*used:0,__LINE__);
     return STNLABZ_MODULE_OK;
 }
@@ -461,7 +471,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 0, .version_patch = 7,
+    .version_major = 1, .version_minor = 0, .version_patch = 8,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
