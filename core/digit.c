@@ -12,7 +12,7 @@
 #include "core_inventory.h"
 #include "core_hotload.h"
 #include "core_router.h"
-#include "core_router.h"
+#include "core_dsd.h"
 #include "stnlabz_abi/module_registry.h"
 #include "stnlabz_abi/module_loader.h"
 
@@ -104,6 +104,9 @@ static stnlabz_module_result_t digit_service(const char *name,
     size_t i;
     if (response_used) *response_used = 0;
     if (!name)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+    if (core_dsd_handles(name))
+        return core_dsd_dispatch(name,request,request_size,response,
+                                 response_size,response_used);
     if (strcmp(name, "digit.message")) {
         stnlabz_module_service_handler_fn handler=NULL;
         digit_registered_service_t *entry=NULL;
@@ -121,12 +124,16 @@ static stnlabz_module_result_t digit_service(const char *name,
             }
         }
         service_lock_release();
-        if(!handler)return STNLABZ_MODULE_ERR_NOT_FOUND;
+        if(!handler){
+            core_dsd_service_result(name,STNLABZ_MODULE_ERR_NOT_FOUND,0,__LINE__);
+            return STNLABZ_MODULE_ERR_NOT_FOUND;
+        }
         rc=handler(request,request_size,response,response_size,response_used,
                    context);
         service_lock_acquire();
         entry->in_flight--;
         service_lock_release();
+        core_dsd_service_result(name,rc,response_used?*response_used:0,__LINE__);
         return rc;
     }
     if (!request || request_size != sizeof(digit_message_t) ||
@@ -145,9 +152,13 @@ static stnlabz_module_result_t digit_service(const char *name,
      * so clients and DSD do not mistake silence for processed success. */
     if (strcmp(msg->message, "show modules") &&
         strncmp(msg->message, "activate module", 15) &&
-        strncmp(msg->message, "deactivate module", 17))
-        return digit_service(DIGIT_MESSAGE_ROUTE,request,request_size,
-                             response,response_size,response_used);
+        strncmp(msg->message, "deactivate module", 17)) {
+        stnlabz_module_result_t rc=digit_service(DIGIT_MESSAGE_ROUTE,
+                request,request_size,response,response_size,response_used);
+        core_dsd_service_result("digit.message",rc,
+                response_used?*response_used:0,__LINE__);
+        return rc;
+    }
 
     /* [AI:GPT-6 | 2026-10-18] Public-channel management requests
        are silent. Only authenticated operator DMs can execute commands. */
