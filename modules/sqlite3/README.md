@@ -45,3 +45,10 @@ open the persistent database. The module's 26 checks cover schema, binary
 round-trips, key validation, missing keys and negative/failure behavior.
 
 Core now provides the ABI service registry. Startup may add the module-owned `digit_kv` table to the existing database using `CREATE TABLE IF NOT EXISTS`, but does not drop or replace other tables. Back up the database before deployment.
+
+
+## Context services (v0.4.5)
+
+The SQLite3 module alone owns access to the existing `context` table. `digit.sqlite3.context_store` records an observed channel utterance only when its Observation source exists, and stores the original Observation event ID in `source_id`. `digit.sqlite3.context_recent` reads up to eight non-expired context rows for the known IRC channel. The stored classification records *utterance form*, not truth or inferred intent.
+
+No database migration or new database is introduced. Context has no independent natural-language comprehension. SQLite3 descriptor revision is 0.4.5, following the version-numbering doctrine. Qualification includes in-memory SQL insertion, provenance and retrieval checks; live database behavior and actual module hotload require operator acceptance.
