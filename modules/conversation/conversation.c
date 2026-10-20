@@ -285,6 +285,12 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
         /* A skipped View must be diagnosable, not invisible in DSD. */
         if(!participate){
             trace_stage(host,"process","response.view","CHANNEL_OBSERVATION",2,0,__LINE__);
+        }else if(result.kind!=DIGIT_UTTERANCE_QUESTION &&
+                  !(result.features&DIGIT_FEATURE_EXPLANATION_REQUEST)){
+            /* A statement or nonverbal acknowledgment is not a factual
+             * question. Preserve observation/context processing below. */
+            trace_stage(host,"process","response.view",
+                "NON_INQUIRY_ABSTENTION",2,0,__LINE__);
         }else if(!response||!capacity){
             trace_stage(host,"process","response.view","OUTPUT_UNAVAILABLE",2,0,__LINE__);
         }else{
@@ -543,8 +549,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
            sizeof response,&emitted,1)==STNLABZ_MODULE_OK&&emitted==0,0);
         emitted=99;
         check(q,process_route(&mock,&addressed,sizeof addressed,response,
-           sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&
-           emitted>0&&strstr(response,"don't know")!=NULL,0);
+           sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&emitted==0,0);
         mock_mode=0;
     }
     {
@@ -591,6 +596,17 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
                 sizeof response,&emitted,1)==STNLABZ_MODULE_OK&&
                 emitted==0,1);
         }
+        /* Directly addressed social and ordinary statements must not
+         * generate a factual uncertainty or clarification response. */
+        strcpy(channel.message,":)");emitted=99;
+        check(q,process_route(&mock,&channel,sizeof channel,response,
+            sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&emitted==0,0);
+        strcpy(channel.message,"good to see you");emitted=99;
+        check(q,process_route(&mock,&channel,sizeof channel,response,
+            sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&emitted==0,0);
+        strcpy(channel.message,"Database latency increased");emitted=99;
+        check(q,process_route(&mock,&channel,sizeof channel,response,
+            sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&emitted==0,0);
         strcpy(channel.message,"");emitted=0;
         check(q,process_route(&mock,&channel,sizeof channel,response,
             sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&
@@ -766,7 +782,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 5,
+    .version_major = 1, .version_minor = 1, .version_patch = 6,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
