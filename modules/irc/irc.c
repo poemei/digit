@@ -356,24 +356,44 @@ static stnlabz_module_result_t submit_observation(
      return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  rc=api->invoke_service(DIGIT_OBSERVATION_RECORD_SERVICE,
      rec,sizeof *rec,NULL,0,&used);
+ /* The separately deployed Observation v0.1.3 service rejects the current
+  * public envelope with INVALID_ARGUMENT. SQLite3 owns the same ABI struct
+  * and atomically persists Observation + context. Fall back ONLY on that
+  * explicit rejection, never after a successful insert or unknown failure. */
+ if(rc==STNLABZ_MODULE_ERR_INVALID_ARGUMENT){
+     syslog(LOG_WARNING,
+       "digit.irc observation_route=sqlite3_direct reason=observation_invalid_argument");
+     used=0;
+     rc=api->invoke_service(DIGIT_OBSERVATION_INSERT_SERVICE,
+          rec,sizeof *rec,NULL,0,&used);
+ }
  if(rc!=STNLABZ_MODULE_OK)return rc;
  return used==0?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
 }
 static int observation_fixture_mode;
+static unsigned observation_fixture_primary,observation_fixture_fallback;
 static stnlabz_module_result_t observation_fixture_invoke(
  const char *service,const void *request,size_t size,
  void *response,size_t capacity,size_t *used){
  (void)response;(void)capacity;
  if(used)*used=0;
- if(!service||strcmp(service,DIGIT_OBSERVATION_RECORD_SERVICE)||
-    !request||size!=sizeof(digit_observation_record_t))
+ if(!service||!request||size!=sizeof(digit_observation_record_t))
     return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ if(!strcmp(service,DIGIT_OBSERVATION_INSERT_SERVICE)){
+    ++observation_fixture_fallback;
+    return observation_fixture_mode==4?STNLABZ_MODULE_OK:
+           STNLABZ_MODULE_ERR_INVALID_STATE;
+ }
+ if(strcmp(service,DIGIT_OBSERVATION_RECORD_SERVICE))
+    return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ ++observation_fixture_primary;
  if(observation_fixture_mode==1)return STNLABZ_MODULE_ERR_NOT_FOUND;
  if(observation_fixture_mode==2)return STNLABZ_MODULE_ERR_INVALID_STATE;
  if(observation_fixture_mode==3){
     if(used)*used=1;
     return STNLABZ_MODULE_OK;
  }
+ if(observation_fixture_mode==4)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  return STNLABZ_MODULE_OK;
 }
 static void observation_status(stnlabz_module_result_t rc) {
@@ -803,6 +823,14 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
       observation_fixture_mode=3;
       check(result,submit_observation(&mock,&rec)==
         STNLABZ_MODULE_ERR_INVALID_STATE,1);
+      observation_fixture_mode=4;
+      observation_fixture_primary=0;observation_fixture_fallback=0;
+      check(result,submit_observation(&mock,&rec)==STNLABZ_MODULE_OK &&
+        observation_fixture_primary==1 && observation_fixture_fallback==1,0);
+      observation_fixture_mode=0;
+      observation_fixture_primary=0;observation_fixture_fallback=0;
+      check(result,submit_observation(&mock,&rec)==STNLABZ_MODULE_OK &&
+        observation_fixture_primary==1 && observation_fixture_fallback==0,0);
       observation_fixture_mode=0;
     }
     check(result,greeting_kind(&c,"") == NULL,1);
@@ -870,7 +898,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=3,.version_patch=0,
+    .version_major=0,.version_minor=3,.version_patch=1,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
