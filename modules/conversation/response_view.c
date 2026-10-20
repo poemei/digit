@@ -34,7 +34,8 @@ int digit_response_render(const digit_reasoning_result_t *d,
   for(j=0;j<corpus->count;j++)
    if(d->corpus_ids[i]==corpus->hits[j].id&&
       corpus->hits[j].id>0&&
-      !strcmp(corpus->hits[j].verification_status,"operator-verified")){
+      (!strcmp(corpus->hits[j].verification_status,"operator-verified")||
+       !strcmp(corpus->hits[j].verification_status,"verified"))){
        hit=&corpus->hits[j];break;
    }
  if(!hit||!memchr(hit->excerpt,0,sizeof hit->excerpt)||!hit->excerpt[0])
