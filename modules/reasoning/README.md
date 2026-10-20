@@ -34,3 +34,8 @@ Reasoning now recognizes exactly two eligible stored verification labels: `opera
 ## v0.1.6 — partial evidence without invention
 
 Reasoning distinguishes a verified, topic-matched but incomplete statement (`PARTIAL`) from an adequate evidence candidate (`EVIDENCE`) and unavailable knowledge (`UNKNOWN`). Compound subjects must have all their significant terms present in a candidate; a final-word match alone no longer qualifies. A partial candidate must be an actual bounded sentence with at least four words and a recognized stored verification status. Unverified or unrelated snippets remain ineligible. No unsupported details are generated, and this lexical boundary is not semantic proof.
+
+
+## v0.1.7 — interrogative wording is not a subject
+
+Evidence relevance no longer demands that a source repeat conversational function words such as `who`, `are`, `your`, `you`, `what's` and similar question framing. Compound subject terms still require lexical coverage; this is not a claim of semantic entailment. A regression fixture checks that `what is your PHP` does not require the literal words `what`, `is`, or `your` in relevant evidence.
