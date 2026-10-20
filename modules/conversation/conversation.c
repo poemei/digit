@@ -230,7 +230,8 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
     /* Conversation coordinates model retrieval and evidence evaluation.
      * Retrieval terms are candidates, not scripted response triggers.
      * Reasoning cannot claim a fact unless a model provided evidence. */
-    {
+    if(result.kind==DIGIT_UTTERANCE_QUESTION ||
+       (result.features&DIGIT_FEATURE_EXPLANATION_REQUEST)){
         digit_reasoning_request_t reasoning={0};
         digit_reasoning_result_t decision={0};
         digit_corpus_query_t search={0};
@@ -285,12 +286,6 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
         /* A skipped View must be diagnosable, not invisible in DSD. */
         if(!participate){
             trace_stage(host,"process","response.view","CHANNEL_OBSERVATION",2,0,__LINE__);
-        }else if(result.kind!=DIGIT_UTTERANCE_QUESTION &&
-                  !(result.features&DIGIT_FEATURE_EXPLANATION_REQUEST)){
-            /* A statement or nonverbal acknowledgment is not a factual
-             * question. Preserve observation/context processing below. */
-            trace_stage(host,"process","response.view",
-                "NON_INQUIRY_ABSTENTION",2,0,__LINE__);
         }else if(!response||!capacity){
             trace_stage(host,"process","response.view","OUTPUT_UNAVAILABLE",2,0,__LINE__);
         }else{
@@ -305,6 +300,11 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
             trace_stage(host,"process","response.view",status,
                 rendered?0:2,rendered?(unsigned)*used:0,__LINE__);
         }
+    }else{
+        /* A non-inquiry must never be sent through factual uncertainty
+         * rendering. Context and diagnostic processing still follow. */
+        trace_stage(host,"process","response.view",
+            "NON_INQUIRY_ABSTENTION",2,0,__LINE__);
     }
     /* Observation persistence and context creation are atomic in SQLite3.
      * Conversation reads that context; it never duplicates observation writes.
