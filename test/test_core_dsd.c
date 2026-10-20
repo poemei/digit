@@ -38,8 +38,28 @@ int main(void){
  assert(report.count>=6);
  assert(strstr(report.lines[0],"Digit explain PHP"));
  assert(strstr(report.lines[1],"digit.message -> digit.conversation -> digit.interpretation"));
+ assert(strstr(report.lines[2],"Module: conversation"));
  assert(strstr(report.lines[3],"modules/conversation/conversation.c:157"));
  assert(strstr(report.lines[5],"no general response generator"));
+ /* Recorded upstream rejection takes precedence over later IRC silence. */
+ id=992;record.trace_id=record.event.trace_id=id;
+ strcpy(record.event.operation,"response.view");
+ strcpy(record.event.status,"INSUFFICIENT_EVIDENCE");
+ record.event.line=201;record.event.result=2;
+ assert(core_dsd_dispatch(DIGIT_DSD_RECORD_SERVICE,&record,sizeof record,NULL,0,&used)==STNLABZ_MODULE_OK);
+ record.event.line=570;record.event.result=0;
+ strcpy(record.event.module,"irc");
+ strcpy(record.event.file,"modules/irc/irc.c");
+ strcpy(record.event.method,"incoming");
+ strcpy(record.event.status,"NO_RESPONSE");
+ assert(core_dsd_dispatch(DIGIT_DSD_RECORD_SERVICE,&record,sizeof record,NULL,0,&used)==STNLABZ_MODULE_OK);
+ query.trace_id=id;
+ assert(core_dsd_dispatch(DIGIT_DSD_REPORT_SERVICE,&query,sizeof query,&report,sizeof report,&used)==STNLABZ_MODULE_OK);
+ assert(strstr(report.lines[2],"Module: conversation"));
+ assert(strstr(report.lines[3],"modules/conversation/conversation.c:201"));
+ assert(strstr(report.lines[5],"insufficient evidence")!=NULL||
+        strstr(report.lines[5],"adequate evidence")!=NULL);
+ id=991;
  trace_query.trace_id=id;used=0;
  assert(core_dsd_dispatch(DIGIT_DSD_DIAGNOSE_SERVICE,&trace_query,sizeof trace_query,&trace,sizeof trace,&used)==STNLABZ_MODULE_OK);
  assert(used==sizeof trace&&trace.found&&trace.count>=3);
