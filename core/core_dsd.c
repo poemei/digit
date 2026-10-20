@@ -254,8 +254,8 @@ static int evidence_rank(const digit_dsd_event_t *e){
     !strcmp(v,"RETRIEVAL_UNAVAILABLE"))return 100;
  if(!strcmp(v,"NO_GENERATOR"))return 95;
  if(!strcmp(v,"EVIDENCE_NOT_RENDERABLE")||
-    !strcmp(v,"INSUFFICIENT_EVIDENCE")||
-    !strcmp(v,"RESPONSE_ABSTAIN"))return 80;
+    !strcmp(v,"INSUFFICIENT_EVIDENCE"))return 80;
+ if(!strcmp(v,"RESPONSE_ABSTAIN"))return 30;
  if(!strcmp(v,"KNOWLEDGE_UNKNOWN")||!strcmp(v,"UNKNOWN_STATED")||
     !strcmp(v,"CLARIFICATION_REQUIRED")||!strcmp(v,"CLARIFICATION_REQUESTED")||
     !strcmp(v,"RETRIEVAL_FAILED")||!strcmp(v,"RETRIEVAL_FAILURE_STATED"))return 75;
