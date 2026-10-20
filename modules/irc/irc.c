@@ -352,36 +352,21 @@ static int dsd_send_full_trace(SSL *ssl,const char *target,const char *account,i
  if(!result.found)
   return dsd_send_line(ssl,target,"DSD: Previous request trace is no longer retained.");
  if(explain){
-  unsigned has_sql=0,has_no_reply=0,has_error=0,has_conversation=0;
-  const digit_dsd_event_t *last=result.count?&result.events[result.count-1]:NULL;
+  digit_dsd_report_request_t report_request={0};
+  digit_dsd_report_result_t report={0};
+  size_t received=0;
   const char *origin=dsd_origin(account,request.trace_id);
-  if(!dsd_send_line(ssl,target,"DSD DIAGNOSIS - observed evidence only"))return 0;
-  snprintf(line,sizeof line,"Originating Term: %.240s",origin[0]?origin:"not retained");
-  if(!dsd_send_line(ssl,target,line))return 0;
-  for(i=0;i<result.count;i++){
-   const digit_dsd_event_t *e=&result.events[i];
-   if(!strcmp(e->module,"sqlite3"))has_sql=1;
-   if(!strcmp(e->module,"conversation"))has_conversation=1;
-   if(!strcmp(e->status,"NO_RESPONSE"))has_no_reply=1;
-   if(e->result)has_error=1;
+  report_request.trace_id=request.trace_id;
+  snprintf(report_request.origin,sizeof report_request.origin,"%s",origin);
+  if(host_api->invoke_service(DIGIT_DSD_REPORT_SERVICE,
+       &report_request,sizeof report_request,&report,sizeof report,
+       &received)!=STNLABZ_MODULE_OK||received!=sizeof report||
+       report.count>DIGIT_DSD_REPORT_LINES)
+   return dsd_send_line(ssl,target,"DSD: Diagnostic report service unavailable.");
+  for(i=0;i<report.count;i++){
+   if(!memchr(report.lines[i],0,sizeof report.lines[i])||
+      !dsd_send_line(ssl,target,report.lines[i]))return 0;
   }
-  if(!dsd_send_line(ssl,target,"Route: authenticated IRC DM -> digit.message (Core service boundary)."))return 0;
-  if(!dsd_send_line(ssl,target,has_conversation?
-   "Module: IRC; Conversation observed in trace; consult event trail.":
-   "Module: IRC observed; Core targeted; Conversation/Interpretation not traced."))return 0;
-  if(last){
-   snprintf(line,sizeof line,"Code: %s:%u (%s.%s); status=%s",
-      last->file,last->line,last->module,last->method,last->status);
-   if(!dsd_send_line(ssl,target,line))return 0;
-  }else if(!dsd_send_line(ssl,target,"Code: no retained execution location."))return 0;
-  if(!dsd_send_line(ssl,target,has_sql?
-   "SQL: SQLite3 event observed; inspect show trace for recorded status.":
-   "SQL: No SQLite3 operation recorded for this request; database result unknown."))return 0;
-  if(!dsd_send_line(ssl,target,has_no_reply?
-   "Assessment: Dispatch returned without reply. No downstream reasoning or SQL work is established.":
-   has_error?"Assessment: Recorded service boundary failed; inspect its actual disposition.":
-   "Assessment: No recorded failure; conversational completion unverified."))return 0;
-  if(result.dropped&&!dsd_send_line(ssl,target,"Evidence incomplete: trace overflow."))return 0;
   return 1;
  }
  snprintf(line,sizeof line,"DSD trace %llu: %u recorded event(s), %u failure(s), %u dropped.",
@@ -979,7 +964,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=3,.version_patch=4,
+    .version_major=0,.version_minor=3,.version_patch=5,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
