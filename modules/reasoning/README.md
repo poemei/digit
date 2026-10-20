@@ -29,3 +29,8 @@ The Reasoning service now records its own request-correlated disposition through
 ## v0.1.5 — explicit stored verification labels
 
 Reasoning now recognizes exactly two eligible stored verification labels: `operator-verified` and `verified`. These are separately named accepted states; the module does not change their values, infer who verified a record, or upgrade `unverified`, `pending`, empty, or unknown statuses. Eligibility is necessary but not sufficient: the existing relevance and content tests still apply. Qualification checks `verified` acceptance and `pending` and `unverified` rejection. This is an explicit local acceptance policy, not proof of record authenticity.
+
+
+## v0.1.6 — partial evidence without invention
+
+Reasoning distinguishes a verified, topic-matched but incomplete statement (`PARTIAL`) from an adequate evidence candidate (`EVIDENCE`) and unavailable knowledge (`UNKNOWN`). Compound subjects must have all their significant terms present in a candidate; a final-word match alone no longer qualifies. A partial candidate must be an actual bounded sentence with at least four words and a recognized stored verification status. Unverified or unrelated snippets remain ineligible. No unsupported details are generated, and this lexical boundary is not semantic proof.
