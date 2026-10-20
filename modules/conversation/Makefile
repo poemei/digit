@@ -7,11 +7,11 @@ MODULE_DIR := $(PREFIX)/modules/conversation
 
 .PHONY: all test install clean
 all: $(TARGET)
-$(TARGET): conversation.c ../interpretation/interpretation.h ../observation/observation.h ../../core/stnlabz_abi/module.h
+$(TARGET): conversation.c ../interpretation/interpretation.h ../observation/observation.h ../sqlite3/context.h ../../core/stnlabz_abi/module.h
 	@mkdir -p bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared conversation.c -o $@
 test: $(TARGET)
-	@echo "Build only; qualification executes when Digit Core verifies Conversation v1.0.2."
+	@echo "Build only; qualification executes when Digit Core verifies Conversation v1.0.3."
 install: $(TARGET)
 	install -d "$(DESTDIR)$(MODULE_DIR)/bin"
 	install -m 0644 module.conf "$(DESTDIR)$(MODULE_DIR)/module.conf"
