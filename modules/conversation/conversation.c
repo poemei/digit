@@ -1,5 +1,5 @@
 /* Digit Conversation: ABI-only interpretation dispatch; no inference or
- * generated response. Conversation v1.0.1. The IRC module and Core are
+ * generated response. Conversation v1.0.3. The IRC module and Core are
  * unchanged; both registered conversation routes share this handler.
  */
 #include <stddef.h>
@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include "../observation/observation.h"
+#include "../sqlite3/context.h"
 #include "module.h"
 #include "../interpretation/interpretation.h"
 
@@ -93,18 +94,45 @@ static stnlabz_module_result_t process(const stnlabz_module_host_t *host,
         result.term_count > DIGIT_INTERPRETATION_TERMS_MAX ||
         result.unresolved_references > DIGIT_INTERPRETATION_TERMS_MAX)
         return STNLABZ_MODULE_ERR_INVALID_STATE;
-    /* No participation without sufficient evidence. A read-only context
-     * query can support a narrow source-level diagnostic. */
-    if (response && capacity && msg->target[0] == '#') {
-        digit_observation_recent_query_t recent_query = {{0}};
-        digit_observation_recent_result_t recent = {0};
+    /* Persist only source-grounded observations through SQLite's owner
+     * service. Retrieve durable conversation context before evaluating
+     * any existing, evidence-bound response capability. */
+    if (!strcmp(msg->target, "#stn-labz") && msg->account[0]) {
+        digit_context_store_request_t store = {0};
+        digit_context_recent_query_t lookup = {0};
+        digit_context_recent_result_t history = {0};
         size_t seen = 0;
-        memcpy(recent_query.channel, msg->target, sizeof recent_query.channel);
-        rc = host->invoke_service(DIGIT_OBSERVATION_RECENT_SERVICE,
-            &recent_query, sizeof recent_query,
-            &recent, sizeof recent, &seen);
-        if (rc == STNLABZ_MODULE_OK && seen == sizeof recent)
-            (void)code_diagnostic(msg, &recent, response, capacity, used);
+        memcpy(store.channel, msg->target, sizeof store.channel);
+        memcpy(store.sender, msg->sender, sizeof store.sender);
+        memcpy(store.source_account, msg->account, sizeof store.source_account);
+        memcpy(store.text, msg->message, sizeof store.text);
+        store.kind = result.kind == DIGIT_UTTERANCE_QUESTION ? 2 : 1;
+        rc = host->invoke_service(DIGIT_CONTEXT_STORE_SERVICE, &store,
+            sizeof store, NULL, 0, &seen);
+        /* Context persistence failure must never be reported as
+         * successful persistence or fabricated conversation knowledge. */
+        if (rc != STNLABZ_MODULE_OK) return rc;
+        memcpy(lookup.channel, msg->target, sizeof lookup.channel);
+        seen = 0;
+        rc = host->invoke_service(DIGIT_CONTEXT_RECENT_SERVICE, &lookup,
+            sizeof lookup, &history, sizeof history, &seen);
+        if (rc != STNLABZ_MODULE_OK) return rc;
+        if (seen != sizeof history || history.count > DIGIT_CONTEXT_MAX)
+            return STNLABZ_MODULE_ERR_INVALID_STATE;
+        if (response && capacity) {
+            digit_observation_recent_result_t visible = {0};
+            uint32_t i, first = history.count > DIGIT_OBSERVATION_RECENT_MAX ?
+                history.count - DIGIT_OBSERVATION_RECENT_MAX : 0;
+            for (i = first; i < history.count; ++i) {
+                const digit_context_item_t *item = &history.items[i];
+                if (!memchr(item->value, 0, sizeof item->value))
+                    return STNLABZ_MODULE_ERR_INVALID_STATE;
+                memcpy(visible.items[visible.count].text, item->value,
+                    sizeof visible.items[visible.count].text);
+                ++visible.count;
+            }
+            (void)code_diagnostic(msg, &visible, response, capacity, used);
+        }
     }
     return STNLABZ_MODULE_OK;
 }
@@ -296,7 +324,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 0, .version_patch = 2,
+    .version_major = 1, .version_minor = 0, .version_patch = 3,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
