@@ -51,3 +51,14 @@ Every successfully parsed IRC channel Observation request now records its return
 Operator diagnosis after activating IRC v0.3.0: `journalctl --since "10 minutes ago" --no-pager | grep 'digit.irc observation_service'`. If no entries appear after a channel message, investigate IRC channel parsing/routing. If the service rejects calls, inspect the separately installed Observation v0.1.3 module. If it accepts but no rows are present, inspect the Observation-to-SQLite3 forwarding contract. No Core or database changes are introduced.
 
 IRC's previous 0.2.21 is a pre-existing historical version. Under the approved version numbering doctrine, this engineering release advances to **0.3.0** rather than extending a revision above 10.
+
+
+## Observation service rejection recovery (IRC v0.3.1)
+
+Runtime journal evidence showed the independently deployed `digit.observation.record` v0.1.3 returning ABI `STNLABZ_MODULE_ERR_INVALID_ARGUMENT` (numeric 1) for channel messages. The Observation implementation source is absent from the repository, preventing correction of that independent service here.
+
+IRC continues to call the Observation service **first**. On that specific invalid-argument outcome only, IRC forwards the **unchanged** `digit_observation_record_t` request to the registered `digit.sqlite3.observation_insert` service. SQLite3 owns that contract and makes the Observation plus `utterance.observed` context insert atomically in v0.4.7. No fallback occurs after successful primary acceptance, an unknown error, or any other error status. No Core, database schema, or Observation module changes occur.
+
+The journal logs `observation_route=sqlite3_direct` when fallback is attempted, then logs the final `observation_service status=<number> accepted=<0|1>`. A successful service result is not a substitute for validating actual rows. This is a **bounded compatibility recovery**, not an implementation-level repair of the unavailable Observation module.
+
+Qualification now covers primary success without fallback and the invalid-argument fallback dispatch, alongside earlier failure cases. Build and activate IRC v0.3.1 under operator control. Verify via a newly observed channel message and its `observations.event_id` joined to `context.source_id`. If fallback fails, its final status remains visible and requires further investigation.
