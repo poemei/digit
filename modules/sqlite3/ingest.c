@@ -156,7 +156,11 @@ static int ingest(sqlite3 *db,const char *path,int type){
  unsigned add=0,change=0,skip=0;int ok=1;unsigned long line_number=0;const char *reason="unknown";const char *name=strrchr(path,'/');
  if(!begin(db)){
   syslog(LOG_ERR,"digit.sqlite3 ingest: transaction begin failed %s: %s",path,sqlite3_errmsg(db));
-  fclose(fp);report(path,0,0,0,1);return 0;
+  {char detail[180];int code=sqlite3_extended_errcode(db);
+   snprintf(detail,sizeof detail,"%s begin transaction (SQLite %d)",name?name+1:path,code);
+   report(detail,0,0,0,1);
+  }
+  fclose(fp);return 0;
  }
  if(type==2){
   long len;char id[256];char *body;
@@ -200,7 +204,11 @@ done:
 static void *watcher(void *unused){
  sqlite3 *db=NULL;(void)unused;
  if(sqlite3_open_v2(DB,&db,SQLITE_OPEN_READWRITE|SQLITE_OPEN_FULLMUTEX,NULL)!=SQLITE_OK){
-  if(db)sqlite3_close(db);syslog(LOG_ERR,"digit.sqlite3 ingest: database unavailable");return NULL;
+  int code=db?sqlite3_extended_errcode(db):SQLITE_CANTOPEN;
+  syslog(LOG_ERR,"digit.sqlite3 ingest: open failed SQLite %d: %s",
+      code,db?sqlite3_errmsg(db):"no database handle");
+  if(db)sqlite3_close(db);
+  report("database open",0,0,0,1);return NULL;
  }
  sqlite3_busy_timeout(db,5000);
  report("watcher started: corpus.tsv, observations.jsonl, lessons/*.txt",0,0,0,0);
