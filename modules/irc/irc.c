@@ -366,6 +366,9 @@ static stnlabz_module_result_t submit_observation(
      used=0;
      rc=api->invoke_service(DIGIT_OBSERVATION_INSERT_SERVICE,
           rec,sizeof *rec,NULL,0,&used);
+     syslog(rc==STNLABZ_MODULE_OK?LOG_INFO:LOG_ERR,
+         "digit.irc observation_route=sqlite3_direct completed=1 status=%d response_bytes=%zu",
+         (int)rc,used);
  }
  if(rc!=STNLABZ_MODULE_OK)return rc;
  return used==0?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
@@ -898,7 +901,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=3,.version_patch=1,
+    .version_major=0,.version_minor=3,.version_patch=2,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
