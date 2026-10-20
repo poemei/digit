@@ -27,7 +27,6 @@ int digit_response_render(const digit_reasoning_result_t *d,
   *used=(size_t)n;return 1;
  }
  if(d->outcome!=DIGIT_REASONING_OUTCOME_EVIDENCE||
-    d->outcome!=DIGIT_REASONING_OUTCOME_EVIDENCE||
     d->requires_verification||!d->reference_count||
     d->reference_count>DIGIT_REASONING_MAX_REFERENCES||
     corpus->count>DIGIT_CORPUS_RESULTS_MAX)return 0;
