@@ -81,7 +81,7 @@ static stnlabz_module_result_t deliver_service(
 static const stnlabz_module_host_t *host_api;
 /* DM-only DSD bridge; trace ownership never keyed by unverified nick. */
 #define DSD_DM_SLOTS 32
-typedef struct {char account[128];uint64_t trace;} dsd_dm_t;
+typedef struct {char account[128];uint64_t trace;char origin[256];} dsd_dm_t;
 static dsd_dm_t dsd_dm[DSD_DM_SLOTS];
 static uint64_t dsd_next_trace=1;
 static unsigned dsd_dm_evict;
@@ -102,6 +102,27 @@ static void dsd_remember(const char *account,uint64_t trace){
  memset(&dsd_dm[empty],0,sizeof dsd_dm[empty]);
  snprintf(dsd_dm[empty].account,sizeof dsd_dm[empty].account,"%s",account);
  dsd_dm[empty].trace=trace;
+}
+static void dsd_remember_origin(const char *account,uint64_t trace,const char *message){
+ unsigned i,j=0;
+ if(!account||!trace||!message)return;
+ for(i=0;i<DSD_DM_SLOTS;i++){
+  if(dsd_dm[i].trace!=trace||strcmp(dsd_dm[i].account,account))continue;
+  memset(dsd_dm[i].origin,0,sizeof dsd_dm[i].origin);
+  while(*message&&j<sizeof dsd_dm[i].origin-1){
+   unsigned char c=(unsigned char)*message++;
+   if(c<32||c==127)continue;
+   dsd_dm[i].origin[j++]=(char)c;
+  }
+  return;
+ }
+}
+static const char *dsd_origin(const char *account,uint64_t trace){
+ unsigned i;
+ for(i=0;i<DSD_DM_SLOTS;i++)
+  if(dsd_dm[i].trace==trace&&!strcmp(dsd_dm[i].account,account))
+   return dsd_dm[i].origin;
+ return "";
 }
 static int dsd_command(const char *message){
  return !strcmp(message,"show dsd")||
@@ -317,7 +338,7 @@ static int dsd_send_line(SSL *ssl,const char *target,const char *body){
  {struct timespec delay={0,200000000L};(void)nanosleep(&delay,NULL);}
  return 1;
 }
-static int dsd_send_full_trace(SSL *ssl,const char *target,const char *account){
+static int dsd_send_full_trace(SSL *ssl,const char *target,const char *account,int explain){
  digit_dsd_query_t request={0};
  digit_dsd_result_t result={0};
  char line[400];size_t used=0;unsigned i;
@@ -330,6 +351,39 @@ static int dsd_send_full_trace(SSL *ssl,const char *target,const char *account){
   return dsd_send_line(ssl,target,"DSD: Trace retrieval failed.");
  if(!result.found)
   return dsd_send_line(ssl,target,"DSD: Previous request trace is no longer retained.");
+ if(explain){
+  unsigned has_sql=0,has_no_reply=0,has_error=0,has_conversation=0;
+  const digit_dsd_event_t *last=result.count?&result.events[result.count-1]:NULL;
+  const char *origin=dsd_origin(account,request.trace_id);
+  if(!dsd_send_line(ssl,target,"DSD DIAGNOSIS - observed evidence only"))return 0;
+  snprintf(line,sizeof line,"Originating Term: %.240s",origin[0]?origin:"not retained");
+  if(!dsd_send_line(ssl,target,line))return 0;
+  for(i=0;i<result.count;i++){
+   const digit_dsd_event_t *e=&result.events[i];
+   if(!strcmp(e->module,"sqlite3"))has_sql=1;
+   if(!strcmp(e->module,"conversation"))has_conversation=1;
+   if(!strcmp(e->status,"NO_RESPONSE"))has_no_reply=1;
+   if(e->result)has_error=1;
+  }
+  if(!dsd_send_line(ssl,target,"Route: authenticated IRC DM -> digit.message (Core service boundary)."))return 0;
+  if(!dsd_send_line(ssl,target,has_conversation?
+   "Module: IRC; Conversation observed in trace; consult event trail.":
+   "Module: IRC observed; Core targeted; Conversation/Interpretation not traced."))return 0;
+  if(last){
+   snprintf(line,sizeof line,"Code: %s:%u (%s.%s); status=%s",
+      last->file,last->line,last->module,last->method,last->status);
+   if(!dsd_send_line(ssl,target,line))return 0;
+  }else if(!dsd_send_line(ssl,target,"Code: no retained execution location."))return 0;
+  if(!dsd_send_line(ssl,target,has_sql?
+   "SQL: SQLite3 event observed; inspect show trace for recorded status.":
+   "SQL: No SQLite3 operation recorded for this request; database result unknown."))return 0;
+  if(!dsd_send_line(ssl,target,has_no_reply?
+   "Assessment: Dispatch returned without reply. No downstream reasoning or SQL work is established.":
+   has_error?"Assessment: Recorded service boundary failed; inspect its actual disposition.":
+   "Assessment: No recorded failure; conversational completion unverified."))return 0;
+  if(result.dropped&&!dsd_send_line(ssl,target,"Evidence incomplete: trace overflow."))return 0;
+  return 1;
+ }
  snprintf(line,sizeof line,"DSD trace %llu: %u recorded event(s), %u failure(s), %u dropped.",
     (unsigned long long)result.trace_id,result.count,result.failures,result.dropped);
  if(!dsd_send_line(ssl,target,line))return 0;
@@ -511,7 +565,7 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled
         !strcmp(input.message,"diagnose my last request"))){
         /* Only the authenticated account's previous private trace is exposed.
          * Transport the entire retained event array as numbered IRC lines. */
-        return dsd_send_full_trace(ssl,target,input.account);
+        return dsd_send_full_trace(ssl,target,input.account,!strcmp(input.message,"diagnose my last request"));
     }
     if(private_message&&dsd_command(input.message)){
         /* Command is never invoked from a channel, even when mentioned. */
@@ -565,6 +619,7 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled
             dsd_record_message(input.account,trace,
                 rc==STNLABZ_MODULE_OK&&used>0,rc,
                 observation_line);
+            dsd_remember_origin(input.account,trace,input.message);
         }
         if(rc!=STNLABZ_MODULE_OK)return 1;
     }
@@ -924,7 +979,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=3,.version_patch=3,
+    .version_major=0,.version_minor=3,.version_patch=4,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
