@@ -114,3 +114,15 @@ ID, without resolved discourse entities or conversational subject scores.
 Thus these changes improve context-aware retrieval but do **not** implement
 full coreference resolution. Live integration and the deployed Corpus contents
 must be tested by the operator.
+
+## v1.1.10 — Verified candidate selection across question terms
+
+Conversation no longer chooses the first nonempty full-text search result.
+It searches each non-grammatical question term (including capability verbs),
+considers verified results returned by the existing Corpus ABI, and retains
+its highest lexical-overlap excerpt for the established Reasoning and View
+services. The existing model/ABI limits still apply (up to three hits per
+individual search). The qualification mock includes a direct Digit feline-
+capability question where an irrelevant early match must not displace a
+stronger later match. This is not a proof of full semantic understanding,
+pronoun resolution, or the actual deployed Corpus contents.
