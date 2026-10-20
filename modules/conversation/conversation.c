@@ -1003,8 +1003,6 @@ static stnlabz_module_result_t stop(void)
     if (!host_api->unregister_service(LISTEN, NULL))
         return STNLABZ_MODULE_ERR_STOP_FAILED;
     host_api = NULL;
-    social_channel[0]=social_language[0]=0;
-    social_turns=0;social_last_reply=0;
     return STNLABZ_MODULE_OK;
 }
 
