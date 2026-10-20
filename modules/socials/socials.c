@@ -233,6 +233,11 @@ static int contains_phrase(const char *text,const char *phrase){
  return 0;
 }
 static int family_intent(const char *text){
+ /* A smile-only acknowledgment is a family social interaction.
+  * No factual claim or clarification is required. */
+ if(!strcmp(text,":)")||!strcmp(text,":D")||
+    !strcmp(text,";)")||!strcmp(text,"<3")||
+    !strcmp(text,"^_^")||!strcmp(text,":3"))return 2;
  /* Never substitute a social reply for a technical question merely
   * because the speaker opened with "hey" or "hi". */
  if(strchr(text,'?')&&(contains_phrase(text,"what")||
@@ -366,6 +371,9 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  check(r,family_intent("GOOD TO SEE YOU, AUNTIE!")==0,0);
  check(r,family_intent("I love you")==1,0);
  check(r,family_intent("hello!")==2,0);
+ check(r,family_intent(":)")==2,0);
+ check(r,family_intent(";)")==2,0);
+ check(r,family_intent("<3")==2,0);
  check(r,family_intent("thank you")==3,0);
  check(r,family_intent("What is C?")==-1,1);
  check(r,family_intent("this is technical")==-1,1);
@@ -388,7 +396,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="socials",.name="Social expression vocabulary",
- .version_major=0,.version_minor=2,.version_patch=1,
+ .version_major=0,.version_minor=2,.version_patch=2,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
