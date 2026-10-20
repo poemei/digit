@@ -242,6 +242,90 @@ static stnlabz_module_result_t diagnose_service(
  return STNLABZ_MODULE_OK;
 }
 
+/* DSD owns interpretation of the evidence; adapters only transport lines.
+ * A missing trace stage is never a claim that the underlying work did not run. */
+static stnlabz_module_result_t report_service(
+ const void *request,size_t request_size,void *response,
+ size_t response_size,size_t *used,void *ctx){
+ const digit_dsd_report_request_t *q=request;
+ digit_dsd_report_result_t *out=response;
+ digit_dsd_result_t d={0};
+ unsigned i,sql=0,conversation=0,no_reply=0,failure=0;
+ const digit_dsd_event_t *last=NULL;
+ size_t n;
+ (void)ctx;
+ if(used)*used=0;
+ if(!q||request_size!=sizeof *q||!response||
+    response_size<sizeof *out||!used||!q->trace_id||
+    !memchr(q->origin,0,sizeof q->origin))
+   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ for(n=0;q->origin[n];n++)
+   if((unsigned char)q->origin[n]<32||(unsigned char)q->origin[n]==127)
+     return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ if(!diagnose(q->trace_id,&d))return STNLABZ_MODULE_ERR_INVALID_STATE;
+ memset(out,0,sizeof *out);
+ out->trace_id=q->trace_id;
+ if(!d.found){
+   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
+     "DSD: Trace %llu is not retained; no diagnosis available.",
+     (unsigned long long)q->trace_id);
+   *used=sizeof *out;return STNLABZ_MODULE_OK;
+ }
+ snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
+   "Originating Term: %.250s",q->origin[0]?q->origin:"origin unavailable");
+ for(i=0;i<d.count;i++){
+   const digit_dsd_event_t *e=&d.events[i];
+   if(!strcmp(e->module,"sqlite3"))sql++;
+   if(!strcmp(e->module,"conversation"))conversation++;
+   if(!strcmp(e->status,"NO_RESPONSE"))no_reply++;
+   if(e->result)failure++;
+   if(strcmp(e->status,"TRACE_BOUND"))last=e;
+ }
+ if(last){
+   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
+     "Route: %s.%s -> %s; observed=%u stage(s), dropped=%u",
+     last->module,last->method,last->operation,d.count,d.dropped);
+ }else{
+   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
+     "Route: only trace binding observed; downstream route unknown.");
+ }
+ snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
+   conversation?
+   "Module: Conversation observed; consult trace for other actual participants.":
+   "Module: downstream Conversation not observed; targeted modules require instrumentation.");
+ if(last)
+   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
+     "Code: %s:%u (%s.%s), status=%s",
+     last->file,last->line,last->module,last->method,last->status);
+ else
+   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
+     "Code: no downstream source location recorded.");
+ if(sql){
+   const digit_dsd_event_t *e=NULL;
+   for(i=0;i<d.count;i++)
+      if(!strcmp(d.events[i].module,"sqlite3"))e=&d.events[i];
+   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
+     "SQL: observed %s at %s:%u; status=%s; records=%u",
+     e->operation,e->file,e->line,e->status,e->records);
+ }else
+   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
+     "SQL: No SQLite3 stage recorded in this request; database outcome unknown.");
+ if(no_reply)
+   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
+     "Assessment: service returned no reply. Failure within downstream reasoning not established.");
+ else if(failure)
+   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
+     "Assessment: %u failure stage(s) observed; trace identifies boundaries, not an unproven root cause.",failure);
+ else
+   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
+     "Assessment: no recorded failures; end-to-end outcome not independently verified.");
+ if(d.dropped)
+   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
+     "Evidence incomplete: %u trace event(s) dropped.",d.dropped);
+ *used=sizeof *out;
+ return STNLABZ_MODULE_OK;
+}
+
 /* Read-only command language. No implicit global "last request" shared
  * across IRC accounts; the authorized entry adapter supplies that ID. */
 /* The caller authenticates the account and selects its previous trace.
@@ -524,10 +608,20 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h){
   (void)h->unregister_service(DIGIT_DSD_RECORD_SERVICE,NULL);
   return STNLABZ_MODULE_ERR_START_FAILED;
  }
+ if(!h->register_service(DIGIT_DSD_REPORT_SERVICE,report_service,NULL)){
+  (void)h->unregister_service(DIGIT_DSD_COMMAND_SERVICE,NULL);
+  (void)h->unregister_service(DIGIT_DSD_CURRENT_SERVICE,NULL);
+  (void)h->unregister_service(DIGIT_DSD_BIND_SERVICE,NULL);
+  (void)h->unregister_service(DIGIT_DSD_DIAGNOSE_SERVICE,NULL);
+  (void)h->unregister_service(DIGIT_DSD_RECORD_SERVICE,NULL);
+  return STNLABZ_MODULE_ERR_START_FAILED;
+ }
  host=h;return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t stop(void){
  if(!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(!host->unregister_service(DIGIT_DSD_REPORT_SERVICE,NULL))
+  return STNLABZ_MODULE_ERR_STOP_FAILED;
  if(!host->unregister_service(DIGIT_DSD_COMMAND_SERVICE,NULL))
   return STNLABZ_MODULE_ERR_STOP_FAILED;
  if(!host->unregister_service(DIGIT_DSD_CURRENT_SERVICE,NULL))
@@ -545,7 +639,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="dsd",.name="Developer Self-Diagnostics",
- .version_major=0,.version_minor=7,.version_patch=1,
+ .version_major=0,.version_minor=7,.version_patch=2,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
