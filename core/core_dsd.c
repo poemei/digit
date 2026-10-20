@@ -70,6 +70,7 @@ static const char *status_meaning(const char *status){
  if(!strcmp(status,"QUERY_ERROR"))return "the corpus search failed";
  if(!strcmp(status,"SERVICE_OK"))return "the service completed without reporting an error";
  if(!strcmp(status,"NO_RESPONSE"))return "request returned without a reply";
+ if(!strcmp(status,"NO_GENERATOR"))return "Conversation has no general response generator";
  if(!strcmp(status,"SERVICE_NOT_FOUND"))return "the requested service was not registered";
  if(!strcmp(status,"NOT_AUTHORIZED"))return "the request was not authorized";
  if(!strcmp(status,"INVALID_ARGUMENT"))return "the service rejected its input";
