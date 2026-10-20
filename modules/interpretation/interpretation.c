@@ -125,7 +125,7 @@ static int interpret(const digit_interpretation_request_t *req,
         if (!c) break;
     }
     out->kind = !seen ? DIGIT_UTTERANCE_UNRESOLVED :
-                question || (first_question && (!strcmp(out->terms[0],"can") || !strcmp(out->terms[0],"could") || !strcmp(out->terms[0],"would"))) ? DIGIT_UTTERANCE_QUESTION :
+                question || (first_question && strcmp(out->terms[0],"does") && strcmp(out->terms[0],"do") && strcmp(out->terms[0],"did")) ? DIGIT_UTTERANCE_QUESTION :
                 DIGIT_UTTERANCE_STATEMENT;
     return 1;
 }
