@@ -78,3 +78,20 @@ Questions referring to Digit's identity, lineage, mission, or mother now read a 
 ## v1.1.5 — participation after Interpretation
 
 The Conversation listener now makes a bounded participation decision after Interpretation rather than automatically suppressing every unaddressed channel message. Recognizable interrogative invitations, including `can you tell me about...` without a question mark, may receive an evidence-constrained response. Stray question marks or unrelated remarks do not by themselves authorize one. Directly addressed contact-only messages receive an acknowledgment rather than a knowledge-clarification response. Qualification cases cover the observed channel examples with mock Interpretation and Reasoning dependencies, not a live IRC integration. This does not yet provide semantic discourse understanding, follow-up resolution, or unsolicited topical contributions beyond the bounded invitations.
+
+## v1.1.7 — shared Socials for nonfamily contact
+
+A directly addressed, nonverbal social contact may request the existing
+`digit.socials.select` category `cats`, regardless of who sent it.
+Family relationship identification stays entirely separate and retains IRC's
+verified account-and-nickname rules. Normal knowledge questions continue to
+Corpus/Reasoning. Unaddressed channel messages do not automatically trigger
+an unsolicited reply. If Socials is missing, optional expression failure is
+not recast as a knowledge-clarification question. The module's qualification
+fixtures cover an addressed smile, ordinary punctuation, and `?` contact.
+
+Socials v0.2.4 may enrich this category from a short verified Corpus record,
+so the same expression vocabulary can serve Momma, Auntie, Jess, or an
+unfamiliar visitor. This is **bounded nonverbal interaction**, not general
+social reasoning or spontaneous conversational participation. The actual
+Corpus record taxonomy has not been inspected or confirmed.
