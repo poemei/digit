@@ -148,9 +148,8 @@ static int corpus_search(sqlite3 *db,const digit_corpus_query_t *query,
   hit=&out->hits[out->count++];
   hit->id=sqlite3_column_int64(stmt,0);
   copy_column(stmt,1,hit->category,sizeof hit->category);
-  /* Operator policy: existing corpus entries are owner-verified.
-   * This is read-only presentation metadata, not a database UPDATE. */
-  snprintf(hit->verification_status,sizeof hit->verification_status,"operator-verified");
+  /* Preserve the database's verification status without modification. */
+  copy_column(stmt,2,hit->verification_status,sizeof hit->verification_status);
   copy_column(stmt,3,hit->excerpt,sizeof hit->excerpt);
  }
  sqlite3_finalize(stmt);
@@ -720,7 +719,16 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
       strcpy(query.query,"STN-Labz");
       test_check(result,corpus_search(db,&query,&findings)==1,0);
       test_check(result,findings.count==1&&findings.hits[0].id==1,0);
-      test_check(result,!strcmp(findings.hits[0].verification_status,"operator-verified"),0);
+      test_check(result,!strcmp(findings.hits[0].verification_status,"verified"),0);
+       test_check(result,sqlite3_exec(db,
+         "INSERT INTO corpus(category,text,verification_status) "
+         "VALUES('LESSON','CSS provides presentation.','unverified')",
+         NULL,NULL,NULL)==SQLITE_OK,0);
+       strcpy(query.query,"CSS");
+       test_check(result,corpus_search(db,&query,&findings)==1,0);
+       test_check(result,findings.count==1&&
+         !strcmp(findings.hits[0].verification_status,"unverified"),0);
+       strcpy(query.query,"STN-Labz");
       test_check(result,strstr(findings.hits[0].excerpt,"STN-Labz")!=NULL,0);
       strcpy(query.query,"unmatchedrecord");
       test_check(result,corpus_search(db,&query,&findings)==0,0);
@@ -862,7 +870,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="sqlite3",.name="SQLite3 persistence",
-    .version_major=0,.version_minor=4,.version_patch=10,
+    .version_major=0,.version_minor=4,.version_patch=11,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
