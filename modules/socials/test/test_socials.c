@@ -8,12 +8,16 @@
 
 static stnlabz_module_service_handler_fn callback;
 static stnlabz_module_service_handler_fn greeting_callback;
+static stnlabz_module_service_handler_fn family_callback;
 static void *registered_context;
 static int registrations;
 static int reg(const char *name,stnlabz_module_service_handler_fn fn,void *ctx) {
  if(!fn)return 0;
  if(!strcmp(name,DIGIT_SOCIALS_SERVICE)&&!callback){
   callback=fn;registered_context=ctx;registrations++;return 1;
+ }
+ if(!strcmp(name,DIGIT_SOCIALS_FAMILY_SERVICE)&&!family_callback){
+  family_callback=fn;registrations++;return 1;
  }
  if(!strcmp(name,DIGIT_SOCIALS_GREETING_SERVICE)&&!greeting_callback){
   greeting_callback=fn;registrations++;return 1;
@@ -23,6 +27,9 @@ static int reg(const char *name,stnlabz_module_service_handler_fn fn,void *ctx) 
 static int unreg(const char *name,void *ctx) {
  if(!strcmp(name,DIGIT_SOCIALS_SERVICE)&&callback&&ctx==registered_context){
   callback=NULL;return 1;
+ }
+ if(!strcmp(name,DIGIT_SOCIALS_FAMILY_SERVICE)&&family_callback&&ctx==NULL){
+  family_callback=NULL;return 1;
  }
  if(!strcmp(name,DIGIT_SOCIALS_GREETING_SERVICE)&&greeting_callback&&ctx==NULL){
   greeting_callback=NULL;return 1;
@@ -57,7 +64,7 @@ int main(int argc,char **argv) {
         "qualification checks");
  api.register_service=reg;api.unregister_service=unreg;
  demand(d->start(&api)==STNLABZ_MODULE_OK,"start");
- demand(registrations==2&&callback!=NULL&&greeting_callback!=NULL,"registration");
+ demand(registrations==3&&callback!=NULL&&greeting_callback!=NULL&&family_callback!=NULL,"registration");
  for(i=0;i<sizeof categories/sizeof categories[0];i++){
   unsigned trial;
   memset(&request,0,sizeof request);
@@ -98,8 +105,49 @@ int main(int argc,char **argv) {
   demand(greeting_callback(&greeting,sizeof greeting,&result,sizeof result,
     &used,NULL)==STNLABZ_MODULE_ERR_NOT_FOUND,"invalid relationship");
  }
+ {
+  digit_socials_family_request_t family={0};
+  digit_socials_family_response_t reply={0};
+  const char *kinds[]={"mommy","auntie","sister"};
+  const char *names[]={"Momma","Auntie","Kitty Sister"};
+  const char *phrases[]={"good to see you","love you","hello","thanks"};
+  size_t role,intent;
+  for(role=0;role<3;role++){
+   for(intent=0;intent<4;intent++){
+    memset(&family,0,sizeof family);
+    strcpy(family.kind,kinds[role]);
+    strcpy(family.text,phrases[intent]);
+    used=0;
+    demand(family_callback(&family,sizeof family,&reply,sizeof reply,
+      &used,NULL)==STNLABZ_MODULE_OK,"family interaction");
+    demand(used==sizeof reply&&strstr(reply.text,names[role])!=NULL,
+      "family address");
+   }
+  }
+  memset(&family,0,sizeof family);
+  strcpy(family.kind,"auntie");strcpy(family.text,"what is C?");
+  used=99;
+  demand(family_callback(&family,sizeof family,&reply,sizeof reply,
+    &used,NULL)==STNLABZ_MODULE_ERR_NOT_FOUND&&used==0,
+    "factual question not consumed");
+  strcpy(family.text,"hey what is C?");
+  used=99;
+  demand(family_callback(&family,sizeof family,&reply,sizeof reply,
+    &used,NULL)==STNLABZ_MODULE_ERR_NOT_FOUND&&used==0,
+    "mixed technical question not consumed");
+  strcpy(family.kind,"unknown");strcpy(family.text,"love you");
+  used=99;
+  demand(family_callback(&family,sizeof family,&reply,sizeof reply,
+    &used,NULL)==STNLABZ_MODULE_ERR_NOT_FOUND&&used==0,
+    "nonfamily denied");
+  memset(family.text,'X',sizeof family.text);
+  strcpy(family.kind,"auntie");used=99;
+  demand(family_callback(&family,sizeof family,&reply,sizeof reply,
+    &used,NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT&&used==0,
+    "nonterminated message rejected");
+ }
  demand(d->stop()==STNLABZ_MODULE_OK,"stop");
- demand(callback==NULL&&greeting_callback==NULL,"unregistration");
+ demand(callback==NULL&&greeting_callback==NULL&&family_callback==NULL,"unregistration");
  dlclose(library);
  printf("socials qualification %u/%u; service tests PASS\n",
         qualification.tests_passed,qualification.tests_executed);
