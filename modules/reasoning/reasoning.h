@@ -10,6 +10,7 @@
 #define DIGIT_REASONING_OUTCOME_CONFLICT 3u
 #define DIGIT_REASONING_OUTCOME_UNKNOWN 4u
 #define DIGIT_REASONING_OUTCOME_FAILURE 5u
+#define DIGIT_REASONING_OUTCOME_PARTIAL 6u
 #define DIGIT_REASONING_MAX_REFERENCES 3u
 typedef struct {
  digit_interpretation_result_t interpretation;
