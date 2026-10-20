@@ -153,7 +153,7 @@ static int observation_upsert(sqlite3 *db,const char *line,unsigned *add,unsigne
 static int ingest(sqlite3 *db,const char *path,int type){
  FILE *fp=fopen(path,"rb");char *line=NULL;size_t cap=0;ssize_t n;
  if(!fp){syslog(LOG_ERR,"digit.sqlite3 ingest: cannot open %s",path);report(path,0,0,0,1);return 0;}
- unsigned add=0,change=0,skip=0;int ok=1;const char *name=strrchr(path,'/');
+ unsigned add=0,change=0,skip=0;int ok=1;unsigned long line_number=0;const char *reason="unknown";const char *name=strrchr(path,'/');
  if(!begin(db)){
   syslog(LOG_ERR,"digit.sqlite3 ingest: transaction begin failed %s: %s",path,sqlite3_errmsg(db));
   fclose(fp);report(path,0,0,0,1);return 0;
@@ -170,24 +170,31 @@ static int ingest(sqlite3 *db,const char *path,int type){
   free(body);goto done;
  }
  while(running()&&(n=getline(&line,&cap,fp))!=-1){
+  line_number++;
   if(n&&line[n-1]=='\n')line[--n]=0;
   if(n&&line[n-1]=='\r')line[--n]=0;
   if(!n)continue;
   if(type==0){
    char *a=strchr(line,'\t'),*b,*c;
-   if(!a||(b=strchr(a+1,'\t'))==NULL||(c=strchr(b+1,'\t'))==NULL){ok=0;break;}
+   if(!a||(b=strchr(a+1,'\t'))==NULL||(c=strchr(b+1,'\t'))==NULL){reason="invalid TSV fields";ok=0;break;}
    *a++=0;*b++=0;*c++=0;
-   if(!corpus_upsert(db,line,b,a,c,&add,&change,&skip)){ok=0;break;}
-  }else if(!observation_upsert(db,line,&add,&skip)){ok=0;break;}
+   if(!corpus_upsert(db,line,b,a,c,&add,&change,&skip)){reason="Corpus SQL write";ok=0;break;}
+  }else if(!observation_upsert(db,line,&add,&skip)){reason="Observation JSON/SQL write";ok=0;break;}
  }
- if(ferror(fp)||!running())ok=0;
+ if(ferror(fp)||!running()){reason="file read interrupted";ok=0;}
 done:
  free(line);fclose(fp);
- if(ok)ok=commit(db);
- if(!ok){syslog(LOG_ERR,"digit.sqlite3 ingest: import rollback %s: %s",path,sqlite3_errmsg(db));
+ if(ok&&!commit(db)){reason="commit";ok=0;}
+ if(!ok){
+  char error_report[170];
+  snprintf(error_report,sizeof error_report,"%s line %lu %s (SQLite %d)",
+    name?name+1:path,line_number,reason,sqlite3_extended_errcode(db));
+  report(error_report,0,0,skip,1);
+  syslog(LOG_ERR,"digit.sqlite3 ingest: rollback %s line=%lu stage=%s sqlite=%d %s",
+    path,line_number,reason,sqlite3_extended_errcode(db),sqlite3_errmsg(db));
   (void)sqlite3_exec(db,"ROLLBACK",NULL,NULL,NULL);
  }
- report(name?name+1:path,ok?add:0,ok?change:0,skip,!ok);
+ if(ok)report(name?name+1:path,add,change,skip,0);
  return ok;
 }
 static void *watcher(void *unused){
