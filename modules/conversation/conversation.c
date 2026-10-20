@@ -473,9 +473,16 @@ static stnlabz_module_result_t mock_invoke(const char *service,
     if(!strcmp(service,DIGIT_DSD_CURRENT_SERVICE))return STNLABZ_MODULE_ERR_NOT_FOUND;
     if(!strcmp(service,DIGIT_CORPUS_SEARCH_SERVICE)){
         digit_corpus_result_t empty={0};
+        const digit_corpus_query_t *q=request;
         if(used)*used=0;
         if(!request||bytes!=sizeof(digit_corpus_query_t)||!response||
             capacity<sizeof empty||!used)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+        if(mock_mode==9&&!strcmp(q->query,"cat")){
+            empty.count=1;empty.hits[0].id=99;
+            strcpy(empty.hits[0].category,"feline");
+            strcpy(empty.hits[0].verification_status,"verified");
+            strcpy(empty.hits[0].excerpt,"Feline vocalizations can convey social signals.");
+        }
         memcpy(response,&empty,sizeof empty);*used=sizeof empty;
         return STNLABZ_MODULE_OK;
     }
@@ -544,6 +551,12 @@ static stnlabz_module_result_t mock_invoke(const char *service,
        r.kind=DIGIT_UTTERANCE_QUESTION;r.term_count=3;
        strcpy(r.terms[0],"so");strcpy(r.terms[1],"her");
        strcpy(r.terms[2],"works");
+    }else if(!strcmp(q->text,"does she understand cat talk?")){
+       r.kind=DIGIT_UTTERANCE_QUESTION;r.term_count=5;
+       strcpy(r.terms[0],"does");strcpy(r.terms[1],"she");
+       strcpy(r.terms[2],"understand");strcpy(r.terms[3],"cat");
+       strcpy(r.terms[4],"talk");r.features=DIGIT_FEATURE_REFERENCE;
+       r.unresolved_references=1;
     }else if(!strcmp(q->text,"what are you?")){
        r.kind=DIGIT_UTTERANCE_QUESTION;r.term_count=3;
        strcpy(r.terms[0],"what");strcpy(r.terms[1],"are");strcpy(r.terms[2],"you");
@@ -694,6 +707,12 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
         check(q,process_route(&mock,&channel,sizeof channel,response,
             sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&emitted>0&&
             strstr(response,"I'm here")!=NULL,0);
+        mock_mode=9;
+        strcpy(channel.message,"does she understand cat talk?");emitted=99;
+        check(q,process_route(&mock,&channel,sizeof channel,response,
+            sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&
+            emitted>0&&strstr(response,"clarification")==NULL,0);
+        mock_mode=0;
         strcpy(channel.message,"good to see you");emitted=99;
         check(q,process_route(&mock,&channel,sizeof channel,response,
             sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&emitted==0,0);
