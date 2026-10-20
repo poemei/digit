@@ -1,17 +1,17 @@
-# Digit Conversation v1.0.2 — evidence-bound participation
+# Digit Conversation v1.0.3 — SQLite context integration
 
-Conversation retains `digit.conversation` and `digit.conversation.listen`, receiving messages through the established Core and IRC service routing. It invokes `digit.interpretation` via the Core ABI. On public-channel traffic it can also consult `digit.sqlite3.observation_recent` without altering observations.
+Conversation keeps the existing `digit.conversation` and `digit.conversation.listen` services, and the existing IRC/Core routing. It invokes Interpretation and, for authenticated messages in `#stn-labz`, writes and retrieves context through the SQLite3 module's registered ABI services.
 
-## First bounded participation capability
+Context records originate from actual persisted IRC Observations. Conversation submits the interpreted utterance category and original message, then reads the bounded context history before any source-grounded response logic. Context failures are returned as failures, not disguised as success. Both services are owned by SQLite3; Conversation does not open a database or execute SQL.
 
-A structural diagnostic recognizes one demonstrable code error: a PHP `if (...)` statement posted following a visible HTML `</div>` boundary, without a PHP opening tag intervening in the observed channel context. In that case Conversation returns a short technical diagnosis; IRC already sends nonempty responses as PRIVMSG. It never claims the code was fixed. It avoids replying when evidence is absent, when PHP was already opened, or when the output buffer is insufficient.
+The retained categories `utterance.question` and `utterance.statement` describe observed speech, not asserted truths. Their original Observation event IDs provide provenance. Retrieval remains bounded to eight records, ordered oldest-first, and filters expired records.
 
-This is a **specific syntax-analysis capability**, not general semantic conversation. It does **not** solve all PHP defects, comprehend arbitrary dialogue, synthesize knowledge generally, or satisfy the full mission requirement. In particular the bounded recent context can omit an earlier PHP opening tag, so human acceptance must assess false positives. Source parsing and contextual evidence are necessary before this diagnostic is enabled operationally.
+This integration **does not implement general conversation understanding, topic resolution, sustained reasoning, or unrestricted natural-language generation**. The existing narrow PHP diagnostic remains and is explicitly not a substitute for those capabilities. No LLM, Ollama, Core modifications, IRC modifications, or schema migration.
 
-Conversation has no Ollama, LLM, neural inference or external inference dependency. No Core or IRC source changes were made. This work does not replace Digit's intended autonomous reasoning architecture with canned chatbot responses.
+## Qualification and operator acceptance
 
-## Qualification and hotload
-
-Conversation descriptor revision is **1.0.2**, up from 1.0.1; `module.conf` remains `id=conversation`. The existing Core hotload system requires a changed binary hash and a strictly increased version and performs candidate qualification and authorization.
-
-Build with `make`. The `make test` target currently compiles only. Descriptor qualification includes synthetic positive and negative source-diagnostic checks plus Interpretation dispatch tests. Real integration, false-positive review, and operator acceptance have **not** been performed in this session; qualification cannot substitute for those tests.
+- Descriptor version **1.0.3** (prior 1.0.2), following the revision doctrine.
+- `make` builds this module; `make test` currently only builds it.
+- Descriptor qualification exercises Interpretation dispatch and context service calls with deterministic mocks. This is not live SQLite or IRC acceptance.
+- Validate SQLite3 v0.4.5 context registration, actual persisted context rows, provenance, and Conversation's readback after operator-controlled hotload.
+- Do not claim full conversational participation based only on ACTIVE status.
