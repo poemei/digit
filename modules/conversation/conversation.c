@@ -708,7 +708,11 @@ static stnlabz_module_result_t mock_invoke(const char *service,
     r.kind = DIGIT_UTTERANCE_STATEMENT;
     if(!strcmp(q->text,":)")||!strcmp(q->text,"...")||
        !strcmp(q->text,"?"))r.kind=DIGIT_UTTERANCE_UNRESOLVED;
-    if(!strcmp(q->text,"what is the Chaos Foundation?")){
+    if(!strcmp(q->text,"mrrp")||!strcmp(q->text,"does paws lickies")){
+       r.kind=DIGIT_UTTERANCE_STATEMENT;
+       r.term_count=1;
+       strcpy(r.terms[0],!strcmp(q->text,"mrrp")?"mrrp":"paws");
+    }else if(!strcmp(q->text,"what is the Chaos Foundation?")){
        r.kind=DIGIT_UTTERANCE_QUESTION;r.term_count=5;
        strcpy(r.terms[0],"what");strcpy(r.terms[1],"is");
        strcpy(r.terms[2],"the");strcpy(r.terms[3],"chaos");
