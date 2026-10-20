@@ -24,3 +24,8 @@ Reasoning now distinguishes `UNKNOWN` (a completed query supplies no adequate ev
 ## v0.1.4 — source-owned DSD evidence
 
 The Reasoning service now records its own request-correlated disposition through the existing Core DSD interface, including `KNOWLEDGE_UNKNOWN`, `CLARIFICATION_REQUIRED`, `EVIDENCE_AVAILABLE`, and `RETRIEVAL_FAILED`. It records the source as `modules/reasoning/reasoning.c`, rather than relying on Conversation to report the decision. Trace recording is inert if no request trace is bound and does not change the actual reasoning outcome. Under the current DSD event prioritization, the Reasoning decision precedes Conversation's matching disposition and can be attributed directly to Reasoning. This is instrumentation, not new semantic reasoning.
+
+
+## v0.1.5 — explicit stored verification labels
+
+Reasoning now recognizes exactly two eligible stored verification labels: `operator-verified` and `verified`. These are separately named accepted states; the module does not change their values, infer who verified a record, or upgrade `unverified`, `pending`, empty, or unknown statuses. Eligibility is necessary but not sufficient: the existing relevance and content tests still apply. Qualification checks `verified` acceptance and `pending` and `unverified` rejection. This is an explicit local acceptance policy, not proof of record authenticity.
