@@ -729,8 +729,8 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
       test_check(result,context_store(&request,sizeof request,NULL,0,
         &used,NULL)==STNLABZ_MODULE_OK,0);
       test_check(result,sqlite3_exec(db,
-        "INSERT INTO observations VALUES(2,'irc-event-2',7,"
-        "'digicat: Can you help?','laurie')",
+        "INSERT INTO observations(id,event_id,conversation_id,text,source_record_id) "
+        "VALUES(2,'irc-event-2',7,'digicat: Can you help?','laurie')",
         NULL,NULL,NULL)==SQLITE_OK,0);
       test_check(result,context_store(&request,sizeof request,NULL,0,
         &used,NULL)==STNLABZ_MODULE_OK,0);
@@ -779,7 +779,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="sqlite3",.name="SQLite3 persistence",
-    .version_major=0,.version_minor=4,.version_patch=6,
+    .version_major=0,.version_minor=4,.version_patch=7,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
