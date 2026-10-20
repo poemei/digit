@@ -277,22 +277,41 @@ static stnlabz_module_result_t report_service(
    const digit_dsd_event_t *e=&d.events[i];
    if(!strcmp(e->module,"sqlite3"))sql++;
    if(!strcmp(e->module,"conversation"))conversation++;
+   if(!strcmp(e->operation,"digit.interpretation"))interpreted++;
    if(!strcmp(e->status,"NO_RESPONSE"))no_reply++;
    if(e->result)failure++;
    if(strcmp(e->status,"TRACE_BOUND"))last=e;
  }
  if(last){
+   char chain[210]={0};size_t len=0;
+   /* Parent service disposition is captured on return, after children. */
+   for(i=0;i<d.count;i++){
+     const digit_dsd_event_t *e=&d.events[i];
+     int n;
+     if(strcmp(e->module,"irc")||strcmp(e->operation,"digit.message"))continue;
+     n=snprintf(chain,sizeof chain,"%.36s",e->operation);
+     if(n>0&&(size_t)n<sizeof chain)len=(size_t)n;
+     break;
+   }
+   for(i=0;i<d.count;i++){
+     const digit_dsd_event_t *e=&d.events[i];
+     int n;
+     if(!strcmp(e->status,"TRACE_BOUND")||
+        (!strcmp(e->module,"irc")&&!strcmp(e->operation,"digit.message")))continue;
+     n=snprintf(chain+len,sizeof chain-len,"%s%.36s",
+       len?" -> ":"",e->operation);
+     if(n<0||(size_t)n>=sizeof chain-len)break;
+     len+=(size_t)n;
+   }
    snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
-     "Route: %s.%s -> %s; observed=%u stage(s), dropped=%u",
-     last->module,last->method,last->operation,d.count,d.dropped);
- }else{
+     "Route: %.210s; recorded=%u, dropped=%u",chain,d.count,d.dropped);
+ }else
    snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
      "Route: only trace binding observed; downstream route unknown.");
- }
  snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
    conversation?
-   "Module: Conversation observed; consult trace for other actual participants.":
-   "Module: downstream Conversation not observed; targeted modules require instrumentation.");
+   "Module: IRC and Conversation observed; specific service outcomes follow recorded route.":
+   "Module: IRC boundary observed; downstream execution not established.");
  if(last)
    snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
      "Code: %s:%u (%s.%s), status=%s",
@@ -303,22 +322,28 @@ static stnlabz_module_result_t report_service(
  if(sql){
    const digit_dsd_event_t *e=NULL;
    for(i=0;i<d.count;i++)
-      if(!strcmp(d.events[i].module,"sqlite3"))e=&d.events[i];
+     if(!strcmp(d.events[i].module,"sqlite3"))e=&d.events[i];
    snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
-     "SQL: observed %s at %s:%u; status=%s; records=%u",
+     "SQL: %s at %s:%u; status=%s; records=%u",
      e->operation,e->file,e->line,e->status,e->records);
  }else
    snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
-     "SQL: No SQLite3 stage recorded in this request; database outcome unknown.");
- if(no_reply)
+     "SQL: No SQLite3 operation recorded for this request; SQL outcome unknown.");
+ if(no_reply&&conversation&&interpreted)
    snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
-     "Assessment: service returned no reply. Failure within downstream reasoning not established.");
+     "Assessment: Conversation invoked Interpretation but produced no reply; generation and participation remain unverified.");
+ else if(no_reply&&conversation)
+   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
+     "Assessment: Conversation ran without a reply; Interpretation not recorded.");
+ else if(no_reply)
+   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
+     "Assessment: service returned without reply; downstream cause not established.");
  else if(failure)
    snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
-     "Assessment: %u failure stage(s) observed; trace identifies boundaries, not an unproven root cause.",failure);
+     "Assessment: %u error stage(s) observed; root cause requires supporting evidence.",failure);
  else
    snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
-     "Assessment: no recorded failures; end-to-end outcome not independently verified.");
+     "Assessment: no recorded failure; end-to-end result not independently verified.");
  if(d.dropped)
    snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
      "Evidence incomplete: %u trace event(s) dropped.",d.dropped);
