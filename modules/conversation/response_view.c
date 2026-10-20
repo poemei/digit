@@ -26,7 +26,8 @@ int digit_response_render(const digit_reasoning_result_t *d,
   if(n<=0||(size_t)n>=capacity)return 0;
   *used=(size_t)n;return 1;
  }
- if(d->outcome!=DIGIT_REASONING_OUTCOME_EVIDENCE||
+ if((d->outcome!=DIGIT_REASONING_OUTCOME_EVIDENCE&&
+     d->outcome!=DIGIT_REASONING_OUTCOME_PARTIAL)||
     d->requires_verification||!d->reference_count||
     d->reference_count>DIGIT_REASONING_MAX_REFERENCES||
     corpus->count>DIGIT_CORPUS_RESULTS_MAX)return 0;
@@ -46,7 +47,9 @@ int digit_response_render(const digit_reasoning_result_t *d,
   if(isalpha(c)){if(!inword){words++;inword=1;}}
   else {inword=0;if(c=='.'||c==';'||c==':')has_detail=1;}
  }
- if(words<6||!has_detail)return 0;
+ if(d->outcome==DIGIT_REASONING_OUTCOME_EVIDENCE&&
+    (words<6||!has_detail))return 0;
+ if(d->outcome==DIGIT_REASONING_OUTCOME_PARTIAL&&words<4)return 0;
  for(end=0;end<source_length&&end<220;end++){
   unsigned char c=(unsigned char)hit->excerpt[end];
   if(c<32||c==127)return 0;
@@ -59,7 +62,10 @@ int digit_response_render(const digit_reasoning_result_t *d,
   while(end>0&&hit->excerpt[end-1]==' ')end--;
  }
  if(!end)return 0;
- n=snprintf(output,capacity,"Corpus #%lld excerpt: \"%.*s%s\"",
+ n=snprintf(output,capacity,
+   d->outcome==DIGIT_REASONING_OUTCOME_PARTIAL?
+     "What I can establish from Corpus #%lld (not a full explanation): \"%.*s%s\"":
+     "Corpus #%lld excerpt: \"%.*s%s\"",
    (long long)hit->id,(int)end,hit->excerpt,
    end<source_length?"...":"");
  if(n<=0||(size_t)n>=capacity)return 0;
