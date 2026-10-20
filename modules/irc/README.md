@@ -84,3 +84,8 @@ A missing SQLite3 trace event is reported as **not observed**, not as a successf
 ## DSD report transport (v0.3.5)
 
 The earlier v0.3.4 IRC-specific assessment implementation is superseded. IRC continues to authenticate the private requester, bind a trace to the previous request, and retain a bounded private origin string. For `diagnose my last request`, it passes that origin and authorized trace ID to `digit.dsd.report` and transports exactly the report lines returned by DSD. It makes **no diagnostic interpretation**. `show trace` remains the existing raw event-list command. Deploy DSD 0.7.2 before IRC 0.3.5.
+
+
+## v0.3.6 — channel participation routing
+
+Channel questions now enter Core's `digit.message` route instead of being categorically treated as passive observations. Bounded address prefixes (the configured IRC nickname, `digit`, and `digicat`) are recognized without treating nicknames as authenticated identities; unaddressed non-question statements remain passive. Core retains operator-command restrictions, and Conversation owns whether a source-grounded response can be rendered. Qualification fixtures cover alias recognition, free-form questions, and passive statements. This change does not supply Core identity information to Conversation; that requires a supported Core interface. Live IRC behavior has not been verified here.
