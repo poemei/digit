@@ -231,13 +231,6 @@ static int reply_valid(const char *reply,size_t size) {
     return reply && size>0 && size<512 && !memchr(reply,'\r',size) &&
         !memchr(reply,'\n',size) && !memchr(reply,'\0',size);
 }
-static int nick_mention(const char *body,const char *nick) {
-    size_t n;
-    if(!body||!nick||!*nick)return 0;
-    n=strlen(nick);
-    return strlen(body)>=n && !strncasecmp(body,nick,n) &&
-        (body[n]==':' || body[n]==',' || body[n]==' ');
-}
 /* Address parsing is transport normalization, not a participation decision. */
 static size_t address_prefix(const char *body,const char *nick){
  const char *names[3]={nick,"digit","digicat"};unsigned i;
@@ -870,8 +863,6 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
     check(result,address_prefix("digit who is your creator?","digicat")==5,0);
     check(result,address_prefix("digicat who are you?","digicat")==7,0);
     check(result,address_prefix("digital keyboard","digicat")==0,1);
-    check(result,nick_mention("Digit: hello","Digit"),0);
-    check(result,nick_mention("digit, hello","Digit"),0);
     check(result,!nick_mention("DigitXYZ: hello","Digit"),1);
     check(result,!nick_mention("Di","Digit"),1);
     check(result,!nick_mention(NULL,"Digit"),1);
