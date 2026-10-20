@@ -9,3 +9,8 @@ This is not a scripted answer engine. The module does not access the database, i
 This is a foundational reasoning stage, **not general intelligence**. The existing Interpretation and View generation limitations remain. DSD sees its invocation from Core dispatch. Conversation v1.0.7 invokes this service after Interpretation and model-owned Corpus retrieval. Reasoning does not register as a replacement for Conversation or supply generated prose.
 
 Qualification executes inside Digit Core; a standalone `make test` checks compilation only.
+
+
+## v0.1.1 evidence eligibility
+
+Verified record metadata alone is no longer considered enough. Evidence must contain the interpreted subject as a whole lexical term, carry multiple content words, and include explanatory punctuation. Isolated labels such as `PHP` and unrelated snippets are rejected even when Corpus reports a match. This is a necessary quality gate, not semantic entailment or factual verification; no automatic language synthesis is claimed.
