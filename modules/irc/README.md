@@ -89,3 +89,8 @@ The earlier v0.3.4 IRC-specific assessment implementation is superseded. IRC con
 ## v0.3.6 — channel participation routing
 
 Channel questions now enter Core's `digit.message` route instead of being categorically treated as passive observations. Bounded address prefixes (the configured IRC nickname, `digit`, and `digicat`) are recognized without treating nicknames as authenticated identities; unaddressed non-question statements remain passive. Core retains operator-command restrictions, and Conversation owns whether a source-grounded response can be rendered. Qualification fixtures cover alias recognition, free-form questions, and passive statements. This change does not supply Core identity information to Conversation; that requires a supported Core interface. Live IRC behavior has not been verified here.
+
+
+## v0.3.7 — transport no longer judges by question punctuation
+
+IRC normalizes bounded direct-address aliases and routes addressed traffic to `digit.message`. All other channel traffic is routed to `digit.conversation.listen`, regardless of punctuation. It never decides that a question mark constitutes participation. The Conversation controller owns participation; passive channel observation remains available. Obsolete nickname-only predicate and punctuation test removed.
