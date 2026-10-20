@@ -2,10 +2,8 @@
 #include "agent_root.h"
 int stnlabz_agent_root_validate(const stnlabz_agent_root_t *r){
  static const char *const orders[]={"Remain at your assigned mission.","Follow established policies and authorized instructions.","Report anything outside your authority to the appropriate next level of authority."};
- /* [AI:GPT-6 | 2026-10-19 00:07:48 UTC] Align validation IDs with the established Core identity. */
  static const char *const ids[]={"poe","laurie","ezra"};
- /* [End AI:GPT-6] */
- static const char *const rel[]={"mother","aunt","younger sister"};
+ static const char *const rel[]={"mother/creator","aunt","younger sister"};
  static const char *const names[]={"Momma","Auntie","Kitty Sister"};
  unsigned i;
  if(!r||!r->id||strcmp(r->id,"digit")||!r->name||strcmp(r->name,"Digit")||!r->organization||strcmp(r->organization,"STN-LABZ")||!r->lineage||!r->mission||!*r->mission||!r->core_protection_rule||!strstr(r->core_protection_rule,"SHALL NEVER independently"))return 0;
