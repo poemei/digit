@@ -1,5 +1,5 @@
 /* Digit Conversation: ABI-only interpretation dispatch; no inference or
- * generated response. Conversation v1.0.3. The IRC module and Core are
+ * generated response. Conversation v1.0.4. The IRC module and Core are
  * unchanged; both registered conversation routes share this handler.
  */
 #include <stddef.h>
@@ -94,24 +94,13 @@ static stnlabz_module_result_t process(const stnlabz_module_host_t *host,
         result.term_count > DIGIT_INTERPRETATION_TERMS_MAX ||
         result.unresolved_references > DIGIT_INTERPRETATION_TERMS_MAX)
         return STNLABZ_MODULE_ERR_INVALID_STATE;
-    /* Persist only source-grounded observations through SQLite's owner
-     * service. Retrieve durable conversation context before evaluating
-     * any existing, evidence-bound response capability. */
+    /* Observation persistence and context creation are atomic in SQLite3.
+     * Conversation reads that context; it never duplicates observation writes.
+     * A nonempty IRC account remains required for this channel route. */
     if (!strcmp(msg->target, "#stn-labz") && msg->account[0]) {
-        digit_context_store_request_t store = {0};
         digit_context_recent_query_t lookup = {0};
         digit_context_recent_result_t history = {0};
         size_t seen = 0;
-        memcpy(store.channel, msg->target, sizeof store.channel);
-        memcpy(store.sender, msg->sender, sizeof store.sender);
-        memcpy(store.source_account, msg->account, sizeof store.source_account);
-        memcpy(store.text, msg->message, sizeof store.text);
-        store.kind = result.kind == DIGIT_UTTERANCE_QUESTION ? 2 : 1;
-        rc = host->invoke_service(DIGIT_CONTEXT_STORE_SERVICE, &store,
-            sizeof store, NULL, 0, &seen);
-        /* Context persistence failure must never be reported as
-         * successful persistence or fabricated conversation knowledge. */
-        if (rc != STNLABZ_MODULE_OK) return rc;
         memcpy(lookup.channel, msg->target, sizeof lookup.channel);
         seen = 0;
         rc = host->invoke_service(DIGIT_CONTEXT_RECENT_SERVICE, &lookup,
@@ -284,18 +273,17 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
     check(q, strcmp(LISTEN, DIRECT) != 0, 0);
     {
         message_t channel=msg;
-        int writes=mock_context_writes,reads=mock_context_reads;
+        int reads=mock_context_reads;
         strcpy(channel.target,"#stn-labz");
         used=44;
         check(q,process(&mock,&channel,sizeof channel,response,
               sizeof response,&used)==STNLABZ_MODULE_OK &&
-              used==0 && mock_context_writes==writes+1 &&
-              mock_context_reads==reads+1,0);
+              used==0 && mock_context_reads==reads+1,0);
         strcpy(channel.account,"");
-        writes=mock_context_writes;reads=mock_context_reads;
+        reads=mock_context_reads;
         check(q,process(&mock,&channel,sizeof channel,response,
               sizeof response,&used)==STNLABZ_MODULE_OK &&
-              mock_context_writes==writes && mock_context_reads==reads,1);
+              mock_context_reads==reads,1);
     }
 
     {
@@ -362,7 +350,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 0, .version_patch = 3,
+    .version_major = 1, .version_minor = 0, .version_patch = 4,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
