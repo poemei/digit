@@ -130,6 +130,12 @@ int main(int argc,char **argv) {
   demand(family_callback(&family,sizeof family,&reply,sizeof reply,
     &used,NULL)==STNLABZ_MODULE_ERR_NOT_FOUND&&used==0,
     "factual question not consumed");
+  strcpy(family.text,":)");
+  used=0;
+  demand(family_callback(&family,sizeof family,&reply,sizeof reply,
+    &used,NULL)==STNLABZ_MODULE_OK&&used==sizeof reply&&
+    strstr(reply.text,"Auntie")!=NULL,
+    "smiley-only family acknowledgment");
   strcpy(family.text,"hey what is C?");
   used=99;
   demand(family_callback(&family,sizeof family,&reply,sizeof reply,
