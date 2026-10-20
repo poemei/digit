@@ -729,6 +729,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
        test_check(result,findings.count==1&&
          !strcmp(findings.hits[0].verification_status,"unverified"),0);
        strcpy(query.query,"STN-Labz");
+       test_check(result,corpus_search(db,&query,&findings)==1,0);
       test_check(result,strstr(findings.hits[0].excerpt,"STN-Labz")!=NULL,0);
       strcpy(query.query,"unmatchedrecord");
       test_check(result,corpus_search(db,&query,&findings)==0,0);
@@ -870,7 +871,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="sqlite3",.name="SQLite3 persistence",
-    .version_major=0,.version_minor=4,.version_patch=11,
+    .version_major=0,.version_minor=4,.version_patch=12,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
