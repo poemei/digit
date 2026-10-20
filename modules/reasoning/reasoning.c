@@ -25,6 +25,7 @@ static void trace_decision(const digit_reasoning_result_t *decision,
     used!=sizeof trace||!trace)return;
  switch(decision->outcome){
   case DIGIT_REASONING_OUTCOME_EVIDENCE:status="EVIDENCE_AVAILABLE";break;
+  case DIGIT_REASONING_OUTCOME_PARTIAL:status="PARTIAL_EVIDENCE";break;
   case DIGIT_REASONING_OUTCOME_UNKNOWN:status="KNOWLEDGE_UNKNOWN";break;
   case DIGIT_REASONING_OUTCOME_CLARIFY:status="CLARIFICATION_REQUIRED";break;
   case DIGIT_REASONING_OUTCOME_FAILURE:status="RETRIEVAL_FAILED";break;
@@ -106,64 +107,88 @@ static int informative(const char *source,const char *topic){
   * A bare title, keyword, or a short label cannot qualify. */
  return letters>=24&&words>=6&&detail&&subject_occurs(source,topic);
 }
+/* Partial evidence is a source-bound observation, not a sufficient answer.
+ * Every subject token must occur; no context is fabricated or completed. */
+static int topic_matches(const char *source,const digit_interpretation_result_t *in){
+ unsigned i,subjects=0;
+ for(i=0;i<in->term_count;i++){
+  const char *t=in->terms[i];
+  if(!strcmp(t,"explain")||!strcmp(t,"describe")||
+     !strcmp(t,"what")||!strcmp(t,"is")||!strcmp(t,"the")||
+     !strcmp(t,"a")||!strcmp(t,"an")||!strcmp(t,"of"))continue;
+  subjects++;
+  if(!subject_occurs(source,t))return 0;
+ }
+ return subjects>0;
+}
+static int partial_statement(const char *source){
+ size_t i,words=0;int inword=0,ending=0;
+ if(!source||!memchr(source,0,DIGIT_CORPUS_EXCERPT_MAX))return 0;
+ for(i=0;source[i];i++){
+  unsigned char c=(unsigned char)source[i];
+  if(isalpha(c)){if(!inword)words++;inword=1;}
+  else if(isspace(c)||ispunct(c)){inword=0;if(c=='.'||c=='!'||c=='?')ending=1;}
+  else return 0;
+ }
+ return words>=4&&ending;
+}
 static void evaluate(const digit_reasoning_request_t *q,
  digit_reasoning_result_t *out){
- unsigned i,j;
- const char *topic=NULL;
+ unsigned i,j;const char *topic=NULL;
  memset(out,0,sizeof *out);
  out->outcome=DIGIT_REASONING_OUTCOME_ABSTAIN;
- out->uncertainty=1;
- out->requires_verification=1;
+ out->uncertainty=1;out->requires_verification=1;
  if(q->interpretation.kind==DIGIT_UTTERANCE_UNRESOLVED||
     (q->interpretation.features&DIGIT_FEATURE_TRUNCATED)||
     q->interpretation.unresolved_references){
   out->outcome=DIGIT_REASONING_OUTCOME_CLARIFY;
-  out->requires_clarification=1;
-  return;
+  out->requires_clarification=1;return;
  }
  if(!q->retrieval_attempted||!q->retrieval_succeeded){
-  out->outcome=DIGIT_REASONING_OUTCOME_FAILURE;
-  return;
+  out->outcome=DIGIT_REASONING_OUTCOME_FAILURE;return;
  }
- if(!q->corpus.count){
-  out->outcome=DIGIT_REASONING_OUTCOME_UNKNOWN;
-  return;
- }
- /* An unqualified one-word utterance is not an instruction to recite the
-  * first matching entry. Preserve lexical ambiguity as a clarification. */
+ if(!q->corpus.count){out->outcome=DIGIT_REASONING_OUTCOME_UNKNOWN;return;}
  if(q->interpretation.term_count==1&&
     !(q->interpretation.features&DIGIT_FEATURE_EXPLANATION_REQUEST)){
   out->outcome=DIGIT_REASONING_OUTCOME_CLARIFY;
-  out->requires_clarification=1;
-  return;
+  out->requires_clarification=1;return;
  }
- /* Interpretation currently retains ordered lexical terms. Recognize the
-  * grammatical command as intent, never as the search subject. */
  for(j=q->interpretation.term_count;j>0;j--){
-  const char *term=q->interpretation.terms[j-1];
-  if(strcmp(term,"explain")&&strcmp(term,"describe")&&
-     strcmp(term,"what")&&strcmp(term,"is")&&strcmp(term,"the")&&
-     strcmp(term,"a")&&strcmp(term,"an")){
-   topic=term;break;
-  }
+  const char *t=q->interpretation.terms[j-1];
+  if(strcmp(t,"explain")&&strcmp(t,"describe")&&
+     strcmp(t,"what")&&strcmp(t,"is")&&strcmp(t,"the")&&
+     strcmp(t,"a")&&strcmp(t,"an")&&strcmp(t,"of")){topic=t;break;}
  }
  if(!topic){out->outcome=DIGIT_REASONING_OUTCOME_CLARIFY;
   out->requires_clarification=1;return;}
+ /* Prefer substantive candidates; do not let a short hit eclipse them. */
  for(i=0;i<q->corpus.count;i++){
   const digit_corpus_hit_t *h=&q->corpus.hits[i];
   if(evidence_eligible(h->verification_status)&&
+     topic_matches(h->excerpt,&q->interpretation)&&
      informative(h->excerpt,topic)&&
      out->reference_count<DIGIT_REASONING_MAX_REFERENCES)
    out->corpus_ids[out->reference_count++]=h->id;
  }
- if(!out->reference_count)out->outcome=DIGIT_REASONING_OUTCOME_UNKNOWN;
- out->evidence_count=out->reference_count;
- if(out->evidence_count){
+ if(out->reference_count){
+  out->evidence_count=out->reference_count;
   out->outcome=DIGIT_REASONING_OUTCOME_EVIDENCE;
-  out->requires_verification=0;
-  /* Lexical relevance cannot establish truth or semantic entailment. */
-  out->uncertainty=1;
+  out->requires_verification=0;return;
  }
+ /* Partial observations must have a verifiable subject and a sentence.
+  * A match alone or unverified text never authorizes this route. */
+ for(i=0;i<q->corpus.count;i++){
+  const digit_corpus_hit_t *h=&q->corpus.hits[i];
+  if(evidence_eligible(h->verification_status)&&
+     topic_matches(h->excerpt,&q->interpretation)&&
+     partial_statement(h->excerpt)){
+    out->corpus_ids[0]=h->id;
+    out->reference_count=out->evidence_count=1;
+    out->outcome=DIGIT_REASONING_OUTCOME_PARTIAL;
+    out->requires_verification=0;return;
+  }
+ }
+ out->outcome=DIGIT_REASONING_OUTCOME_UNKNOWN;
 }
 static stnlabz_module_result_t service(
  const void *request,size_t bytes,void *response,size_t capacity,
@@ -279,7 +304,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="reasoning",.name="Evidence Constrained Reasoning",
- .version_major=0,.version_minor=1,.version_patch=5,
+ .version_major=0,.version_minor=1,.version_patch=6,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
