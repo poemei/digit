@@ -287,25 +287,16 @@ static stnlabz_module_result_t report_service(
  }
  if(last){
    char chain[210]={0};size_t len=0;
-   /* Parent service disposition is captured on return, after children. */
    for(i=0;i<d.count;i++){
      const digit_dsd_event_t *e=&d.events[i];
      int n;
-     if(strcmp(e->module,"irc")||strcmp(e->operation,"digit.message"))continue;
-     n=snprintf(chain,sizeof chain,"%.36s",e->operation);
-     if(n>0&&(size_t)n<sizeof chain)len=(size_t)n;
-     break;
-   }
-   for(i=0;i<d.count;i++){
-     const digit_dsd_event_t *e=&d.events[i];
-     int n;
-     if(!strcmp(e->status,"TRACE_BOUND")||
-        (!strcmp(e->module,"irc")&&!strcmp(e->operation,"digit.message")))continue;
-     n=snprintf(chain+len,sizeof chain-len,"%s%.36s",
+     if(strcmp(e->status,"CALL_ENTER"))continue;
+     n=snprintf(chain+len,sizeof chain-len,"%s%.45s",
        len?" -> ":"",e->operation);
      if(n<0||(size_t)n>=sizeof chain-len)break;
      len+=(size_t)n;
    }
+   if(!len)snprintf(chain,sizeof chain,"No Core call-entry evidence");
    snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
      "Route: %.210s; recorded=%u, dropped=%u",chain,d.count,d.dropped);
  }else
@@ -478,6 +469,18 @@ stnlabz_module_result_t core_dsd_dispatch(const char *name,
  if(!strcmp(name,DIGIT_DSD_REPORT_SERVICE))
   return report_service(request,request_size,response,response_size,used,NULL);
  return STNLABZ_MODULE_ERR_NOT_FOUND;
+}
+/* Capture the actual call entry before running a module callback. */
+void core_dsd_service_begin(const char *service,unsigned line){
+ digit_dsd_event_t event={0};
+ if(!current_trace||!service)return;
+ event.trace_id=current_trace;event.span_id=7;event.line=line;
+ snprintf(event.module,sizeof event.module,"core");
+ snprintf(event.method,sizeof event.method,"digit_service");
+ snprintf(event.file,sizeof event.file,"core/digit.c");
+ snprintf(event.operation,sizeof event.operation,"%s",service);
+ snprintf(event.status,sizeof event.status,"CALL_ENTER");
+ (void)record(&event);
 }
 /* Diagnostic evidence for every service call, not only opt-in modules. */
 void core_dsd_service_result(const char *service,
