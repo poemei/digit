@@ -115,6 +115,24 @@ static int core_identity_field(const digit_interpretation_result_t *r,
  }
  return 0;
 }
+/* Conversational participation is decided here, after Interpretation.
+ * A question mark alone is not an invitation. */
+static int conversation_invitation(const digit_interpretation_result_t *r){
+ static const char *const openings[]={
+   "who","what","what's","whats","when","where","why","how",
+   "which","can","could","would","will","do","does","did",
+   "is","are","should","tell","describe","explain"
+ };
+ unsigned i,j;
+ if(r->kind!=DIGIT_UTTERANCE_QUESTION&&
+    !(r->features&DIGIT_FEATURE_EXPLANATION_REQUEST))return 0;
+ for(i=0;i<r->term_count&&i<4;i++){
+    const char *term=r->terms[i];
+    for(j=0;j<sizeof openings/sizeof openings[0];j++)
+       if(!strcmp(term,openings[j]))return 1;
+ }
+ return 0;
+}
 static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
     const void *request, size_t bytes, void *response, size_t capacity,
     size_t *used, int passive)
@@ -124,6 +142,7 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
     digit_interpretation_result_t result = {0};
     size_t returned = 0;
     stnlabz_module_result_t rc;
+    int participate;
     if (used) *used = 0;
     if (!request || bytes != sizeof(message_t) || !used)
         return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
@@ -147,10 +166,26 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
         result.term_count > DIGIT_INTERPRETATION_TERMS_MAX ||
         result.unresolved_references > DIGIT_INTERPRETATION_TERMS_MAX)
         return STNLABZ_MODULE_ERR_INVALID_STATE;
+    participate=!passive||conversation_invitation(&result);
+    if(!passive&&(!msg->message[0]||
+       (result.kind==DIGIT_UTTERANCE_UNRESOLVED&&
+        !strcmp(msg->message,"?")))){
+        int n;
+        if(!response||!capacity)return STNLABZ_MODULE_OK;
+        n=snprintf(response,capacity,"I'm here. What's on your mind?");
+        if(n<=0||(size_t)n>=capacity)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+        *used=(size_t)n;
+        trace_stage(host,"process","participation","CONTACT_ACKNOWLEDGED",
+            0,(unsigned)*used,__LINE__);
+        return STNLABZ_MODULE_OK;
+    }
+    trace_stage(host,"process","participation",
+       participate?"ENGAGEMENT_SELECTED":"PASSIVE_OBSERVATION",
+       participate?0:2,0,__LINE__);
     {
         uint32_t field=0;
         int creator=0;
-        if(!passive&&response&&capacity&&
+        if(participate&&response&&capacity&&
            core_identity_field(&result,&field,&creator)){
             digit_identity_request_t identity={field};
             digit_identity_response_t core_value={{0}};
@@ -248,7 +283,7 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
            decision.reference_count>DIGIT_REASONING_MAX_REFERENCES)
             return STNLABZ_MODULE_ERR_INVALID_STATE;
         /* A skipped View must be diagnosable, not invisible in DSD. */
-        if(passive){
+        if(!participate){
             trace_stage(host,"process","response.view","CHANNEL_OBSERVATION",2,0,__LINE__);
         }else if(!response||!capacity){
             trace_stage(host,"process","response.view","OUTPUT_UNAVAILABLE",2,0,__LINE__);
@@ -677,7 +712,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 4,
+    .version_major = 1, .version_minor = 1, .version_patch = 5,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
