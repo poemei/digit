@@ -84,3 +84,37 @@ When a live thread-bound DSD trace is present, `digit.sqlite3.context_recent` em
 ## Corpus provenance fidelity (v0.4.11)
 
 `digit.sqlite3.corpus_search` now copies `corpus.verification_status` from the stored database record into the returned Corpus hit without overriding it. The in-memory qualification verifies both a `verified` record and an `unverified` CSS record retain their actual values. This is a read-only retrieval correction: no schema changes, SQL writes to the runtime Corpus, Core changes, or autonomous verification. Note that Reasoning currently accepts only the literal status `operator-verified`; stored `verified` values are intentionally not promoted by SQLite3 and may remain ineligible until a separately authorized verification-policy decision. Build and live qualification remain operator-controlled.
+
+## SQLite import watcher (0.4.13)
+
+SQLite3 watches `/opt/digit/corpus/corpus.tsv`,
+`/opt/digit/observation/observations.jsonl`, and regular `.txt` files
+inside `/opt/digit/lessons`. Changes are checked approximately every two
+seconds, including on module startup. Imports are transactional and do not
+create duplicate Corpus rows for identical category/text or repeated source
+record IDs. A modified known Corpus source replaces its old text and returns
+to `unverified` rather than keeping a stale verified state. Plain-text
+lessons are imported as complete documents with provenance `lesson:<filename>`
+and status `unverified`; they are not automatically promoted to facts.
+
+TSV records are four tab-separated fields: source-record ID, category, source,
+text. JSONL observation records must be valid JSON objects with `text` or
+`message`; optional `event_id`, `source_record_id`, `timestamp`. The
+existing IRC `#stn-labz` conversation is required for observational import;
+missing conversation or malformed data prevents successful synchronization.
+Each file is imported in a transaction, rolled back on failure. Observation
+rows are append-only and duplicate records are skipped, with contextual
+provenance written for newly imported observations. No direct Core changes.
+
+Synchronization updates and failures are sent through the existing
+`digit.irc.deliver` queue as `[SQLite sync]` messages. Reporting is retried
+in memory while SQLite3 remains running if IRC is temporarily offline.
+Read-only Corpus queries continue to use the original read handle, and the
+new worker owns its separate write handle. Imported operator learning remains
+`unverified` until a human-controlled verification process approves it.
+
+The importer does not delete records when source lines or files disappear:
+this is a non-destructive additive/upsert sync, not a destructive mirror.
+Run `make -C modules/sqlite3 clean all test` and verify a live change to each
+source before operational acceptance. Source edits do not bypass the existing
+Reasoning verification policy.
