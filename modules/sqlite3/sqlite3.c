@@ -43,6 +43,31 @@ static void observe_search(unsigned count,int failed,unsigned line){
  (void)host->invoke_service(DIGIT_DSD_RECORD_SERVICE,&rec,sizeof rec,
                             NULL,0,&used);
 }
+/* Report actual context-query outcomes, only for a bound DSD request.
+ * No row values, SQL text, or source accounts enter diagnostics. */
+static void observe_context(unsigned count,int sqlite_code,unsigned line){
+ uint64_t trace=0,token=1;size_t used=0;digit_dsd_record_t rec={0};
+ if(!host||!host->invoke_service)return;
+ if(host->invoke_service(DIGIT_DSD_CURRENT_SERVICE,&token,sizeof token,
+    &trace,sizeof trace,&used)!=STNLABZ_MODULE_OK||
+    used!=sizeof trace||!trace)return;
+ rec.trace_id=rec.event.trace_id=trace;
+ rec.event.span_id=4;rec.event.parent_span_id=3;
+ rec.event.line=line;rec.event.result=sqlite_code==SQLITE_OK?0:1;
+ rec.event.records=count;
+ snprintf(rec.event.module,sizeof rec.event.module,"sqlite3");
+ snprintf(rec.event.method,sizeof rec.event.method,"context_recent");
+ snprintf(rec.event.file,sizeof rec.event.file,"modules/sqlite3/sqlite3.c");
+ snprintf(rec.event.operation,sizeof rec.event.operation,"context_select");
+ snprintf(rec.event.status,sizeof rec.event.status,"%s",
+   sqlite_code==SQLITE_OK?"SQLITE_OK":
+   sqlite_code==SQLITE_BUSY?"SQLITE_BUSY":
+   sqlite_code==SQLITE_LOCKED?"SQLITE_LOCKED":
+   sqlite_code==SQLITE_READONLY?"SQLITE_READONLY":
+   sqlite_code==SQLITE_CORRUPT?"SQLITE_CORRUPT":
+   sqlite_code==SQLITE_IOERR?"SQLITE_IOERR":"QUERY_ERROR");
+ (void)host->invoke_service(DIGIT_DSD_RECORD_SERVICE,&rec,sizeof rec,NULL,0,&used);
+}
 static int key_valid(const char *key) {
     size_t i;
     if (!key || !key[0]) return 0;
@@ -380,7 +405,7 @@ static stnlabz_module_result_t context_recent(
    "datetime(x.expires_at)>datetime('now')) "
    "ORDER BY x.id DESC LIMIT 8) ORDER BY id ASC",
    -1,&stmt,NULL);
- if(rc!=SQLITE_OK)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(rc!=SQLITE_OK){observe_context(0,rc,__LINE__);return STNLABZ_MODULE_ERR_INVALID_STATE;}
  sqlite3_bind_text(stmt,1,q->channel,-1,SQLITE_TRANSIENT);
  while((rc=sqlite3_step(stmt))==SQLITE_ROW){
    digit_context_item_t *item;
@@ -837,7 +862,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="sqlite3",.name="SQLite3 persistence",
-    .version_major=0,.version_minor=4,.version_patch=9,
+    .version_major=0,.version_minor=4,.version_patch=10,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
