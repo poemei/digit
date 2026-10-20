@@ -13,6 +13,7 @@ static const stnlabz_module_host_t *api;
 static char channel[128],language[48];
 static time_t last_reply;
 static unsigned turns;
+static char observed_channel[128];
 static int preference(const char *text,char word[48]){
  const char *p=text,*start;size_t n,i;
  const char *prefix="digit use ",*suffix=" when you speak to ";
@@ -92,31 +93,47 @@ static stnlabz_module_result_t process(const void *request,size_t bytes,
   snprintf(channel,sizeof channel,"%s",q->channel);
   snprintf(language,sizeof language,"%s",desired);
   last_reply=0;turns=0;
+  snprintf(observed_channel,sizeof observed_channel,"%s",q->channel);
   out->handled=1;
   snprintf(out->response,sizeof out->response,
     "I hear you. I'll use the social expressions I know here; "
     "that doesn't establish fluency in %s.",desired);
- }else if(social(&q->interpretation)||emoticon(q->text)){
-  int reply=!q->passive;
-  out->handled=1;
-  if(!reply&&language[0]&&!strcmp(channel,q->channel)){
-   if(++turns>=2&&(last_reply==0||
-      (time(NULL)!=(time_t)-1&&time(NULL)-last_reply>=60)))
-      reply=1;
-  }
-  if(reply){
+ }else{
+  const int cue=social(&q->interpretation)||emoticon(q->text);
+  const time_t now=time(NULL);
+  int reply=0;
+  /* Channel traffic is conversational context even when individual turns
+   * are not social cues. Keep DM interactions immediate, but allow a
+   * relevant social cue after other channel participants have been talking.
+   * Do not require an ephemeral preference to be repeated after reload. */
+  if(q->passive){
+   if(strcmp(observed_channel,q->channel)){
+    snprintf(observed_channel,sizeof observed_channel,"%s",q->channel);
+    turns=0;
+   }
+   if(q->interpretation.kind==DIGIT_UTTERANCE_STATEMENT&&
+      q->text[0]&&turns<8)turns++;
+   if(cue&&turns>=3&&
+      (last_reply==0||(now!=(time_t)-1&&now>=last_reply&&
+       now-last_reply>=60)))reply=1;
+  }else if(cue)reply=1;
+  if(cue){
    digit_socials_request_t sr={{0}};
    digit_socials_response_t result={{0}};
    size_t n=0;
-   strcpy(sr.category,emoticon(q->text)?"cats":"playful");
-   if(api->invoke_service(DIGIT_SOCIALS_SERVICE,&sr,sizeof sr,
-      &result,sizeof result,&n)==STNLABZ_MODULE_OK&&
-      n==sizeof result&&memchr(result.expression,0,sizeof result.expression)){
-    snprintf(out->response,sizeof out->response,"%s",result.expression);
-    turns=0;last_reply=time(NULL);
+   out->handled=1;
+   if(reply){
+    strcpy(sr.category,emoticon(q->text)?"cats":"playful");
+    if(api->invoke_service(DIGIT_SOCIALS_SERVICE,&sr,sizeof sr,
+       &result,sizeof result,&n)==STNLABZ_MODULE_OK&&
+       n==sizeof result&&memchr(result.expression,0,sizeof result.expression)){
+     snprintf(out->response,sizeof out->response,"%s",result.expression);
+     if(q->passive){turns=0;last_reply=now;}
+    }
    }
   }
  }
+
  *used=sizeof *out;return STNLABZ_MODULE_OK;
 }
 static void check(stnlabz_module_qualification_result_t *q,int ok,int negative){
@@ -152,6 +169,14 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  in.passive=1;
  check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
   out.handled&&!out.response[0],0);
+ /* Ordinary channel discussion contributes to activity before a cue. */
+ strcpy(in.text,"ordinary chat");in.interpretation.term_count=2;
+ strcpy(in.interpretation.terms[0],"ordinary");
+ strcpy(in.interpretation.terms[1],"chat");
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
+  !out.handled,0);
+ strcpy(in.text,"mrrp");in.interpretation.term_count=1;
+ strcpy(in.interpretation.terms[0],"mrrp");
  check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
   out.handled&&!strcmp(out.response,"=^.^="),0);
  strcpy(in.channel,"#other");
@@ -207,7 +232,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
    STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
  /* Realistic multi-speaker social-turn qualification. All observations
   * use the same channel, without assuming the speakers are family. */
- channel[0]=language[0]=0;last_reply=0;turns=0;
+ channel[0]=language[0]=observed_channel[0]=0;last_reply=0;turns=0;
  memset(&in,0,sizeof in);
  strcpy(in.account,"speaker-a");strcpy(in.channel,"#social");
  strcpy(in.text,"digit use kitten when you speak to us");
@@ -223,6 +248,11 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
    out.handled&&!out.response[0],0);
  strcpy(in.account,"speaker-b");
+ strcpy(in.text,"yes :)");
+ in.interpretation.term_count=1;strcpy(in.interpretation.terms[0],"yes");
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
+   !out.handled,0);
+ in.interpretation.term_count=3;
  strcpy(in.text,"runs and tackles yous");
  strcpy(in.interpretation.terms[0],"runs");
  strcpy(in.interpretation.terms[1],"tackles");
@@ -256,12 +286,12 @@ static stnlabz_module_result_t stop(void){
  if(!api)return STNLABZ_MODULE_ERR_INVALID_STATE;
  if(!api->unregister_service(DIGIT_SOCIAL_INTELLIGENCE_SERVICE,NULL))
   return STNLABZ_MODULE_ERR_STOP_FAILED;
- api=NULL;channel[0]=language[0]=0;turns=0;last_reply=0;
+ api=NULL;channel[0]=language[0]=observed_channel[0]=0;turns=0;last_reply=0;
  return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="social_intelligence",.name="Social Intelligence",
- .version_major=0,.version_minor=1,.version_patch=1,
+ .version_major=0,.version_minor=1,.version_patch=2,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
