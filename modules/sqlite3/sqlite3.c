@@ -11,6 +11,7 @@
 #include <syslog.h>
 #include "module.h"
 #include "sqlite3_diagnostic.h"
+#include "ingest.h"
 #include "corpus_search.h"
 #include "context.h"
 #include "../observation/observation.h"
@@ -621,6 +622,12 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api) {
         host->unregister_service(DIGIT_CONTEXT_STORE_SERVICE,NULL);
         goto fail_registered;
     }
+    if(!digit_ingest_start(host)){
+        startup_log("ingest",SQLITE_ERROR,"watcher_start_failed");
+        host->unregister_service(DIGIT_CONTEXT_RECENT_SERVICE,NULL);
+        host->unregister_service(DIGIT_CONTEXT_STORE_SERVICE,NULL);
+        goto fail_registered;
+    }
     startup_log("active",SQLITE_OK,"all_services_registered");
     return STNLABZ_MODULE_OK;
 fail_registered:
@@ -638,6 +645,7 @@ fail:
 }
 static stnlabz_module_result_t stop(void) {
     if(!database||!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
+    digit_ingest_stop();
     host->unregister_service(DIGIT_CONTEXT_RECENT_SERVICE,NULL);
     host->unregister_service(DIGIT_CONTEXT_STORE_SERVICE,NULL);
     host->unregister_service(DIGIT_OBSERVATION_RECENT_SERVICE,NULL);
@@ -871,7 +879,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="sqlite3",.name="SQLite3 persistence",
-    .version_major=0,.version_minor=4,.version_patch=12,
+    .version_major=0,.version_minor=4,.version_patch=13,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
