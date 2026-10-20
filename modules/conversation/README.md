@@ -68,3 +68,8 @@ Conversation and its Response View accept Reasoning's `PARTIAL` outcome. The Vie
 ## v1.1.3 — addressed IRC channel participation
 
 Conversation registers distinct handlers for passive `digit.conversation.listen` and interactive `digit.conversation`. Passive channel traffic remains observable without a mandatory reply. When IRC routes an addressed channel message through Core's `digit.message` route, Conversation permits the same source-grounded View outcomes as a private message, including clarification and honest uncertainty. Channel context lookup remains enabled, and structural code diagnostics cannot overwrite an already rendered response. Qualification fixtures exercise channel passivity and addressed-channel uncertainty rendering. No Core or IRC code was changed. Live channel routing and runtime participation remain subject to operator acceptance.
+
+
+## v1.1.4 — Core-owned identity access
+
+Questions referring to Digit's identity, lineage, mission, or mother now read a bounded value using the Core-owned `digit.core.identity.read` ABI service. The conversation module does not duplicate Core identity or rewrite protected Core facts. A question about a creator is explicitly distinguished from Core's mother relationship: the authoritative identity does not declare a creator. The response says so instead of inventing one. When the read-only service is unavailable, Digit reports the technical failure, not a lack of personal knowledge. This is separate from Corpus retrieval and Reasoning. Qualification fixtures now cover representative self, mission and creator questions; live service integration has not been executed here.
