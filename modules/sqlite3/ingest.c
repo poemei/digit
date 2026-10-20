@@ -153,7 +153,7 @@ static int observation_upsert(sqlite3 *db,const char *line,unsigned *add,unsigne
 static int ingest(sqlite3 *db,const char *path,int type){
  FILE *fp=fopen(path,"rb");char *line=NULL;size_t cap=0;ssize_t n;
  if(!fp){syslog(LOG_ERR,"digit.sqlite3 ingest: cannot open %s",path);report(path,0,0,0,1);return 0;}
- unsigned add=0,change=0,skip=0;int ok=1;unsigned long line_number=0;const char *reason="unknown";const char *name=strrchr(path,'/');
+ unsigned add=0,change=0,skip=0,batch=0;int ok=1;unsigned long line_number=0;const char *reason="unknown";const char *name=strrchr(path,'/');
  if(!begin(db)){
   syslog(LOG_ERR,"digit.sqlite3 ingest: transaction begin failed %s: %s",path,sqlite3_errmsg(db));
   {char detail[180];int code=sqlite3_extended_errcode(db);
@@ -188,8 +188,21 @@ static int ingest(sqlite3 *db,const char *path,int type){
    *a++=0;*b++=0;*c++=0;
    if(!corpus_upsert(db,line,b,a,c,&add,&change,&skip)){reason="Corpus SQL write";ok=0;break;}
   }else if(!observation_upsert(db,line,&add,&skip)){reason="Observation JSON/SQL write";ok=0;break;}
+  /* Release the writer lock frequently: IRC observations must not be
+   * starved by a full-file import. Previously 48K rows were one transaction. */
+  if(++batch==100){
+   if(!commit(db)){reason="batch commit";ok=0;break;}
+   batch=0;
+   if(!running())break;
+   {struct timespec pause={0,20000000};nanosleep(&pause,NULL);}
+   if(!begin(db)){reason="batch begin";ok=0;break;}
+  }
  }
+
  if(ferror(fp)){reason="file read error";ok=0;}
+ if(ok&&!running()&&!feof(fp)){
+  reason="paused for module shutdown";
+ }
 done:
  free(line);fclose(fp);
  if(ok&&!commit(db)){reason="commit";ok=0;}
@@ -203,7 +216,8 @@ done:
   (void)sqlite3_exec(db,"ROLLBACK",NULL,NULL,NULL);
  }
  if(ok)report(name?name+1:path,add,change,skip,0);
- return ok;
+ /* Do not mark a partially processed file as fully synchronized. */
+ return ok&&strcmp(reason,"paused for module shutdown")!=0;
 }
 static void *watcher(void *unused){
  sqlite3 *db=NULL;(void)unused;
