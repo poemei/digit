@@ -185,6 +185,26 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
         result.term_count > DIGIT_INTERPRETATION_TERMS_MAX ||
         result.unresolved_references > DIGIT_INTERPRETATION_TERMS_MAX)
         return STNLABZ_MODULE_ERR_INVALID_STATE;
+    /* Context is an input to evidence selection, not an afterthought.
+     * Keep one read per channel message and reuse it for diagnostics. */
+    digit_context_recent_result_t history={0};
+    int have_history=0;
+    if(!strcmp(msg->target,"#stn-labz")&&msg->account[0]){
+        digit_context_recent_query_t lookup={0};
+        size_t seen=0;
+        memcpy(lookup.channel,msg->target,sizeof lookup.channel);
+        rc=host->invoke_service(DIGIT_CONTEXT_RECENT_SERVICE,&lookup,
+            sizeof lookup,&history,sizeof history,&seen);
+        trace_stage(host,"process",DIGIT_CONTEXT_RECENT_SERVICE,
+            rc==STNLABZ_MODULE_OK?"SERVICE_OK":
+            rc==STNLABZ_MODULE_ERR_NOT_FOUND?"SERVICE_NOT_FOUND":"SERVICE_ERROR",
+            rc==STNLABZ_MODULE_OK?0:1,
+            rc==STNLABZ_MODULE_OK?history.count:0,__LINE__);
+        if(rc!=STNLABZ_MODULE_OK)return rc;
+        if(seen!=sizeof history||history.count>DIGIT_CONTEXT_MAX)
+            return STNLABZ_MODULE_ERR_INVALID_STATE;
+        have_history=1;
+    }
     participate=!passive||conversation_invitation(&result);
     if(!passive&&(!msg->message[0]||
        (result.kind==DIGIT_UTTERANCE_UNRESOLVED&&
@@ -282,31 +302,44 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
         size_t search_used=0,decision_used=0;
         unsigned i;
         reasoning.interpretation=result;
-        if(result.term_count){
-            /* Single indexed subject term avoids demanding that the entire
-             * utterance appear as an exact FTS phrase. No keyword dictionary. */
-            for(i=result.term_count;i>0;i--){
-                const char *term=result.terms[i-1];
-                if(term[0]&&strlen(term)>1){
-                    snprintf(search.query,sizeof search.query,"%s",term);
-                    break;
-                }
-            }
-        }
-        if(search.query[0]){
+        /* Search content-bearing terms, not merely the final word.
+         * FTS matches are candidates; their verification and relevance
+         * remain Reasoning's responsibility. No pronoun-to-person mapping. */
+        for(i=result.term_count;i>0;i--){
+            const char *term=result.terms[i-1];
+            static const char *const function_words[]={
+                "a","an","the","do","does","did","is","are","was","were",
+                "she","he","they","them","her","him","it","this","that",
+                "you","your","my","our","who","what","where","when",
+                "why","how","can","could","would","should","will",
+                "understand","about","of","to","and","or","in","on"
+            };
+            unsigned j;int skip=0;
+            digit_corpus_result_t candidate={0};
+            size_t candidate_used=0;
+            if(!term[0]||strlen(term)<3)continue;
+            for(j=0;j<sizeof function_words/sizeof function_words[0];j++)
+                if(!strcmp(term,function_words[j])){skip=1;break;}
+            if(skip)continue;
+            memset(&search,0,sizeof search);
+            snprintf(search.query,sizeof search.query,"%s",term);
             reasoning.retrieval_attempted=1;
             rc=host->invoke_service(DIGIT_CORPUS_SEARCH_SERVICE,&search,
-                sizeof search,&found,sizeof found,&search_used);
-            reasoning.retrieval_succeeded=(rc==STNLABZ_MODULE_OK&&
-                                         search_used==sizeof found&&
-                                         found.count<=DIGIT_CORPUS_RESULTS_MAX);
-            if(reasoning.retrieval_succeeded)reasoning.corpus=found;
-            trace_stage(host,"process","digit.sqlite3.corpus_search",
-                reasoning.retrieval_succeeded?"EVIDENCE_RETRIEVED":
-                rc==STNLABZ_MODULE_ERR_NOT_FOUND?"SERVICE_NOT_FOUND":"RETRIEVAL_UNAVAILABLE",
-                reasoning.retrieval_succeeded?0:2,
-                reasoning.retrieval_succeeded?found.count:0,__LINE__);
+                sizeof search,&candidate,sizeof candidate,&candidate_used);
+            if(rc!=STNLABZ_MODULE_OK||candidate_used!=sizeof candidate||
+               candidate.count>DIGIT_CORPUS_RESULTS_MAX)continue;
+            reasoning.retrieval_succeeded=1;
+            if(candidate.count){
+                found=candidate;reasoning.corpus=found;
+                search_used=candidate_used;
+                break;
+            }
         }
+        trace_stage(host,"process",DIGIT_CORPUS_SEARCH_SERVICE,
+            found.count?"EVIDENCE_RETRIEVED":
+            reasoning.retrieval_succeeded?"NO_CORPUS_MATCH":
+            "RETRIEVAL_UNAVAILABLE",found.count?0:2,found.count,__LINE__);
+        reasoning.context_count=have_history?history.count:0;
         rc=host->invoke_service(DIGIT_REASONING_SERVICE,&reasoning,
             sizeof reasoning,&decision,sizeof decision,&decision_used);
         trace_stage(host,"process","digit.reasoning.evaluate",
@@ -352,21 +385,7 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
     /* Observation persistence and context creation are atomic in SQLite3.
      * Conversation reads that context; it never duplicates observation writes.
      * A nonempty IRC account remains required for this channel route. */
-    if (!strcmp(msg->target, "#stn-labz") && msg->account[0]) {
-        digit_context_recent_query_t lookup = {0};
-        digit_context_recent_result_t history = {0};
-        size_t seen = 0;
-        memcpy(lookup.channel, msg->target, sizeof lookup.channel);
-        seen = 0;
-        rc = host->invoke_service(DIGIT_CONTEXT_RECENT_SERVICE, &lookup,
-            sizeof lookup, &history, sizeof history, &seen);
-        trace_stage(host,"process","digit.sqlite3.context_recent",
-          rc==STNLABZ_MODULE_OK?"SERVICE_OK":
-          rc==STNLABZ_MODULE_ERR_NOT_FOUND?"SERVICE_NOT_FOUND":"SERVICE_ERROR",
-          rc==STNLABZ_MODULE_OK?0:1,rc==STNLABZ_MODULE_OK?history.count:0,__LINE__);
-        if (rc != STNLABZ_MODULE_OK) return rc;
-        if (seen != sizeof history || history.count > DIGIT_CONTEXT_MAX)
-            return STNLABZ_MODULE_ERR_INVALID_STATE;
+    if(have_history){
         if (response && capacity && (!used || !*used)) {
             digit_observation_recent_result_t visible = {0};
             uint32_t i, first = history.count > DIGIT_OBSERVATION_RECENT_MAX ?
@@ -856,7 +875,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 8,
+    .version_major = 1, .version_minor = 1, .version_patch = 9,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
