@@ -87,6 +87,11 @@ static int subject_occurs(const char *source,const char *term){
  }
  return 0;
 }
+/* Explicit allowlist of stored Corpus verification labels. These remain
+ * distinct provenance values; neither is rewritten or promoted. */
+static int evidence_eligible(const char *status){
+ return !strcmp(status,"operator-verified")||!strcmp(status,"verified");
+}
 static int informative(const char *source,const char *topic){
  size_t i=0,words=0,letters=0;
  int inword=0,detail=0;
@@ -146,7 +151,7 @@ static void evaluate(const digit_reasoning_request_t *q,
   out->requires_clarification=1;return;}
  for(i=0;i<q->corpus.count;i++){
   const digit_corpus_hit_t *h=&q->corpus.hits[i];
-  if(!strcmp(h->verification_status,"operator-verified")&&
+  if(evidence_eligible(h->verification_status)&&
      informative(h->excerpt,topic)&&
      out->reference_count<DIGIT_REASONING_MAX_REFERENCES)
    out->corpus_ids[out->reference_count++]=h->id;
@@ -213,6 +218,12 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_CLARIFY,1);
  mutated=request;mutated.corpus.count=0;
  check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_UNKNOWN,0);
+ mutated=request;strcpy(mutated.corpus.hits[0].verification_status,"verified");
+ check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&
+   response.outcome==DIGIT_REASONING_OUTCOME_EVIDENCE&&response.corpus_ids[0]==123,0);
+ mutated=request;strcpy(mutated.corpus.hits[0].verification_status,"pending");
+ check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&
+   response.outcome==DIGIT_REASONING_OUTCOME_UNKNOWN,1);
  mutated=request;strcpy(mutated.corpus.hits[0].verification_status,"unverified");
  check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.evidence_count==0&&response.outcome==DIGIT_REASONING_OUTCOME_UNKNOWN,0);
  mutated=request;mutated.interpretation.unresolved_references=1;
@@ -268,7 +279,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="reasoning",.name="Evidence Constrained Reasoning",
- .version_major=0,.version_minor=1,.version_patch=4,
+ .version_major=0,.version_minor=1,.version_patch=5,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
