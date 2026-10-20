@@ -678,6 +678,14 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
       strcpy(lookup.channel,"#wrong");
       test_check(result,context_recent(&lookup,sizeof lookup,&found,
         sizeof found,&used,NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
+      strcpy(lookup.channel,"#stn-labz");
+      test_check(result,sqlite3_exec(db,
+        "UPDATE context SET expires_at='2000-01-01 00:00:00' WHERE id=1",
+        NULL,NULL,NULL)==SQLITE_OK,0);
+      used=0;
+      test_check(result,context_recent(&lookup,sizeof lookup,&found,
+        sizeof found,&used,NULL)==STNLABZ_MODULE_OK &&
+        used==sizeof found && found.count==0,0);
       database=previous_read;observation_writer=previous_writer;
     }
     test_check(result,sqlite3_close(db)==SQLITE_OK,0);
