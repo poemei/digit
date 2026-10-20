@@ -52,3 +52,8 @@ Existing `digit.socials.select` behavior remains unchanged.
 The relationship mappings are **designated by the human operator**,
 not proven by IRC nickname. Deployment of Socials does not grant anyone
 an identity, relationship, or authorization.
+
+
+## v0.2.1 — authenticated family exchanges
+
+The new `digit.socials.family` service accepts an explicit family kind and an addressed conversational text. It supports the operator-authorized family forms of address Momma, Auntie, and Kitty Sister and selects varied reciprocal greetings, affection, acknowledgments and thanks with expressions drawn from the existing Socials catalogs. It returns NOT_FOUND for non-family classifications or unrecognized social intent, so normal factual conversation is not replaced. There is no JOIN cooldown on interpersonal replies. This is **bounded family-specific language handling**, not general conversational intelligence. The caller is responsible for authenticated relationship classification; Socials does not authenticate accounts. Qualification adds representative positive and negative social-intent cases.
