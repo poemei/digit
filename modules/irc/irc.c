@@ -519,6 +519,7 @@ static void observe_channel(const irc_config_t *cfg,const char *raw,int tags_ena
  snprintf(rec.text,sizeof rec.text,"%s",message);
  observation_status(submit_observation(host_api,&rec));
 }
+static const char *greeting_kind(const irc_config_t *cfg,const char *account);
 static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled) {
     char *sender,*bang,*cmd,*target,*body,*space;
     char response[512],wire[1024];
@@ -617,8 +618,38 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled
                     &warning,sizeof warning,NULL,0,&warning_used);
             }
         }
-        rc=host_api->invoke_service(passive_channel?IRC_CONVERSATION_LISTEN:IRC_INPUT_SERVICE,
-            &input,sizeof input,response,sizeof response,&used);
+        /* Account-authenticated family messages may receive a Socials
+         * response. All other messages continue through Conversation. */
+        rc=STNLABZ_MODULE_ERR_NOT_FOUND;
+        if(!passive_channel){
+            const char *family=greeting_kind(cfg,input.account);
+            if(family && strcmp(family,"unknown")){
+                digit_socials_family_request_t social={{0}};
+                digit_socials_family_response_t social_response={{0}};
+                size_t social_used=0;
+                snprintf(social.kind,sizeof social.kind,"%s",family);
+                snprintf(social.text,sizeof social.text,"%s",input.message);
+                rc=host_api->invoke_service(DIGIT_SOCIALS_FAMILY_SERVICE,
+                    &social,sizeof social,&social_response,
+                    sizeof social_response,&social_used);
+                if(rc==STNLABZ_MODULE_OK&&
+                   social_used==sizeof social_response&&
+                   memchr(social_response.text,0,sizeof social_response.text)){
+                    used=strlen(social_response.text);
+                    if(used<sizeof response)
+                        memcpy(response,social_response.text,used+1);
+                    else rc=STNLABZ_MODULE_ERR_INVALID_STATE;
+                }else if(rc==STNLABZ_MODULE_OK){
+                    rc=STNLABZ_MODULE_ERR_INVALID_STATE;
+                }
+            }
+        }
+        if(rc!=STNLABZ_MODULE_OK){
+            used=0;
+            rc=host_api->invoke_service(
+                passive_channel?IRC_CONVERSATION_LISTEN:IRC_INPUT_SERVICE,
+                &input,sizeof input,response,sizeof response,&used);
+        }
         if(private_message){
             uint64_t clear=0;size_t trace_used=0;
             (void)host_api->invoke_service(DIGIT_DSD_BIND_SERVICE,
@@ -991,7 +1022,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=3,.version_patch=8,
+    .version_major=0,.version_minor=3,.version_patch=9,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
