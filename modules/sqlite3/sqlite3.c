@@ -739,8 +739,18 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
         strcpy(rec.sender,"UnknownSpeaker");
         strcpy(rec.account,"unknown-account");
         strcpy(rec.text,"Atomic context fixture");
-        test_check(result,observation_insert(&rec,sizeof rec,NULL,0,
-          &used,NULL)==STNLABZ_MODULE_OK,0);
+        {
+          digit_observation_receipt_t receipt={0};
+          used=0;
+          test_check(result,observation_insert(&rec,sizeof rec,
+            &receipt,sizeof receipt,&used,NULL)==STNLABZ_MODULE_OK &&
+            used==sizeof receipt && receipt.observation_id>0 &&
+            receipt.context_id>0 && receipt.event_id[0],0);
+          used=0;
+          test_check(result,observation_insert(&rec,sizeof rec,
+            &receipt,sizeof receipt-1,&used,NULL)==
+            STNLABZ_MODULE_ERR_INVALID_ARGUMENT && used==0,1);
+        }
         rc=sqlite3_prepare_v2(db,
           "SELECT count(*) FROM context x JOIN observations o "
           "ON o.event_id=x.source_id WHERE o.text='Atomic context fixture' "
