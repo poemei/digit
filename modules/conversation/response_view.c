@@ -3,12 +3,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <ctype.h>
 #include "response_view.h"
 
 int digit_response_render(const digit_reasoning_result_t *d,
  const digit_corpus_result_t *corpus,char *output,size_t capacity,size_t *used){
  unsigned i,j;const digit_corpus_hit_t *hit=NULL;
- size_t length=0,end=0,source_length;
+ size_t length=0,end=0,source_length,words=0;
+ int inword=0,has_detail=0;
  int n;
  if(used)*used=0;
  if(!d||!corpus||!output||!used||capacity<2||
@@ -26,6 +28,12 @@ int digit_response_render(const digit_reasoning_result_t *d,
  if(!hit||!memchr(hit->excerpt,0,sizeof hit->excerpt)||!hit->excerpt[0])
   return 0;
  source_length=strlen(hit->excerpt);
+ for(i=0;i<source_length;i++){
+  unsigned char c=(unsigned char)hit->excerpt[i];
+  if(isalpha(c)){if(!inword){words++;inword=1;}}
+  else {inword=0;if(c=='.'||c==';'||c==':')has_detail=1;}
+ }
+ if(words<6||!has_detail)return 0;
  for(end=0;end<source_length&&end<220;end++){
   unsigned char c=(unsigned char)hit->excerpt[end];
   if(c<32||c==127)return 0;
