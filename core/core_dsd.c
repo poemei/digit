@@ -252,7 +252,7 @@ static stnlabz_module_result_t report_service(
  const digit_dsd_report_request_t *q=request;
  digit_dsd_report_result_t *out=response;
  digit_dsd_result_t d={0};
- unsigned i,sql=0,conversation=0,no_reply=0,failure=0,interpreted=0;
+ unsigned i,sql=0,conversation=0,no_reply=0,failure=0,interpreted=0,no_generator=0;
  const digit_dsd_event_t *last=NULL;
  size_t n;
  (void)ctx;
@@ -281,6 +281,7 @@ static stnlabz_module_result_t report_service(
    if(!strcmp(e->module,"conversation"))conversation++;
    if(!strcmp(e->operation,"digit.interpretation"))interpreted++;
    if(!strcmp(e->status,"NO_RESPONSE"))no_reply++;
+   if(!strcmp(e->module,"conversation")&&!strcmp(e->status,"NO_GENERATOR"))no_generator++;
    if(e->result)failure++;
    if(strcmp(e->status,"TRACE_BOUND"))last=e;
  }
@@ -314,7 +315,15 @@ static stnlabz_module_result_t report_service(
    conversation?
    "Module: IRC and Conversation observed; specific service outcomes follow recorded route.":
    "Module: IRC boundary observed; downstream execution not established.");
- if(last)
+ if(no_generator){
+   const digit_dsd_event_t *source=NULL;
+   for(i=0;i<d.count;i++)
+      if(!strcmp(d.events[i].module,"conversation")&&
+         !strcmp(d.events[i].status,"NO_GENERATOR"))source=&d.events[i];
+   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
+     "Code: %s:%u (%s.%s), status=%s",
+     source->file,source->line,source->module,source->method,source->status);
+ }else if(last)
    snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
      "Code: %s:%u (%s.%s), status=%s",
      last->file,last->line,last->module,last->method,last->status);
@@ -331,7 +340,10 @@ static stnlabz_module_result_t report_service(
  }else
    snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
      "SQL: No SQLite3 operation recorded for this request; SQL outcome unknown.");
- if(no_reply&&conversation&&interpreted)
+ if(no_generator)
+   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
+     "Assessment: Conversation has no general response generator; this request completed without a generated answer.");
+ else if(no_reply&&conversation&&interpreted)
    snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
      "Assessment: Conversation invoked Interpretation but produced no reply; generation and participation remain unverified.");
  else if(no_reply&&conversation)
