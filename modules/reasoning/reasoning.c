@@ -109,28 +109,36 @@ static int informative(const char *source,const char *topic){
 }
 /* Partial evidence is a source-bound observation, not a sufficient answer.
  * Every subject token must occur; no context is fabricated or completed. */
-static int topic_matches(const char *source,const digit_interpretation_result_t *in){
- unsigned i,subjects=0;
+/* Functional words and discourse references are not evidence subjects.
+ * A pronoun's antecedent is NOT inferred here; relevant evidence may still
+ * be evaluated, while the unresolved identity remains unconfirmed. */
+static int function_term(const char *t){
+ static const char *const words[]={
+  "explain","describe","what","is","the","a","an","of",
+  "who","where","when","why","how","which","are","was","were",
+  "do","does","did","can","could","would","should","will",
+  "your","you","my","me","i","our","we","please","so","hey",
+  "what's","whats","tell","about","she","he","they","them",
+  "her","him","his","hers","their","theirs","it","its",
+  "this","that","these","those","now","then","already"
+ };
+ unsigned i;
+ for(i=0;i<sizeof words/sizeof words[0];i++)
+  if(!strcmp(t,words[i]))return 1;
+ return 0;
+}
+/* A short retrieval excerpt can corroborate a subject, not the entire
+ * proposition. Require a substantive verified sentence and at least one
+ * independent topical term, not incidental grammatical overlap. */
+static const char *matching_topic(const char *source,
+ const digit_interpretation_result_t *in){
+ unsigned i;
  for(i=0;i<in->term_count;i++){
   const char *t=in->terms[i];
-  if(!strcmp(t,"explain")||!strcmp(t,"describe")||
-     !strcmp(t,"what")||!strcmp(t,"is")||!strcmp(t,"the")||
-     !strcmp(t,"a")||!strcmp(t,"an")||!strcmp(t,"of")||
-     !strcmp(t,"who")||!strcmp(t,"where")||!strcmp(t,"when")||
-     !strcmp(t,"why")||!strcmp(t,"how")||!strcmp(t,"which")||
-     !strcmp(t,"are")||!strcmp(t,"was")||!strcmp(t,"were")||
-     !strcmp(t,"do")||!strcmp(t,"does")||!strcmp(t,"did")||
-     !strcmp(t,"can")||!strcmp(t,"could")||!strcmp(t,"would")||
-     !strcmp(t,"should")||!strcmp(t,"your")||!strcmp(t,"you")||
-     !strcmp(t,"my")||!strcmp(t,"me")||!strcmp(t,"i")||
-     !strcmp(t,"our")||!strcmp(t,"we")||!strcmp(t,"please")||
-     !strcmp(t,"so")||!strcmp(t,"hey")||
-     !strcmp(t,"what's")||!strcmp(t,"whats")||
-     !strcmp(t,"tell")||!strcmp(t,"about"))continue;
-  subjects++;
-  if(!subject_occurs(source,t))return 0;
+  if(strlen(t)<3||function_term(t))continue;
+  if(subject_occurs(source,t))return t;
  }
- return subjects>0;
+ return NULL;
 }
 static int partial_statement(const char *source){
  size_t i,words=0;int inword=0,ending=0;
@@ -151,7 +159,8 @@ static void evaluate(const digit_reasoning_request_t *q,
  out->uncertainty=1;out->requires_verification=1;
  if(q->interpretation.kind==DIGIT_UTTERANCE_UNRESOLVED||
     (q->interpretation.features&DIGIT_FEATURE_TRUNCATED)||
-    q->interpretation.unresolved_references){
+    (q->interpretation.unresolved_references &&
+     !q->interpretation.term_count)){
   out->outcome=DIGIT_REASONING_OUTCOME_CLARIFY;
   out->requires_clarification=1;return;
  }
@@ -166,18 +175,18 @@ static void evaluate(const digit_reasoning_request_t *q,
  }
  for(j=q->interpretation.term_count;j>0;j--){
   const char *t=q->interpretation.terms[j-1];
-  if(strcmp(t,"explain")&&strcmp(t,"describe")&&
-     strcmp(t,"what")&&strcmp(t,"is")&&strcmp(t,"the")&&
-     strcmp(t,"a")&&strcmp(t,"an")&&strcmp(t,"of")){topic=t;break;}
+  if(strlen(t)>=3&&!function_term(t)){topic=t;break;}
  }
- if(!topic){out->outcome=DIGIT_REASONING_OUTCOME_CLARIFY;
-  out->requires_clarification=1;return;}
+ if(!topic){
+  out->outcome=DIGIT_REASONING_OUTCOME_CLARIFY;
+  out->requires_clarification=1;return;
+ }
  /* Prefer substantive candidates; do not let a short hit eclipse them. */
  for(i=0;i<q->corpus.count;i++){
   const digit_corpus_hit_t *h=&q->corpus.hits[i];
   if(evidence_eligible(h->verification_status)&&
-     topic_matches(h->excerpt,&q->interpretation)&&
-     informative(h->excerpt,topic)&&
+     matching_topic(h->excerpt,&q->interpretation)&&
+     informative(h->excerpt,matching_topic(h->excerpt,&q->interpretation))&&
      out->reference_count<DIGIT_REASONING_MAX_REFERENCES)
    out->corpus_ids[out->reference_count++]=h->id;
  }
@@ -191,7 +200,7 @@ static void evaluate(const digit_reasoning_request_t *q,
  for(i=0;i<q->corpus.count;i++){
   const digit_corpus_hit_t *h=&q->corpus.hits[i];
   if(evidence_eligible(h->verification_status)&&
-     topic_matches(h->excerpt,&q->interpretation)&&
+     matching_topic(h->excerpt,&q->interpretation)&&
      partial_statement(h->excerpt)){
     out->corpus_ids[0]=h->id;
     out->reference_count=out->evidence_count=1;
@@ -289,7 +298,28 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  mutated=request;strcpy(mutated.corpus.hits[0].verification_status,"unverified");
  check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.evidence_count==0&&response.outcome==DIGIT_REASONING_OUTCOME_UNKNOWN,0);
  mutated=request;mutated.interpretation.unresolved_references=1;
- check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.requires_clarification,0);
+ check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_EVIDENCE,0);
+ mutated=request;
+ mutated.interpretation.term_count=5;
+ strcpy(mutated.interpretation.terms[0],"does");
+ strcpy(mutated.interpretation.terms[1],"she");
+ strcpy(mutated.interpretation.terms[2],"understand");
+ strcpy(mutated.interpretation.terms[3],"cat");
+ strcpy(mutated.interpretation.terms[4],"talk");
+ mutated.interpretation.unresolved_references=1;
+ strcpy(mutated.corpus.hits[0].excerpt,
+    "Cat vocalizations include social sounds used during feline communication.");
+ check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&
+   response.outcome==DIGIT_REASONING_OUTCOME_EVIDENCE,0);
+ strcpy(mutated.corpus.hits[0].verification_status,"pending");
+ check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&
+   response.outcome==DIGIT_REASONING_OUTCOME_UNKNOWN,1);
+ mutated=request;mutated.interpretation.unresolved_references=1;
+ mutated.interpretation.term_count=2;
+ strcpy(mutated.interpretation.terms[0],"does");
+ strcpy(mutated.interpretation.terms[1],"she");
+ check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&
+   response.outcome==DIGIT_REASONING_OUTCOME_CLARIFY,1);
  mutated=request;mutated.interpretation.features=DIGIT_FEATURE_TRUNCATED;
  check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_CLARIFY,0);
  mutated=request;mutated.interpretation.kind=DIGIT_UTTERANCE_UNRESOLVED;
@@ -341,7 +371,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="reasoning",.name="Evidence Constrained Reasoning",
- .version_major=0,.version_minor=1,.version_patch=7,
+ .version_major=0,.version_minor=1,.version_patch=8,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
