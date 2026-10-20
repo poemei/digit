@@ -468,6 +468,16 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
         check(q,!digit_response_render(&decision,&data,render,sizeof render,&length),1);
         decision.corpus_ids[0]=42;
         check(q,!digit_response_render(&decision,&data,render,5,&length),1);
+        decision.outcome=DIGIT_REASONING_OUTCOME_UNKNOWN;
+        check(q,digit_response_render(&decision,&data,render,sizeof render,&length)
+          &&strstr(render,"don't know")!=NULL,0);
+        decision.outcome=DIGIT_REASONING_OUTCOME_CLARIFY;
+        check(q,digit_response_render(&decision,&data,render,sizeof render,&length)
+          &&strstr(render,"clarification")!=NULL,0);
+        decision.outcome=DIGIT_REASONING_OUTCOME_FAILURE;
+        check(q,digit_response_render(&decision,&data,render,sizeof render,&length)
+          &&strstr(render,"retrieval failed")!=NULL,0);
+
     }
 
     return q->tests_executed >= STNLABZ_MODULE_MIN_TESTS &&
