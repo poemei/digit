@@ -79,3 +79,8 @@ Qualification's in-memory writer runs are marked internally so they do not emit 
 ## Request-bound DSD context read evidence (v0.4.10)
 
 When a live thread-bound DSD trace is present, `digit.sqlite3.context_recent` emits a sanitized SQL result event identifying the actual prepared SELECT boundary, `SQLITE_OK` or a concrete categorized SQLite failure, source line, and result row count. No SQL statement text, row contents or identities are logged. The existing persistence transaction and optional Observation/context receipt are unchanged. If a request does not invoke this SQLite service, no SQL result is invented. Deploy with DSD 0.7.3 and Conversation 1.0.5.
+
+
+## Corpus provenance fidelity (v0.4.11)
+
+`digit.sqlite3.corpus_search` now copies `corpus.verification_status` from the stored database record into the returned Corpus hit without overriding it. The in-memory qualification verifies both a `verified` record and an `unverified` CSS record retain their actual values. This is a read-only retrieval correction: no schema changes, SQL writes to the runtime Corpus, Core changes, or autonomous verification. Note that Reasoning currently accepts only the literal status `operator-verified`; stored `verified` values are intentionally not promoted by SQLite3 and may remain ineligible until a separately authorized verification-policy decision. Build and live qualification remain operator-controlled.
