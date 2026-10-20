@@ -164,7 +164,8 @@ static stnlabz_module_result_t process(const stnlabz_module_host_t *host,
         trace_stage(host,"process","digit.reasoning.evaluate",
             rc==STNLABZ_MODULE_OK&&decision_used==sizeof decision?
               (decision.outcome==DIGIT_REASONING_OUTCOME_EVIDENCE?
-                "EVIDENCE_AVAILABLE":decision.outcome==DIGIT_REASONING_OUTCOME_CLARIFY?
+                "EVIDENCE_AVAILABLE":decision.outcome==DIGIT_REASONING_OUTCOME_PARTIAL?
+                "PARTIAL_EVIDENCE":decision.outcome==DIGIT_REASONING_OUTCOME_CLARIFY?
                 "CLARIFICATION_REQUIRED":decision.outcome==DIGIT_REASONING_OUTCOME_UNKNOWN?
                 "KNOWLEDGE_UNKNOWN":decision.outcome==DIGIT_REASONING_OUTCOME_FAILURE?
                 "RETRIEVAL_FAILED":"EVIDENCE_INSUFFICIENT"):
@@ -174,7 +175,7 @@ static stnlabz_module_result_t process(const stnlabz_module_host_t *host,
                 decision.evidence_count:0,__LINE__);
         if(rc!=STNLABZ_MODULE_OK)return rc;
         if(decision_used!=sizeof decision||
-           decision.outcome>DIGIT_REASONING_OUTCOME_FAILURE||
+           decision.outcome>DIGIT_REASONING_OUTCOME_PARTIAL||
            decision.reference_count>DIGIT_REASONING_MAX_REFERENCES)
             return STNLABZ_MODULE_ERR_INVALID_STATE;
         /* A skipped View must be diagnosable, not invisible in DSD. */
@@ -188,7 +189,8 @@ static stnlabz_module_result_t process(const stnlabz_module_host_t *host,
                 (decision.outcome==DIGIT_REASONING_OUTCOME_UNKNOWN?
                   "UNKNOWN_STATED":decision.outcome==DIGIT_REASONING_OUTCOME_CLARIFY?
                   "CLARIFICATION_REQUESTED":decision.outcome==DIGIT_REASONING_OUTCOME_FAILURE?
-                  "RETRIEVAL_FAILURE_STATED":"RESPONSE_COMPOSED"):
+                  "RETRIEVAL_FAILURE_STATED":decision.outcome==DIGIT_REASONING_OUTCOME_PARTIAL?
+                  "PARTIAL_KNOWLEDGE_STATED":"RESPONSE_COMPOSED"):
                 "EVIDENCE_NOT_RENDERABLE";
             trace_stage(host,"process","response.view",status,
                 rendered?0:2,rendered?(unsigned)*used:0,__LINE__);
@@ -473,6 +475,13 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
         check(q,!digit_response_render(&decision,&data,render,sizeof render,&length),1);
         decision.corpus_ids[0]=42;
         check(q,!digit_response_render(&decision,&data,render,5,&length),1);
+        decision.outcome=DIGIT_REASONING_OUTCOME_PARTIAL;
+        strcpy(data.hits[0].excerpt,"Chaos Foundation maintains engineering documentation.");
+        check(q,digit_response_render(&decision,&data,render,sizeof render,&length)&&
+          strstr(render,"not a full explanation")!=NULL,0);
+        strcpy(data.hits[0].verification_status,"unverified");
+        check(q,!digit_response_render(&decision,&data,render,sizeof render,&length),1);
+        strcpy(data.hits[0].verification_status,"verified");
         decision.outcome=DIGIT_REASONING_OUTCOME_UNKNOWN;
         check(q,digit_response_render(&decision,&data,render,sizeof render,&length)
           &&strstr(render,"don't know")!=NULL,0);
@@ -520,7 +529,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 1,
+    .version_major = 1, .version_minor = 1, .version_patch = 2,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
