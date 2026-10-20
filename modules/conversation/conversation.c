@@ -458,6 +458,11 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
         check(q,!digit_response_render(&decision,&data,render,sizeof render,&length)
            &&length==0,1);
         decision.requires_verification=0;
+        strcpy(data.hits[0].verification_status,"verified");
+        check(q,digit_response_render(&decision,&data,render,sizeof render,&length)
+           &&length>0,0);
+        strcpy(data.hits[0].verification_status,"pending");
+        check(q,!digit_response_render(&decision,&data,render,sizeof render,&length),1);
         strcpy(data.hits[0].verification_status,"unverified");
         check(q,!digit_response_render(&decision,&data,render,sizeof render,&length),1);
         strcpy(data.hits[0].verification_status,"operator-verified");
@@ -515,7 +520,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 0,
+    .version_major = 1, .version_minor = 1, .version_patch = 1,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
