@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <time.h>
 #include "../observation/observation.h"
 #include "../sqlite3/context.h"
 #include "module.h"
@@ -26,6 +27,10 @@ typedef struct {
 } message_t;
 
 static const stnlabz_module_host_t *host_api;
+static char social_channel[128];
+static char social_language[48];
+static time_t social_last_reply;
+static unsigned social_turns;
 
 
 /* Structural PHP diagnostic based on observed code boundaries, not on
@@ -158,7 +163,7 @@ static int nonverbal_social_contact(const char *text){
 static int speech_preference(const message_t *msg,char *language,size_t capacity){
  const char *p=msg->message,*start;size_t n;
  static const char lead[]="digit use ";
- static const char end[]=" when you speak to me";
+ static const char end[]=" when you speak to ";
  size_t i;
  if(!msg->account[0]||capacity<2)return 0;
  while(isspace((unsigned char)*p))p++;
@@ -171,6 +176,9 @@ static int speech_preference(const message_t *msg,char *language,size_t capacity
  for(i=0;i<sizeof end-1;i++)
   if(!p[i]||tolower((unsigned char)p[i])!=end[i])return 0;
  p+=sizeof end-1;
+ if(p[0]=='m'&&p[1]=='e')p+=2;
+ else if(p[0]=='u'&&p[1]=='s')p+=2;
+ else return 0;
  while(isspace((unsigned char)*p))p++;
  if(*p&&(*p!='.'&&*p!='!'))return 0;
  if(*p&&p[1])return 0;
@@ -253,11 +261,13 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
         char requested_language[DIGIT_INTERPRETATION_TERM_MAX]={0};
         if(speech_preference(msg,requested_language,sizeof requested_language)){
             int n;
+            snprintf(social_channel,sizeof social_channel,"%s",msg->target);
+            snprintf(social_language,sizeof social_language,"%s",requested_language);
+            social_last_reply=0;social_turns=0;
             if(!response||!capacity)return STNLABZ_MODULE_OK;
             n=snprintf(response,capacity,
-                "You want me to use %s when speaking to you. "
-                "I understand the request, but I can't yet confirm I can "
-                "speak it or retain that preference across conversations.",
+                "I hear you. I'll use the social expressions I know "
+                "when speaking here. I can't promise fluency in %s.",
                 requested_language);
             if(n<=0||(size_t)n>=capacity)
                 return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
@@ -271,7 +281,11 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
      * social contact can use the existing Socials selector without inventing
      * a factual question or pretending a Corpus excerpt is an utterance. */
     if(social_utterance(&result)){
-        if(!passive&&response&&capacity){
+        if(response&&capacity&&(!passive||
+           (social_language[0]&&!strcmp(social_channel,msg->target)&&
+            ++social_turns>=3&&
+            (social_last_reply==0||
+             (time(NULL)!=(time_t)-1&&time(NULL)-social_last_reply>=60))))){
             digit_socials_request_t request={{0}};
             digit_socials_response_t expression={{0}};
             size_t expression_used=0;
@@ -284,6 +298,7 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
                 int n=snprintf(response,capacity,"%s",expression.expression);
                 if(n>0&&(size_t)n<capacity){
                     *used=(size_t)n;
+                    social_last_reply=time(NULL);social_turns=0;
                     trace_stage(host,"process","participation",
                         "SOCIAL_EXPRESSION",0,(unsigned)*used,__LINE__);
                 }
@@ -925,6 +940,12 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
         check(q,process_route(&mock,&preference,sizeof preference,response,
             sizeof response,&emitted,1)==STNLABZ_MODULE_OK&&
             emitted>0&&strstr(response,"use kitten")!=NULL,0);
+        strcpy(preference.message,"digit use kitten when you speak to us");
+        emitted=0;
+        check(q,process_route(&mock,&preference,sizeof preference,response,
+            sizeof response,&emitted,1)==STNLABZ_MODULE_OK&&emitted>0,0);
+        social_channel[0]=social_language[0]=0;
+        social_turns=0;social_last_reply=0;
         strcpy(preference.message,"meow");
         emitted=99;
         check(q,process_route(&mock,&preference,sizeof preference,response,
@@ -1124,13 +1145,15 @@ static stnlabz_module_result_t stop(void)
     if (!host_api->unregister_service(LISTEN, NULL))
         return STNLABZ_MODULE_ERR_STOP_FAILED;
     host_api = NULL;
+    social_channel[0]=social_language[0]=0;
+    social_turns=0;social_last_reply=0;
     return STNLABZ_MODULE_OK;
 }
 
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 16,
+    .version_major = 1, .version_minor = 1, .version_patch = 17,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
