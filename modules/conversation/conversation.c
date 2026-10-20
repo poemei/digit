@@ -11,7 +11,7 @@
 #include "../sqlite3/context.h"
 #include "module.h"
 #include "../interpretation/interpretation.h"
-#include "../dsd/dsd.h"
+#include "dsd.h"
 #include "../reasoning/reasoning.h"
 #include "../sqlite3/corpus_search.h"
 
