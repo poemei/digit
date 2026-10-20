@@ -70,6 +70,33 @@ static int corpus_upsert(sqlite3 *db,const char *id,const char *category,
      !strcmp((const char*)status,"operator-verified")){++*skip;sqlite3_finalize(st);return 1;}
  }else if(rc!=SQLITE_DONE){sqlite3_finalize(st);return 0;}
  sqlite3_finalize(st);st=NULL;
+ /* Adopt an identical preexisting row instead of adding a duplicate.
+  * A matching designated source is operator-approved even when an older
+  * importer left the row without provenance or as unverified. */
+ if(!exists){
+  rc=sqlite3_prepare_v2(db,
+   "SELECT id FROM corpus WHERE category=?1 AND text=?2 LIMIT 1",-1,&st,NULL);
+  if(rc!=SQLITE_OK)return 0;
+  sqlite3_bind_text(st,1,category,-1,SQLITE_TRANSIENT);
+  sqlite3_bind_text(st,2,body,-1,SQLITE_TRANSIENT);
+  rc=sqlite3_step(st);
+  if(rc==SQLITE_ROW){
+   sqlite3_int64 rowid=sqlite3_column_int64(st,0);
+   sqlite3_finalize(st);st=NULL;
+   rc=sqlite3_prepare_v2(db,
+    "UPDATE corpus SET verification_status='operator-verified',"
+    "source_record_id=CASE WHEN source_record_id IS NULL OR source_record_id='' "
+    "THEN ?1 ELSE source_record_id END WHERE id=?2",-1,&st,NULL);
+   if(rc!=SQLITE_OK)return 0;
+   sqlite3_bind_text(st,1,id,-1,SQLITE_TRANSIENT);
+   sqlite3_bind_int64(st,2,rowid);
+   rc=sqlite3_step(st);sqlite3_finalize(st);
+   if(rc==SQLITE_DONE)++*change;
+   return rc==SQLITE_DONE;
+  }
+  sqlite3_finalize(st);st=NULL;
+  if(rc!=SQLITE_DONE)return 0;
+ }
  rc=sqlite3_prepare_v2(db,exists?
    "UPDATE corpus SET category=?1,source=?2,text=?3,verification_status='operator-verified' WHERE source_record_id=?4":
    "INSERT INTO corpus(category,source,text,verification_status,source_record_id) "
