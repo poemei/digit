@@ -5,7 +5,32 @@
 #include <string.h>
 #include "module.h"
 #include "socials.h"
+#include "../sqlite3/corpus_search.h"
 
+static int corpus_fixture_mode;
+static stnlabz_module_result_t mock_invoke(const char *name,
+ const void *request,size_t request_size,void *response,
+ size_t capacity,size_t *used){
+ digit_corpus_result_t result={0};
+ const digit_corpus_query_t *query=request;
+ if(used)*used=0;
+ if(strcmp(name,DIGIT_CORPUS_SEARCH_SERVICE)||!request||
+    request_size!=sizeof *query||!response||!used||
+    capacity<sizeof result)return STNLABZ_MODULE_ERR_NOT_FOUND;
+ if(!corpus_fixture_mode)return STNLABZ_MODULE_ERR_NOT_FOUND;
+ if(strcmp(query->query,"feline"))return STNLABZ_MODULE_ERR_NOT_FOUND;
+ result.count=1;result.hits[0].id=42;
+ strcpy(result.hits[0].category,corpus_fixture_mode==2?
+   "engineering":"feline");
+ strcpy(result.hits[0].verification_status,
+   corpus_fixture_mode==3?"unverified":"operator-verified");
+ strcpy(result.hits[0].excerpt,corpus_fixture_mode==4?
+   "A very long description of a kitten phrase, not an expression":
+   "mrrp");
+ memcpy(response,&result,sizeof result);
+ *used=sizeof result;
+ return STNLABZ_MODULE_OK;
+}
 static stnlabz_module_service_handler_fn callback;
 static stnlabz_module_service_handler_fn greeting_callback;
 static stnlabz_module_service_handler_fn family_callback;
@@ -63,6 +88,7 @@ int main(int argc,char **argv) {
  demand(qualification.tests_executed>=20&&qualification.tests_failed==0,
         "qualification checks");
  api.register_service=reg;api.unregister_service=unreg;
+ api.invoke_service=mock_invoke;
  demand(d->start(&api)==STNLABZ_MODULE_OK,"start");
  demand(registrations==3&&callback!=NULL&&greeting_callback!=NULL&&family_callback!=NULL,"registration");
  for(i=0;i<sizeof categories/sizeof categories[0];i++){
@@ -80,6 +106,31 @@ int main(int argc,char **argv) {
    memcpy(previous,output.expression,sizeof previous);
   }
  }
+ /* Corpus may enrich expression vocabulary for any caller, but only
+  * verified, category-labeled, short expressions may be emitted. */
+ memset(&request,0,sizeof request);
+ strcpy(request.category,"cats");
+ corpus_fixture_mode=1;used=0;
+ demand(callback(&request,sizeof request,&output,sizeof output,&used,
+    registered_context)==STNLABZ_MODULE_OK&&
+    !strcmp(output.expression,"mrrp"),"verified Corpus feline expression");
+ used=0;
+ demand(callback(&request,sizeof request,&output,sizeof output,&used,
+    registered_context)==STNLABZ_MODULE_OK&&
+    strcmp(output.expression,"mrrp"),"Corpus expression no immediate repeat");
+ corpus_fixture_mode=2;used=0;
+ demand(callback(&request,sizeof request,&output,sizeof output,&used,
+    registered_context)==STNLABZ_MODULE_OK&&
+    strcmp(output.expression,"mrrp"),"reject incorrect Corpus category");
+ corpus_fixture_mode=3;used=0;
+ demand(callback(&request,sizeof request,&output,sizeof output,&used,
+    registered_context)==STNLABZ_MODULE_OK&&
+    strcmp(output.expression,"mrrp"),"reject unverified Corpus record");
+ corpus_fixture_mode=4;used=0;
+ demand(callback(&request,sizeof request,&output,sizeof output,&used,
+    registered_context)==STNLABZ_MODULE_OK&&
+    strcmp(output.expression,"mrrp"),"reject narrative Corpus excerpt");
+ corpus_fixture_mode=0;
  memset(&request,0,sizeof request);
  strcpy(request.category,"unknown");
  demand(callback(&request,sizeof request,&output,sizeof output,&used,NULL)==
