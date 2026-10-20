@@ -248,7 +248,11 @@ static stnlabz_module_result_t context_store(
   "INSERT INTO context(subject_type,subject_id,context_type,value,source_id,confidence,expires_at) "
   "SELECT 'conversation',c.id,?1,o.text,o.event_id,1.0,NULL "
   "FROM observations o JOIN conversations c ON c.id=o.conversation_id "
-  "WHERE c.transport='irc' AND c.channel=?2 AND o.text=?3 "
+  "WHERE c.transport='irc' AND c.channel=?2 "
+  "AND (o.text=?3 OR (length(o.text)>length(?3) "
+  "AND length(o.text)-length(?3)<=72 "
+  "AND substr(o.text,-length(?3))=?3 "
+  "AND substr(o.text,length(o.text)-length(?3),1) IN (' ',':',','))) "
   "AND o.source_record_id=?4 "
   "AND NOT EXISTS(SELECT 1 FROM context x WHERE x.subject_type='conversation' "
   "AND x.subject_id=c.id AND x.source_id=o.event_id AND x.context_type=?1) "
@@ -266,7 +270,11 @@ static stnlabz_module_result_t context_store(
  rc=sqlite3_prepare_v2(observation_writer,
    "SELECT 1 FROM observations o JOIN conversations c "
    "ON c.id=o.conversation_id WHERE c.transport='irc' "
-   "AND c.channel=?1 AND o.text=?2 AND o.source_record_id=?3 "
+   "AND c.channel=?1 AND (o.text=?2 OR (length(o.text)>length(?2) "
+   "AND length(o.text)-length(?2)<=72 "
+   "AND substr(o.text,-length(?2))=?2 "
+   "AND substr(o.text,length(o.text)-length(?2),1) IN (' ',':',','))) "
+   "AND o.source_record_id=?3 "
    "LIMIT 1",-1,&stmt,NULL);
  if(rc!=SQLITE_OK)return STNLABZ_MODULE_ERR_INVALID_STATE;
  sqlite3_bind_text(stmt,1,r->channel,-1,SQLITE_TRANSIENT);
@@ -662,10 +670,21 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
         !strcmp(found.items[0].context_type,"utterance.question"),0);
       test_check(result,context_store(&request,sizeof request,NULL,0,
         &used,NULL)==STNLABZ_MODULE_OK,0);
+      test_check(result,sqlite3_exec(db,
+        "INSERT INTO observations VALUES(2,'irc-event-2',7,"
+        "'digicat: Can you help?','laurie')",
+        NULL,NULL,NULL)==SQLITE_OK,0);
+      test_check(result,context_store(&request,sizeof request,NULL,0,
+        &used,NULL)==STNLABZ_MODULE_OK,0);
       used=0;
       test_check(result,context_recent(&lookup,sizeof lookup,&found,
         sizeof found,&used,NULL)==STNLABZ_MODULE_OK &&
-        found.count==1,0);
+        found.count==2 &&
+        !strcmp(found.items[1].source_id,"irc-event-2"),0);
+      used=0;
+      test_check(result,context_recent(&lookup,sizeof lookup,&found,
+        sizeof found,&used,NULL)==STNLABZ_MODULE_OK &&
+        found.count==2,0);
       strcpy(request.text,"unobserved message");
       test_check(result,context_store(&request,sizeof request,NULL,0,
         &used,NULL)==STNLABZ_MODULE_ERR_NOT_FOUND,1);
@@ -680,7 +699,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
         sizeof found,&used,NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
       strcpy(lookup.channel,"#stn-labz");
       test_check(result,sqlite3_exec(db,
-        "UPDATE context SET expires_at='2000-01-01 00:00:00' WHERE id=1",
+        "UPDATE context SET expires_at='2000-01-01 00:00:00'",
         NULL,NULL,NULL)==SQLITE_OK,0);
       used=0;
       test_check(result,context_recent(&lookup,sizeof lookup,&found,
