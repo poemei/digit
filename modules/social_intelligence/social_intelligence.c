@@ -46,18 +46,31 @@ static int emoticon(const char *t){
  }
  return mark;
 }
+/* Score conversational signals, not a lookup table of replies.
+ * Textual play and affectionate actions are weak signals independently;
+ * multiple turns are required before unsolicited participation. */
+static int prefix(const char *word,const char *stem){
+ size_t n=strlen(stem);
+ return !strncmp(word,stem,n);
+}
 static int social(const digit_interpretation_result_t *r){
- unsigned i;int found=0;
- if(r->kind==DIGIT_UTTERANCE_QUESTION)return 0;
+ unsigned i;int markers=0;
+ if(r->kind==DIGIT_UTTERANCE_QUESTION||
+    r->kind==DIGIT_UTTERANCE_UNRESOLVED)return 0;
  for(i=0;i<r->term_count&&i<DIGIT_INTERPRETATION_TERMS_MAX;i++){
   const char *w=r->terms[i];
-  if(!strcmp(w,"mrrp")||!strcmp(w,"meow")||
-     !strcmp(w,"purr")||!strcmp(w,"purrs")||
-     !strcmp(w,"puurrs")||!strcmp(w,"paws")||
-     !strcmp(w,"lickies")||!strcmp(w,"scratches")||
-     !strcmp(w,"cuddles"))found=1;
+  /* Morphological families permit informal spellings and inflection.
+   * These are social cues, not evidence of intent or consent. */
+  if(prefix(w,"purr")||prefix(w,"puurr")||prefix(w,"meow")||
+     prefix(w,"mrrp")||prefix(w,"lick")||prefix(w,"paws")||
+     prefix(w,"bump")||prefix(w,"tackl")||prefix(w,"cuddl")||
+     prefix(w,"gigg")||prefix(w,"nuzzl")||prefix(w,"scritch")||
+     prefix(w,"kitten")||prefix(w,"kitty")||prefix(w,"bowl")||
+     prefix(w,"hug")||prefix(w,"snugg")||prefix(w,"queen")||
+     prefix(w,"groom")||prefix(w,"pet")||prefix(w,"scratches"))
+     markers++;
  }
- return found;
+ return markers>0;
 }
 static stnlabz_module_result_t process(const void *request,size_t bytes,
  void *response,size_t capacity,size_t *used,void *ctx){
@@ -192,6 +205,40 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  in.interpretation.kind=DIGIT_UTTERANCE_QUESTION+1;
  check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==
    STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
+ /* Realistic multi-speaker social-turn qualification. All observations
+  * use the same channel, without assuming the speakers are family. */
+ channel[0]=language[0]=0;last_reply=0;turns=0;
+ memset(&in,0,sizeof in);
+ strcpy(in.account,"speaker-a");strcpy(in.channel,"#social");
+ strcpy(in.text,"digit use kitten when you speak to us");
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
+   out.handled&&out.response[0],0);
+ in.passive=1;
+ strcpy(in.text,"head bumpies you");
+ in.interpretation.kind=DIGIT_UTTERANCE_STATEMENT;
+ in.interpretation.term_count=3;
+ strcpy(in.interpretation.terms[0],"head");
+ strcpy(in.interpretation.terms[1],"bumpies");
+ strcpy(in.interpretation.terms[2],"you");
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
+   out.handled&&!out.response[0],0);
+ strcpy(in.account,"speaker-b");
+ strcpy(in.text,"runs and tackles yous");
+ strcpy(in.interpretation.terms[0],"runs");
+ strcpy(in.interpretation.terms[1],"tackles");
+ strcpy(in.interpretation.terms[2],"yous");
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
+   out.handled&&!strcmp(out.response,"=^.^="),0);
+ strcpy(in.text,"What is the server status?");
+ in.interpretation.kind=DIGIT_UTTERANCE_QUESTION;
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
+   !out.handled,1);
+ in.interpretation.kind=DIGIT_UTTERANCE_STATEMENT;
+ strcpy(in.text,"regular discussion");
+ strcpy(in.interpretation.terms[0],"regular");
+ strcpy(in.interpretation.terms[1],"discussion");
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
+   !out.handled,1);
  api=saved;
  channel[0]=language[0]=0;last_reply=0;turns=0;
  return q->tests_executed>=STNLABZ_MODULE_MIN_TESTS&&!q->tests_failed&&
@@ -214,7 +261,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="social_intelligence",.name="Social Intelligence",
- .version_major=0,.version_minor=1,.version_patch=0,
+ .version_major=0,.version_minor=1,.version_patch=1,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
