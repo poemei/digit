@@ -173,7 +173,10 @@ static int ingest(sqlite3 *db,const char *path,int type){
   if(len&&!corpus_upsert(db,id,"LESSON",path,body,&add,&change,&skip))ok=0;
   free(body);goto done;
  }
- while(running()&&(n=getline(&line,&cap,fp))!=-1){
+ /* Finish an already-started transaction before shutdown. A hotload
+  * may request stop while scanning a large source; that is not a read
+  * error and must not discard thousands of valid imported rows. */
+ while((n=getline(&line,&cap,fp))!=-1){
   line_number++;
   if(n&&line[n-1]=='\n')line[--n]=0;
   if(n&&line[n-1]=='\r')line[--n]=0;
@@ -185,7 +188,7 @@ static int ingest(sqlite3 *db,const char *path,int type){
    if(!corpus_upsert(db,line,b,a,c,&add,&change,&skip)){reason="Corpus SQL write";ok=0;break;}
   }else if(!observation_upsert(db,line,&add,&skip)){reason="Observation JSON/SQL write";ok=0;break;}
  }
- if(ferror(fp)||!running()){reason="file read interrupted";ok=0;}
+ if(ferror(fp)){reason="file read error";ok=0;}
 done:
  free(line);fclose(fp);
  if(ok&&!commit(db)){reason="commit";ok=0;}
@@ -214,7 +217,7 @@ static void *watcher(void *unused){
  report("watcher started: corpus.tsv, observations.jsonl, lessons/*.txt",0,0,0,0);
  while(running()){
   int i;DIR *dir;
-  for(i=0;i<2;i++){
+  for(i=0;i<2&&running();i++){
    struct stat st;file_state_t *f=&sources[i];
    if(stat(f->path,&st)||!S_ISREG(st.st_mode))continue;
    if(!f->seen||st.st_size!=f->size||st.st_mtim.tv_sec!=f->mtime||
