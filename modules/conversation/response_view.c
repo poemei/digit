@@ -13,7 +13,20 @@ int digit_response_render(const digit_reasoning_result_t *d,
  int inword=0,has_detail=0;
  int n;
  if(used)*used=0;
- if(!d||!corpus||!output||!used||capacity<2||
+ if(!d||!corpus||!output||!used||capacity<2)return 0;
+ if(d->outcome==DIGIT_REASONING_OUTCOME_UNKNOWN||
+    d->outcome==DIGIT_REASONING_OUTCOME_CLARIFY||
+    d->outcome==DIGIT_REASONING_OUTCOME_FAILURE){
+  const char *message=d->outcome==DIGIT_REASONING_OUTCOME_UNKNOWN?
+    "I don't know based on the available evidence.":
+    d->outcome==DIGIT_REASONING_OUTCOME_CLARIFY?
+    "I need clarification before answering.":
+    "Evidence retrieval failed. I cannot verify an answer.";
+  n=snprintf(output,capacity,"%s",message);
+  if(n<=0||(size_t)n>=capacity)return 0;
+  *used=(size_t)n;return 1;
+ }
+ if(d->outcome!=DIGIT_REASONING_OUTCOME_EVIDENCE||
     d->outcome!=DIGIT_REASONING_OUTCOME_EVIDENCE||
     d->requires_verification||!d->reference_count||
     d->reference_count>DIGIT_REASONING_MAX_REFERENCES||
