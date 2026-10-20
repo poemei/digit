@@ -5,6 +5,7 @@
 #define DIGIT_DSD_RECORD_SERVICE "digit.dsd.record"
 #define DIGIT_DSD_DIAGNOSE_SERVICE "digit.dsd.diagnose"
 #define DIGIT_DSD_COMMAND_SERVICE "digit.dsd.command"
+#define DIGIT_DSD_REPORT_SERVICE "digit.dsd.report"
 /* Bind/clear request trace on the current dispatch thread; 0 clears. */
 #define DIGIT_DSD_BIND_SERVICE "digit.dsd.bind"
 #define DIGIT_DSD_CURRENT_SERVICE "digit.dsd.current"
@@ -34,4 +35,17 @@ typedef struct {
     char command[DIGIT_DSD_COMMAND_MAX];
 } digit_dsd_command_request_t;
 typedef struct {char text[DIGIT_DSD_TEXT_MAX];} digit_dsd_command_result_t;
+/* Request origin is supplied by the authenticated adapter, never retained in
+ * generic trace events. The adapter enforces account-scoped trace ownership. */
+#define DIGIT_DSD_REPORT_LINES 8
+#define DIGIT_DSD_REPORT_LINE_MAX 320
+typedef struct {
+    uint64_t trace_id;
+    char origin[256];
+} digit_dsd_report_request_t;
+typedef struct {
+    uint64_t trace_id;
+    unsigned count;
+    char lines[DIGIT_DSD_REPORT_LINES][DIGIT_DSD_REPORT_LINE_MAX];
+} digit_dsd_report_result_t;
 #endif
