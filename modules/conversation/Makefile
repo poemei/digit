@@ -7,7 +7,7 @@ MODULE_DIR := $(PREFIX)/modules/conversation
 
 .PHONY: all test install clean
 all: $(TARGET)
-$(TARGET): conversation.c ../interpretation/interpretation.h ../observation/observation.h ../sqlite3/context.h ../../core/stnlabz_abi/module.h
+$(TARGET): conversation.c ../interpretation/interpretation.h ../observation/observation.h ../sqlite3/context.h ../sqlite3/corpus_search.h ../reasoning/reasoning.h ../../core/stnlabz_abi/module.h
 	@mkdir -p bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared conversation.c -o $@
 test: $(TARGET)
