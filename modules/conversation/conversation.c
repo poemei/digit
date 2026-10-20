@@ -440,7 +440,29 @@ static stnlabz_module_result_t mock_invoke(const char *service,
     if (mock_mode == 1) return STNLABZ_MODULE_ERR_NOT_FOUND;
     if (mock_mode == 2) return STNLABZ_MODULE_ERR_INVALID_STATE;
     r.kind = DIGIT_UTTERANCE_STATEMENT;
-    if(!strcmp(q->text,"what are you?")){
+    if(!strcmp(q->text,"what is the Chaos Foundation?")){
+       r.kind=DIGIT_UTTERANCE_QUESTION;r.term_count=5;
+       strcpy(r.terms[0],"what");strcpy(r.terms[1],"is");
+       strcpy(r.terms[2],"the");strcpy(r.terms[3],"chaos");
+       strcpy(r.terms[4],"foundation");
+    }else if(!strcmp(q->text,"can you tell me about the Chaos Foundation")){
+       r.kind=DIGIT_UTTERANCE_QUESTION;r.term_count=8;
+       strcpy(r.terms[0],"can");strcpy(r.terms[1],"you");
+       strcpy(r.terms[2],"tell");strcpy(r.terms[3],"me");
+       strcpy(r.terms[4],"about");strcpy(r.terms[5],"the");
+       strcpy(r.terms[6],"chaos");strcpy(r.terms[7],"foundation");
+    }else if(!strcmp(q->text,"and then now she is doing stupid shit like this?")){
+       r.kind=DIGIT_UTTERANCE_QUESTION;r.term_count=4;
+       strcpy(r.terms[0],"and");strcpy(r.terms[1],"then");
+       strcpy(r.terms[2],"now");strcpy(r.terms[3],"she");
+    }else if(!strcmp(q->text,"no ?")){
+       r.kind=DIGIT_UTTERANCE_QUESTION;r.term_count=1;
+       strcpy(r.terms[0],"no");
+    }else if(!strcmp(q->text,"so her ? works")){
+       r.kind=DIGIT_UTTERANCE_QUESTION;r.term_count=3;
+       strcpy(r.terms[0],"so");strcpy(r.terms[1],"her");
+       strcpy(r.terms[2],"works");
+    }else if(!strcmp(q->text,"what are you?")){
        r.kind=DIGIT_UTTERANCE_QUESTION;r.term_count=3;
        strcpy(r.terms[0],"what");strcpy(r.terms[1],"are");strcpy(r.terms[2],"you");
     }else if(!strcmp(q->text,"what is your mission?")){
@@ -542,6 +564,38 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
         check(q,process_route(&mock,&self,sizeof self,response,
              sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&
              emitted>0&&strstr(response,"does not specify my creator")!=NULL,0);
+    }
+    {
+        const char *const engage[]={
+            "what is the Chaos Foundation?",
+            "can you tell me about the Chaos Foundation"
+        };
+        const char *const abstain[]={
+            "and then now she is doing stupid shit like this?",
+            "no ?","so her ? works","Database latency increased"
+        };
+        message_t channel=msg;
+        size_t emitted=0;
+        unsigned i;
+        strcpy(channel.target,"#stn-labz");
+        mock_mode=7;
+        for(i=0;i<sizeof engage/sizeof engage[0];i++){
+            strcpy(channel.message,engage[i]);emitted=0;
+            check(q,process_route(&mock,&channel,sizeof channel,response,
+                sizeof response,&emitted,1)==STNLABZ_MODULE_OK&&
+                emitted>0&&strstr(response,"don't know")!=NULL,0);
+        }
+        for(i=0;i<sizeof abstain/sizeof abstain[0];i++){
+            strcpy(channel.message,abstain[i]);emitted=99;
+            check(q,process_route(&mock,&channel,sizeof channel,response,
+                sizeof response,&emitted,1)==STNLABZ_MODULE_OK&&
+                emitted==0,1);
+        }
+        strcpy(channel.message,"");emitted=0;
+        check(q,process_route(&mock,&channel,sizeof channel,response,
+            sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&
+            emitted>0&&strstr(response,"I'm here")!=NULL,0);
+        mock_mode=0;
     }
     used = 17; before = mock_calls;
     check(q, process(&mock, NULL, sizeof msg, response, sizeof response, &used)
