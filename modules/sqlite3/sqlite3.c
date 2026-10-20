@@ -15,7 +15,7 @@
 #include "context.h"
 #include "../observation/observation.h"
 #include "../s2/s2_observations.h"
-#include "../dsd/dsd.h"
+#include "dsd.h"
 
 #define DB_PATH "/opt/digit/data/digit_memory.db"
 #define KEY_MAX 128
