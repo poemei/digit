@@ -136,17 +136,21 @@ static int corpus_search(sqlite3 *db,const digit_corpus_query_t *query,
 /* Observation and context are one SQLite transaction. An accepted
  * observation cannot become visible without its provenance-linked context.
  * The module owns all writes; Core and the Observation ABI remain unchanged. */
+static int sqlite_qualification_active;
 static stnlabz_module_result_t observation_insert(
  const void *request,size_t request_size,void *response,size_t response_size,
  size_t *response_used,void *context){
  const digit_observation_record_t *r=request;
  sqlite3_stmt *stmt=NULL;
  sqlite3_int64 person=0,conversation=0,observation_id=0;
+ digit_observation_receipt_t receipt={0};
+ int wants_receipt=response!=NULL;
  int rc;
  const char *phase="validate";
- (void)response;(void)response_size;(void)context;
+ (void)context;
  if(response_used)*response_used=0;
- if(!observation_writer||!r||request_size!=sizeof *r||
+ if((wants_receipt && (!response_used || response_size<sizeof receipt)) ||
+    !observation_writer||!r||request_size!=sizeof *r||
     !memchr(r->sender,0,sizeof r->sender)||
     !memchr(r->channel,0,sizeof r->channel)||
     !memchr(r->transport,0,sizeof r->transport)||
@@ -210,10 +214,37 @@ static stnlabz_module_result_t observation_insert(
  rc=sqlite3_step(stmt);
  sqlite3_finalize(stmt);stmt=NULL;
  if(rc!=SQLITE_DONE||sqlite3_changes(observation_writer)!=1)goto rollback;
+ /* Verify exact provenance on the writer before committing. */
+ phase="verify_pair";
+ rc=sqlite3_prepare_v2(observation_writer,
+   "SELECT o.event_id,x.id FROM observations o "
+   "JOIN context x ON x.source_id=o.event_id "
+   "WHERE o.id=?1 AND x.subject_type='conversation' "
+   "AND x.subject_id=?2 AND x.context_type='utterance.observed' "
+   "AND x.value=o.text LIMIT 1",-1,&stmt,NULL);
+ if(rc!=SQLITE_OK)goto rollback;
+ sqlite3_bind_int64(stmt,1,observation_id);
+ sqlite3_bind_int64(stmt,2,conversation);
+ rc=sqlite3_step(stmt);
+ if(rc!=SQLITE_ROW)goto rollback;
+ receipt.observation_id=observation_id;
+ receipt.context_id=sqlite3_column_int64(stmt,1);
+ snprintf(receipt.event_id,sizeof receipt.event_id,"%s",
+          (const char *)sqlite3_column_text(stmt,0));
+ sqlite3_finalize(stmt);stmt=NULL;
+ if(receipt.context_id<=0||!receipt.event_id[0])goto rollback;
  phase="commit";
  if(sqlite3_exec(observation_writer,"COMMIT",NULL,NULL,NULL)!=SQLITE_OK)
      goto rollback;
- syslog(LOG_INFO,"digit.sqlite3 observation_atomic status=committed");
+ /* An explicit receipt is returned only after COMMIT succeeds. */
+ if(wants_receipt){
+   memcpy(response,&receipt,sizeof receipt);
+   *response_used=sizeof receipt;
+ }
+ if(!sqlite_qualification_active)
+   syslog(LOG_INFO,
+     "digit.sqlite3 observation_atomic role=runtime status=committed observation_id=%lld context_id=%lld",
+     (long long)receipt.observation_id,(long long)receipt.context_id);
  return STNLABZ_MODULE_OK;
 rollback:
  if(stmt)sqlite3_finalize(stmt);
@@ -796,7 +827,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="sqlite3",.name="SQLite3 persistence",
-    .version_major=0,.version_minor=4,.version_patch=8,
+    .version_major=0,.version_minor=4,.version_patch=9,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
