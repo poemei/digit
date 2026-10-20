@@ -250,6 +250,16 @@ static size_t address_prefix(const char *body,const char *nick){
  }
  return 0;
 }
+/* Only address-normalized, non-inquiry emoticon contact.
+ * This is transport recognition; social expression belongs to Socials. */
+static int social_emoticon(const char *p){
+ static const char *const forms[]={":)",":D",";)",":3","<3","^_^",":xD","=^.^="};
+ size_t i;
+ if(!p)return 0;
+ for(i=0;i<sizeof forms/sizeof forms[0];i++)
+  if(!strcmp(p,forms[i]))return 1;
+ return 0;
+}
 static int config_read(irc_config_t *c) {
     FILE *f;char line[1024];
     memset(c,0,sizeof *c);
@@ -661,6 +671,28 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled
                 }
             }
         }
+        /* The direct IRC message service may route a non-family smile
+         * into factual clarification. For explicitly addressed contact,
+         * Socials owns the expressive response for every account. */
+        if(rc!=STNLABZ_MODULE_OK&&!passive_channel&&
+           social_emoticon(input.message)){
+            digit_socials_request_t expression_request={{0}};
+            digit_socials_response_t expression={{0}};
+            size_t expression_used=0;
+            snprintf(expression_request.category,
+                     sizeof expression_request.category,"cats");
+            rc=host_api->invoke_service(DIGIT_SOCIALS_SERVICE,
+                &expression_request,sizeof expression_request,
+                &expression,sizeof expression,&expression_used);
+            if(rc==STNLABZ_MODULE_OK&&
+               expression_used==sizeof expression&&
+               memchr(expression.expression,0,sizeof expression.expression)){
+                used=strlen(expression.expression);
+                if(used<sizeof response)
+                    memcpy(response,expression.expression,used+1);
+                else rc=STNLABZ_MODULE_ERR_INVALID_STATE;
+            }else rc=STNLABZ_MODULE_ERR_NOT_FOUND;
+        }
         if(rc!=STNLABZ_MODULE_OK){
             used=0;
             rc=host_api->invoke_service(
@@ -936,6 +968,12 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
     check(result,family_reference("awww Digit :)"),0);
     check(result,!family_reference("more coffee"),1);
     check(result,!family_reference("digitized"),1);
+    check(result,social_emoticon(":)"),0);
+    check(result,social_emoticon(":xD"),0);
+    check(result,social_emoticon("=^.^="),0);
+    check(result,!social_emoticon("what is C?"),1);
+    check(result,!social_emoticon("hello"),1);
+    check(result,!social_emoticon(""),1);
     check(result,address_prefix("digit :)","digicat")==5,0);
     check(result,address_prefix("Digit :)","digicat")==5,0);
     check(result,address_prefix("digicat :)","digicat")==7,0);
@@ -1071,7 +1109,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=3,.version_patch=12,
+    .version_major=0,.version_minor=3,.version_patch=13,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
