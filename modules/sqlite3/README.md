@@ -74,3 +74,8 @@ The atomic Observation writer now emits result-only syslog entries under `digit.
 The existing `digit.sqlite3.observation_insert` ABI accepts an **optional** `digit_observation_receipt_t` response. Callers providing a response buffer receive a completed receipt only after a successful transaction COMMIT. The receipt contains the persisted observation row ID, linked context row ID, and exact event ID; it is populated by verifying the provenance join before commit. Older clients supplying NULL response remain supported. An undersized non-null response is rejected without writing.
 
 Qualification's in-memory writer runs are marked internally so they do not emit production `observation_atomic role=runtime status=committed` messages. Native qualification now checks the receipt, including a malformed response-buffer case. A passing qualification still requires operator live database acceptance.
+
+
+## Request-bound DSD context read evidence (v0.4.10)
+
+When a live thread-bound DSD trace is present, `digit.sqlite3.context_recent` emits a sanitized SQL result event identifying the actual prepared SELECT boundary, `SQLITE_OK` or a concrete categorized SQLite failure, source line, and result row count. No SQL statement text, row contents or identities are logged. The existing persistence transaction and optional Observation/context receipt are unchanged. If a request does not invoke this SQLite service, no SQL result is invented. Deploy with DSD 0.7.3 and Conversation 1.0.5.
