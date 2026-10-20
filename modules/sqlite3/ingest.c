@@ -1,4 +1,4 @@
-/* SQLite3-owned, provenance-preserving import watcher. */
+/* SQLite3-owned import watcher. Designated source files are operator-approved. */
 #define _POSIX_C_SOURCE 200809L
 #include "ingest.h"
 #include <sqlite3.h>
@@ -57,21 +57,23 @@ static int begin(sqlite3 *db){return sqlite3_exec(db,"BEGIN IMMEDIATE",NULL,NULL
 static int commit(sqlite3 *db){return sqlite3_exec(db,"COMMIT",NULL,NULL,NULL)==SQLITE_OK;}
 static int corpus_upsert(sqlite3 *db,const char *id,const char *category,
  const char *origin,const char *body,unsigned *add,unsigned *change,unsigned *skip){
- sqlite3_stmt *st=NULL;int rc,exists=0;const unsigned char *old;
+ sqlite3_stmt *st=NULL;int rc,exists=0;const unsigned char *old;const unsigned char *status;
  if(!*id||!*body)return 0;
- rc=sqlite3_prepare_v2(db,"SELECT text FROM corpus WHERE source_record_id=?1 LIMIT 1",-1,&st,NULL);
+ rc=sqlite3_prepare_v2(db,"SELECT text,verification_status FROM corpus WHERE source_record_id=?1 LIMIT 1",-1,&st,NULL);
  if(rc!=SQLITE_OK)return 0;
  sqlite3_bind_text(st,1,id,-1,SQLITE_TRANSIENT);
  rc=sqlite3_step(st);
  if(rc==SQLITE_ROW){
   exists=1;old=sqlite3_column_text(st,0);
-  if(old&&!strcmp((const char*)old,body)){++*skip;sqlite3_finalize(st);return 1;}
+  status=sqlite3_column_text(st,1);
+  if(old&&!strcmp((const char*)old,body)&&status&&
+     !strcmp((const char*)status,"operator-verified")){++*skip;sqlite3_finalize(st);return 1;}
  }else if(rc!=SQLITE_DONE){sqlite3_finalize(st);return 0;}
  sqlite3_finalize(st);st=NULL;
  rc=sqlite3_prepare_v2(db,exists?
-   "UPDATE corpus SET category=?1,source=?2,text=?3,verification_status='unverified' WHERE source_record_id=?4":
+   "UPDATE corpus SET category=?1,source=?2,text=?3,verification_status='operator-verified' WHERE source_record_id=?4":
    "INSERT INTO corpus(category,source,text,verification_status,source_record_id) "
-   "SELECT ?1,?2,?3,'unverified',?4 WHERE NOT EXISTS "
+   "SELECT ?1,?2,?3,'operator-verified',?4 WHERE NOT EXISTS "
    "(SELECT 1 FROM corpus WHERE category=?1 AND text=?3)",-1,&st,NULL);
  if(rc!=SQLITE_OK)return 0;
  sqlite3_bind_text(st,1,category,-1,SQLITE_TRANSIENT);
