@@ -57,3 +57,24 @@ an identity, relationship, or authorization.
 ## v0.2.1 — authenticated family exchanges
 
 The new `digit.socials.family` service accepts an explicit family kind and an addressed conversational text. It supports the operator-authorized family forms of address Momma, Auntie, and Kitty Sister and selects varied reciprocal greetings, affection, acknowledgments and thanks with expressions drawn from the existing Socials catalogs. It returns NOT_FOUND for non-family classifications or unrecognized social intent, so normal factual conversation is not replaced. There is no JOIN cooldown on interpersonal replies. This is **bounded family-specific language handling**, not general conversational intelligence. The caller is responsible for authenticated relationship classification; Socials does not authenticate accounts. Qualification adds representative positive and negative social-intent cases.
+
+## v0.2.4 — Corpus-backed expression candidates
+
+The existing `digit.socials.select` service can consult the existing read-only
+`digit.sqlite3.corpus_search` service for the shared `cats`, `playful`, and
+`text` expression categories. This behavior is **not restricted to family**.
+It makes bounded searches for feline/kitten/cat-speak vocabulary and accepts an
+excerpt only when the record is explicitly categorized as feline, kitten,
+cat_speak, or social_expression, has status `verified` or
+`operator-verified`, and is short enough to be an independent expression.
+Unsuitable narrative excerpts are never published as chat. Missing or
+unavailable Corpus records fall back to the existing randomized catalogs.
+Corpus candidates alternate with catalog candidates to avoid mechanically
+repeating one retrieved expression. The test harness covers eligible and
+ineligible records and the fallback path.
+
+**Scope:** This adds a knowledge-backed vocabulary source to an existing
+expression service; it does not independently identify conversational intent,
+create kitten-speak grammar, or make Digit spontaneously participate in IRC.
+Existing consumers still decide when to request an expression. Actual deployed
+Corpus taxonomy and contents have not been inspected or validated here.
