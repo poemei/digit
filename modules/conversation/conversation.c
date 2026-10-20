@@ -283,7 +283,8 @@ static stnlabz_module_result_t mock_invoke(const char *service,
         if(used)*used=0;
         if(!req||bytes!=sizeof *req||!response||
             capacity<sizeof decision||!used)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
-        decision.outcome=DIGIT_REASONING_OUTCOME_ABSTAIN;
+        decision.outcome=mock_mode==7?DIGIT_REASONING_OUTCOME_UNKNOWN:
+            DIGIT_REASONING_OUTCOME_ABSTAIN;
         memcpy(response,&decision,sizeof decision);*used=sizeof decision;
         return STNLABZ_MODULE_OK;
     }
@@ -379,9 +380,15 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
         strcpy(addressed.target,"#stn-labz");
         check(q,process_route(&mock,&addressed,sizeof addressed,response,
            sizeof response,&emitted,1)==STNLABZ_MODULE_OK&&emitted==0,0);
+        mock_mode=7;
         emitted=99;
         check(q,process_route(&mock,&addressed,sizeof addressed,response,
-           sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&emitted==0,0);
+           sizeof response,&emitted,1)==STNLABZ_MODULE_OK&&emitted==0,0);
+        emitted=99;
+        check(q,process_route(&mock,&addressed,sizeof addressed,response,
+           sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&
+           emitted>0&&strstr(response,"don't know")!=NULL,0);
+        mock_mode=0;
     }
     used = 17; before = mock_calls;
     check(q, process(&mock, NULL, sizeof msg, response, sizeof response, &used)
