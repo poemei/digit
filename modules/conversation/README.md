@@ -25,3 +25,10 @@ Conversation no longer creates a second context record or attempts to reconstruc
 ## DSD request tracing (v1.0.5)
 
 Conversation records request-correlated service boundary outcomes for its Interpretation invocation, conditional SQLite3 context-recent invocation, and final participation disposition. Events use the existing thread-bound DSD trace ID; without a bound trace, tracing is inert. Only status, source line, operation and bounded counts are emitted; message contents and accounts are not included. This exposes *executed* stages, not fabricated downstream reasoning. The existing non-generative Conversation behavior is unchanged.
+
+
+## Evidence-to-Reasoning dispatch (v1.0.7)
+
+After Interpretation, Conversation submits a candidate lexical subject term to the established `digit.sqlite3.corpus_search` model and supplies the returned evidence, success/failure status, and Interpretation results to `digit.reasoning.evaluate`. It does not access SQLite directly. DSD records both service boundaries. Reasoning returns a bounded provenance-aware outcome rather than a scripted answer. Until a separately authorized View/generation capability exists, a general request may still produce `NO_GENERATOR`; this must not be misrepresented as reasoning failure.
+
+Requires Reasoning v0.1.0 to be active before Conversation v1.0.7.
