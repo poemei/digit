@@ -246,17 +246,18 @@ static stnlabz_module_result_t context_store(
  /* A single bounded context fact per observation source. */
  rc=sqlite3_prepare_v2(observation_writer,
   "INSERT INTO context(subject_type,subject_id,context_type,value,source_id,confidence,expires_at) "
-  "SELECT 'conversation',c.id,?1,o.text,o.event_id,1.0,NULL "
-  "FROM observations o JOIN conversations c ON c.id=o.conversation_id "
+  "SELECT 'conversation',latest.conversation_id,?1,latest.text,latest.event_id,1.0,NULL "
+  "FROM (SELECT o.conversation_id,o.text,o.event_id FROM observations o "
+  "JOIN conversations c ON c.id=o.conversation_id "
   "WHERE c.transport='irc' AND c.channel=?2 "
   "AND (o.text=?3 OR (length(o.text)>length(?3) "
   "AND length(o.text)-length(?3)<=72 "
   "AND substr(o.text,-length(?3))=?3 "
   "AND substr(o.text,length(o.text)-length(?3),1) IN (' ',':',','))) "
-  "AND o.source_record_id=?4 "
-  "AND NOT EXISTS(SELECT 1 FROM context x WHERE x.subject_type='conversation' "
-  "AND x.subject_id=c.id AND x.source_id=o.event_id AND x.context_type=?1) "
-  "ORDER BY o.id DESC LIMIT 1",
+  "AND o.source_record_id=?4 ORDER BY o.id DESC LIMIT 1) latest "
+  "WHERE NOT EXISTS(SELECT 1 FROM context x WHERE x.subject_type='conversation' "
+  "AND x.subject_id=latest.conversation_id AND x.source_id=latest.event_id "
+  "AND x.context_type=?1)",
   -1,&stmt,NULL);
  if(rc!=SQLITE_OK)return STNLABZ_MODULE_ERR_INVALID_STATE;
  sqlite3_bind_text(stmt,1,category,-1,SQLITE_STATIC);
