@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "../core/core_dsd.h"
-#include "../modules/dsd/dsd.h"
+#include "../core/stnlabz_abi/dsd.h"
 int main(void){
  uint64_t id=991,clear=0;size_t used=0;
  digit_dsd_record_t record={0};
