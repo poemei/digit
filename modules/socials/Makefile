@@ -10,10 +10,10 @@ MODULE_DIR := $(PREFIX)/modules/socials
 
 .PHONY: all test install clean
 all: $(TARGET)
-$(TARGET): socials.c socials.h ../../core/stnlabz_abi/module.h
+$(TARGET): socials.c socials.h ../sqlite3/corpus_search.h ../../core/stnlabz_abi/module.h
 	@mkdir -p bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared socials.c -o $@
-$(TEST_TARGET): test/test_socials.c socials.h ../../core/stnlabz_abi/module.h
+$(TEST_TARGET): test/test_socials.c socials.h ../sqlite3/corpus_search.h ../../core/stnlabz_abi/module.h
 	@mkdir -p bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) test/test_socials.c -o $@ -ldl
 test: $(TARGET) $(TEST_TARGET)
