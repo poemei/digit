@@ -1,4 +1,4 @@
-# Digit — Architectural Rebuild
+# Digit
 
 ## Architecture and authority
 
@@ -6,7 +6,7 @@ Digit follows the ChAoS MVC structure with a **core**, **model**, **view**, and 
 
 **Core change control:** Nothing in Digit's Core may be changed, altered, or updated without direct consent from the Director of the Digit Project. Core qualification results do not replace this requirement.
 
-## DIG IS
+## DIGIT IS
 An Intelligent Autonomous Engineering and Management Asset
  - She has a Chat Function
  - She does **NOT** rely on third party services such as **Ollama**
