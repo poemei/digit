@@ -10,6 +10,7 @@
 #include <time.h>
 #include "module.h"
 #include "socials.h"
+#include "../sqlite3/corpus_search.h"
 
 typedef struct {
  const char *name;
@@ -100,6 +101,45 @@ static int pick(category_t *c,size_t *index) {
  if(c->previous<c->count&&*index>=c->previous)(*index)++;
  return 1;
 }
+/* Read-only Corpus vocabulary enrichment. Only a short, verified,
+ * standalone expression is eligible; narrative excerpts are NOT chat.
+ * Every sender can use this shared vocabulary, independent of family role.
+ * Service unavailable, no matching record, or unsuitable data => catalog. */
+static int corpus_expression(const char *category,char output[DIGIT_SOCIALS_EXPRESSION_MAX]){
+ digit_corpus_query_t query={0};
+ digit_corpus_result_t results={0};
+ const char *subject=NULL;size_t used=0,i;
+ if(!host||!host->invoke_service)return 0;
+ if(!strcmp(category,"cats"))subject="feline";
+ else if(!strcmp(category,"playful"))subject="kitten";
+ else if(!strcmp(category,"text"))subject="cat speak";
+ else return 0;
+ snprintf(query.query,sizeof query.query,"%s",subject);
+ if(host->invoke_service(DIGIT_CORPUS_SEARCH_SERVICE,&query,sizeof query,
+      &results,sizeof results,&used)!=STNLABZ_MODULE_OK||
+    used!=sizeof results||results.count>DIGIT_CORPUS_RESULTS_MAX)return 0;
+ for(i=0;i<results.count;i++){
+  const digit_corpus_hit_t *hit=&results.hits[i];
+  size_t n;
+  if(!memchr(hit->category,0,sizeof hit->category)||
+     !memchr(hit->verification_status,0,sizeof hit->verification_status)||
+     !memchr(hit->excerpt,0,sizeof hit->excerpt))continue;
+  if(strcmp(hit->verification_status,"verified")&&
+     strcmp(hit->verification_status,"operator-verified"))continue;
+  /* Corpus categories must explicitly identify expressive vocabulary. */
+  if(!strstr(hit->category,"feline")&&!strstr(hit->category,"kitten")&&
+     !strstr(hit->category,"cat_speak")&&
+     !strstr(hit->category,"social_expression"))continue;
+  n=strlen(hit->excerpt);
+  if(!n||n>=DIGIT_SOCIALS_EXPRESSION_MAX)continue;
+  if(strpbrk(hit->excerpt,"\\r\\n\\t")||
+     strchr(hit->excerpt,'.')||strchr(hit->excerpt,':'))continue;
+  memset(output,0,DIGIT_SOCIALS_EXPRESSION_MAX);
+  memcpy(output,hit->excerpt,n);
+  return 1;
+ }
+ return 0;
+}
 static stnlabz_module_result_t select_expression(
  const void *request,size_t request_size,void *response,
  size_t response_size,size_t *response_used,void *context) {
@@ -117,6 +157,17 @@ static stnlabz_module_result_t select_expression(
  for(i=0;i<COUNT(catalog);i++)
   if(!strcmp(req->category,catalog[i].name))break;
  if(i==COUNT(catalog))return STNLABZ_MODULE_ERR_NOT_FOUND;
+ /* Enrich the same expression API from Corpus if the deployed data has
+  * a verified, category-labeled short expression. Otherwise use catalog. */
+ {
+  char enriched[DIGIT_SOCIALS_EXPRESSION_MAX]={0};
+  if(corpus_expression(req->category,enriched)){
+   memset(out,0,sizeof *out);
+   memcpy(out->expression,enriched,strlen(enriched));
+   *response_used=sizeof *out;
+   return STNLABZ_MODULE_OK;
+  }
+ }
  lock();
  if(!pick(&catalog[i],&index)){unlock();return STNLABZ_MODULE_ERR_INVALID_STATE;}
  n=strlen(catalog[i].tokens[index]);
@@ -407,7 +458,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="socials",.name="Social expression vocabulary",
- .version_major=0,.version_minor=2,.version_patch=3,
+ .version_major=0,.version_minor=2,.version_patch=4,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
