@@ -878,6 +878,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
     check(result,!dsd_tracks_previous("diagnose trace 10"),1);
     check(result,!dsd_tracks_previous("show modules"),1);
     check(result,address_prefix("digit?","digicat")==5,0);
+    check(result,address_prefix("digit who is your creator?","digicat")==5,0);
     check(result,address_prefix("digicat who are you?","digicat")==7,0);
     check(result,address_prefix("digital keyboard","digicat")==0,1);
     check(result,channel_question("hey so What's the Chaos Foundation?"),0);
@@ -999,7 +1000,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=3,.version_patch=5,
+    .version_major=0,.version_minor=3,.version_patch=6,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
