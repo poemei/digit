@@ -519,7 +519,7 @@ static void observe_channel(const irc_config_t *cfg,const char *raw,int tags_ena
  snprintf(rec.text,sizeof rec.text,"%s",message);
  observation_status(submit_observation(host_api,&rec));
 }
-static const char *greeting_kind(const irc_config_t *cfg,const char *account);
+static const char *greeting_kind(const irc_config_t *cfg,const char *account,const char *nick);
 /* A family member can address Digit in the middle of an utterance.
  * Do not convert all ambient family talk into an invitation. */
 static int family_reference(const char *message){
@@ -639,7 +639,7 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled
          * response. All other messages continue through Conversation. */
         rc=STNLABZ_MODULE_ERR_NOT_FOUND;
         if(!passive_channel || family_reference(input.message)){
-            const char *family=greeting_kind(cfg,input.account);
+            const char *family=greeting_kind(cfg,input.account,input.sender);
             if(family && strcmp(family,"unknown")){
                 digit_socials_family_request_t social={{0}};
                 digit_socials_family_response_t social_response={{0}};
@@ -705,11 +705,23 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled
  * Family classification is based only on explicitly configured IRC account
  * identities, never nickname, hostmask or channel privileges.
  */
-static const char *greeting_kind(const irc_config_t *cfg,const char *account){
- if(!cfg||!account||!*account||!strcmp(account,"*"))return NULL;
- if(cfg->mommy_account[0]&&!strcmp(cfg->mommy_account,account))return "mommy";
- if(cfg->auntie_account[0]&&!strcmp(cfg->auntie_account,account))return "auntie";
- if(cfg->sister_account[0]&&!strcmp(cfg->sister_account,account))return "sister";
+/* A family role requires BOTH the configured authenticated account and
+ * the designated IRC nickname. In particular, an account-tag mismatch
+ * must never make PoeMei receive Auntie's role, or vice versa. */
+static const char *greeting_kind(const irc_config_t *cfg,const char *account,
+                                const char *nick){
+ if(!cfg||!account||!*account||!strcmp(account,"*")||!nick||!*nick)
+  return NULL;
+ if(!strcasecmp(nick,"PoeMei"))
+  return cfg->mommy_account[0]&&!strcasecmp(cfg->mommy_account,account)
+      ?"mommy":NULL;
+ if(!strcasecmp(nick,"Laurie_Vo"))
+  return cfg->auntie_account[0]&&!strcasecmp(cfg->auntie_account,account)
+      ?"auntie":NULL;
+ /* Sister's nickname is not designated in this transport; the registered
+  * account remains the sole source for that configured relationship. */
+ if(cfg->sister_account[0]&&!strcasecmp(cfg->sister_account,account))
+  return "sister";
  return "unknown";
 }
 static int join_greeting(SSL *ssl,const irc_config_t *cfg,char *line,
@@ -744,7 +756,7 @@ static int join_greeting(SSL *ssl,const irc_config_t *cfg,char *line,
  channel=command+5;
  space=strchr(channel,' ');if(space)*space=0;
  if(strcasecmp(channel,cfg->channel)||!strcasecmp(nick,cfg->nick))return 1;
- kind=greeting_kind(cfg,account);
+ kind=greeting_kind(cfg,account,nick);
  if(!kind||!host_api||!host_api->invoke_service)return 1;
  now=time(NULL);
  if(now==(time_t)-1||(last_greeting&&now>=last_greeting&&
@@ -983,11 +995,22 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
         observation_fixture_primary==1 && observation_fixture_fallback==0,0);
       observation_fixture_mode=0;
     }
-    check(result,greeting_kind(&c,"") == NULL,1);
-    check(result,!strcmp(greeting_kind(&c,"registered"),"unknown"),0);
+    strcpy(c.mommy_account,"PoeAccount");
     strcpy(c.auntie_account,"LaurieAccount");
-    check(result,!strcmp(greeting_kind(&c,"LaurieAccount"),"auntie"),0);
-    check(result,!strcmp(greeting_kind(&c,"Laurie_Vo"),"unknown"),1);
+    check(result,!strcmp(greeting_kind(&c,"PoeAccount","PoeMei"),"mommy"),0);
+    check(result,!strcmp(greeting_kind(&c,"LaurieAccount","Laurie_Vo"),"auntie"),0);
+    check(result,greeting_kind(&c,"LaurieAccount","PoeMei")==NULL,1);
+    check(result,greeting_kind(&c,"PoeAccount","Laurie_Vo")==NULL,1);
+    check(result,greeting_kind(&c,"PoeAccount","OtherNick")==NULL ||
+        strcmp(greeting_kind(&c,"PoeAccount","OtherNick"),"mommy"),1);
+    check(result,greeting_kind(&c,"","PoeMei")==NULL,1);
+    check(result,greeting_kind(&c,"*","Laurie_Vo")==NULL,1);
+    check(result,greeting_kind(&c,"LaurieAccount","PoeMei")==NULL,1);
+    check(result,greeting_kind(&c,"","PoeMei") == NULL,1);
+    check(result,!strcmp(greeting_kind(&c,"registered","Unknown"),"unknown"),0);
+    strcpy(c.auntie_account,"LaurieAccount");
+    check(result,!strcmp(greeting_kind(&c,"LaurieAccount","Laurie_Vo"),"auntie"),0);
+    check(result,!strcmp(greeting_kind(&c,"Laurie_Vo","Laurie_Vo"),"unknown"),1);
     /* RFC 4616 PLAIN fixture: empty authorization identity, account,
      * password. Verify the same construction and base64 primitive as the
      * production SASL path without using or logging actual credentials. */
@@ -1048,7 +1071,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=3,.version_patch=11,
+    .version_major=0,.version_minor=3,.version_patch=12,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
