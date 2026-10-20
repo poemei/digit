@@ -14,11 +14,11 @@ For a request such as `Digit explain PHP`, Conversation 1.0.6 emits a `NO_GENERA
 
 ## Legacy module retirement
 
-The legacy `modules/dsd` source remains in-tree temporarily as a compatibility/test reference and ABI header source. Its `module.conf` has been removed, and its `make install` now refuses deployment. The diagnostic runtime is Core-owned.
+The legacy `modules/dsd` directory has been removed from the repository. The shared diagnostic contract is `core/stnlabz_abi/dsd.h`. The diagnostic runtime is Core-owned.
 
 **Upgrading an existing installation:** the operator must stop Digit, deploy the rebuilt Core, remove or quarantine the installed legacy `/opt/digit/modules/dsd/module.conf` so that old DSD does not appear as an independently activated module, then restart Digit. Do not delete unrelated module data or reset the database. This deployment is **not performed by AI**.
 
-The remaining transport and module headers still use `modules/dsd/dsd.h` as the shared ABI definition. This does not load the former implementation.
+The transport and other modules include `core/stnlabz_abi/dsd.h` through their existing compiler include path. This does not load a diagnostic module.
 
 ## Verification
 
