@@ -2,7 +2,7 @@
 CC ?= cc
 CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Wpedantic
 CPPFLAGS += -Icore -Icore/stnlabz_abi -Imodels -Iviews -Icontrollers
-LDLIBS += -lssl -lcrypto -ldl
+LDLIBS += -lssl -lcrypto -ldl -pthread
 TARGET := bin/digit
 SOURCES = $(CORE_SOURCES) core/main.c
 CORE_SOURCES := $(filter-out core/main.c,$(wildcard core/*.c)) $(wildcard core/stnlabz_abi/*.c)
