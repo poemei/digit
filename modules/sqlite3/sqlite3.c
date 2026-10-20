@@ -261,7 +261,21 @@ static stnlabz_module_result_t context_store(
  sqlite3_bind_text(stmt,4,r->source_account,-1,SQLITE_TRANSIENT);
  rc=sqlite3_step(stmt);
  sqlite3_finalize(stmt);
- return rc==SQLITE_DONE ? STNLABZ_MODULE_OK :
+ if(rc!=SQLITE_DONE)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ /* Verify a persisted source exists even for idempotent duplicate calls. */
+ rc=sqlite3_prepare_v2(observation_writer,
+   "SELECT 1 FROM observations o JOIN conversations c "
+   "ON c.id=o.conversation_id WHERE c.transport='irc' "
+   "AND c.channel=?1 AND o.text=?2 AND o.source_record_id=?3 "
+   "LIMIT 1",-1,&stmt,NULL);
+ if(rc!=SQLITE_OK)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ sqlite3_bind_text(stmt,1,r->channel,-1,SQLITE_TRANSIENT);
+ sqlite3_bind_text(stmt,2,r->text,-1,SQLITE_TRANSIENT);
+ sqlite3_bind_text(stmt,3,r->source_account,-1,SQLITE_TRANSIENT);
+ rc=sqlite3_step(stmt);
+ sqlite3_finalize(stmt);
+ return rc==SQLITE_ROW ? STNLABZ_MODULE_OK :
+        rc==SQLITE_DONE ? STNLABZ_MODULE_ERR_NOT_FOUND :
         STNLABZ_MODULE_ERR_INVALID_STATE;
 }
 
@@ -609,6 +623,62 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
       test_check(result,corpus_search(db,&query,&findings)==0,0);
       strcpy(query.query,"???");
       test_check(result,corpus_search(db,&query,&findings)==-1,1);
+    }
+
+    /* Execute context INSERT/SELECT against the actual schema in RAM,
+     * including provenance and deduplication. Never touch the live DB. */
+    {
+      digit_context_store_request_t request={0};
+      digit_context_recent_query_t lookup={0};
+      digit_context_recent_result_t found={0};
+      size_t used=0;
+      sqlite3 *previous_read=database,*previous_writer=observation_writer;
+      int rc;
+      test_check(result,sqlite3_exec(db,
+        "CREATE TABLE conversations(id INTEGER PRIMARY KEY,transport TEXT,channel TEXT);"
+        "CREATE TABLE observations(id INTEGER PRIMARY KEY,event_id TEXT,"
+        "conversation_id INTEGER,text TEXT,source_record_id TEXT);"
+        "CREATE TABLE context(id INTEGER PRIMARY KEY,subject_type TEXT,"
+        "subject_id INTEGER,context_type TEXT,value TEXT,source_id TEXT,"
+        "confidence REAL,expires_at TEXT);"
+        "INSERT INTO conversations VALUES(7,'irc','#stn-labz');"
+        "INSERT INTO observations VALUES(1,'irc-event-1',7,'Can you help?','laurie');",
+        NULL,NULL,NULL)==SQLITE_OK,0);
+      database=db;observation_writer=db;
+      strcpy(request.channel,"#stn-labz");
+      strcpy(request.source_account,"laurie");
+      strcpy(request.sender,"Laurie");
+      strcpy(request.text,"Can you help?");
+      request.kind=2;
+      rc=context_store(&request,sizeof request,NULL,0,&used,NULL);
+      test_check(result,rc==STNLABZ_MODULE_OK&&used==0,0);
+      strcpy(lookup.channel,"#stn-labz");
+      rc=context_recent(&lookup,sizeof lookup,&found,sizeof found,&used,NULL);
+      test_check(result,rc==STNLABZ_MODULE_OK &&
+        used==sizeof found && found.count==1,0);
+      test_check(result,found.count==1 &&
+        !strcmp(found.items[0].value,"Can you help?") &&
+        !strcmp(found.items[0].source_id,"irc-event-1") &&
+        !strcmp(found.items[0].context_type,"utterance.question"),0);
+      test_check(result,context_store(&request,sizeof request,NULL,0,
+        &used,NULL)==STNLABZ_MODULE_OK,0);
+      used=0;
+      test_check(result,context_recent(&lookup,sizeof lookup,&found,
+        sizeof found,&used,NULL)==STNLABZ_MODULE_OK &&
+        found.count==1,0);
+      strcpy(request.text,"unobserved message");
+      test_check(result,context_store(&request,sizeof request,NULL,0,
+        &used,NULL)==STNLABZ_MODULE_ERR_NOT_FOUND,1);
+      request.kind=99;
+      test_check(result,context_store(&request,sizeof request,NULL,0,
+        &used,NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
+      strcpy(request.channel,"#wrong");
+      test_check(result,context_store(&request,sizeof request,NULL,0,
+        &used,NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
+      strcpy(lookup.channel,"#wrong");
+      test_check(result,context_recent(&lookup,sizeof lookup,&found,
+        sizeof found,&used,NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
+      database=previous_read;observation_writer=previous_writer;
     }
     test_check(result,sqlite3_close(db)==SQLITE_OK,0);
     test_check(result,result->tests_executed>=20,0);
