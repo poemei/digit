@@ -582,11 +582,11 @@ static stnlabz_module_result_t mock_invoke(const char *service,
         if(!req||bytes!=sizeof *req||!response||
             capacity<sizeof decision||!used)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
         decision.outcome=mock_mode==7?DIGIT_REASONING_OUTCOME_UNKNOWN:
-            mock_mode==9?DIGIT_REASONING_OUTCOME_EVIDENCE:
+            (mock_mode==9||mock_mode==10)?DIGIT_REASONING_OUTCOME_EVIDENCE:
             DIGIT_REASONING_OUTCOME_ABSTAIN;
-        if(mock_mode==9){
+        if(mock_mode==9||mock_mode==10){
             decision.evidence_count=1;decision.reference_count=1;
-            decision.corpus_ids[0]=99;
+            decision.corpus_ids[0]=mock_mode==10?8:99;
         }
         memcpy(response,&decision,sizeof decision);*used=sizeof decision;
         return STNLABZ_MODULE_OK;
@@ -809,7 +809,8 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
         mock_mode=10;
         strcpy(channel.message,"does digit understand cat speak?");emitted=99;
         check(q,process_route(&mock,&channel,sizeof channel,response,
-            sizeof response,&emitted,0)==STNLABZ_MODULE_OK,0);
+            sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&emitted>0&&
+            strstr(response,"Corpus #8")!=NULL,0);
         mock_mode=0;
         strcpy(channel.message,"good to see you");emitted=99;
         check(q,process_route(&mock,&channel,sizeof channel,response,
