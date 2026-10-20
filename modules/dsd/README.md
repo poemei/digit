@@ -150,3 +150,10 @@ available at their own service boundary.
 to database-backed modules. Consequently end-to-end database evidence for
 such a request cannot be generated until a real participating module path
 executes. DSD does not control or extend Core dispatch.
+
+
+## DSD-owned diagnosis service (v0.7.2)
+
+`digit.dsd.report` accepts `digit_dsd_report_request_t` (trace ID and an authenticated adapter-provided originating term) and returns a bounded `digit_dsd_report_result_t` containing Originating Term, observed Route, Module, Code source location, SQL evidence, and an evidence-qualified Assessment. The source of report policy and interpretation is DSD, not IRC. Trace ID ownership remains the responsibility of the authenticated entry adapter; do not expose report to untrusted users without that check. Origin text is not retained in the generic DSD event store. DSD reports missing SQL spans as unknown rather than fabricating a SQLite response.
+
+This service operates on *actual retained trace events*. It cannot infer invisible Core/service internals or supply actual SQL codes unless SQLite3 was instrumented to record them for the same request. It is a bounded, observable diagnostic foundation, not completed end-to-end diagnosis or autonomous repair. Qualification covers report construction from multi-module fixtures and origin validation. Requires IRC 0.3.5 for DM delivery. Operator activates DSD first.
