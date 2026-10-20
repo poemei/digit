@@ -81,6 +81,8 @@ static void add_word(const char *word, digit_interpretation_result_t *out,
     if (!*seen) *first_question = question_initial(word);
     *seen = 1;
     word_features(word, out);
+    if (!strcmp(word,"explain") || !strcmp(word,"describe"))
+        out->features |= DIGIT_FEATURE_EXPLANATION_REQUEST;
     n = strlen(word);
     if (out->term_count >= DIGIT_INTERPRETATION_TERMS_MAX) {
         out->features |= DIGIT_FEATURE_TRUNCATED;
@@ -172,6 +174,8 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
         {"The database works but the API fails.",1,DIGIT_FEATURE_CONTRAST},
         {"They changed it.",1,DIGIT_FEATURE_REFERENCE},
         {"What changed?",2,0},
+        {"explain php",1,DIGIT_FEATURE_EXPLANATION_REQUEST},
+        {"describe databases",1,DIGIT_FEATURE_EXPLANATION_REQUEST},
         {"Could this be incorrect?",2,DIGIT_FEATURE_REFERENCE},
         {"No changes were made.",1,DIGIT_FEATURE_NEGATION},
         {"Before the migration, performance was stable.",1,DIGIT_FEATURE_PAST},
@@ -233,7 +237,7 @@ static const stnlabz_module_descriptor_t descriptor = {
     .name = "Digit Lexical Interpretation",
     .version_major = 0,
     .version_minor = 1,
-    .version_patch = 1,
+    .version_patch = 2,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify,
