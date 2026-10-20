@@ -192,11 +192,104 @@ static stnlabz_module_result_t greeting_service(
  *response_used=sizeof *out;
  return STNLABZ_MODULE_OK;
 }
+/* The operator explicitly permits fixed family forms of address.
+ * Only an account-classified family interaction reaches this service.
+ * This service does not attempt general language understanding. */
+typedef struct {
+ const char *kind,*address;
+ const char *const *phrases;
+ size_t count,previous;
+} family_reply_t;
+static const char *const reciprocal[]={
+ "Good to see you too, %s!","Always good to see you, %s!",
+ "Right back at you, %s!","Happy you're here, %s!"
+};
+static const char *const affection[]={
+ "Love you too, %s!","Lots of love, %s!",
+ "Sending you love, %s!","Aww, %s, love you!"
+};
+static const char *const hello_reply[]={
+ "Hey, %s!","Hi, %s!","Hello there, %s!","I'm here, %s!"
+};
+static const char *const gratitude_reply[]={
+ "Anytime, %s!","You're welcome, %s!",
+ "Of course, %s!","Always happy to help, %s!"
+};
+static const char *const kind_names[]={"mommy","auntie","sister"};
+static const char *const kind_addresses[]={"Momma","Auntie","Kitty Sister"};
+static family_reply_t replies[3][4];
+static int contains_phrase(const char *text,const char *phrase){
+ size_t n=strlen(phrase);const char *p;
+ for(p=text;*p;p++){
+  size_t j=0;
+  while(j<n&&p[j]&&
+    (p[j]==phrase[j]||((unsigned char)p[j]>='A'&&
+     (unsigned char)p[j]<='Z'&&p[j]+('a'-'A')==phrase[j])))j++;
+  if(j==n&& (p==text||!((p[-1]>='a'&&p[-1]<='z')||
+       (p[-1]>='A'&&p[-1]<='Z'))) &&
+     (!((p[j]>='a'&&p[j]<='z')||
+       (p[j]>='A'&&p[j]<='Z'))))return 1;
+ }
+ return 0;
+}
+static int family_intent(const char *text){
+ if(contains_phrase(text,"good to see you")||
+    contains_phrase(text,"nice to see you")||
+    contains_phrase(text,"miss you"))return 0;
+ if(contains_phrase(text,"love you")||
+    contains_phrase(text,"love ya"))return 1;
+ if(contains_phrase(text,"hello")||contains_phrase(text,"hi")||
+    contains_phrase(text,"hey"))return 2;
+ if(contains_phrase(text,"thank you")||
+    contains_phrase(text,"thanks"))return 3;
+ return -1;
+}
+static stnlabz_module_result_t family_service(
+ const void *request,size_t request_size,void *response,
+ size_t response_size,size_t *response_used,void *context){
+ const digit_socials_family_request_t *req=request;
+ digit_socials_family_response_t *out=response;
+ int intent,role=-1,n;size_t i,index;family_reply_t *entry;
+ (void)context;
+ if(response_used)*response_used=0;
+ if(!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(!req||request_size!=sizeof *req||!out||
+    response_size<sizeof *out||!response_used||
+    !memchr(req->kind,0,sizeof req->kind)||
+    !memchr(req->text,0,sizeof req->text))
+   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ for(i=0;i<COUNT(kind_names);i++)
+  if(!strcmp(req->kind,kind_names[i])){role=(int)i;break;}
+ if(role<0)return STNLABZ_MODULE_ERR_NOT_FOUND;
+ intent=family_intent(req->text);
+ if(intent<0)return STNLABZ_MODULE_ERR_NOT_FOUND;
+ lock();
+ entry=&replies[role][intent];
+ if(!pick((category_t *)&(category_t){entry->kind,entry->phrases,
+                     entry->count,entry->previous},&index)){
+  unlock();return STNLABZ_MODULE_ERR_INVALID_STATE;
+ }
+ memset(out,0,sizeof *out);
+ n=snprintf(out->text,sizeof out->text,entry->phrases[index],entry->address);
+ if(n<=0||(size_t)n>=sizeof out->text){
+  unlock();return STNLABZ_MODULE_ERR_INVALID_STATE;
+ }
+ entry->previous=index;
+ unlock();
+ *response_used=sizeof *out;
+ return STNLABZ_MODULE_OK;
+}
 static stnlabz_module_result_t start(const stnlabz_module_host_t *api) {
  size_t i;
  if(host||!api||!api->register_service||!api->unregister_service)
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  for(i=0;i<COUNT(catalog);i++)catalog[i].previous=SIZE_MAX;
+ for(i=0;i<COUNT(kind_names);i++){
+  replies[i][0]=(family_reply_t){kind_names[i],kind_addresses[i],reciprocal,COUNT(reciprocal),SIZE_MAX};
+  replies[i][1]=(family_reply_t){kind_names[i],kind_addresses[i],affection,COUNT(affection),SIZE_MAX};
+  replies[i][2]=(family_reply_t){kind_names[i],kind_addresses[i],hello_reply,COUNT(hello_reply),SIZE_MAX};
+  replies[i][3]=(family_reply_t){kind_names[i],kind_addresses[i],gratitude_reply,COUNT(gratitude_reply),SIZE_MAX};
+ }
  for(i=0;i<COUNT(greetings);i++){
   greetings[i].previous=SIZE_MAX;greetings[i].last=0;
  }
@@ -208,10 +301,17 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api) {
   api->unregister_service(DIGIT_SOCIALS_SERVICE,NULL);
   host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
  }
+ if(!api->register_service(DIGIT_SOCIALS_FAMILY_SERVICE,family_service,NULL)){
+  api->unregister_service(DIGIT_SOCIALS_GREETING_SERVICE,NULL);
+  api->unregister_service(DIGIT_SOCIALS_SERVICE,NULL);
+  host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
+ }
  return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t stop(void) {
  if(!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(!host->unregister_service(DIGIT_SOCIALS_FAMILY_SERVICE,NULL))
+  return STNLABZ_MODULE_ERR_STOP_FAILED;
  if(!host->unregister_service(DIGIT_SOCIALS_GREETING_SERVICE,NULL))
   return STNLABZ_MODULE_ERR_STOP_FAILED;
  if(!host->unregister_service(DIGIT_SOCIALS_SERVICE,NULL))
@@ -256,7 +356,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="socials",.name="Social expression vocabulary",
- .version_major=0,.version_minor=2,.version_patch=0,
+ .version_major=0,.version_minor=2,.version_patch=1,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
