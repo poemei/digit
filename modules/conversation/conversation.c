@@ -453,7 +453,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
         decision.outcome=DIGIT_REASONING_OUTCOME_EVIDENCE;
         decision.reference_count=1;decision.corpus_ids[0]=42;
         check(q,digit_response_render(&decision,&data,render,sizeof render,&length)
-           &&length>0&&strstr(render,"Corpus #42: PHP is a server-side language.")!=NULL,0);
+           &&length>0&&strstr(render,"Corpus #42 excerpt: \"PHP is a server-side language.")!=NULL,0);
         decision.requires_verification=1;length=9;
         check(q,!digit_response_render(&decision,&data,render,sizeof render,&length)
            &&length==0,1);
@@ -462,7 +462,8 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
         check(q,!digit_response_render(&decision,&data,render,sizeof render,&length),1);
         strcpy(data.hits[0].verification_status,"operator-verified");
         strcpy(data.hits[0].excerpt,"Unfinished evidence fragment");
-        check(q,!digit_response_render(&decision,&data,render,sizeof render,&length),1);
+        check(q,digit_response_render(&decision,&data,render,sizeof render,&length)&&
+          strstr(render,"Unfinished evidence fragment")!=NULL,0);
         strcpy(data.hits[0].excerpt,"Short fact.");
         decision.corpus_ids[0]=900;
         check(q,!digit_response_render(&decision,&data,render,sizeof render,&length),1);
