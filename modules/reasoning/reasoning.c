@@ -77,7 +77,22 @@ static void evaluate(const digit_reasoning_request_t *q,
   out->requires_clarification=1;
   return;
  }
- if(!q->retrieval_attempted||!q->retrieval_succeeded)return;
+ if(!q->retrieval_attempted||!q->retrieval_succeeded){
+  out->outcome=DIGIT_REASONING_OUTCOME_FAILURE;
+  return;
+ }
+ if(!q->corpus.count){
+  out->outcome=DIGIT_REASONING_OUTCOME_UNKNOWN;
+  return;
+ }
+ /* An unqualified one-word utterance is not an instruction to recite the
+  * first matching entry. Preserve lexical ambiguity as a clarification. */
+ if(q->interpretation.term_count==1&&
+    !(q->interpretation.features&DIGIT_FEATURE_EXPLANATION_REQUEST)){
+  out->outcome=DIGIT_REASONING_OUTCOME_CLARIFY;
+  out->requires_clarification=1;
+  return;
+ }
  /* Interpretation currently retains ordered lexical terms. Recognize the
   * grammatical command as intent, never as the search subject. */
  for(j=q->interpretation.term_count;j>0;j--){
@@ -88,7 +103,8 @@ static void evaluate(const digit_reasoning_request_t *q,
    topic=term;break;
   }
  }
- if(!topic)return;
+ if(!topic){out->outcome=DIGIT_REASONING_OUTCOME_CLARIFY;
+  out->requires_clarification=1;return;}
  for(i=0;i<q->corpus.count;i++){
   const digit_corpus_hit_t *h=&q->corpus.hits[i];
   if(!strcmp(h->verification_status,"operator-verified")&&
@@ -96,6 +112,7 @@ static void evaluate(const digit_reasoning_request_t *q,
      out->reference_count<DIGIT_REASONING_MAX_REFERENCES)
    out->corpus_ids[out->reference_count++]=h->id;
  }
+ if(!out->reference_count)out->outcome=DIGIT_REASONING_OUTCOME_UNKNOWN;
  out->evidence_count=out->reference_count;
  if(out->evidence_count){
   out->outcome=DIGIT_REASONING_OUTCOME_EVIDENCE;
@@ -148,13 +165,13 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  check(q,response.requires_verification==0,0);
  check(q,response.requires_clarification==0,0);
  mutated=request;strcpy(mutated.corpus.hits[0].excerpt,"PHP");
- check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_ABSTAIN,1);
+ check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_UNKNOWN,1);
  mutated=request;strcpy(mutated.corpus.hits[0].excerpt,"Python is a language used to create dynamically generated web pages.");
  check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_ABSTAIN,1);
  mutated=request;mutated.corpus.count=0;
- check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_ABSTAIN,0);
+ check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_UNKNOWN,0);
  mutated=request;strcpy(mutated.corpus.hits[0].verification_status,"unverified");
- check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.evidence_count==0,0);
+ check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.evidence_count==0&&response.outcome==DIGIT_REASONING_OUTCOME_UNKNOWN,0);
  mutated=request;mutated.interpretation.unresolved_references=1;
  check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.requires_clarification,0);
  mutated=request;mutated.interpretation.features=DIGIT_FEATURE_TRUNCATED;
@@ -162,7 +179,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  mutated=request;mutated.interpretation.kind=DIGIT_UTTERANCE_UNRESOLVED;
  check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_CLARIFY,0);
  mutated=request;mutated.retrieval_attempted=0;mutated.retrieval_succeeded=0;mutated.corpus.count=0;
- check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_ABSTAIN,0);
+ check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_FAILURE,0);
  for(i=0;i<3;i++){
   mutated=request;
   if(i==0)mutated.corpus.count=DIGIT_CORPUS_RESULTS_MAX+1;
@@ -208,7 +225,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="reasoning",.name="Evidence Constrained Reasoning",
- .version_major=0,.version_minor=1,.version_patch=1,
+ .version_major=0,.version_minor=1,.version_patch=2,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
