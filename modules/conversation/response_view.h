@@ -3,5 +3,6 @@
 #include <stddef.h>
 #include "../reasoning/reasoning.h"
 int digit_response_render(const digit_reasoning_result_t *decision,
- const digit_corpus_result_t *evidence,char *output,size_t capacity,size_t *used);
+ const digit_corpus_result_t *evidence,const digit_interpretation_result_t *question,
+ char *output,size_t capacity,size_t *used);
 #endif
