@@ -62,3 +62,8 @@ SQLite3 now creates an `utterance.observed` context record within the same trans
 ## Qualification fixture correction (v0.4.7)
 
 The in-memory qualification extends its observations fixture with `sender_id` and `timestamp` before exercising atomic persistence. A subsequent fixture insert now specifies column names explicitly rather than relying on the old five-column shape. This preserves all actual qualification checks and does not change the production schema or runtime SQL behavior. Operator build and test results remain the acceptance authority.
+
+
+## Transaction diagnosis (v0.4.8)
+
+The atomic Observation writer now emits result-only syslog entries under `digit.sqlite3 observation_atomic`: `status=committed`, `status=rejected phase=... sqlite_code=...`, or `status=rollback phase=... sqlite_code=...`. No message text, sender, account, or SQL row contents are logged. Diagnostics do not replace end-to-end acceptance.
