@@ -16,7 +16,6 @@
 #include "../reasoning/reasoning.h"
 #include "../sqlite3/corpus_search.h"
 #include "response_view.h"
-#include "../socials/socials.h"
 
 #define LISTEN "digit.conversation.listen"
 #define DIRECT "digit.conversation"
@@ -134,37 +133,6 @@ static int conversation_invitation(const digit_interpretation_result_t *r){
  }
  return 0;
 }
-/* Social acknowledgment is not a factual claim. Its non-verbal
- * expression is always sourced from the existing Socials service. */
-static int social_reciprocity(const digit_interpretation_result_t *r){
- unsigned i;
- int good=0,see=0,you=0;
- if(r->kind!=DIGIT_UTTERANCE_STATEMENT)return 0;
- for(i=0;i<r->term_count;i++){
-   if(!strcmp(r->terms[i],"good"))good=1;
-   else if(!strcmp(r->terms[i],"see"))see=1;
-   else if(!strcmp(r->terms[i],"you"))you=1;
- }
- return good&&see&&you;
-}
-static int social_acknowledge(const stnlabz_module_host_t *host,
- char *response,size_t capacity,size_t *used){
- digit_socials_request_t select={{0}};
- digit_socials_response_t chosen={{0}};
- size_t returned=0;
- stnlabz_module_result_t rc;
- int written;
- strcpy(select.category,"smiles");
- rc=host->invoke_service(DIGIT_SOCIALS_SERVICE,&select,sizeof select,
-                        &chosen,sizeof chosen,&returned);
- if(rc!=STNLABZ_MODULE_OK||returned!=sizeof chosen||
-    !memchr(chosen.expression,0,sizeof chosen.expression))
-   return 0;
- written=snprintf(response,capacity,"Good to see you too! %s",chosen.expression);
- if(written<=0||(size_t)written>=capacity)return 0;
- *used=(size_t)written;
- return 1;
-}
 static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
     const void *request, size_t bytes, void *response, size_t capacity,
     size_t *used, int passive)
@@ -209,18 +177,6 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
         *used=(size_t)n;
         trace_stage(host,"process","participation","CONTACT_ACKNOWLEDGED",
             0,(unsigned)*used,__LINE__);
-        return STNLABZ_MODULE_OK;
-    }
-    if(!passive&&response&&capacity&&social_reciprocity(&result)){
-        if(social_acknowledge(host,response,capacity,used)){
-            trace_stage(host,"process",DIGIT_SOCIALS_SERVICE,
-               "SOCIAL_RECIPROCITY",0,(unsigned)*used,__LINE__);
-            return STNLABZ_MODULE_OK;
-        }
-        trace_stage(host,"process",DIGIT_SOCIALS_SERVICE,
-           "SOCIAL_EXPRESSION_UNAVAILABLE",1,0,__LINE__);
-        /* A social expression service failure must not become an
-         * invented lack-of-Corpus-knowledge statement. */
         return STNLABZ_MODULE_OK;
     }
     trace_stage(host,"process","participation",
@@ -416,17 +372,6 @@ static stnlabz_module_result_t mock_invoke(const char *service,
 {
     const digit_interpretation_request_t *q = request;
     digit_interpretation_result_t r = {0};
-    if(!strcmp(service,DIGIT_SOCIALS_SERVICE)){
-        const digit_socials_request_t *req=request;
-        digit_socials_response_t value={{0}};
-        if(used)*used=0;
-        if(!req||bytes!=sizeof *req||!response||capacity<sizeof value||
-           !used||strcmp(req->category,"smiles"))
-           return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
-        strcpy(value.expression,":)");
-        memcpy(response,&value,sizeof value);*used=sizeof value;
-        return STNLABZ_MODULE_OK;
-    }
     if(!strcmp(service,DIGIT_IDENTITY_READ_SERVICE)){
         const digit_identity_request_t *req=request;
         digit_identity_response_t out={{0}};
@@ -652,16 +597,6 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
             emitted>0&&strstr(response,"I'm here")!=NULL,0);
         mock_mode=0;
     }
-    {
-        message_t social=msg;size_t emitted=0;
-        strcpy(social.message,"good to see you");
-        check(q,process_route(&mock,&social,sizeof social,response,
-           sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&
-           emitted>0&&strstr(response,"Good to see you too!")!=NULL,0);
-        emitted=0;
-        strcpy(social.message,"what is your mission?");
-        check(q,!social_reciprocity(&(digit_interpretation_result_t){.kind=DIGIT_UTTERANCE_QUESTION}),1);
-    }
     used = 17; before = mock_calls;
     check(q, process(&mock, NULL, sizeof msg, response, sizeof response, &used)
           == STNLABZ_MODULE_ERR_INVALID_ARGUMENT && used == 0 &&
@@ -831,7 +766,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 6,
+    .version_major = 1, .version_minor = 1, .version_patch = 5,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
