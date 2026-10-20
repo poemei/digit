@@ -645,6 +645,11 @@ static stnlabz_module_result_t mock_invoke(const char *service,
        r.kind=DIGIT_UTTERANCE_QUESTION;r.term_count=3;
        strcpy(r.terms[0],"so");strcpy(r.terms[1],"her");
        strcpy(r.terms[2],"works");
+    }else if(!strcmp(q->text,"does digit understand cat speak?")){
+       r.kind=DIGIT_UTTERANCE_QUESTION;r.term_count=5;
+       strcpy(r.terms[0],"does");strcpy(r.terms[1],"digit");
+       strcpy(r.terms[2],"understand");strcpy(r.terms[3],"cat");
+       strcpy(r.terms[4],"speak");
     }else if(!strcmp(q->text,"does she understand cat talk?")){
        r.kind=DIGIT_UTTERANCE_QUESTION;r.term_count=5;
        strcpy(r.terms[0],"does");strcpy(r.terms[1],"she");
