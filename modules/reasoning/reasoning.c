@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <ctype.h>
 #include "module.h"
 #include "reasoning.h"
 
@@ -32,11 +33,39 @@ static int validate(const digit_reasoning_request_t *q){
  }
  return 1;
 }
-/* Only operator-verified records support conclusions. This classification
- * evaluates provenance and availability, NOT the truth of a prose answer. */
+/* Eligibility is not factual verification. Reject isolated terms and evidence
+ * unrelated to the observed subject; never infer a definition from a match. */
+static int subject_occurs(const char *source,const char *term){
+ size_t i,n=strlen(term);
+ if(!n)return 0;
+ for(i=0;source[i];i++){
+  size_t j;
+  if(i&&isalnum((unsigned char)source[i-1]))continue;
+  for(j=0;j<n&&source[i+j]&&
+      tolower((unsigned char)source[i+j])==
+      tolower((unsigned char)term[j]);j++);
+  if(j==n&&!isalnum((unsigned char)source[i+j]))return 1;
+ }
+ return 0;
+}
+static int informative(const char *source,const char *topic){
+ size_t i=0,words=0,letters=0;
+ int inword=0,detail=0;
+ if(!source||!memchr(source,0,DIGIT_CORPUS_EXCERPT_MAX))return 0;
+ for(;source[i];i++){
+  unsigned char c=(unsigned char)source[i];
+  if(isalpha(c)){letters++;if(!inword){words++;inword=1;}}
+  else if(isspace(c)||ispunct(c)){inword=0;if(c=='.'||c==';'||c==':')detail=1;}
+  else return 0;
+ }
+ /* Minimum explanatory substance is a necessary, not sufficient test.
+  * A bare title, keyword, or a short label cannot qualify. */
+ return letters>=24&&words>=6&&detail&&subject_occurs(source,topic);
+}
 static void evaluate(const digit_reasoning_request_t *q,
  digit_reasoning_result_t *out){
- unsigned i;
+ unsigned i,j;
+ const char *topic=NULL;
  memset(out,0,sizeof *out);
  out->outcome=DIGIT_REASONING_OUTCOME_ABSTAIN;
  out->uncertainty=1;
@@ -48,19 +77,30 @@ static void evaluate(const digit_reasoning_request_t *q,
   out->requires_clarification=1;
   return;
  }
- if(!q->retrieval_attempted||!q->retrieval_succeeded)
-  return;
+ if(!q->retrieval_attempted||!q->retrieval_succeeded)return;
+ /* Interpretation currently retains ordered lexical terms. Recognize the
+  * grammatical command as intent, never as the search subject. */
+ for(j=q->interpretation.term_count;j>0;j--){
+  const char *term=q->interpretation.terms[j-1];
+  if(strcmp(term,"explain")&&strcmp(term,"describe")&&
+     strcmp(term,"what")&&strcmp(term,"is")&&strcmp(term,"the")&&
+     strcmp(term,"a")&&strcmp(term,"an")){
+   topic=term;break;
+  }
+ }
+ if(!topic)return;
  for(i=0;i<q->corpus.count;i++){
   const digit_corpus_hit_t *h=&q->corpus.hits[i];
   if(!strcmp(h->verification_status,"operator-verified")&&
-     h->excerpt[0]&&out->reference_count<DIGIT_REASONING_MAX_REFERENCES)
+     informative(h->excerpt,topic)&&
+     out->reference_count<DIGIT_REASONING_MAX_REFERENCES)
    out->corpus_ids[out->reference_count++]=h->id;
  }
  out->evidence_count=out->reference_count;
  if(out->evidence_count){
   out->outcome=DIGIT_REASONING_OUTCOME_EVIDENCE;
   out->requires_verification=0;
-  /* Retrieved provenance does not prove semantic relevance or synthesis. */
+  /* Lexical relevance cannot establish truth or semantic entailment. */
   out->uncertainty=1;
  }
 }
@@ -97,7 +137,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  request.corpus.count=1;request.corpus.hits[0].id=123;
  strcpy(request.corpus.hits[0].category,"documentation");
  strcpy(request.corpus.hits[0].verification_status,"operator-verified");
- strcpy(request.corpus.hits[0].excerpt,"An example of actual indexed source material");
+ strcpy(request.corpus.hits[0].excerpt,"PHP is a language used to create dynamically generated web pages.");
  used=0;
  check(q,service(&request,sizeof request,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK,0);
  check(q,used==sizeof response,0);
@@ -107,6 +147,10 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  check(q,response.uncertainty==1,0);
  check(q,response.requires_verification==0,0);
  check(q,response.requires_clarification==0,0);
+ mutated=request;strcpy(mutated.corpus.hits[0].excerpt,"PHP");
+ check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_ABSTAIN,1);
+ mutated=request;strcpy(mutated.corpus.hits[0].excerpt,"Python is a language used to create dynamically generated web pages.");
+ check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_ABSTAIN,1);
  mutated=request;mutated.corpus.count=0;
  check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_ABSTAIN,0);
  mutated=request;strcpy(mutated.corpus.hits[0].verification_status,"unverified");
@@ -164,7 +208,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="reasoning",.name="Evidence Constrained Reasoning",
- .version_major=0,.version_minor=1,.version_patch=0,
+ .version_major=0,.version_minor=1,.version_patch=1,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
