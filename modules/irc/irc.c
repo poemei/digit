@@ -201,7 +201,7 @@ static int dsd_dm_reply(const char *account,const char *message,char *response,
   snprintf(response,cap,"DSD: Use diagnose my last request. Other trace investigations require scoped authorization.");
   *used=strlen(response);return 1;
  }
- snprintf(query.command,sizeof query.command,"%s",message);
+ memcpy(query.command,message,strlen(message)+1);
  rc=host_api->invoke_service(DIGIT_DSD_COMMAND_SERVICE,&query,sizeof query,
    &answer,sizeof answer,&returned);
  if(rc!=STNLABZ_MODULE_OK||returned!=sizeof answer||
@@ -651,7 +651,7 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled
         if(!passive_channel || family_reference(input.message)){
             const char *family=greeting_kind(cfg,input.account,input.sender);
             if(family && strcmp(family,"unknown")){
-                digit_socials_family_request_t social={{0}};
+                digit_socials_family_request_t social={0};
                 digit_socials_family_response_t social_response={{0}};
                 size_t social_used=0;
                 snprintf(social.kind,sizeof social.kind,"%s",family);
@@ -1048,7 +1048,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
     check(result,!strcmp(greeting_kind(&c,"registered","Unknown"),"unknown"),0);
     strcpy(c.auntie_account,"LaurieAccount");
     check(result,!strcmp(greeting_kind(&c,"LaurieAccount","Laurie_Vo"),"auntie"),0);
-    check(result,!strcmp(greeting_kind(&c,"Laurie_Vo","Laurie_Vo"),"unknown"),1);
+    check(result,greeting_kind(&c,"Laurie_Vo","Laurie_Vo")==NULL,1);
     /* RFC 4616 PLAIN fixture: empty authorization identity, account,
      * password. Verify the same construction and base64 primitive as the
      * production SASL path without using or logging actual credentials. */
@@ -1109,7 +1109,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=3,.version_patch=13,
+    .version_major=0,.version_minor=3,.version_patch=14,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
