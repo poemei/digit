@@ -520,6 +520,23 @@ static void observe_channel(const irc_config_t *cfg,const char *raw,int tags_ena
  observation_status(submit_observation(host_api,&rec));
 }
 static const char *greeting_kind(const irc_config_t *cfg,const char *account);
+/* A family member can address Digit in the middle of an utterance.
+ * Do not convert all ambient family talk into an invitation. */
+static int family_reference(const char *message){
+ const char *p;
+ static const char *const references[]={"digit","digicat","kitten"};
+ size_t i;
+ if(!message)return 0;
+ for(p=message;*p;p++){
+  for(i=0;i<sizeof references/sizeof references[0];i++){
+   size_t n=strlen(references[i]);
+   if((p==message||!isalnum((unsigned char)p[-1]))&&
+      !strncasecmp(p,references[i],n)&&
+      (!p[n]||!isalnum((unsigned char)p[n])))return 1;
+  }
+ }
+ return 0;
+}
 static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled) {
     char *sender,*bang,*cmd,*target,*body,*space;
     char response[512],wire[1024];
@@ -621,7 +638,7 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled
         /* Account-authenticated family messages may receive a Socials
          * response. All other messages continue through Conversation. */
         rc=STNLABZ_MODULE_ERR_NOT_FOUND;
-        if(!passive_channel){
+        if(!passive_channel || family_reference(input.message)){
             const char *family=greeting_kind(cfg,input.account);
             if(family && strcmp(family,"unknown")){
                 digit_socials_family_request_t social={{0}};
@@ -903,6 +920,10 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
     check(result,!dsd_tracks_previous("diagnose my last request"),1);
     check(result,!dsd_tracks_previous("diagnose trace 10"),1);
     check(result,!dsd_tracks_previous("show modules"),1);
+    check(result,family_reference("there you are kitten"),0);
+    check(result,family_reference("awww Digit :)"),0);
+    check(result,!family_reference("more coffee"),1);
+    check(result,!family_reference("digitized"),1);
     check(result,address_prefix("digit :)","digicat")==5,0);
     check(result,address_prefix("Digit :)","digicat")==5,0);
     check(result,address_prefix("digicat :)","digicat")==7,0);
@@ -1027,7 +1048,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=3,.version_patch=10,
+    .version_major=0,.version_minor=3,.version_patch=11,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
