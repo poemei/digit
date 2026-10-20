@@ -554,11 +554,23 @@ static stnlabz_module_result_t mock_invoke(const char *service,
         if(used)*used=0;
         if(!request||bytes!=sizeof(digit_corpus_query_t)||!response||
             capacity<sizeof empty||!used)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+        if(mock_mode==10&&!strcmp(q->query,"speak")){
+            empty.count=1;empty.hits[0].id=7;
+            strcpy(empty.hits[0].category,"feline");
+            strcpy(empty.hits[0].verification_status,"verified");
+            strcpy(empty.hits[0].excerpt,"Speak is a general word that can be applied to many unrelated kinds of communication.");
+        }
+        if(mock_mode==10&&!strcmp(q->query,"digit")){
+            empty.count=1;empty.hits[0].id=8;
+            strcpy(empty.hits[0].category,"capability");
+            strcpy(empty.hits[0].verification_status,"verified");
+            strcpy(empty.hits[0].excerpt,"Digit can understand and use cat speak in contextual social exchanges.");
+        }
         if(mock_mode==9&&!strcmp(q->query,"cat")){
             empty.count=1;empty.hits[0].id=99;
             strcpy(empty.hits[0].category,"feline");
             strcpy(empty.hits[0].verification_status,"verified");
-            strcpy(empty.hits[0].excerpt,"Feline vocalizations can convey social signals.");
+            strcpy(empty.hits[0].excerpt,"Cat vocalizations can convey social signals.");
         }
         memcpy(response,&empty,sizeof empty);*used=sizeof empty;
         return STNLABZ_MODULE_OK;
@@ -794,6 +806,10 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
         check(q,process_route(&mock,&channel,sizeof channel,response,
             sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&
             emitted>0&&strstr(response,"clarification")==NULL,0);
+        mock_mode=10;
+        strcpy(channel.message,"does digit understand cat speak?");emitted=99;
+        check(q,process_route(&mock,&channel,sizeof channel,response,
+            sizeof response,&emitted,0)==STNLABZ_MODULE_OK,0);
         mock_mode=0;
         strcpy(channel.message,"good to see you");emitted=99;
         check(q,process_route(&mock,&channel,sizeof channel,response,
