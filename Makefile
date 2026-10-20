@@ -46,6 +46,7 @@ test: $(TARGET) $(CORE_TARGET)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(filter-out core/digit.c,$(CORE_SOURCES)) test/test_core_services.c -o bin/test_core_services $(LDLIBS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(filter-out core/core_hotload.c,$(CORE_SOURCES)) test/test_core_hotload.c -o bin/test_core_hotload $(LDLIBS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(filter-out core/digit.c,$(CORE_SOURCES)) test/test_core_commands.c -o bin/test_core_commands $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) core/core_dsd.c test/test_core_dsd.c -o bin/test_core_dsd -pthread
 	@sh test/run_core_tests.sh
 # [End AI:GPT-6]
 clean:
