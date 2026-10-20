@@ -14,3 +14,8 @@ Qualification executes inside Digit Core; a standalone `make test` checks compil
 ## v0.1.1 evidence eligibility
 
 Verified record metadata alone is no longer considered enough. Evidence must contain the interpreted subject as a whole lexical term, carry multiple content words, and include explanatory punctuation. Isolated labels such as `PHP` and unrelated snippets are rejected even when Corpus reports a match. This is a necessary quality gate, not semantic entailment or factual verification; no automatic language synthesis is claimed.
+
+
+## v0.1.2 — honest uncertainty outcomes
+
+Reasoning now distinguishes `UNKNOWN` (a completed query supplies no adequate evidence), `CLARIFY` (an isolated ambiguous term or unresolved meaning), and `FAILURE` (retrieval did not complete). These states are distinct from an evidence-supported result. A successful lookup with no matches is not a database failure. An isolated name with no matches yields unknown; a bare term with hits is not automatically permission to answer on an assumed topic. This remains a bounded heuristic rather than full contextual understanding.
