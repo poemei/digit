@@ -53,3 +53,8 @@ The request path now records a `response.view` DSD event for every Reasoning res
 Conversation preserves the model-to-Reasoning-to-View path. Reasoning v0.1.1 must establish minimum source substance and lexical relevance before it authorizes display; the View independently rejects isolated words or fragments without explanatory structure. An inadequate match reports `INSUFFICIENT_EVIDENCE` rather than being presented as an explanation. A source excerpt remains identified as an excerpt, not original synthesis. These are conservative necessary checks only; substantive semantic correctness and genuine multi-source explanation remain unimplemented.
 
 Requires Interpretation v0.1.2 and Reasoning v0.1.1 for the updated interpretation/evidence contracts.
+
+
+## v1.1.1 — verification-state consistency
+
+The Response View accepts the same explicit stored statuses as Reasoning v0.1.5: `operator-verified` and `verified`. It does not rewrite either label; `pending` and `unverified` remain ineligible. Qualification tests the accepted and rejected statuses. The View still presents attributed Corpus excerpts rather than independently authoring an explanation.
