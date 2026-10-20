@@ -5,7 +5,7 @@
 #include <string.h>
 #include "module.h"
 #include "socials.h"
-#include "../sqlite3/corpus_search.h"
+#include "../../sqlite3/corpus_search.h"
 
 static int corpus_fixture_mode;
 static stnlabz_module_result_t mock_invoke(const char *name,
