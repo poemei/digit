@@ -31,6 +31,8 @@ static file_state_t sources[2]={
 static int running(void){int v;pthread_mutex_lock(&lock);v=live;pthread_mutex_unlock(&lock);return v;}
 static irc_report_t pending[64];
 static unsigned pending_count;
+static file_state_t lesson_states[256];
+static unsigned lesson_count;
 static void flush_reports(void){
  while(pending_count&&api&&api->invoke_service){
   size_t used=0;
@@ -121,9 +123,12 @@ static int observation_upsert(sqlite3 *db,const char *line,unsigned *add,unsigne
 }
 static int ingest(sqlite3 *db,const char *path,int type){
  FILE *fp=fopen(path,"rb");char *line=NULL;size_t cap=0;ssize_t n;
+ if(!fp){syslog(LOG_ERR,"digit.sqlite3 ingest: cannot open %s",path);report(path,0,0,0,1);return 0;}
  unsigned add=0,change=0,skip=0;int ok=1;const char *name=strrchr(path,'/');
- if(!fp)return 0;
- if(!begin(db)){fclose(fp);return 0;}
+ if(!begin(db)){
+  syslog(LOG_ERR,"digit.sqlite3 ingest: transaction begin failed %s: %s",path,sqlite3_errmsg(db));
+  fclose(fp);report(path,0,0,0,1);return 0;
+ }
  if(type==2){
   long len;char id[256];char *body;
   if(fseek(fp,0,SEEK_END)||(len=ftell(fp))<0||len>1048576||
@@ -150,8 +155,10 @@ static int ingest(sqlite3 *db,const char *path,int type){
 done:
  free(line);fclose(fp);
  if(ok)ok=commit(db);
- if(!ok)(void)sqlite3_exec(db,"ROLLBACK",NULL,NULL,NULL);
- if(add||change||!ok)report(name?name+1:path,ok?add:0,ok?change:0,skip,!ok);
+ if(!ok){syslog(LOG_ERR,"digit.sqlite3 ingest: import rollback %s: %s",path,sqlite3_errmsg(db));
+  (void)sqlite3_exec(db,"ROLLBACK",NULL,NULL,NULL);
+ }
+ report(name?name+1:path,ok?add:0,ok?change:0,skip,!ok);
  return ok;
 }
 static void *watcher(void *unused){
@@ -160,6 +167,7 @@ static void *watcher(void *unused){
   if(db)sqlite3_close(db);syslog(LOG_ERR,"digit.sqlite3 ingest: database unavailable");return NULL;
  }
  sqlite3_busy_timeout(db,5000);
+ report("watcher started: corpus.tsv, observations.jsonl, lessons/*.txt",0,0,0,0);
  while(running()){
   int i;DIR *dir;
   for(i=0;i<2;i++){
@@ -180,7 +188,23 @@ static void *watcher(void *unused){
     if(len<5||strcmp(e->d_name+len-4,".txt"))continue;
     if(snprintf(path,sizeof path,"%s/%s",LESSONS,e->d_name)>=(int)sizeof path||
        lstat(path,&st)||!S_ISREG(st.st_mode))continue;
-    (void)ingest(db,path,2); /* content comparison prevents repeated inserts */
+    {unsigned k;file_state_t *state=NULL;
+     for(k=0;k<lesson_count;k++)if(!strcmp(lesson_states[k].path,path)){
+       state=&lesson_states[k];break;
+     }
+     if(!state&&lesson_count<256){
+       state=&lesson_states[lesson_count++];
+       snprintf(state->path,sizeof state->path,"%s",path);
+     }
+     if(state&&(!state->seen||state->size!=st.st_size||
+        state->mtime!=st.st_mtim.tv_sec||
+        state->nsec!=st.st_mtim.tv_nsec)){
+       if(ingest(db,path,2)){
+        state->seen=1;state->size=st.st_size;
+        state->mtime=st.st_mtim.tv_sec;state->nsec=st.st_mtim.tv_nsec;
+       }
+     }
+    }
    }
    closedir(dir);
   }
