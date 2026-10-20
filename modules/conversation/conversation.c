@@ -148,12 +148,34 @@ static stnlabz_module_result_t handle(const void *request, size_t bytes,
  * not claim to test the real Interpretation module or live IRC integration. */
 static int mock_calls;
 static int mock_mode;
+static int mock_context_writes, mock_context_reads;
 static stnlabz_module_result_t mock_invoke(const char *service,
     const void *request, size_t bytes, void *response, size_t capacity,
     size_t *used)
 {
     const digit_interpretation_request_t *q = request;
     digit_interpretation_result_t r = {0};
+    if (!strcmp(service, DIGIT_CONTEXT_STORE_SERVICE)) {
+        const digit_context_store_request_t *s=request;
+        if (!s || bytes!=sizeof *s || strcmp(s->channel,"#stn-labz") ||
+            !s->sender[0] || !s->source_account[0] || !s->text[0] ||
+            (s->kind!=1 && s->kind!=2))
+            return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+        ++mock_context_writes;
+        if(used)*used=0;
+        return STNLABZ_MODULE_OK;
+    }
+    if (!strcmp(service, DIGIT_CONTEXT_RECENT_SERVICE)) {
+        const digit_context_recent_query_t *q=request;
+        digit_context_recent_result_t h={0};
+        if(!q || bytes!=sizeof *q || strcmp(q->channel,"#stn-labz") ||
+           !response || capacity<sizeof h || !used)
+            return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+        ++mock_context_reads;
+        memcpy(response,&h,sizeof h);
+        *used=sizeof h;
+        return STNLABZ_MODULE_OK;
+    }
     mock_calls++;
     if (strcmp(service, DIGIT_INTERPRETATION_SERVICE) ||
         !request || bytes != sizeof *q ||
@@ -260,6 +282,22 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
     check(q, mock_calls == before + 1, 0);
     check(q, sizeof(msg.message) == sizeof(((digit_interpretation_request_t *)0)->text), 0);
     check(q, strcmp(LISTEN, DIRECT) != 0, 0);
+    {
+        message_t channel=msg;
+        int writes=mock_context_writes,reads=mock_context_reads;
+        strcpy(channel.target,"#stn-labz");
+        used=44;
+        check(q,process(&mock,&channel,sizeof channel,response,
+              sizeof response,&used)==STNLABZ_MODULE_OK &&
+              used==0 && mock_context_writes==writes+1 &&
+              mock_context_reads==reads+1,0);
+        strcpy(channel.account,"");
+        writes=mock_context_writes;reads=mock_context_reads;
+        check(q,process(&mock,&channel,sizeof channel,response,
+              sizeof response,&used)==STNLABZ_MODULE_OK &&
+              mock_context_writes==writes && mock_context_reads==reads,1);
+    }
+
     {
         digit_observation_recent_result_t history = {0};
         size_t emitted = 0;
