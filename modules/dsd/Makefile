@@ -15,9 +15,8 @@ $(TEST_TARGET): test/test_dsd.c dsd.h ../../core/stnlabz_abi/module.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) test/test_dsd.c -o $@ -ldl -pthread
 test: $(TARGET) $(TEST_TARGET)
 	./$(TEST_TARGET) ./$(TARGET)
-install: $(TARGET)
-	install -d "$(DESTDIR)$(MODULE_DIR)/bin"
-	install -m 0644 module.conf "$(DESTDIR)$(MODULE_DIR)/module.conf"
-	install -m 0755 $(TARGET) "$(DESTDIR)$(MODULE_DIR)/bin/dsd.so"
+install:
+	@echo "DSD module retired. DSD is now built into Digit Core; do not install dsd.so."
+	@exit 1
 clean:
 	rm -rf bin
