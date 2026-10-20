@@ -72,6 +72,7 @@ static category_t catalog[] = {
  {"gestures",gestures,COUNT(gestures),SIZE_MAX},
  {"text",text_expr,COUNT(text_expr),SIZE_MAX}
 };
+static unsigned char corpus_previous[COUNT(catalog)];
 static const stnlabz_module_host_t *host;
 static volatile int busy;
 static void lock(void){while(__sync_lock_test_and_set(&busy,1)){}}
@@ -132,8 +133,7 @@ static int corpus_expression(const char *category,char output[DIGIT_SOCIALS_EXPR
      !strstr(hit->category,"social_expression"))continue;
   n=strlen(hit->excerpt);
   if(!n||n>=DIGIT_SOCIALS_EXPRESSION_MAX)continue;
-  if(strpbrk(hit->excerpt,"\\r\\n\\t")||
-     strchr(hit->excerpt,'.')||strchr(hit->excerpt,':'))continue;
+  if(strpbrk(hit->excerpt,"\\r\\n\\t")||strchr(hit->excerpt,'.'))continue;
   memset(output,0,DIGIT_SOCIALS_EXPRESSION_MAX);
   memcpy(output,hit->excerpt,n);
   return 1;
@@ -162,10 +162,19 @@ static stnlabz_module_result_t select_expression(
  {
   char enriched[DIGIT_SOCIALS_EXPRESSION_MAX]={0};
   if(corpus_expression(req->category,enriched)){
-   memset(out,0,sizeof *out);
-   memcpy(out->expression,enriched,strlen(enriched));
-   *response_used=sizeof *out;
-   return STNLABZ_MODULE_OK;
+   int use_candidate;
+   lock();
+   use_candidate=!corpus_previous[i];
+   corpus_previous[i]=(unsigned char)use_candidate;
+   unlock();
+   if(use_candidate){
+    memset(out,0,sizeof *out);
+    memcpy(out->expression,enriched,strlen(enriched));
+    *response_used=sizeof *out;
+    return STNLABZ_MODULE_OK;
+   }
+  }else{
+   lock();corpus_previous[i]=0;unlock();
   }
  }
  lock();
@@ -368,7 +377,9 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api) {
  size_t i;
  if(host||!api||!api->register_service||!api->unregister_service)
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
- for(i=0;i<COUNT(catalog);i++)catalog[i].previous=SIZE_MAX;
+ for(i=0;i<COUNT(catalog);i++){
+  catalog[i].previous=SIZE_MAX;corpus_previous[i]=0;
+ }
  for(i=0;i<COUNT(kind_names);i++){
   replies[i][0]=(family_reply_t){kind_names[i],kind_addresses[i],reciprocal,COUNT(reciprocal),SIZE_MAX};
   replies[i][1]=(family_reply_t){kind_names[i],kind_addresses[i],affection,COUNT(affection),SIZE_MAX};
