@@ -92,10 +92,9 @@ SQLite3 watches `/opt/digit/corpus/corpus.tsv`,
 inside `/opt/digit/lessons`. Changes are checked approximately every two
 seconds, including on module startup. Imports are transactional and do not
 create duplicate Corpus rows for identical category/text or repeated source
-record IDs. A modified known Corpus source replaces its old text and returns
-to `unverified` rather than keeping a stale verified state. Plain-text
+record IDs. A modified known Corpus source replaces its old text and is restored to `operator-verified`, reflecting the operator's authority over these sources. Plain-text
 lessons are imported as complete documents with provenance `lesson:<filename>`
-and status `unverified`; they are not automatically promoted to facts.
+and status `operator-verified` as explicitly directed by the operator.
 
 TSV records are four tab-separated fields: source-record ID, category, source,
 text. JSONL observation records must be valid JSON objects with `text` or
@@ -110,11 +109,14 @@ Synchronization updates and failures are sent through the existing
 `digit.irc.deliver` queue as `[SQLite sync]` messages. Reporting is retried
 in memory while SQLite3 remains running if IRC is temporarily offline.
 Read-only Corpus queries continue to use the original read handle, and the
-new worker owns its separate write handle. Imported operator learning remains
-`unverified` until a human-controlled verification process approves it.
+new worker owns its separate write handle. Files placed in these designated import locations are operator-approved;
+imported Corpus and lesson records receive `operator-verified` status.
 
 The importer does not delete records when source lines or files disappear:
 this is a non-destructive additive/upsert sync, not a destructive mirror.
 Run `make -C modules/sqlite3 clean all test` and verify a live change to each
-source before operational acceptance. Source edits do not bypass the existing
-Reasoning verification policy.
+source before operational acceptance. Reasoning recognizes the `operator-verified` label.
+
+## Operator authority update
+
+The Director confirms that material placed in the three designated source locations is already personally verified. The importer applies `operator-verified` to new, changed, and matching previously imported Corpus/lesson records; no duplicate records are inserted for matching content. Existing records outside those designated sources are not promoted indiscriminately. Restart SQLite3 to trigger the revised startup reconciliation. Observation rows do not have a Corpus verification status.
