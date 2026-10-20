@@ -337,6 +337,24 @@ static stnlabz_module_result_t mock_invoke(const char *service,
 {
     const digit_interpretation_request_t *q = request;
     digit_interpretation_result_t r = {0};
+    if(!strcmp(service,DIGIT_IDENTITY_READ_SERVICE)){
+        const digit_identity_request_t *req=request;
+        digit_identity_response_t out={{0}};
+        if(used)*used=0;
+        if(!req||bytes!=sizeof *req||!response||
+           capacity<sizeof out||!used)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+        switch(req->field){
+          case DIGIT_IDENTITY_LINEAGE:
+            strcpy(out.text,"foundational autonomous agent");break;
+          case DIGIT_IDENTITY_MISSION:
+            strcpy(out.text,"Digit supports STN-LABZ through research and engineering.");break;
+          case DIGIT_IDENTITY_MOTHER:
+            strcpy(out.text,"poe");break;
+          default:return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+        }
+        memcpy(response,&out,sizeof out);*used=sizeof out;
+        return STNLABZ_MODULE_OK;
+    }
     if(!strcmp(service,DIGIT_DSD_CURRENT_SERVICE))return STNLABZ_MODULE_ERR_NOT_FOUND;
     if(!strcmp(service,DIGIT_CORPUS_SEARCH_SERVICE)){
         digit_corpus_result_t empty={0};
@@ -387,6 +405,19 @@ static stnlabz_module_result_t mock_invoke(const char *service,
     if (mock_mode == 1) return STNLABZ_MODULE_ERR_NOT_FOUND;
     if (mock_mode == 2) return STNLABZ_MODULE_ERR_INVALID_STATE;
     r.kind = DIGIT_UTTERANCE_STATEMENT;
+    if(!strcmp(q->text,"what are you?")){
+       r.kind=DIGIT_UTTERANCE_QUESTION;r.term_count=3;
+       strcpy(r.terms[0],"what");strcpy(r.terms[1],"are");strcpy(r.terms[2],"you");
+    }else if(!strcmp(q->text,"what is your mission?")){
+       r.kind=DIGIT_UTTERANCE_QUESTION;r.term_count=4;
+       strcpy(r.terms[0],"what");strcpy(r.terms[1],"is");
+       strcpy(r.terms[2],"your");strcpy(r.terms[3],"mission");
+    }else if(!strcmp(q->text,"who is your creator?")){
+       r.kind=DIGIT_UTTERANCE_QUESTION;r.term_count=4;
+       strcpy(r.terms[0],"who");strcpy(r.terms[1],"is");
+       strcpy(r.terms[2],"your");strcpy(r.terms[3],"creator");
+    }
+
     if (mock_mode == 4) r.kind = 99;
     if (mock_mode == 5) r.term_count = DIGIT_INTERPRETATION_TERMS_MAX + 1;
     if (mock_mode == 6)
@@ -458,6 +489,24 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
            sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&
            emitted>0&&strstr(response,"don't know")!=NULL,0);
         mock_mode=0;
+    }
+    {
+        message_t self=msg;size_t emitted=0;
+        strcpy(self.target,"#stn-labz");
+        strcpy(self.message,"what are you?");
+        check(q,process_route(&mock,&self,sizeof self,response,
+             sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&
+             emitted>0&&strstr(response,"foundational autonomous agent")!=NULL,0);
+        strcpy(self.message,"what is your mission?");
+        emitted=0;
+        check(q,process_route(&mock,&self,sizeof self,response,
+             sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&
+             emitted>0&&strstr(response,"STN-LABZ")!=NULL,0);
+        strcpy(self.message,"who is your creator?");
+        emitted=0;
+        check(q,process_route(&mock,&self,sizeof self,response,
+             sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&
+             emitted>0&&strstr(response,"does not specify my creator")!=NULL,0);
     }
     used = 17; before = mock_calls;
     check(q, process(&mock, NULL, sizeof msg, response, sizeof response, &used)
