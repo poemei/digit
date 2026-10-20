@@ -339,6 +339,10 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
    out.handled&&!out.response[0],0);
  strcpy(in.text,"chill out");
+ /* Do not reuse the previous puurrs interpretation for a new utterance. */
+ in.interpretation.term_count=2;
+ strcpy(in.interpretation.terms[0],"chill");
+ strcpy(in.interpretation.terms[1],"out");
  check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
    !out.handled,1);
  api=saved;
@@ -358,12 +362,12 @@ static stnlabz_module_result_t stop(void){
  if(!api)return STNLABZ_MODULE_ERR_INVALID_STATE;
  if(!api->unregister_service(DIGIT_SOCIAL_INTELLIGENCE_SERVICE,NULL))
   return STNLABZ_MODULE_ERR_STOP_FAILED;
- api=NULL;channel[0]=language[0]=observed_channel[0]=0;turns=0;last_reply=0;
+ api=NULL;channel[0]=language[0]=observed_channel[0]=quiet_channel[0]=0;turns=0;last_reply=0;
  return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="social_intelligence",.name="Social Intelligence",
- .version_major=0,.version_minor=1,.version_patch=3,
+ .version_major=0,.version_minor=1,.version_patch=4,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
