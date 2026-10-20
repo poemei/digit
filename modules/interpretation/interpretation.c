@@ -124,9 +124,22 @@ static int interpret(const digit_interpretation_request_t *req,
         }
         if (!c) break;
     }
-    out->kind = !seen ? DIGIT_UTTERANCE_UNRESOLVED :
-                question || (first_question && strcmp(out->terms[0],"does") && strcmp(out->terms[0],"do") && strcmp(out->terms[0],"did")) ? DIGIT_UTTERANCE_QUESTION :
-                DIGIT_UTTERANCE_STATEMENT;
+    /* A bare echo of someone else's statement is an agreement fragment,
+     * not an information request. This recognizes the grammatical shape
+     * "what <speaker> said" without assuming who that speaker is.
+     * Explicit punctuation still signals a question. */
+    {
+        int quoted_agreement = !question && out->term_count == 3 &&
+            !strcmp(out->terms[0], "what") &&
+            (!strcmp(out->terms[2], "said") ||
+             !strcmp(out->terms[2], "says"));
+        out->kind = !seen ? DIGIT_UTTERANCE_UNRESOLVED :
+                    question || (!quoted_agreement && first_question &&
+                    strcmp(out->terms[0],"does") &&
+                    strcmp(out->terms[0],"do") &&
+                    strcmp(out->terms[0],"did")) ?
+                    DIGIT_UTTERANCE_QUESTION : DIGIT_UTTERANCE_STATEMENT;
+    }
     return 1;
 }
 
@@ -174,6 +187,10 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
         {"The database works but the API fails.",1,DIGIT_FEATURE_CONTRAST},
         {"They changed it.",1,DIGIT_FEATURE_REFERENCE},
         {"What changed?",2,0},
+        {"what Poe Said",1,0},
+        {"what she said",1,0},
+        {"what Poe said?",2,0},
+        {"what Poe meant",2,0},
         {"explain php",1,DIGIT_FEATURE_EXPLANATION_REQUEST},
         {"describe databases",1,DIGIT_FEATURE_EXPLANATION_REQUEST},
         {"Could this be incorrect?",2,DIGIT_FEATURE_REFERENCE},
@@ -240,7 +257,7 @@ static const stnlabz_module_descriptor_t descriptor = {
     .name = "Digit Lexical Interpretation",
     .version_major = 0,
     .version_minor = 1,
-    .version_patch = 3,
+    .version_patch = 4,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify,
