@@ -95,3 +95,22 @@ so the same expression vocabulary can serve Momma, Auntie, Jess, or an
 unfamiliar visitor. This is **bounded nonverbal interaction**, not general
 social reasoning or spontaneous conversational participation. The actual
 Corpus record taxonomy has not been inspected or confirmed.
+
+## v1.1.9 — Context-before-reasoning retrieval
+
+Conversation now reads recent channel observations before evidence selection, then
+tries more than the final lexical term against the existing Corpus search service.
+For questions containing unresolved references, earlier observed utterances can
+supply additional retrieval candidates if the current words yielded no results.
+These are **search candidates only**; a prior statement is not authenticated
+knowledge, and the implementation does **not** equate `she`, `he`, or `they`
+with a fixed person. Existing Reasoning and View verification rules still
+govern emitted claims. The mock qualification case for `does she understand
+cat talk?` checks that available verified feline evidence can be retrieved
+without blindly emitting a clarification request.
+
+Limitations: the existing context ABI contains only observation text and source
+ID, without resolved discourse entities or conversational subject scores.
+Thus these changes improve context-aware retrieval but do **not** implement
+full coreference resolution. Live integration and the deployed Corpus contents
+must be tested by the operator.
