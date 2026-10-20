@@ -239,6 +239,24 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_UNKNOWN,1);
  mutated=request;strcpy(mutated.corpus.hits[0].excerpt,"Python is a language used to create dynamically generated web pages.");
  check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_UNKNOWN,1);
+ mutated=request;
+ strcpy(mutated.corpus.hits[0].excerpt,"PHP supports server rendering.");
+ check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&
+   response.outcome==DIGIT_REASONING_OUTCOME_PARTIAL&&response.corpus_ids[0]==123,0);
+ mutated=request;
+ mutated.interpretation.term_count=3;
+ strcpy(mutated.interpretation.terms[0],"explain");
+ strcpy(mutated.interpretation.terms[1],"chaos");
+ strcpy(mutated.interpretation.terms[2],"foundation");
+ strcpy(mutated.corpus.hits[0].excerpt,"Foundation maintains engineering documentation.");
+ check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&
+   response.outcome==DIGIT_REASONING_OUTCOME_UNKNOWN,1);
+ strcpy(mutated.corpus.hits[0].excerpt,"Chaos Foundation maintains engineering documentation.");
+ check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&
+   response.outcome==DIGIT_REASONING_OUTCOME_PARTIAL,0);
+ strcpy(mutated.corpus.hits[0].verification_status,"unverified");
+ check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&
+   response.outcome==DIGIT_REASONING_OUTCOME_UNKNOWN,1);
  mutated=request;mutated.interpretation.features=0;
  check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_CLARIFY,1);
  mutated=request;mutated.corpus.count=0;
