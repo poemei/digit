@@ -58,3 +58,8 @@ Requires Interpretation v0.1.2 and Reasoning v0.1.1 for the updated interpretati
 ## v1.1.1 — verification-state consistency
 
 The Response View accepts the same explicit stored statuses as Reasoning v0.1.5: `operator-verified` and `verified`. It does not rewrite either label; `pending` and `unverified` remain ineligible. Qualification tests the accepted and rejected statuses. The View still presents attributed Corpus excerpts rather than independently authoring an explanation.
+
+
+## v1.1.2 — explicit partial response
+
+Conversation and its Response View accept Reasoning's `PARTIAL` outcome. The View identifies the verified Corpus record and explicitly labels its text as *not a full explanation*. Reasoning's `UNKNOWN`, `CLARIFY`, and retrieval-failure outcomes remain active; uncertain evidence is not automatically presented as a complete answer. Added qualification cases check permitted partial evidence and refusal of unverified content. Core and IRC remain unchanged.
