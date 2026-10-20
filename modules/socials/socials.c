@@ -233,6 +233,15 @@ static int contains_phrase(const char *text,const char *phrase){
  return 0;
 }
 static int family_intent(const char *text){
+ /* Never substitute a social reply for a technical question merely
+  * because the speaker opened with "hey" or "hi". */
+ if(strchr(text,'?')&&(contains_phrase(text,"what")||
+    contains_phrase(text,"who")||contains_phrase(text,"why")||
+    contains_phrase(text,"how")||contains_phrase(text,"can you")||
+    contains_phrase(text,"could you")))return -1;
+ if(contains_phrase(text,"what is")||
+    contains_phrase(text,"explain")||
+    contains_phrase(text,"tell me about"))return -1;
  if(contains_phrase(text,"good to see you")||
     contains_phrase(text,"nice to see you")||
     contains_phrase(text,"miss you"))return 0;
@@ -361,6 +370,9 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  check(r,family_intent("What is C?")==-1,1);
  check(r,family_intent("this is technical")==-1,1);
  check(r,family_intent("ship")==-1,1);
+ check(r,family_intent("hey what is C?")==-1,1);
+ check(r,family_intent("hi, explain an error")==-1,1);
+ check(r,family_intent("hello can you debug C?")==-1,1);
  check(r,total>=100,0);
  for(i=0;i<COUNT(greetings);i++){
   check(r,strlen(greetings[i].kind)<DIGIT_SOCIALS_GREETING_KIND_MAX,0);
