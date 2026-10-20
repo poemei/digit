@@ -175,15 +175,22 @@ static stnlabz_module_result_t process(const stnlabz_module_host_t *host,
            decision.outcome>DIGIT_REASONING_OUTCOME_CONFLICT||
            decision.reference_count>DIGIT_REASONING_MAX_REFERENCES)
             return STNLABZ_MODULE_ERR_INVALID_STATE;
-        /* View expresses a verified, evidence-bound decision. It may
-         * abstain; it must not invent a sentence to conceal missing data.
-         * Passive channel messages remain observational, not replies. */
-        if(response&&capacity&&!strcmp(msg->sender,msg->target)&&
-           decision.outcome==DIGIT_REASONING_OUTCOME_EVIDENCE&&
-           reasoning.retrieval_succeeded){
+        /* A skipped View must be diagnosable, not invisible in DSD. */
+        if(strcmp(msg->sender,msg->target)){
+            trace_stage(host,"process","response.view","CHANNEL_OBSERVATION",2,0,__LINE__);
+        }else if(!response||!capacity){
+            trace_stage(host,"process","response.view","OUTPUT_UNAVAILABLE",2,0,__LINE__);
+        }else if(!reasoning.retrieval_succeeded){
+            trace_stage(host,"process","response.view","RETRIEVAL_UNAVAILABLE",2,0,__LINE__);
+        }else if(decision.outcome!=DIGIT_REASONING_OUTCOME_EVIDENCE){
+            trace_stage(host,"process","response.view",
+                decision.outcome==DIGIT_REASONING_OUTCOME_CLARIFY?
+                  "CLARIFICATION_REQUIRED":"REASONING_ABSTAIN",
+                2,decision.evidence_count,__LINE__);
+        }else{
             int rendered=digit_response_render(&decision,&found,response,capacity,used);
             trace_stage(host,"process","response.view",
-                rendered?"RESPONSE_COMPOSED":"RENDER_ABSTAIN",
+                rendered?"RESPONSE_COMPOSED":"EVIDENCE_NOT_RENDERABLE",
                 rendered?0:2,rendered?(unsigned)*used:0,__LINE__);
         }
     }
@@ -498,7 +505,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 0, .version_patch = 8,
+    .version_major = 1, .version_minor = 0, .version_patch = 9,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
