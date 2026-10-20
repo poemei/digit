@@ -62,3 +62,8 @@ IRC continues to call the Observation service **first**. On that specific invali
 The journal logs `observation_route=sqlite3_direct` when fallback is attempted, then logs the final `observation_service status=<number> accepted=<0|1>`. A successful service result is not a substitute for validating actual rows. This is a **bounded compatibility recovery**, not an implementation-level repair of the unavailable Observation module.
 
 Qualification now covers primary success without fallback and the invalid-argument fallback dispatch, alongside earlier failure cases. Build and activate IRC v0.3.1 under operator control. Verify via a newly observed channel message and its `observations.event_id` joined to `context.source_id`. If fallback fails, its final status remains visible and requires further investigation.
+
+
+## Direct fallback completion diagnosis (v0.3.2)
+
+IRC logs `observation_route=sqlite3_direct completed=1 status=... response_bytes=...` **after** the fallback service returns. If only the earlier `reason=observation_invalid_argument` entry appears, completion has not been observed. This release adds instrumentation without changing the existing fallback decision.
