@@ -57,3 +57,8 @@ No database migration or new database is introduced. Context has no independent 
 ## Atomic Observation context (v0.4.6)
 
 SQLite3 now creates an `utterance.observed` context record within the same transaction as each successful `digit.sqlite3.observation_insert` call. Context `source_id` is the exact new Observation `event_id`; `subject_id` is the actual Conversation ID. Failure to insert either record rolls back both. No schema migration, Core edit, new database, or change to the Observation request ABI. Existing context services remain available for retrieval and compatibility, but the Observation writer owns immediate context persistence. The in-memory qualification exercises the atomic path. Live reload and runtime behavior require operator acceptance.
+
+
+## Qualification fixture correction (v0.4.7)
+
+The in-memory qualification extends its observations fixture with `sender_id` and `timestamp` before exercising atomic persistence. A subsequent fixture insert now specifies column names explicitly rather than relying on the old five-column shape. This preserves all actual qualification checks and does not change the production schema or runtime SQL behavior. Operator build and test results remain the acceptance authority.
