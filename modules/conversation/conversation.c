@@ -917,48 +917,49 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
     {
         digit_reasoning_result_t decision={0};
         digit_corpus_result_t data={0};
+        digit_interpretation_result_t question={0};
         char render[512]={0};size_t length=0;
         data.count=1;data.hits[0].id=42;
         strcpy(data.hits[0].verification_status,"operator-verified");
         strcpy(data.hits[0].excerpt,"PHP is a server-side language. Additional text.");
         decision.outcome=DIGIT_REASONING_OUTCOME_EVIDENCE;
         decision.reference_count=1;decision.corpus_ids[0]=42;
-        check(q,digit_response_render(&decision,&data,render,sizeof render,&length)
+        check(q,digit_response_render(&decision,&data,&question,render,sizeof render,&length)
            &&length>0&&strstr(render,"Corpus #42 excerpt: \"PHP is a server-side language.")!=NULL,0);
         decision.requires_verification=1;length=9;
-        check(q,!digit_response_render(&decision,&data,render,sizeof render,&length)
+        check(q,!digit_response_render(&decision,&data,&question,render,sizeof render,&length)
            &&length==0,1);
         decision.requires_verification=0;
         strcpy(data.hits[0].verification_status,"verified");
-        check(q,digit_response_render(&decision,&data,render,sizeof render,&length)
+        check(q,digit_response_render(&decision,&data,&question,render,sizeof render,&length)
            &&length>0,0);
         strcpy(data.hits[0].verification_status,"pending");
-        check(q,!digit_response_render(&decision,&data,render,sizeof render,&length),1);
+        check(q,!digit_response_render(&decision,&data,&question,render,sizeof render,&length),1);
         strcpy(data.hits[0].verification_status,"unverified");
-        check(q,!digit_response_render(&decision,&data,render,sizeof render,&length),1);
+        check(q,!digit_response_render(&decision,&data,&question,render,sizeof render,&length),1);
         strcpy(data.hits[0].verification_status,"operator-verified");
         strcpy(data.hits[0].excerpt,"Unfinished evidence fragment");
-        check(q,!digit_response_render(&decision,&data,render,sizeof render,&length),1);
+        check(q,!digit_response_render(&decision,&data,&question,render,sizeof render,&length),1);
         strcpy(data.hits[0].excerpt,"Short fact.");
         decision.corpus_ids[0]=900;
-        check(q,!digit_response_render(&decision,&data,render,sizeof render,&length),1);
+        check(q,!digit_response_render(&decision,&data,&question,render,sizeof render,&length),1);
         decision.corpus_ids[0]=42;
-        check(q,!digit_response_render(&decision,&data,render,5,&length),1);
+        check(q,!digit_response_render(&decision,&data,&question,render,5,&length),1);
         decision.outcome=DIGIT_REASONING_OUTCOME_PARTIAL;
         strcpy(data.hits[0].excerpt,"Chaos Foundation maintains engineering documentation.");
-        check(q,digit_response_render(&decision,&data,render,sizeof render,&length)&&
+        check(q,digit_response_render(&decision,&data,&question,render,sizeof render,&length)&&
           strstr(render,"not a full explanation")!=NULL,0);
         strcpy(data.hits[0].verification_status,"unverified");
-        check(q,!digit_response_render(&decision,&data,render,sizeof render,&length),1);
+        check(q,!digit_response_render(&decision,&data,&question,render,sizeof render,&length),1);
         strcpy(data.hits[0].verification_status,"verified");
         decision.outcome=DIGIT_REASONING_OUTCOME_UNKNOWN;
-        check(q,digit_response_render(&decision,&data,render,sizeof render,&length)
+        check(q,digit_response_render(&decision,&data,&question,render,sizeof render,&length)
           &&strstr(render,"don't know")!=NULL,0);
         decision.outcome=DIGIT_REASONING_OUTCOME_CLARIFY;
-        check(q,digit_response_render(&decision,&data,render,sizeof render,&length)
+        check(q,digit_response_render(&decision,&data,&question,render,sizeof render,&length)
           &&strstr(render,"clarification")!=NULL,0);
         decision.outcome=DIGIT_REASONING_OUTCOME_FAILURE;
-        check(q,digit_response_render(&decision,&data,render,sizeof render,&length)
+        check(q,digit_response_render(&decision,&data,&question,render,sizeof render,&length)
           &&strstr(render,"retrieval failed")!=NULL,0);
 
     }
@@ -998,7 +999,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 11,
+    .version_major = 1, .version_minor = 1, .version_patch = 12,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
