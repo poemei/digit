@@ -46,3 +46,10 @@ The descriptor is Conversation v1.0.8. The module Makefile builds both `conversa
 ## Response gating diagnostics (v1.0.9)
 
 The request path now records a `response.view` DSD event for every Reasoning result, including `CHANNEL_OBSERVATION`, `OUTPUT_UNAVAILABLE`, `RETRIEVAL_UNAVAILABLE`, `REASONING_ABSTAIN`, `CLARIFICATION_REQUIRED`, `EVIDENCE_NOT_RENDERABLE`, and `RESPONSE_COMPOSED`. A skipped View must not leave Core DSD interpreting an unrelated IRC `NO_RESPONSE` as the root cause. The View may present a bounded operator-verified Corpus excerpt with an explicit Corpus ID, quotation framing, and ellipsis for truncation. This does not implement general semantic synthesis or promise an explanation from retrieval alone. Core remains unchanged; Core's current six-line summary may still need to incorporate the new stage dispositions separately.
+
+
+## Evidence sufficiency correction (v1.0.10)
+
+Conversation preserves the model-to-Reasoning-to-View path. Reasoning v0.1.1 must establish minimum source substance and lexical relevance before it authorizes display; the View independently rejects isolated words or fragments without explanatory structure. An inadequate match reports `INSUFFICIENT_EVIDENCE` rather than being presented as an explanation. A source excerpt remains identified as an excerpt, not original synthesis. These are conservative necessary checks only; substantive semantic correctness and genuine multi-source explanation remain unimplemented.
+
+Requires Interpretation v0.1.2 and Reasoning v0.1.1 for the updated interpretation/evidence contracts.
