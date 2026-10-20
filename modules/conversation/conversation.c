@@ -185,7 +185,7 @@ static stnlabz_module_result_t process(const stnlabz_module_host_t *host,
         }else if(decision.outcome!=DIGIT_REASONING_OUTCOME_EVIDENCE){
             trace_stage(host,"process","response.view",
                 decision.outcome==DIGIT_REASONING_OUTCOME_CLARIFY?
-                  "CLARIFICATION_REQUIRED":"REASONING_ABSTAIN",
+                  "CLARIFICATION_REQUIRED":"INSUFFICIENT_EVIDENCE",
                 2,decision.evidence_count,__LINE__);
         }else{
             int rendered=digit_response_render(&decision,&found,response,capacity,used);
@@ -462,8 +462,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
         check(q,!digit_response_render(&decision,&data,render,sizeof render,&length),1);
         strcpy(data.hits[0].verification_status,"operator-verified");
         strcpy(data.hits[0].excerpt,"Unfinished evidence fragment");
-        check(q,digit_response_render(&decision,&data,render,sizeof render,&length)&&
-          strstr(render,"Unfinished evidence fragment")!=NULL,0);
+        check(q,!digit_response_render(&decision,&data,render,sizeof render,&length),1);
         strcpy(data.hits[0].excerpt,"Short fact.");
         decision.corpus_ids[0]=900;
         check(q,!digit_response_render(&decision,&data,render,sizeof render,&length),1);
@@ -506,7 +505,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 0, .version_patch = 9,
+    .version_major = 1, .version_minor = 0, .version_patch = 10,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
