@@ -72,3 +72,10 @@ IRC logs `observation_route=sqlite3_direct completed=1 status=... response_bytes
 ## Verified SQLite receipt (v0.3.3)
 
 On the existing `digit.observation.record` invalid-argument fallback, IRC now requires a complete SQLite3 `digit_observation_receipt_t` with positive Observation/context row IDs and a NUL-terminated, nonempty event ID. A service return of OK without a valid receipt is treated as invalid state, not logged as persistence verified. The mock qualification tests valid and malformed receipt paths. Activate SQLite3 0.4.9 before IRC 0.3.3.
+
+
+## Developer diagnosis output (v0.3.4)
+
+Authenticated private `diagnose my last request` now emits a structured evidence-based diagnosis, distinct from `show trace` (which continues to print the retained raw event trail). Sections: Originating Term, Route, Module, Code, SQL, and Assessment. The previous private request is retained only in a bounded account-scoped in-memory IRC slot; it is not submitted as text to generic DSD trace events and is not persisted in SQLite. Control characters are excluded and the display is capped at 240 characters. Existing trace ownership and private-message authorization are preserved.
+
+A missing SQLite3 trace event is reported as **not observed**, not as a successful, failed, or skipped SQL statement. No database query is invented and no inference is presented as a captured downstream trace. The latest source location names the observed boundary, not an unobserved fault location. The DSD module's raw trace ABI is unchanged; this change is in the IRC diagnostic presentation layer. Production activation and request-level acceptance remain operator-controlled.
