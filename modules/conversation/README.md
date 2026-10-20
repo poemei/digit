@@ -63,3 +63,8 @@ The Response View accepts the same explicit stored statuses as Reasoning v0.1.5:
 ## v1.1.2 — explicit partial response
 
 Conversation and its Response View accept Reasoning's `PARTIAL` outcome. The View identifies the verified Corpus record and explicitly labels its text as *not a full explanation*. Reasoning's `UNKNOWN`, `CLARIFY`, and retrieval-failure outcomes remain active; uncertain evidence is not automatically presented as a complete answer. Added qualification cases check permitted partial evidence and refusal of unverified content. Core and IRC remain unchanged.
+
+
+## v1.1.3 — addressed IRC channel participation
+
+Conversation registers distinct handlers for passive `digit.conversation.listen` and interactive `digit.conversation`. Passive channel traffic remains observable without a mandatory reply. When IRC routes an addressed channel message through Core's `digit.message` route, Conversation permits the same source-grounded View outcomes as a private message, including clarification and honest uncertainty. Channel context lookup remains enabled, and structural code diagnostics cannot overwrite an already rendered response. Qualification fixtures exercise channel passivity and addressed-channel uncertainty rendering. No Core or IRC code was changed. Live channel routing and runtime participation remain subject to operator acceptance.
