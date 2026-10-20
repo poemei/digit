@@ -152,6 +152,31 @@ static int nonverbal_social_contact(const char *text){
  }
  return marker;
 }
+/* A bounded directive recognizer. Only explicitly addressed utterances
+ * become instructions; ordinary channel speech remains observational.
+ * This does not grant persistent preferences or invent language fluency. */
+static int speech_preference(const message_t *msg,char *language,size_t capacity){
+ const char *p=msg->message,*start;size_t n;
+ static const char lead[]="digit use ";
+ static const char end[]=" when you speak to me";
+ size_t i;
+ if(!msg->account[0]||capacity<2)return 0;
+ while(isspace((unsigned char)*p))p++;
+ for(i=0;i<sizeof lead-1;i++)
+  if(!p[i]||tolower((unsigned char)p[i])!=lead[i])return 0;
+ p+=sizeof lead-1;start=p;
+ while(*p&&(isalnum((unsigned char)*p)||*p=='-'||*p=='_'))p++;
+ n=(size_t)(p-start);
+ if(!n||n>=capacity)return 0;
+ for(i=0;i<sizeof end-1;i++)
+  if(!p[i]||tolower((unsigned char)p[i])!=end[i])return 0;
+ p+=sizeof end-1;
+ while(isspace((unsigned char)*p))p++;
+ if(*p&&(*p!='.'&&*p!='!'))return 0;
+ if(*p&&p[1])return 0;
+ memcpy(language,start,n);language[n]=0;
+ return 1;
+}
 static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
     const void *request, size_t bytes, void *response, size_t capacity,
     size_t *used, int passive)
@@ -206,6 +231,27 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
         have_history=1;
     }
     participate=!passive||conversation_invitation(&result);
+    /* Recognize a clearly addressed speaking preference as an instruction,
+     * rather than dropping it under non-inquiry abstention. Do not infer a
+     * preference from another participant's observations. */
+    {
+        char requested_language[DIGIT_INTERPRETATION_TERM_MAX]={0};
+        if(speech_preference(msg,requested_language,sizeof requested_language)){
+            int n;
+            if(!response||!capacity)return STNLABZ_MODULE_OK;
+            n=snprintf(response,capacity,
+                "You want me to use %s when speaking to you. "
+                "I understand the request, but I can't yet confirm I can "
+                "speak it or retain that preference across conversations.",
+                requested_language);
+            if(n<=0||(size_t)n>=capacity)
+                return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+            *used=(size_t)n;
+            trace_stage(host,"process","participation",
+                "SPEECH_PREFERENCE_ACKNOWLEDGED",0,(unsigned)*used,__LINE__);
+            return STNLABZ_MODULE_OK;
+        }
+    }
     if(!passive&&(!msg->message[0]||
        (result.kind==DIGIT_UTTERANCE_UNRESOLVED&&
         !strcmp(msg->message,"?")))){
@@ -829,6 +875,25 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
             emitted>0&&strstr(response,"I'm here")!=NULL,0);
         mock_mode=0;
     }
+    {
+        message_t preference=msg;size_t emitted=0;
+        strcpy(preference.target,"#stn-labz");
+        strcpy(preference.message,"digit use kitten when you speak to me");
+        check(q,process_route(&mock,&preference,sizeof preference,response,
+            sizeof response,&emitted,1)==STNLABZ_MODULE_OK&&
+            emitted>0&&strstr(response,"use kitten")!=NULL,0);
+        strcpy(preference.message,"meow");
+        emitted=99;
+        check(q,process_route(&mock,&preference,sizeof preference,response,
+            sizeof response,&emitted,1)==STNLABZ_MODULE_OK&&
+            emitted==0,1);
+        preference.account[0]=0;
+        strcpy(preference.message,"digit use kitten when you speak to me");
+        emitted=99;
+        check(q,process_route(&mock,&preference,sizeof preference,response,
+            sizeof response,&emitted,1)==STNLABZ_MODULE_OK&&
+            emitted==0,1);
+    }
     used = 17; before = mock_calls;
     check(q, process(&mock, NULL, sizeof msg, response, sizeof response, &used)
           == STNLABZ_MODULE_ERR_INVALID_ARGUMENT && used == 0 &&
@@ -1008,7 +1073,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 14,
+    .version_major = 1, .version_minor = 1, .version_patch = 15,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
