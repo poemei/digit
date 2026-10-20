@@ -238,6 +238,32 @@ static int nick_mention(const char *body,const char *nick) {
     return strlen(body)>=n && !strncasecmp(body,nick,n) &&
         (body[n]==':' || body[n]==',' || body[n]==' ');
 }
+/* Channel questions merit evaluation; ordinary statements remain passive.
+ * Address aliases are case-insensitive, token-bounded, and not credentials. */
+static int channel_question(const char *body){
+ const char *p=body;int visible=0;
+ if(!p)return 0;
+ while(*p){
+  if(*p=='?')return visible;
+  if(isalnum((unsigned char)*p))visible=1;
+  p++;
+ }
+ return 0;
+}
+static size_t address_prefix(const char *body,const char *nick){
+ const char *names[3]={nick,"digit","digicat"};unsigned i;
+ if(!body)return 0;
+ while(isspace((unsigned char)*body))body++;
+ for(i=0;i<3;i++){
+  size_t n;
+  if(!names[i]||!names[i][0])continue;
+  n=strlen(names[i]);
+  if(strncasecmp(body,names[i],n))continue;
+  if(body[n]==':'||body[n]==','||body[n]==' '||
+     body[n]=='?'||body[n]=='!'||body[n]==0)return n;
+ }
+ return 0;
+}
 static int config_read(irc_config_t *c) {
     FILE *f;char line[1024];
     memset(c,0,sizeof *c);
@@ -505,7 +531,7 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled
     char *sender,*bang,*cmd,*target,*body,*space;
     char response[512],wire[1024];
     irc_input_t input={0};
-    size_t used=0,n;
+    size_t used=0;
     int k,private_message,passive_channel=0;
     if (!tags_enabled || line[0]!='@') return 1;
     {
@@ -529,16 +555,20 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled
     cmd=space+1;if(strncmp(cmd,"PRIVMSG ",8))return 1;
     target=cmd+8;space=strchr(target,' ');if(!space)return 1;
     *space++=0;if(*space!=':')return 1;body=space+1;
-    n=strlen(cfg->nick);
     private_message=!strcasecmp(target,cfg->nick);
     if(private_message) target=sender;
     else {
         if(strcasecmp(target,cfg->channel))return 1;
-        if(!nick_mention(body,cfg->nick))passive_channel=1;
-        else {
-            body+=n;
-            if(*body==':'||*body==',')body++;
-            while(*body==' ')body++;
+        {
+            size_t prefix=address_prefix(body,cfg->nick);
+            if(prefix){
+                body+=prefix;
+                if(*body==':'||*body==',')body++;
+                while(*body==' ')body++;
+                if(!*body)body="?";
+            }else if(!channel_question(body)){
+                passive_channel=1;
+            }
         }
     }
     snprintf(input.sender,sizeof input.sender,"%s",sender);
@@ -847,6 +877,11 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
     check(result,!dsd_tracks_previous("diagnose my last request"),1);
     check(result,!dsd_tracks_previous("diagnose trace 10"),1);
     check(result,!dsd_tracks_previous("show modules"),1);
+    check(result,address_prefix("digit?","digicat")==5,0);
+    check(result,address_prefix("digicat who are you?","digicat")==7,0);
+    check(result,address_prefix("digital keyboard","digicat")==0,1);
+    check(result,channel_question("hey so What's the Chaos Foundation?"),0);
+    check(result,channel_question("Database latency increased")==0,1);
     check(result,nick_mention("Digit: hello","Digit"),0);
     check(result,nick_mention("digit, hello","Digit"),0);
     check(result,!nick_mention("DigitXYZ: hello","Digit"),1);
