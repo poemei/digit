@@ -283,7 +283,7 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
     if(social_utterance(&result)){
         if(response&&capacity&&(!passive||
            (social_language[0]&&!strcmp(social_channel,msg->target)&&
-            ++social_turns>=3&&
+            ++social_turns>=2&&
             (social_last_reply==0||
              (time(NULL)!=(time_t)-1&&time(NULL)-social_last_reply>=60))))){
             digit_socials_request_t request={{0}};
