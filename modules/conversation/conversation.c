@@ -7,7 +7,6 @@
 #include <string.h>
 #include <stdio.h>
 #include <ctype.h>
-#include <time.h>
 #include "../observation/observation.h"
 #include "../sqlite3/context.h"
 #include "module.h"
@@ -18,6 +17,7 @@
 #include "../sqlite3/corpus_search.h"
 #include "response_view.h"
 #include "../socials/socials.h"
+#include "../social_intelligence/social_intelligence.h"
 
 #define LISTEN "digit.conversation.listen"
 #define DIRECT "digit.conversation"
@@ -27,10 +27,6 @@ typedef struct {
 } message_t;
 
 static const stnlabz_module_host_t *host_api;
-static char social_channel[128];
-static char social_language[48];
-static time_t social_last_reply;
-static unsigned social_turns;
 
 
 /* Structural PHP diagnostic based on observed code boundaries, not on
@@ -139,67 +135,6 @@ static int conversation_invitation(const digit_interpretation_result_t *r){
  }
  return 0;
 }
-/* Nonverbal contact is identifiable without interpreting factual
- * content. General social reactions are available to every sender.
- * No account, nickname or familial role is inferred here. */
-/* Addressed emoticons are social contact, irrespective of lexical classification. */
-static int nonverbal_social_contact(const char *text){
- const unsigned char *p=(const unsigned char *)text;
- size_t n;int marker=0;
- if(!text||!(n=strlen(text))||n>24)return 0;
- while(*p){
-  unsigned char c=*p++;
-  if(c=='?'||c=='!')return 0;
-  if(c==':'||c==';'||c=='<'||c=='^'||c==')'||
-     c=='('||c=='='||c=='*'||c>=128)marker=1;
-  else if(c!='3'&&c!='D'&&c!='d'&&c!='x'&&c!='X'&&
-          c!='-'&&c!='.'&&c!=' '&&c!=9)return 0;
- }
- return marker;
-}
-/* A bounded directive recognizer. Only explicitly addressed utterances
- * become instructions; ordinary channel speech remains observational.
- * This does not grant persistent preferences or invent language fluency. */
-static int speech_preference(const message_t *msg,char *language,size_t capacity){
- const char *p=msg->message,*start;size_t n;
- static const char lead[]="digit use ";
- static const char end[]=" when you speak to ";
- size_t i;
- if(!msg->account[0]||capacity<2)return 0;
- while(isspace((unsigned char)*p))p++;
- for(i=0;i<sizeof lead-1;i++)
-  if(!p[i]||tolower((unsigned char)p[i])!=lead[i])return 0;
- p+=sizeof lead-1;start=p;
- while(*p&&(isalnum((unsigned char)*p)||*p=='-'||*p=='_'))p++;
- n=(size_t)(p-start);
- if(!n||n>=capacity)return 0;
- for(i=0;i<sizeof end-1;i++)
-  if(!p[i]||tolower((unsigned char)p[i])!=end[i])return 0;
- p+=sizeof end-1;
- if(p[0]=='m'&&p[1]=='e')p+=2;
- else if(p[0]=='u'&&p[1]=='s')p+=2;
- else return 0;
- while(isspace((unsigned char)*p))p++;
- if(*p&&(*p!='.'&&*p!='!'))return 0;
- if(*p&&p[1])return 0;
- memcpy(language,start,n);language[n]=0;
- return 1;
-}
-/* Social utterances and physical-action narration are not questions.
- * Keep their classification distinct from factual uncertainty. */
-static int social_utterance(const digit_interpretation_result_t *r){
- unsigned i;int vocal=0,action=0;
- if(r->kind==DIGIT_UTTERANCE_QUESTION)return 0;
- for(i=0;i<r->term_count;i++){
-  const char *t=r->terms[i];
-  if(!strcmp(t,"mrrp")||!strcmp(t,"meow")||
-     !strcmp(t,"purr")||!strcmp(t,"purrs")||
-     !strcmp(t,"puurrs"))vocal=1;
-  if(!strcmp(t,"paws")||!strcmp(t,"lickies")||
-     !strcmp(t,"scratches")||!strcmp(t,"cuddles"))action=1;
- }
- return vocal||action;
-}
 static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
     const void *request, size_t bytes, void *response, size_t capacity,
     size_t *used, int passive)
@@ -254,57 +189,30 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
         have_history=1;
     }
     participate=!passive||conversation_invitation(&result);
-    /* Recognize a clearly addressed speaking preference as an instruction,
-     * rather than dropping it under non-inquiry abstention. Do not infer a
-     * preference from another participant's observations. */
+    /* Social-specific interpretation and participation are delegated.
+     * Missing optional service is not a factual query. */
     {
-        char requested_language[DIGIT_INTERPRETATION_TERM_MAX]={0};
-        if(speech_preference(msg,requested_language,sizeof requested_language)){
-            int n;
-            snprintf(social_channel,sizeof social_channel,"%s",msg->target);
-            snprintf(social_language,sizeof social_language,"%s",requested_language);
-            social_last_reply=0;social_turns=0;
-            if(!response||!capacity)return STNLABZ_MODULE_OK;
-            n=snprintf(response,capacity,
-                "I hear you. I'll use the social expressions I know "
-                "when speaking here. I can't promise fluency in %s.",
-                requested_language);
-            if(n<=0||(size_t)n>=capacity)
-                return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
-            *used=(size_t)n;
-            trace_stage(host,"process","participation",
-                "SPEECH_PREFERENCE_ACKNOWLEDGED",0,(unsigned)*used,__LINE__);
+        digit_social_intelligence_request_t social={0};
+        digit_social_intelligence_result_t social_result={0};
+        size_t social_used=0;
+        snprintf(social.channel,sizeof social.channel,"%s",msg->target);
+        snprintf(social.account,sizeof social.account,"%s",msg->account);
+        snprintf(social.text,sizeof social.text,"%s",msg->message);
+        social.interpretation=result;social.passive=(uint32_t)passive;
+        rc=host->invoke_service(DIGIT_SOCIAL_INTELLIGENCE_SERVICE,
+            &social,sizeof social,&social_result,sizeof social_result,&social_used);
+        if(rc==STNLABZ_MODULE_OK&&social_used==sizeof social_result&&
+           social_result.handled){
+            if(response&&capacity&&social_result.response[0]){
+                int n=snprintf(response,capacity,"%s",social_result.response);
+                if(n<=0||(size_t)n>=capacity)
+                    return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+                *used=(size_t)n;
+            }
             return STNLABZ_MODULE_OK;
         }
-    }
-    /* Unaddressed social chatter is observational. Directly addressed
-     * social contact can use the existing Socials selector without inventing
-     * a factual question or pretending a Corpus excerpt is an utterance. */
-    if(social_utterance(&result)){
-        if(response&&capacity&&(!passive||
-           (social_language[0]&&!strcmp(social_channel,msg->target)&&
-            ++social_turns>=2&&
-            (social_last_reply==0||
-             (time(NULL)!=(time_t)-1&&time(NULL)-social_last_reply>=60))))){
-            digit_socials_request_t request={{0}};
-            digit_socials_response_t expression={{0}};
-            size_t expression_used=0;
-            snprintf(request.category,sizeof request.category,"playful");
-            rc=host->invoke_service(DIGIT_SOCIALS_SERVICE,&request,
-               sizeof request,&expression,sizeof expression,&expression_used);
-            if(rc==STNLABZ_MODULE_OK&&
-               expression_used==sizeof expression&&
-               memchr(expression.expression,0,sizeof expression.expression)){
-                int n=snprintf(response,capacity,"%s",expression.expression);
-                if(n>0&&(size_t)n<capacity){
-                    *used=(size_t)n;
-                    social_last_reply=time(NULL);social_turns=0;
-                    trace_stage(host,"process","participation",
-                        "SOCIAL_EXPRESSION",0,(unsigned)*used,__LINE__);
-                }
-            }
-        }
-        return STNLABZ_MODULE_OK;
+        if(rc!=STNLABZ_MODULE_OK&&rc!=STNLABZ_MODULE_ERR_NOT_FOUND)
+            return rc;
     }
     if(!passive&&(!msg->message[0]||
        (result.kind==DIGIT_UTTERANCE_UNRESOLVED&&
@@ -317,30 +225,6 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
         trace_stage(host,"process","participation","CONTACT_ACKNOWLEDGED",
             0,(unsigned)*used,__LINE__);
         return STNLABZ_MODULE_OK;
-    }
-    if(!passive&&response&&capacity&&
-       nonverbal_social_contact(msg->message)){
-        digit_socials_request_t request={{0}};
-        digit_socials_response_t expression={{0}};
-        size_t expression_used=0;
-        strcpy(request.category,"cats");
-        rc=host->invoke_service(DIGIT_SOCIALS_SERVICE,&request,sizeof request,
-           &expression,sizeof expression,&expression_used);
-        if(rc==STNLABZ_MODULE_OK&&
-           expression_used==sizeof expression&&
-           memchr(expression.expression,0,sizeof expression.expression)){
-            int n=snprintf(response,capacity,"%s",expression.expression);
-            if(n>0&&(size_t)n<capacity){
-                *used=(size_t)n;
-                trace_stage(host,"process",DIGIT_SOCIALS_SERVICE,
-                    "SOCIAL_NONVERBAL_RESPONSE",0,(unsigned)*used,__LINE__);
-                return STNLABZ_MODULE_OK;
-            }
-        }
-        trace_stage(host,"process",DIGIT_SOCIALS_SERVICE,
-             "SOCIAL_EXPRESSION_UNAVAILABLE",2,0,__LINE__);
-        /* Missing optional vocabulary must not turn a smile into a
-         * factual inquiry. Continue to regular context processing. */
     }
     trace_stage(host,"process","participation",
        participate?"ENGAGEMENT_SELECTED":"PASSIVE_OBSERVATION",
@@ -933,45 +817,6 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
             emitted>0&&strstr(response,"I'm here")!=NULL,0);
         mock_mode=0;
     }
-    {
-        message_t preference=msg;size_t emitted=0;
-        strcpy(preference.target,"#stn-labz");
-        strcpy(preference.message,"digit use kitten when you speak to me");
-        check(q,process_route(&mock,&preference,sizeof preference,response,
-            sizeof response,&emitted,1)==STNLABZ_MODULE_OK&&
-            emitted>0&&strstr(response,"use kitten")!=NULL,0);
-        strcpy(preference.message,"digit use kitten when you speak to us");
-        emitted=0;
-        check(q,process_route(&mock,&preference,sizeof preference,response,
-            sizeof response,&emitted,1)==STNLABZ_MODULE_OK&&emitted>0,0);
-        social_channel[0]=social_language[0]=0;
-        social_turns=0;social_last_reply=0;
-        strcpy(preference.message,"meow");
-        emitted=99;
-        check(q,process_route(&mock,&preference,sizeof preference,response,
-            sizeof response,&emitted,1)==STNLABZ_MODULE_OK&&
-            emitted==0,1);
-        preference.account[0]=0;
-        strcpy(preference.message,"digit use kitten when you speak to me");
-        emitted=99;
-        check(q,process_route(&mock,&preference,sizeof preference,response,
-            sizeof response,&emitted,1)==STNLABZ_MODULE_OK&&
-            emitted==0,1);
-    }
-    {
-        message_t social=msg;size_t emitted=17;
-        strcpy(social.target,"#stn-labz");
-        strcpy(social.message,"does paws lickies");
-        check(q,process_route(&mock,&social,sizeof social,response,
-          sizeof response,&emitted,1)==STNLABZ_MODULE_OK&&emitted==0,1);
-        strcpy(social.message,"mrrp");emitted=17;
-        check(q,process_route(&mock,&social,sizeof social,response,
-          sizeof response,&emitted,1)==STNLABZ_MODULE_OK&&emitted==0,1);
-        emitted=0;
-        check(q,process_route(&mock,&social,sizeof social,response,
-          sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&
-          emitted>0,0);
-    }
     used = 17; before = mock_calls;
     check(q, process(&mock, NULL, sizeof msg, response, sizeof response, &used)
           == STNLABZ_MODULE_ERR_INVALID_ARGUMENT && used == 0 &&
@@ -1153,7 +998,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 17,
+    .version_major = 1, .version_minor = 1, .version_patch = 18,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
