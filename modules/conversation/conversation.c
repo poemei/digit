@@ -503,6 +503,8 @@ static stnlabz_module_result_t mock_invoke(const char *service,
     if (mock_mode == 1) return STNLABZ_MODULE_ERR_NOT_FOUND;
     if (mock_mode == 2) return STNLABZ_MODULE_ERR_INVALID_STATE;
     r.kind = DIGIT_UTTERANCE_STATEMENT;
+    if(!strcmp(q->text,":)")||!strcmp(q->text,"...")||
+       !strcmp(q->text,"?"))r.kind=DIGIT_UTTERANCE_UNRESOLVED;
     if(!strcmp(q->text,"what is the Chaos Foundation?")){
        r.kind=DIGIT_UTTERANCE_QUESTION;r.term_count=5;
        strcpy(r.terms[0],"what");strcpy(r.terms[1],"is");
