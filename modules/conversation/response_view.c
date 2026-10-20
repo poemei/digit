@@ -7,13 +7,14 @@
 #include "response_view.h"
 
 int digit_response_render(const digit_reasoning_result_t *d,
- const digit_corpus_result_t *corpus,char *output,size_t capacity,size_t *used){
+ const digit_corpus_result_t *corpus,const digit_interpretation_result_t *question,
+ char *output,size_t capacity,size_t *used){
  unsigned i,j;const digit_corpus_hit_t *hit=NULL;
  size_t length=0,end=0,source_length,words=0;
  int inword=0,has_detail=0;
  int n;
  if(used)*used=0;
- if(!d||!corpus||!output||!used||capacity<2)return 0;
+ if(!d||!corpus||!question||!output||!used||capacity<2)return 0;
  if(d->outcome==DIGIT_REASONING_OUTCOME_UNKNOWN||
     d->outcome==DIGIT_REASONING_OUTCOME_CLARIFY||
     d->outcome==DIGIT_REASONING_OUTCOME_FAILURE){
@@ -41,6 +42,23 @@ int digit_response_render(const digit_reasoning_result_t *d,
    }
  if(!hit||!memchr(hit->excerpt,0,sizeof hit->excerpt)||!hit->excerpt[0])
   return 0;
+ /* A source discussing an activity is not proof Digit can perform it. */
+ if(question->term_count>0&&
+    (!strcmp(question->terms[0],"can")||
+     !strcmp(question->terms[0],"could"))){
+  unsigned k;int self=0;
+  for(k=1;k<question->term_count;k++)
+   if(!strcmp(question->terms[k],"you")||
+      !strcmp(question->terms[k],"digit")||
+      !strcmp(question->terms[k],"digicat"))self=1;
+  if(self){
+   n=snprintf(output,capacity,
+     "I have verified Corpus knowledge related to your question, "
+     "but that evidence alone doesn't establish that I can do it.");
+   if(n<=0||(size_t)n>=capacity)return 0;
+   *used=(size_t)n;return 1;
+  }
+ }
  source_length=strlen(hit->excerpt);
  for(i=0;i<source_length;i++){
   unsigned char c=(unsigned char)hit->excerpt[i];
