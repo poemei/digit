@@ -378,7 +378,7 @@ static stnlabz_module_result_t observation_fixture_invoke(
 }
 static void observation_status(stnlabz_module_result_t rc) {
  syslog(rc==STNLABZ_MODULE_OK?LOG_INFO:LOG_ERR,
-    "digit.irc observation_service status=%d persisted=%d",
+    "digit.irc observation_service status=%d accepted=%d",
     (int)rc,rc==STNLABZ_MODULE_OK);
 }
 /* Capture every channel PRIVMSG before intent/mention filtering.
