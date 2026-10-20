@@ -206,6 +206,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
    out.handled&&!strcmp(out.response,"=^.^="),0);
  in.passive=1;
+ strcpy(in.channel,"#quiet");
  check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
    out.handled&&!out.response[0],0);
  in.passive=0;strcpy(in.text,"");
