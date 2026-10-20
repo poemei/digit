@@ -148,6 +148,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  if(!q)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(q,0,sizeof *q);
  request.interpretation.kind=DIGIT_UTTERANCE_QUESTION;
+ request.interpretation.features=DIGIT_FEATURE_EXPLANATION_REQUEST;
  request.interpretation.term_count=1;
  strcpy(request.interpretation.terms[0],"php");
  request.retrieval_attempted=request.retrieval_succeeded=1;
@@ -168,6 +169,8 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_UNKNOWN,1);
  mutated=request;strcpy(mutated.corpus.hits[0].excerpt,"Python is a language used to create dynamically generated web pages.");
  check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_ABSTAIN,1);
+ mutated=request;mutated.interpretation.features=0;
+ check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_CLARIFY,1);
  mutated=request;mutated.corpus.count=0;
  check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_UNKNOWN,0);
  mutated=request;strcpy(mutated.corpus.hits[0].verification_status,"unverified");
