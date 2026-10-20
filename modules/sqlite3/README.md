@@ -67,3 +67,10 @@ The in-memory qualification extends its observations fixture with `sender_id` an
 ## Transaction diagnosis (v0.4.8)
 
 The atomic Observation writer now emits result-only syslog entries under `digit.sqlite3 observation_atomic`: `status=committed`, `status=rejected phase=... sqlite_code=...`, or `status=rollback phase=... sqlite_code=...`. No message text, sender, account, or SQL row contents are logged. Diagnostics do not replace end-to-end acceptance.
+
+
+## Verified Observation receipt (v0.4.9)
+
+The existing `digit.sqlite3.observation_insert` ABI accepts an **optional** `digit_observation_receipt_t` response. Callers providing a response buffer receive a completed receipt only after a successful transaction COMMIT. The receipt contains the persisted observation row ID, linked context row ID, and exact event ID; it is populated by verifying the provenance join before commit. Older clients supplying NULL response remain supported. An undersized non-null response is rejected without writing.
+
+Qualification's in-memory writer runs are marked internally so they do not emit production `observation_atomic role=runtime status=committed` messages. Native qualification now checks the receipt, including a malformed response-buffer case. A passing qualification still requires operator live database acceptance.
