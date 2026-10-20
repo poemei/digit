@@ -27,4 +27,13 @@ typedef struct {
 typedef struct {
  char text[DIGIT_SOCIALS_GREETING_MAX];
 } digit_socials_greeting_response_t;
+/* Family interaction is explicitly limited to a trusted account classification
+ * supplied by the IRC transport. Ordinary dialogue remains Conversation-owned. */
+#define DIGIT_SOCIALS_FAMILY_SERVICE "digit.socials.family"
+#define DIGIT_SOCIALS_FAMILY_TEXT_MAX 512
+typedef struct {
+ char kind[DIGIT_SOCIALS_GREETING_KIND_MAX];
+ char text[DIGIT_SOCIALS_FAMILY_TEXT_MAX];
+} digit_socials_family_request_t;
+typedef digit_socials_greeting_response_t digit_socials_family_response_t;
 #endif
