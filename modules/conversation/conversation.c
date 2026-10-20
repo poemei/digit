@@ -442,7 +442,7 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
         }else if(!response||!capacity){
             trace_stage(host,"process","response.view","OUTPUT_UNAVAILABLE",2,0,__LINE__);
         }else{
-            int rendered=digit_response_render(&decision,&found,response,capacity,used);
+            int rendered=digit_response_render(&decision,&found,&result,response,capacity,used);
             const char *status=rendered?
                 (decision.outcome==DIGIT_REASONING_OUTCOME_UNKNOWN?
                   "UNKNOWN_STATED":decision.outcome==DIGIT_REASONING_OUTCOME_CLARIFY?
@@ -998,7 +998,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 10,
+    .version_major = 1, .version_minor = 1, .version_patch = 11,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
