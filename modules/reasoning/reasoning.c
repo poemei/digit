@@ -132,13 +132,20 @@ static int function_term(const char *t){
  * independent topical term, not incidental grammatical overlap. */
 static const char *matching_topic(const char *source,
  const digit_interpretation_result_t *in){
- unsigned i;
+ unsigned i,matched=0,subjects=0;
+ const char *first=NULL;
  for(i=0;i<in->term_count;i++){
   const char *t=in->terms[i];
   if(strlen(t)<3||function_term(t))continue;
-  if(subject_occurs(source,t))return t;
+  subjects++;
+  if(subject_occurs(source,t)){matched++;if(!first)first=t;}
  }
- return NULL;
+ if(!subjects||!matched)return NULL;
+ /* With no unresolved reference, all named subjects must match.
+  * With a reference, we can quote related evidence but cannot establish
+  * that the reference denotes any particular person. */
+ if(!in->unresolved_references&&matched!=subjects)return NULL;
+ return first;
 }
 static int partial_statement(const char *source){
  size_t i,words=0;int inword=0,ending=0;
