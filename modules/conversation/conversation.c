@@ -493,7 +493,12 @@ static stnlabz_module_result_t mock_invoke(const char *service,
         if(!req||bytes!=sizeof *req||!response||
             capacity<sizeof decision||!used)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
         decision.outcome=mock_mode==7?DIGIT_REASONING_OUTCOME_UNKNOWN:
+            mock_mode==9?DIGIT_REASONING_OUTCOME_EVIDENCE:
             DIGIT_REASONING_OUTCOME_ABSTAIN;
+        if(mock_mode==9){
+            decision.evidence_count=1;decision.reference_count=1;
+            decision.corpus_ids[0]=99;
+        }
         memcpy(response,&decision,sizeof decision);*used=sizeof decision;
         return STNLABZ_MODULE_OK;
     }
