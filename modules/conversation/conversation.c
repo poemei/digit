@@ -334,6 +334,54 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
                 break;
             }
         }
+        /* If the current referential question yielded no evidence, use
+         * recently observed discourse as additional search candidates.
+         * This does not equate any pronoun to an individual: previous
+         * utterances remain provenance-bound observations, not facts. */
+        if(!found.count&&have_history&&
+           (result.features&DIGIT_FEATURE_REFERENCE)){
+            unsigned h;
+            for(h=history.count;h>0&&!found.count;h--){
+                digit_interpretation_request_t prior={0};
+                digit_interpretation_result_t parsed={0};
+                const digit_context_item_t *item=&history.items[h-1];
+                size_t parsed_size=0;
+                unsigned t;
+                if(strcmp(item->context_type,"utterance.observed")||
+                   !memchr(item->value,0,sizeof item->value)||
+                   !strcmp(item->value,msg->message))continue;
+                snprintf(prior.text,sizeof prior.text,"%s",item->value);
+                rc=host->invoke_service(DIGIT_INTERPRETATION_SERVICE,
+                    &prior,sizeof prior,&parsed,sizeof parsed,&parsed_size);
+                if(rc!=STNLABZ_MODULE_OK||parsed_size!=sizeof parsed||
+                   parsed.term_count>DIGIT_INTERPRETATION_TERMS_MAX)continue;
+                for(t=parsed.term_count;t>0;t--){
+                    const char *term=parsed.terms[t-1];
+                    digit_corpus_result_t candidate={0};
+                    size_t candidate_used=0;
+                    if(strlen(term)<4)continue;
+                    /* No identity or pronoun assignment from recency. */
+                    if(!strcmp(term,"they")||!strcmp(term,"them")||
+                       !strcmp(term,"this")||!strcmp(term,"that")||
+                       !strcmp(term,"what")||!strcmp(term,"does")||
+                       !strcmp(term,"have")||!strcmp(term,"were"))continue;
+                    memset(&search,0,sizeof search);
+                    snprintf(search.query,sizeof search.query,"%s",term);
+                    reasoning.retrieval_attempted=1;
+                    rc=host->invoke_service(DIGIT_CORPUS_SEARCH_SERVICE,
+                        &search,sizeof search,&candidate,sizeof candidate,
+                        &candidate_used);
+                    if(rc==STNLABZ_MODULE_OK&&
+                       candidate_used==sizeof candidate&&
+                       candidate.count<=DIGIT_CORPUS_RESULTS_MAX){
+                        reasoning.retrieval_succeeded=1;
+                        if(candidate.count){
+                            found=candidate;reasoning.corpus=found;break;
+                        }
+                    }
+                }
+            }
+        }
         trace_stage(host,"process",DIGIT_CORPUS_SEARCH_SERVICE,
             found.count?"EVIDENCE_RETRIEVED":
             reasoning.retrieval_succeeded?"NO_CORPUS_MATCH":
