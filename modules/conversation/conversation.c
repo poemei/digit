@@ -12,6 +12,8 @@
 #include "module.h"
 #include "../interpretation/interpretation.h"
 #include "../dsd/dsd.h"
+#include "../reasoning/reasoning.h"
+#include "../sqlite3/corpus_search.h"
 
 #define LISTEN "digit.conversation.listen"
 #define DIRECT "digit.conversation"
@@ -120,6 +122,59 @@ static stnlabz_module_result_t process(const stnlabz_module_host_t *host,
         result.term_count > DIGIT_INTERPRETATION_TERMS_MAX ||
         result.unresolved_references > DIGIT_INTERPRETATION_TERMS_MAX)
         return STNLABZ_MODULE_ERR_INVALID_STATE;
+    /* Conversation coordinates model retrieval and evidence evaluation.
+     * Retrieval terms are candidates, not scripted response triggers.
+     * Reasoning cannot claim a fact unless a model provided evidence. */
+    {
+        digit_reasoning_request_t reasoning={0};
+        digit_reasoning_result_t decision={0};
+        digit_corpus_query_t search={0};
+        digit_corpus_result_t found={0};
+        size_t search_used=0,decision_used=0;
+        unsigned i;
+        reasoning.interpretation=result;
+        if(result.term_count){
+            /* Single indexed subject term avoids demanding that the entire
+             * utterance appear as an exact FTS phrase. No keyword dictionary. */
+            for(i=result.term_count;i>0;i--){
+                const char *term=result.terms[i-1];
+                if(term[0]&&strlen(term)>1){
+                    snprintf(search.query,sizeof search.query,"%s",term);
+                    break;
+                }
+            }
+        }
+        if(search.query[0]){
+            reasoning.retrieval_attempted=1;
+            rc=host->invoke_service(DIGIT_CORPUS_SEARCH_SERVICE,&search,
+                sizeof search,&found,sizeof found,&search_used);
+            reasoning.retrieval_succeeded=(rc==STNLABZ_MODULE_OK&&
+                                         search_used==sizeof found&&
+                                         found.count<=DIGIT_CORPUS_RESULTS_MAX);
+            if(reasoning.retrieval_succeeded)reasoning.corpus=found;
+            trace_stage(host,"process","digit.sqlite3.corpus_search",
+                reasoning.retrieval_succeeded?"EVIDENCE_RETRIEVED":
+                rc==STNLABZ_MODULE_ERR_NOT_FOUND?"SERVICE_NOT_FOUND":"RETRIEVAL_UNAVAILABLE",
+                reasoning.retrieval_succeeded?0:2,
+                reasoning.retrieval_succeeded?found.count:0,__LINE__);
+        }
+        rc=host->invoke_service(DIGIT_REASONING_SERVICE,&reasoning,
+            sizeof reasoning,&decision,sizeof decision,&decision_used);
+        trace_stage(host,"process","digit.reasoning.evaluate",
+            rc==STNLABZ_MODULE_OK&&decision_used==sizeof decision?
+              (decision.outcome==DIGIT_REASONING_OUTCOME_EVIDENCE?
+                "EVIDENCE_AVAILABLE":decision.outcome==DIGIT_REASONING_OUTCOME_CLARIFY?
+                "CLARIFICATION_REQUIRED":"EVIDENCE_INSUFFICIENT"):
+              rc==STNLABZ_MODULE_ERR_NOT_FOUND?"SERVICE_NOT_FOUND":"SERVICE_ERROR",
+            rc==STNLABZ_MODULE_OK&&decision_used==sizeof decision?0:1,
+            rc==STNLABZ_MODULE_OK&&decision_used==sizeof decision?
+                decision.evidence_count:0,__LINE__);
+        if(rc!=STNLABZ_MODULE_OK)return rc;
+        if(decision_used!=sizeof decision||
+           decision.outcome>DIGIT_REASONING_OUTCOME_CONFLICT||
+           decision.reference_count>DIGIT_REASONING_MAX_REFERENCES)
+            return STNLABZ_MODULE_ERR_INVALID_STATE;
+    }
     /* Observation persistence and context creation are atomic in SQLite3.
      * Conversation reads that context; it never duplicates observation writes.
      * A nonempty IRC account remains required for this channel route. */
@@ -182,6 +237,24 @@ static stnlabz_module_result_t mock_invoke(const char *service,
     const digit_interpretation_request_t *q = request;
     digit_interpretation_result_t r = {0};
     if(!strcmp(service,DIGIT_DSD_CURRENT_SERVICE))return STNLABZ_MODULE_ERR_NOT_FOUND;
+    if(!strcmp(service,DIGIT_CORPUS_SEARCH_SERVICE)){
+        digit_corpus_result_t empty={0};
+        if(used)*used=0;
+        if(!request||bytes!=sizeof(digit_corpus_query_t)||!response||
+            capacity<sizeof empty||!used)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+        memcpy(response,&empty,sizeof empty);*used=sizeof empty;
+        return STNLABZ_MODULE_OK;
+    }
+    if(!strcmp(service,DIGIT_REASONING_SERVICE)){
+        digit_reasoning_result_t decision={0};
+        const digit_reasoning_request_t *req=request;
+        if(used)*used=0;
+        if(!req||bytes!=sizeof *req||!response||
+            capacity<sizeof decision||!used)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+        decision.outcome=DIGIT_REASONING_OUTCOME_ABSTAIN;
+        memcpy(response,&decision,sizeof decision);*used=sizeof decision;
+        return STNLABZ_MODULE_OK;
+    }
     if (!strcmp(service, DIGIT_CONTEXT_STORE_SERVICE)) {
         const digit_context_store_request_t *s=request;
         if (!s || bytes!=sizeof *s || strcmp(s->channel,"#stn-labz") ||
@@ -388,7 +461,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 0, .version_patch = 6,
+    .version_major = 1, .version_minor = 0, .version_patch = 7,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
