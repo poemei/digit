@@ -73,3 +73,8 @@ Conversation registers distinct handlers for passive `digit.conversation.listen`
 ## v1.1.4 — Core-owned identity access
 
 Questions referring to Digit's identity, lineage, mission, or mother now read a bounded value using the Core-owned `digit.core.identity.read` ABI service. The conversation module does not duplicate Core identity or rewrite protected Core facts. A question about a creator is explicitly distinguished from Core's mother relationship: the authoritative identity does not declare a creator. The response says so instead of inventing one. When the read-only service is unavailable, Digit reports the technical failure, not a lack of personal knowledge. This is separate from Corpus retrieval and Reasoning. Qualification fixtures now cover representative self, mission and creator questions; live service integration has not been executed here.
+
+
+## v1.1.5 — participation after Interpretation
+
+The Conversation listener now makes a bounded participation decision after Interpretation rather than automatically suppressing every unaddressed channel message. Recognizable interrogative invitations, including `can you tell me about...` without a question mark, may receive an evidence-constrained response. Stray question marks or unrelated remarks do not by themselves authorize one. Directly addressed contact-only messages receive an acknowledgment rather than a knowledge-clarification response. Qualification cases cover the observed channel examples with mock Interpretation and Reasoning dependencies, not a live IRC integration. This does not yet provide semantic discourse understanding, follow-up resolution, or unsolicited topical contributions beyond the bounded invitations.
