@@ -12,6 +12,7 @@
 #include "module.h"
 #include "sqlite3_diagnostic.h"
 #include "corpus_search.h"
+#include "context.h"
 #include "../observation/observation.h"
 #include "../s2/s2_observations.h"
 #include "../dsd/dsd.h"
@@ -219,6 +220,92 @@ static stnlabz_module_result_t observation_recent(
  memcpy(response,&out,sizeof out);*response_used=sizeof out;
  return STNLABZ_MODULE_OK;
 }
+
+/* Context is derived only from a persisted IRC observation. The referenced
+ * event_id, conversation ID and original message must exist; never invent
+ * provenance or treat a lexical category as factual knowledge. */
+static stnlabz_module_result_t context_store(
+ const void *request,size_t size,void *response,size_t capacity,
+ size_t *used,void *context){
+ const digit_context_store_request_t *r=request;
+ sqlite3_stmt *stmt=NULL;
+ const char *category;
+ int rc;
+ (void)response;(void)capacity;(void)context;
+ if(used)*used=0;
+ if(!observation_writer||!r||size!=sizeof *r||
+    !memchr(r->channel,0,sizeof r->channel)||
+    !memchr(r->sender,0,sizeof r->sender)||
+    !memchr(r->source_account,0,sizeof r->source_account)||
+    !memchr(r->text,0,sizeof r->text)||
+    !r->sender[0]||!r->text[0]||!r->source_account[0]||
+    strcmp(r->channel,"#stn-labz")||
+    (r->kind!=1&&r->kind!=2))
+   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ category=r->kind==2?"utterance.question":"utterance.statement";
+ /* A single bounded context fact per observation source. */
+ rc=sqlite3_prepare_v2(observation_writer,
+  "INSERT INTO context(subject_type,subject_id,context_type,value,source_id,confidence,expires_at) "
+  "SELECT 'conversation',c.id,?1,o.text,o.event_id,1.0,NULL "
+  "FROM observations o JOIN conversations c ON c.id=o.conversation_id "
+  "WHERE c.transport='irc' AND c.channel=?2 AND o.text=?3 "
+  "AND o.source_record_id=?4 "
+  "AND NOT EXISTS(SELECT 1 FROM context x WHERE x.subject_type='conversation' "
+  "AND x.subject_id=c.id AND x.source_id=o.event_id AND x.context_type=?1) "
+  "ORDER BY o.id DESC LIMIT 1",
+  -1,&stmt,NULL);
+ if(rc!=SQLITE_OK)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ sqlite3_bind_text(stmt,1,category,-1,SQLITE_STATIC);
+ sqlite3_bind_text(stmt,2,r->channel,-1,SQLITE_TRANSIENT);
+ sqlite3_bind_text(stmt,3,r->text,-1,SQLITE_TRANSIENT);
+ sqlite3_bind_text(stmt,4,r->source_account,-1,SQLITE_TRANSIENT);
+ rc=sqlite3_step(stmt);
+ sqlite3_finalize(stmt);
+ return rc==SQLITE_DONE ? STNLABZ_MODULE_OK :
+        STNLABZ_MODULE_ERR_INVALID_STATE;
+}
+
+static stnlabz_module_result_t context_recent(
+ const void *request,size_t size,void *response,size_t capacity,
+ size_t *used,void *context){
+ const digit_context_recent_query_t *q=request;
+ digit_context_recent_result_t out={0};
+ sqlite3_stmt *stmt=NULL;
+ int rc;
+ (void)context;
+ if(used)*used=0;
+ if(!database||!q||size!=sizeof *q||!response||
+    capacity<sizeof out||!used||
+    !memchr(q->channel,0,sizeof q->channel)||
+    strcmp(q->channel,"#stn-labz"))
+    return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ rc=sqlite3_prepare_v2(database,
+   "SELECT source_id,context_type,value FROM ("
+   "SELECT x.id,x.source_id,x.context_type,x.value "
+   "FROM context x JOIN conversations c ON c.id=x.subject_id "
+   "WHERE x.subject_type='conversation' AND c.transport='irc' "
+   "AND c.channel=?1 AND (x.expires_at IS NULL OR "
+   "datetime(x.expires_at)>datetime('now')) "
+   "ORDER BY x.id DESC LIMIT 8) ORDER BY id ASC",
+   -1,&stmt,NULL);
+ if(rc!=SQLITE_OK)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ sqlite3_bind_text(stmt,1,q->channel,-1,SQLITE_TRANSIENT);
+ while((rc=sqlite3_step(stmt))==SQLITE_ROW){
+   digit_context_item_t *item;
+   if(out.count>=DIGIT_CONTEXT_MAX)break;
+   item=&out.items[out.count++];
+   copy_column(stmt,0,item->source_id,sizeof item->source_id);
+   copy_column(stmt,1,item->context_type,sizeof item->context_type);
+   copy_column(stmt,2,item->value,sizeof item->value);
+ }
+ sqlite3_finalize(stmt);
+ if(rc!=SQLITE_DONE&&rc!=SQLITE_ROW)
+    return STNLABZ_MODULE_ERR_INVALID_STATE;
+ memcpy(response,&out,sizeof out);
+ *used=sizeof out;
+ return STNLABZ_MODULE_OK;
+}
+
 /* Return newest IRC Rictus Intel observation after an explicit cursor.
  * No rows are modified; callers receive text and provenance ID only. */
 static stnlabz_module_result_t s2_observations(
@@ -410,8 +497,23 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api) {
         host->unregister_service(DIGIT_OBSERVATION_INSERT_SERVICE,NULL);
         goto fail;
     }
+    stage="register_context_store";
+    if(!host->register_service(DIGIT_CONTEXT_STORE_SERVICE,context_store,NULL))
+        goto fail_registered;
+    stage="register_context_recent";
+    if(!host->register_service(DIGIT_CONTEXT_RECENT_SERVICE,context_recent,NULL)){
+        host->unregister_service(DIGIT_CONTEXT_STORE_SERVICE,NULL);
+        goto fail_registered;
+    }
     startup_log("active",SQLITE_OK,"all_services_registered");
     return STNLABZ_MODULE_OK;
+fail_registered:
+    host->unregister_service(DIGIT_OBSERVATION_RECENT_SERVICE,NULL);
+    host->unregister_service(DIGIT_SQLITE3_DIAGNOSTIC_SERVICE,NULL);
+    host->unregister_service(DIGIT_CORPUS_SEARCH_SERVICE,(void *)op_search);
+    host->unregister_service("digit.sqlite3.get",(void *)op_get);
+    host->unregister_service(DIGIT_S2_OBSERVATIONS_SERVICE,NULL);
+    host->unregister_service(DIGIT_OBSERVATION_INSERT_SERVICE,NULL);
 fail:
     if(database)sqlite3_close(database);
     if(observation_writer)sqlite3_close(observation_writer);
@@ -420,6 +522,8 @@ fail:
 }
 static stnlabz_module_result_t stop(void) {
     if(!database||!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
+    host->unregister_service(DIGIT_CONTEXT_RECENT_SERVICE,NULL);
+    host->unregister_service(DIGIT_CONTEXT_STORE_SERVICE,NULL);
     host->unregister_service(DIGIT_OBSERVATION_RECENT_SERVICE,NULL);
     host->unregister_service(DIGIT_S2_OBSERVATIONS_SERVICE,NULL);
     host->unregister_service(DIGIT_OBSERVATION_INSERT_SERVICE,NULL);
@@ -515,7 +619,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="sqlite3",.name="SQLite3 persistence",
-    .version_major=0,.version_minor=4,.version_patch=4,
+    .version_major=0,.version_minor=4,.version_patch=5,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
