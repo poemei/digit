@@ -29,13 +29,27 @@ static file_state_t sources[2]={
  {CORPUS,0,0,0,0},{OBS,0,0,0,0}
 };
 static int running(void){int v;pthread_mutex_lock(&lock);v=live;pthread_mutex_unlock(&lock);return v;}
+static irc_report_t pending[64];
+static unsigned pending_count;
+static void flush_reports(void){
+ while(pending_count&&api&&api->invoke_service){
+  size_t used=0;
+  if(api->invoke_service(REPORT,&pending[0],sizeof pending[0],
+      NULL,0,&used)!=STNLABZ_MODULE_OK)break;
+  memmove(pending,pending+1,(--pending_count)*sizeof pending[0]);
+ }
+}
 static void report(const char *name,unsigned add,unsigned change,unsigned skip,int error){
- irc_report_t r={{0}};size_t used=0;
+ irc_report_t r={{0}};
  snprintf(r.report,sizeof r.report,"[SQLite sync] %.100s: added=%u updated=%u skipped=%u %s",
  name,add,change,skip,error?"FAILED":"OK");
- if(!api||!api->invoke_service||
-  api->invoke_service(REPORT,&r,sizeof r,NULL,0,&used)!=STNLABZ_MODULE_OK)
-  syslog(error?LOG_ERR:LOG_NOTICE,"%s",r.report);
+ syslog(error?LOG_ERR:LOG_INFO,"%s",r.report);
+ if(pending_count==sizeof pending/sizeof pending[0]){
+  syslog(LOG_ERR,"digit.sqlite3 ingest: IRC report queue full");
+  return;
+ }
+ pending[pending_count++]=r;
+ flush_reports();
 }
 static int begin(sqlite3 *db){return sqlite3_exec(db,"BEGIN IMMEDIATE",NULL,NULL,NULL)==SQLITE_OK;}
 static int commit(sqlite3 *db){return sqlite3_exec(db,"COMMIT",NULL,NULL,NULL)==SQLITE_OK;}
@@ -170,6 +184,7 @@ static void *watcher(void *unused){
    }
    closedir(dir);
   }
+  flush_reports();
   for(i=0;i<20&&running();i++){
    struct timespec pause={0,100000000};nanosleep(&pause,NULL);
   }
