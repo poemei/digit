@@ -137,22 +137,20 @@ static int conversation_invitation(const digit_interpretation_result_t *r){
 /* Nonverbal contact is identifiable without interpreting factual
  * content. General social reactions are available to every sender.
  * No account, nickname or familial role is inferred here. */
-static int nonverbal_social_contact(const char *text,
- const digit_interpretation_result_t *result){
- size_t i,n;int expressive=0;
- if(!text||!result||result->kind!=DIGIT_UTTERANCE_UNRESOLVED||
-    result->term_count||!text[0])return 0;
- n=strlen(text);
- if(n>24)return 0;
- for(i=0;i<n;i++){
-  unsigned char c=(unsigned char)text[i];
-  if(c=='?'||c=='!'||c=='\\r'||c=='\\n')return 0;
-  if(c>=128||c==':'||c==';'||c=='<'||c=='^'||c==')')
-   expressive=1;
-  else if(!isspace(c)&&c!='('&&c!='='&&c!='3'&&c!='-'&&
-          c!='.'&&c!='*')return 0;
+/* Addressed emoticons are social contact, irrespective of lexical classification. */
+static int nonverbal_social_contact(const char *text){
+ const unsigned char *p=(const unsigned char *)text;
+ size_t n;int marker=0;
+ if(!text||!(n=strlen(text))||n>24)return 0;
+ while(*p){
+  unsigned char c=*p++;
+  if(c=='?'||c=='!')return 0;
+  if(c==':'||c==';'||c=='<'||c=='^'||c==')'||
+     c=='('||c=='='||c=='*'||c>=128)marker=1;
+  else if(c!='3'&&c!='D'&&c!='d'&&c!='x'&&c!='X'&&
+          c!='-'&&c!='.'&&c!=' '&&c!=9)return 0;
  }
- return expressive;
+ return marker;
 }
 static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
     const void *request, size_t bytes, void *response, size_t capacity,
@@ -201,7 +199,7 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
         return STNLABZ_MODULE_OK;
     }
     if(!passive&&response&&capacity&&
-       nonverbal_social_contact(msg->message,&result)){
+       nonverbal_social_contact(msg->message)){
         digit_socials_request_t request={{0}};
         digit_socials_response_t expression={{0}};
         size_t expression_used=0;
@@ -540,6 +538,7 @@ static stnlabz_module_result_t mock_invoke(const char *service,
        strcpy(r.terms[2],"your");strcpy(r.terms[3],"creator");
     }
 
+    if (mock_mode == 8 && !strcmp(q->text,":)")){r.kind=DIGIT_UTTERANCE_QUESTION;r.term_count=1;strcpy(r.terms[0],"smile");}
     if (mock_mode == 4) r.kind = 99;
     if (mock_mode == 5) r.term_count = DIGIT_INTERPRETATION_TERMS_MAX + 1;
     if (mock_mode == 6)
@@ -658,6 +657,14 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
         /* Directly addressed social and ordinary statements must not
          * generate a factual uncertainty or clarification response. */
         strcpy(channel.message,":)");emitted=99;
+        check(q,process_route(&mock,&channel,sizeof channel,response,
+            sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&
+            emitted>0&&!strcmp(response,"=^.^="),0);
+        mock_mode=8;strcpy(channel.message,":)");emitted=99;
+        check(q,process_route(&mock,&channel,sizeof channel,response,
+            sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&
+            emitted>0&&!strcmp(response,"=^.^="),0);
+        mock_mode=0;strcpy(channel.message,":xD");emitted=99;
         check(q,process_route(&mock,&channel,sizeof channel,response,
             sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&
             emitted>0&&!strcmp(response,"=^.^="),0);
@@ -849,7 +856,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 7,
+    .version_major = 1, .version_minor = 1, .version_patch = 8,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
