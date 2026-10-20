@@ -32,3 +32,12 @@ Conversation records request-correlated service boundary outcomes for its Interp
 After Interpretation, Conversation submits a candidate lexical subject term to the established `digit.sqlite3.corpus_search` model and supplies the returned evidence, success/failure status, and Interpretation results to `digit.reasoning.evaluate`. It does not access SQLite directly. DSD records both service boundaries. Reasoning returns a bounded provenance-aware outcome rather than a scripted answer. Until a separately authorized View/generation capability exists, a general request may still produce `NO_GENERATOR`; this must not be misrepresented as reasoning failure.
 
 Requires Reasoning v0.1.0 to be active before Conversation v1.0.7.
+
+
+## Evidence-bound response View (v1.0.8)
+
+Conversation can now pass a Reasoning-selected, operator-verified Corpus reference to its dedicated View component (`response_view.c`). The View renders a complete first source sentence with the Corpus ID, only for a direct private request. It cannot invent a definition, repair code, or claim an original synthesis; if evidence is missing, unverified, mismatched, truncated or unsuitable, it abstains.
+
+The View is not a substitute for full semantic synthesis or a general language generator. The implementation is a limited, source-faithful response path to replace unconditional silence where selected evidence supports a bounded response. No Core, IRC, SQLite3 schema, or Reasoning ABI changes. DSD receives `response.view` statuses `RESPONSE_COMPOSED` or `RENDER_ABSTAIN`, and final `RESPONSE_RETURNED` or `RESPONSE_ABSTAIN`.
+
+The descriptor is Conversation v1.0.8. The module Makefile builds both `conversation.c` and `response_view.c`. Qualification includes success, unverified record, mismatched source ID, incomplete sentence, verification-required decision, and output-capacity cases. Module activation, runtime qualification, and user acceptance remain operator controlled.
