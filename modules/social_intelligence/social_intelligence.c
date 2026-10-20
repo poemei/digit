@@ -14,6 +14,7 @@ static char channel[128],language[48];
 static time_t last_reply;
 static unsigned turns;
 static char observed_channel[128];
+static char quiet_channel[128];
 static int preference(const char *text,char word[48]){
  const char *p=text,*start;size_t n,i;
  const char *prefix="digit use ",*suffix=" when you speak to ";
@@ -73,6 +74,43 @@ static int social(const digit_interpretation_result_t *r){
  }
  return markers>0;
 }
+/* A quiet request is only actionable when addressed to Digit.
+ * The IRC transport removes a leading address; passive channel messages
+ * retain their text and therefore require an explicit Digit reference. */
+static int has_word(const char *text,const char *word){
+ const char *p=text;size_t n=strlen(word);
+ while(*p){
+  size_t i=0;
+  while(*p&&!isalnum((unsigned char)*p))p++;
+  if(!*p)break;
+  while(isalnum((unsigned char)p[i])||p[i]=='_')i++;
+  if(i==n){
+   size_t j;
+   for(j=0;j<n;j++)
+    if(tolower((unsigned char)p[j])!=word[j])break;
+   if(j==n)return 1;
+  }
+  p+=i;
+ }
+ return 0;
+}
+static int addressed(const digit_social_intelligence_request_t *q){
+ return !q->passive||has_word(q->text,"digit")||
+                         has_word(q->text,"digicat");
+}
+static int quiet_request(const digit_social_intelligence_request_t *q){
+ if(!addressed(q))return 0;
+ return has_word(q->text,"chill")||has_word(q->text,"quiet")||
+        has_word(q->text,"shush")||
+        (has_word(q->text,"stop")&&
+         (has_word(q->text,"talking")||has_word(q->text,"speaking")));
+}
+static int resume_request(const digit_social_intelligence_request_t *q){
+ if(!addressed(q))return 0;
+ return (has_word(q->text,"resume")||
+         (has_word(q->text,"join")&&has_word(q->text,"in"))) &&
+        !has_word(q->text,"not")&&!has_word(q->text,"dont");
+}
 static stnlabz_module_result_t process(const void *request,size_t bytes,
  void *response,size_t capacity,size_t *used,void *ctx){
  const digit_social_intelligence_request_t *q=request;
@@ -89,7 +127,15 @@ static stnlabz_module_result_t process(const void *request,size_t bytes,
     q->interpretation.kind>DIGIT_UTTERANCE_QUESTION)
      return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(out,0,sizeof *out);
- if(q->account[0]&&preference(q->text,desired)){
+ if(q->account[0]&&quiet_request(q)){
+  snprintf(quiet_channel,sizeof quiet_channel,"%s",q->channel);
+  turns=0;out->handled=1;
+  snprintf(out->response,sizeof out->response,"Okay, I'll be quiet here.");
+ }else if(q->account[0]&&resume_request(q)){
+  if(!strcmp(quiet_channel,q->channel))quiet_channel[0]=0;
+  turns=0;out->handled=1;
+  snprintf(out->response,sizeof out->response,"Okay, I can join in again.");
+ }else if(q->account[0]&&preference(q->text,desired)){
   snprintf(channel,sizeof channel,"%s",q->channel);
   snprintf(language,sizeof language,"%s",desired);
   last_reply=0;turns=0;
@@ -107,6 +153,10 @@ static stnlabz_module_result_t process(const void *request,size_t bytes,
    * relevant social cue after other channel participants have been talking.
    * Do not require an ephemeral preference to be repeated after reload. */
   if(q->passive){
+   if(!strcmp(quiet_channel,q->channel)){
+    if(cue)out->handled=1;
+    *used=sizeof *out;return STNLABZ_MODULE_OK;
+   }
    if(strcmp(observed_channel,q->channel)){
     snprintf(observed_channel,sizeof observed_channel,"%s",q->channel);
     turns=0;
@@ -233,7 +283,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
    STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
  /* Realistic multi-speaker social-turn qualification. All observations
   * use the same channel, without assuming the speakers are family. */
- channel[0]=language[0]=observed_channel[0]=0;last_reply=0;turns=0;
+ channel[0]=language[0]=observed_channel[0]=quiet_channel[0]=0;last_reply=0;turns=0;
  memset(&in,0,sizeof in);
  strcpy(in.account,"speaker-a");strcpy(in.channel,"#social");
  strcpy(in.text,"digit use kitten when you speak to us");
@@ -270,8 +320,29 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  strcpy(in.interpretation.terms[1],"discussion");
  check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
    !out.handled,1);
+ /* Directly addressed quiet request and explicit re-entry. */
+ memset(&in,0,sizeof in);
+ strcpy(in.channel,"#social");strcpy(in.account,"speaker-b");
+ strcpy(in.text,"and digit chill da phuk out k?");
+ in.passive=1;in.interpretation.kind=DIGIT_UTTERANCE_QUESTION;
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
+   out.handled&&strstr(out.response,"quiet"),0);
+ strcpy(in.text,"puurrs");
+ in.interpretation.kind=DIGIT_UTTERANCE_STATEMENT;in.interpretation.term_count=1;
+ strcpy(in.interpretation.terms[0],"puurrs");
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
+   out.handled&&!out.response[0],1);
+ strcpy(in.text,"digit join in");
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
+   out.handled&&strstr(out.response,"join in again"),0);
+ strcpy(in.text,"puurrs");
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
+   out.handled&&!out.response[0],0);
+ strcpy(in.text,"chill out");
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
+   !out.handled,1);
  api=saved;
- channel[0]=language[0]=0;last_reply=0;turns=0;
+ channel[0]=language[0]=quiet_channel[0]=observed_channel[0]=0;last_reply=0;turns=0;
  return q->tests_executed>=STNLABZ_MODULE_MIN_TESTS&&!q->tests_failed&&
   q->negative_test_executed&&q->negative_test_passed?
   STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_QUALIFICATION;
@@ -292,7 +363,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="social_intelligence",.name="Social Intelligence",
- .version_major=0,.version_minor=1,.version_patch=2,
+ .version_major=0,.version_minor=1,.version_patch=3,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
