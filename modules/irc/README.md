@@ -94,3 +94,8 @@ Channel questions now enter Core's `digit.message` route instead of being catego
 ## v0.3.7 — transport no longer judges by question punctuation
 
 IRC normalizes bounded direct-address aliases and routes addressed traffic to `digit.message`. All other channel traffic is routed to `digit.conversation.listen`, regardless of punctuation. It never decides that a question mark constitutes participation. The Conversation controller owns participation; passive channel observation remains available. Obsolete nickname-only predicate and punctuation test removed.
+
+
+## v0.3.9 — authenticated family replies
+
+For directly addressed messages, IRC compares the supplied IRC account tag with the operator-configured family account bindings already used for JOIN greetings. Only matching family accounts are offered to `digit.socials.family`. Successful bounded replies are returned to IRC; nonmatching or unsupported interactions continue through the ordinary Conversation route. Nicknames, operator status, and other channel claims cannot establish family status. Existing Core, Interpretation, and Conversation interfaces remain unchanged. This does not address unaddressed social messages or general contextual interpretation.
