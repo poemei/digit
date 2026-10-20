@@ -10,6 +10,7 @@
 #include "../observation/observation.h"
 #include "../sqlite3/context.h"
 #include "module.h"
+#include "identity_read.h"
 #include "../interpretation/interpretation.h"
 #include "dsd.h"
 #include "../reasoning/reasoning.h"
@@ -91,6 +92,29 @@ static void trace_stage(const stnlabz_module_host_t *api,
  snprintf(r.event.status,sizeof r.event.status,"%s",status);
  (void)api->invoke_service(DIGIT_DSD_RECORD_SERVICE,&r,sizeof r,NULL,0,&used);
 }
+/* Identity questions are answered from Core, never from Corpus guesses. */
+static int has_term(const digit_interpretation_result_t *r,const char *term){
+ unsigned i;
+ for(i=0;i<r->term_count;i++)if(!strcmp(r->terms[i],term))return 1;
+ return 0;
+}
+static int core_identity_field(const digit_interpretation_result_t *r,
+    uint32_t *field,int *creator){
+ int self=has_term(r,"you")||has_term(r,"your")||
+          has_term(r,"digit")||has_term(r,"digicat");
+ if(!self)return 0;
+ *creator=0;
+ if(has_term(r,"mission")){*field=DIGIT_IDENTITY_MISSION;return 1;}
+ if(has_term(r,"creator")||has_term(r,"created")){
+  *field=DIGIT_IDENTITY_MOTHER;*creator=1;return 1;
+ }
+ if(has_term(r,"mother")){*field=DIGIT_IDENTITY_MOTHER;return 1;}
+ if(has_term(r,"organization")){*field=DIGIT_IDENTITY_ORGANIZATION;return 1;}
+ if(has_term(r,"what")||has_term(r,"who")){
+  *field=DIGIT_IDENTITY_LINEAGE;return 1;
+ }
+ return 0;
+}
 static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
     const void *request, size_t bytes, void *response, size_t capacity,
     size_t *used, int passive)
@@ -123,6 +147,51 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
         result.term_count > DIGIT_INTERPRETATION_TERMS_MAX ||
         result.unresolved_references > DIGIT_INTERPRETATION_TERMS_MAX)
         return STNLABZ_MODULE_ERR_INVALID_STATE;
+    {
+        uint32_t field=0;
+        int creator=0;
+        if(!passive&&response&&capacity&&
+           core_identity_field(&result,&field,&creator)){
+            digit_identity_request_t identity={field};
+            digit_identity_response_t core_value={{0}};
+            size_t value_used=0;
+            int written;
+            rc=host->invoke_service(DIGIT_IDENTITY_READ_SERVICE,
+                 &identity,sizeof identity,&core_value,sizeof core_value,
+                 &value_used);
+            trace_stage(host,"process",DIGIT_IDENTITY_READ_SERVICE,
+               rc==STNLABZ_MODULE_OK?"CORE_IDENTITY_READ":"CORE_IDENTITY_UNAVAILABLE",
+               rc==STNLABZ_MODULE_OK?0:1,0,__LINE__);
+            if(rc==STNLABZ_MODULE_OK&&value_used==sizeof core_value&&
+                memchr(core_value.text,0,sizeof core_value.text)){
+                if(creator)
+                    written=snprintf(response,capacity,
+                       "Core identifies %s as my mother, but does not specify my creator.",
+                       core_value.text);
+                else if(field==DIGIT_IDENTITY_MISSION)
+                    written=snprintf(response,capacity,"%s",core_value.text);
+                else if(field==DIGIT_IDENTITY_LINEAGE)
+                    written=snprintf(response,capacity,
+                       "I am Digit, a %s within STN-LABZ.",core_value.text);
+                else
+                    written=snprintf(response,capacity,"%s",core_value.text);
+                if(written>0&&(size_t)written<capacity){
+                    *used=(size_t)written;
+                    trace_stage(host,"process","participation",
+                       "CORE_IDENTITY_RESPONSE",0,(unsigned)*used,__LINE__);
+                    return STNLABZ_MODULE_OK;
+                }
+                return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+            }
+            /* Missing service is a technical defect, not missing knowledge. */
+            written=snprintf(response,capacity,
+               "My Core identity is unavailable to this conversation.");
+            if(written>0&&(size_t)written<capacity){
+               *used=(size_t)written;return STNLABZ_MODULE_OK;
+            }
+            return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+        }
+    }
     /* Conversation coordinates model retrieval and evidence evaluation.
      * Retrieval terms are candidates, not scripted response triggers.
      * Reasoning cannot claim a fact unless a model provided evidence. */
@@ -559,7 +628,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 3,
+    .version_major = 1, .version_minor = 1, .version_patch = 4,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
