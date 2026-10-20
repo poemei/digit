@@ -110,10 +110,10 @@ int main(int argc,char **argv) {
   digit_socials_family_response_t reply={0};
   const char *kinds[]={"mommy","auntie","sister"};
   const char *names[]={"Momma","Auntie","Kitty Sister"};
-  const char *phrases[]={"good to see you","love you","hello","thanks"};
+  const char *phrases[]={"good to see you","love you","hello","thanks","there you are kitten","awww Digit :)"};
   size_t role,intent;
   for(role=0;role<3;role++){
-   for(intent=0;intent<4;intent++){
+   for(intent=0;intent<sizeof phrases/sizeof phrases[0];intent++){
     memset(&family,0,sizeof family);
     strcpy(family.kind,kinds[role]);
     strcpy(family.text,phrases[intent]);
