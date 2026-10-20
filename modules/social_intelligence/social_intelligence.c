@@ -32,6 +32,20 @@ static int preference(const char *text,char word[48]){
  if(*p)return 0;
  memcpy(word,start,n);word[n]=0;return 1;
 }
+static int emoticon(const char *t){
+ const unsigned char *p=(const unsigned char *)t;
+ size_t n=strlen(t);int mark=0;
+ if(!n||n>24)return 0;
+ while(*p){
+  unsigned char c=*p++;
+  if(c=='?'||c=='!')return 0;
+  if(c==':'||c==';'||c=='<'||c=='^'||c==')'||c=='('||
+     c=='='||c=='*'||c>=128)mark=1;
+  else if(c!='3'&&c!='D'&&c!='d'&&c!='x'&&c!='X'&&
+          c!='-'&&c!='.'&&c!=' '&&c!=9)return 0;
+ }
+ return mark;
+}
 static int social(const digit_interpretation_result_t *r){
  unsigned i;int found=0;
  if(r->kind==DIGIT_UTTERANCE_QUESTION)return 0;
@@ -69,7 +83,7 @@ static stnlabz_module_result_t process(const void *request,size_t bytes,
   snprintf(out->response,sizeof out->response,
     "I hear you. I'll use the social expressions I know here; "
     "that doesn't establish fluency in %s.",desired);
- }else if(social(&q->interpretation)){
+ }else if(social(&q->interpretation)||emoticon(q->text)){
   int reply=!q->passive;
   out->handled=1;
   if(!reply&&language[0]&&!strcmp(channel,q->channel)){
@@ -81,7 +95,7 @@ static stnlabz_module_result_t process(const void *request,size_t bytes,
    digit_socials_request_t sr={{0}};
    digit_socials_response_t result={{0}};
    size_t n=0;
-   strcpy(sr.category,"playful");
+   strcpy(sr.category,emoticon(q->text)?"cats":"playful");
    if(api->invoke_service(DIGIT_SOCIALS_SERVICE,&sr,sizeof sr,
       &result,sizeof result,&n)==STNLABZ_MODULE_OK&&
       n==sizeof result&&memchr(result.expression,0,sizeof result.expression)){
@@ -145,6 +159,39 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  in.interpretation.term_count=DIGIT_INTERPRETATION_TERMS_MAX+1;
  check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==
   STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
+ /* Interface bounds and negative controls, all executed. */
+ in.interpretation.term_count=0;in.interpretation.kind=DIGIT_UTTERANCE_STATEMENT;
+ strcpy(in.text,"ordinary statement");
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
+   !out.handled,0);
+ strcpy(in.text,":)");in.passive=0;
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
+   out.handled&&!strcmp(out.response,"=^.^="),0);
+ in.passive=1;
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
+   out.handled&&!out.response[0],0);
+ in.passive=0;strcpy(in.text,"");
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
+   !out.handled,0);
+ memset(in.text,'x',sizeof in.text);
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==
+   STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
+ memset(in.text,0,sizeof in.text);
+ memset(in.channel,'x',sizeof in.channel);
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==
+   STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
+ memset(in.channel,0,sizeof in.channel);
+ memset(in.account,'x',sizeof in.account);
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==
+   STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
+ memset(in.account,0,sizeof in.account);
+ check(q,process(&in,sizeof in,&out,sizeof out-1,&used,NULL)==
+   STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
+ check(q,process(&in,sizeof in,&out,sizeof out,NULL,NULL)==
+   STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
+ in.interpretation.kind=DIGIT_UTTERANCE_QUESTION+1;
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==
+   STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
  api=saved;
  channel[0]=language[0]=0;last_reply=0;turns=0;
  return q->tests_executed>=STNLABZ_MODULE_MIN_TESTS&&!q->tests_failed&&
