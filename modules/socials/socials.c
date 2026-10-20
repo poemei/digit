@@ -133,7 +133,7 @@ static int corpus_expression(const char *category,char output[DIGIT_SOCIALS_EXPR
      !strstr(hit->category,"social_expression"))continue;
   n=strlen(hit->excerpt);
   if(!n||n>=DIGIT_SOCIALS_EXPRESSION_MAX)continue;
-  if(strpbrk(hit->excerpt,"\\r\\n\\t")||strchr(hit->excerpt,'.'))continue;
+  if(strpbrk(hit->excerpt,"\r\n\t")||strchr(hit->excerpt,'.'))continue;
   memset(output,0,DIGIT_SOCIALS_EXPRESSION_MAX);
   memcpy(output,hit->excerpt,n);
   return 1;
