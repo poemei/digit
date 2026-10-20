@@ -245,6 +245,53 @@ static stnlabz_module_result_t diagnose_service(
  return STNLABZ_MODULE_OK;
 }
 
+/* Select upstream decision evidence, never IRC's final delivery observation. */
+static int evidence_rank(const digit_dsd_event_t *e){
+ const char *v=e->status;
+ if(!strcmp(e->module,"irc"))return 0;
+ if(!strcmp(v,"SERVICE_ERROR")||!strcmp(v,"SERVICE_NOT_FOUND")||
+    !strcmp(v,"INVALID_STATE")||!strcmp(v,"QUERY_ERROR")||
+    !strcmp(v,"RETRIEVAL_UNAVAILABLE"))return 100;
+ if(!strcmp(v,"NO_GENERATOR"))return 95;
+ if(!strcmp(v,"EVIDENCE_NOT_RENDERABLE")||
+    !strcmp(v,"INSUFFICIENT_EVIDENCE")||
+    !strcmp(v,"RESPONSE_ABSTAIN"))return 80;
+ if(!strcmp(v,"KNOWLEDGE_UNKNOWN")||!strcmp(v,"UNKNOWN_STATED")||
+    !strcmp(v,"CLARIFICATION_REQUIRED")||!strcmp(v,"CLARIFICATION_REQUESTED")||
+    !strcmp(v,"RETRIEVAL_FAILED")||!strcmp(v,"RETRIEVAL_FAILURE_STATED"))return 75;
+ if(!strcmp(v,"QUERY_NO_MATCH")||
+    !strcmp(v,"EVIDENCE_INSUFFICIENT"))return 65;
+ if(!strcmp(v,"RESPONSE_COMPOSED")||
+    !strcmp(v,"RESPONSE_RETURNED"))return 35;
+ if(!strcmp(v,"QUERY_MATCH")||!strcmp(v,"EVIDENCE_AVAILABLE"))return 20;
+ if(e->result)return 70;
+ return 0;
+}
+static const char *evidence_assessment(const digit_dsd_event_t *e){
+ const char *v=e->status;
+ if(!strcmp(v,"KNOWLEDGE_UNKNOWN")||!strcmp(v,"UNKNOWN_STATED"))
+  return "Adequate knowledge was not established; unknown is a valid result.";
+ if(!strcmp(v,"CLARIFICATION_REQUIRED")||!strcmp(v,"CLARIFICATION_REQUESTED"))
+  return "Intended meaning unresolved; clarification is appropriate.";
+ if(!strcmp(v,"INSUFFICIENT_EVIDENCE")||!strcmp(v,"EVIDENCE_INSUFFICIENT"))
+  return "Reasoning did not establish adequate evidence for an answer.";
+ if(!strcmp(v,"EVIDENCE_NOT_RENDERABLE"))
+  return "Conversation View rejected available evidence as unsuitable for output.";
+ if(!strcmp(v,"RESPONSE_ABSTAIN"))
+  return "Conversation withheld a response; underlying decision must be examined.";
+ if(!strcmp(v,"QUERY_NO_MATCH"))
+  return "SQLite3 returned no matching records; retrieval completed without a match.";
+ if(!strcmp(v,"RETRIEVAL_FAILED")||!strcmp(v,"RETRIEVAL_FAILURE_STATED")||
+    !strcmp(v,"QUERY_ERROR")||!strcmp(v,"RETRIEVAL_UNAVAILABLE"))
+  return "Evidence retrieval failed; absence of knowledge is not established.";
+ if(!strcmp(v,"NO_GENERATOR"))return "Conversation has no general response generator.";
+ if(!strcmp(v,"RESPONSE_COMPOSED")||!strcmp(v,"RESPONSE_RETURNED"))
+  return "A response was produced; substantive answer quality remains unverified.";
+ if(!strcmp(v,"SERVICE_NOT_FOUND"))return "An upstream service was not registered.";
+ if(!strcmp(v,"SERVICE_ERROR")||!strcmp(v,"INVALID_STATE"))
+  return "The named upstream service reported a technical failure.";
+ return "The reported module status is observed; deeper cause is unverified.";
+}
 /* DSD owns interpretation of the evidence; adapters only transport lines.
  * A missing trace stage is never a claim that the underlying work did not run. */
 static stnlabz_module_result_t report_service(
@@ -254,7 +301,8 @@ static stnlabz_module_result_t report_service(
  digit_dsd_report_result_t *out=response;
  digit_dsd_result_t d={0};
  unsigned i,sql=0,conversation=0,no_reply=0,failure=0,interpreted=0,no_generator=0;
- const digit_dsd_event_t *last=NULL;
+ const digit_dsd_event_t *last=NULL,*responsible=NULL;
+ int best_rank=0;
  size_t n;
  (void)ctx;
  if(used)*used=0;
@@ -285,6 +333,7 @@ static stnlabz_module_result_t report_service(
    if(!strcmp(e->module,"conversation")&&!strcmp(e->status,"NO_GENERATOR"))no_generator++;
    if(e->result)failure++;
    if(strcmp(e->status,"TRACE_BOUND"))last=e;
+   if(evidence_rank(e)>best_rank){best_rank=evidence_rank(e);responsible=e;}
  }
  if(last){
    char chain[210]={0};size_t len=0;
@@ -304,24 +353,16 @@ static stnlabz_module_result_t report_service(
    snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
      "Route: only trace binding observed; downstream route unknown.");
  snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
-   conversation?
-   "Module: IRC and Conversation observed; specific service outcomes follow recorded route.":
-   "Module: IRC boundary observed; downstream execution not established.");
- if(no_generator){
-   const digit_dsd_event_t *source=NULL;
-   for(i=0;i<d.count;i++)
-      if(!strcmp(d.events[i].module,"conversation")&&
-         !strcmp(d.events[i].status,"NO_GENERATOR"))source=&d.events[i];
-   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
-     "Code: %s:%u (%s.%s), status=%s",
-     source->file,source->line,source->module,source->method,source->status);
- }else if(last)
-   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
-     "Code: %s:%u (%s.%s), status=%s",
-     last->file,last->line,last->module,last->method,last->status);
+   "Module: %s",responsible?responsible->module:
+   "undetermined (upstream evidence missing)");
+ if(responsible)
+  snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
+    "Code: %s:%u (%s.%s), status=%s",
+    responsible->file,responsible->line,responsible->module,
+    responsible->method,responsible->status);
  else
-   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
-     "Code: no downstream source location recorded.");
+  snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
+    "Code: upstream source unverified; IRC records only delivery.");
  if(sql){
    const digit_dsd_event_t *e=NULL;
    for(i=0;i<d.count;i++)
@@ -332,24 +373,9 @@ static stnlabz_module_result_t report_service(
  }else
    snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
      "SQL: No SQLite3 operation recorded for this request; SQL outcome unknown.");
- if(no_generator)
-   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
-     "Assessment: Conversation has no general response generator; this request completed without a generated answer.");
- else if(no_reply&&conversation&&interpreted)
-   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
-     "Assessment: Conversation invoked Interpretation but produced no reply; generation and participation remain unverified.");
- else if(no_reply&&conversation)
-   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
-     "Assessment: Conversation ran without a reply; Interpretation not recorded.");
- else if(no_reply)
-   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
-     "Assessment: service returned without reply; downstream cause not established.");
- else if(failure)
-   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
-     "Assessment: %u error stage(s) observed; root cause requires supporting evidence.",failure);
- else
-   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
-     "Assessment: no recorded failure; end-to-end result not independently verified.");
+ snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
+   "Assessment: %s",responsible?evidence_assessment(responsible):
+   "Upstream cause was not recorded; no module attribution is justified.");
  if(d.dropped)
    snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
      "Evidence incomplete: %u trace event(s) dropped.",d.dropped);
