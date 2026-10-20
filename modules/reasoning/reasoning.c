@@ -124,7 +124,9 @@ static int topic_matches(const char *source,const digit_interpretation_result_t 
      !strcmp(t,"should")||!strcmp(t,"your")||!strcmp(t,"you")||
      !strcmp(t,"my")||!strcmp(t,"me")||!strcmp(t,"i")||
      !strcmp(t,"our")||!strcmp(t,"we")||!strcmp(t,"please")||
-     !strcmp(t,"so")||!strcmp(t,"hey"))continue;
+     !strcmp(t,"so")||!strcmp(t,"hey")||
+     !strcmp(t,"what's")||!strcmp(t,"whats")||
+     !strcmp(t,"tell")||!strcmp(t,"about"))continue;
   subjects++;
   if(!subject_occurs(source,t))return 0;
  }
