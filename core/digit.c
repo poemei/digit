@@ -4,6 +4,7 @@
  */
 #include <stdio.h>
 #include "agent_root.h"
+#include "stnlabz_abi/identity_read.h"
 #include "digit.h"
 #include "logging.h"
 #include "runtime.h"
@@ -104,6 +105,41 @@ static stnlabz_module_result_t digit_service(const char *name,
     size_t i;
     if (response_used) *response_used = 0;
     if (!name)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+    /* Core owns this read-only identity endpoint. Module callers receive
+     * copied values, never pointers into protected Core memory. */
+    if (!strcmp(name,DIGIT_IDENTITY_READ_SERVICE)) {
+        const digit_identity_request_t *q=request;
+        digit_identity_response_t out={{0}};
+        const stnlabz_agent_root_t *root=stnlabz_agent_root_identity();
+        const char *value=NULL;
+        size_t count;
+        if(!q||request_size!=sizeof *q||!response||!response_used||
+           response_size<sizeof out||!root)
+            return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+        switch(q->field){
+          case DIGIT_IDENTITY_NAME:value=root->name;break;
+          case DIGIT_IDENTITY_LINEAGE:value=root->lineage;break;
+          case DIGIT_IDENTITY_ORGANIZATION:value=root->organization;break;
+          case DIGIT_IDENTITY_MISSION:value=root->mission;break;
+          case DIGIT_IDENTITY_MOTHER:value=root->family[0].id;break;
+          default:return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+        }
+        if(!value)return STNLABZ_MODULE_ERR_INVALID_STATE;
+        count=strlen(value);
+        if(count>=sizeof out.text){
+           /* Mission is longer than IRC's single-message response capacity.
+            * Publish a complete first sentence, not a mid-word clipping. */
+           const char *stop=strchr(value,'.');
+           if(!stop||(size_t)(stop-value+1)>=sizeof out.text)
+             return STNLABZ_MODULE_ERR_INVALID_STATE;
+           count=(size_t)(stop-value+1);
+        }
+        memcpy(out.text,value,count);
+        out.text[count]=0;
+        memcpy(response,&out,sizeof out);
+        *response_used=sizeof out;
+        return STNLABZ_MODULE_OK;
+    }
     if (core_dsd_handles(name))
         return core_dsd_dispatch(name,request,request_size,response,
                                  response_size,response_used);
