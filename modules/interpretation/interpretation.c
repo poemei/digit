@@ -125,7 +125,7 @@ static int interpret(const digit_interpretation_request_t *req,
         if (!c) break;
     }
     out->kind = !seen ? DIGIT_UTTERANCE_UNRESOLVED :
-                question || first_question ? DIGIT_UTTERANCE_QUESTION :
+                question || (first_question && (!strcmp(out->terms[0],"can") || !strcmp(out->terms[0],"could") || !strcmp(out->terms[0],"would"))) ? DIGIT_UTTERANCE_QUESTION :
                 DIGIT_UTTERANCE_STATEMENT;
     return 1;
 }
@@ -185,6 +185,9 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
         {"The cause remains unknown.",1,DIGIT_FEATURE_CAUSAL_WORD},
         {"The server is active.",1,0},
         {"Does it work?",2,DIGIT_FEATURE_REFERENCE},
+        {"does paws lickies",1,0},
+        {"mrrp",1,0},
+        {"puurrs",1,0},
         {"They cannot establish the cause.",1,DIGIT_FEATURE_NEGATION}
     };
     digit_interpretation_request_t req;
@@ -237,7 +240,7 @@ static const stnlabz_module_descriptor_t descriptor = {
     .name = "Digit Lexical Interpretation",
     .version_major = 0,
     .version_minor = 1,
-    .version_patch = 2,
+    .version_patch = 3,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify,
