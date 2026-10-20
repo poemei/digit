@@ -177,6 +177,21 @@ static int speech_preference(const message_t *msg,char *language,size_t capacity
  memcpy(language,start,n);language[n]=0;
  return 1;
 }
+/* Social utterances and physical-action narration are not questions.
+ * Keep their classification distinct from factual uncertainty. */
+static int social_utterance(const digit_interpretation_result_t *r){
+ unsigned i;int vocal=0,action=0;
+ if(r->kind==DIGIT_UTTERANCE_QUESTION)return 0;
+ for(i=0;i<r->term_count;i++){
+  const char *t=r->terms[i];
+  if(!strcmp(t,"mrrp")||!strcmp(t,"meow")||
+     !strcmp(t,"purr")||!strcmp(t,"purrs")||
+     !strcmp(t,"puurrs"))vocal=1;
+  if(!strcmp(t,"paws")||!strcmp(t,"lickies")||
+     !strcmp(t,"scratches")||!strcmp(t,"cuddles"))action=1;
+ }
+ return vocal||action;
+}
 static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
     const void *request, size_t bytes, void *response, size_t capacity,
     size_t *used, int passive)
@@ -251,6 +266,30 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
                 "SPEECH_PREFERENCE_ACKNOWLEDGED",0,(unsigned)*used,__LINE__);
             return STNLABZ_MODULE_OK;
         }
+    }
+    /* Unaddressed social chatter is observational. Directly addressed
+     * social contact can use the existing Socials selector without inventing
+     * a factual question or pretending a Corpus excerpt is an utterance. */
+    if(social_utterance(&result)){
+        if(!passive&&response&&capacity){
+            digit_socials_request_t request={{0}};
+            digit_socials_response_t expression={{0}};
+            size_t expression_used=0;
+            snprintf(request.category,sizeof request.category,"playful");
+            rc=host->invoke_service(DIGIT_SOCIALS_SERVICE,&request,
+               sizeof request,&expression,sizeof expression,&expression_used);
+            if(rc==STNLABZ_MODULE_OK&&
+               expression_used==sizeof expression&&
+               memchr(expression.expression,0,sizeof expression.expression)){
+                int n=snprintf(response,capacity,"%s",expression.expression);
+                if(n>0&&(size_t)n<capacity){
+                    *used=(size_t)n;
+                    trace_stage(host,"process","participation",
+                        "SOCIAL_EXPRESSION",0,(unsigned)*used,__LINE__);
+                }
+            }
+        }
+        return STNLABZ_MODULE_OK;
     }
     if(!passive&&(!msg->message[0]||
        (result.kind==DIGIT_UTTERANCE_UNRESOLVED&&
@@ -894,6 +933,20 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
             sizeof response,&emitted,1)==STNLABZ_MODULE_OK&&
             emitted==0,1);
     }
+    {
+        message_t social=msg;size_t emitted=17;
+        strcpy(social.target,"#stn-labz");
+        strcpy(social.message,"does paws lickies");
+        check(q,process_route(&mock,&social,sizeof social,response,
+          sizeof response,&emitted,1)==STNLABZ_MODULE_OK&&emitted==0,1);
+        strcpy(social.message,"mrrp");emitted=17;
+        check(q,process_route(&mock,&social,sizeof social,response,
+          sizeof response,&emitted,1)==STNLABZ_MODULE_OK&&emitted==0,1);
+        emitted=0;
+        check(q,process_route(&mock,&social,sizeof social,response,
+          sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&
+          emitted>0,0);
+    }
     used = 17; before = mock_calls;
     check(q, process(&mock, NULL, sizeof msg, response, sizeof response, &used)
           == STNLABZ_MODULE_ERR_INVALID_ARGUMENT && used == 0 &&
@@ -1073,7 +1126,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 15,
+    .version_major = 1, .version_minor = 1, .version_patch = 16,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
