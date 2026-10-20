@@ -10,7 +10,7 @@ MODULE_DIR := $(PREFIX)/modules/sqlite3
 
 .PHONY: all test install clean
 all: $(TARGET)
-$(TARGET): sqlite3.c sqlite3_diagnostic.h corpus_search.h context.h ../observation/observation.h ../dsd/dsd.h ../../core/stnlabz_abi/module.h
+$(TARGET): sqlite3.c sqlite3_diagnostic.h corpus_search.h context.h ../observation/observation.h ../../core/stnlabz_abi/dsd.h ../../core/stnlabz_abi/module.h
 	@mkdir -p bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared sqlite3.c -o $@ -lsqlite3
 $(TEST_TARGET): test/test_sqlite3.c ../../core/stnlabz_abi/module.h
