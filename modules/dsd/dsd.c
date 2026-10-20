@@ -539,6 +539,21 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
   CHECK(strstr(result.summary,"sqlite3.corpus_search")!=NULL,0);
   CHECK(strstr(result.summary,"conversation.answer")!=NULL,0);
   CHECK(strstr(result.summary,"RESPONSE_RETURNED")!=NULL,0);
+  {
+   digit_dsd_report_request_t rq={0};
+   digit_dsd_report_result_t rp={0};
+   size_t received=0;
+   rq.trace_id=60;
+   snprintf(rq.origin,sizeof rq.origin,"Digit explain PHP");
+   CHECK(report_service(&rq,sizeof rq,&rp,sizeof rp,&received,NULL)==
+     STNLABZ_MODULE_OK&&received==sizeof rp&&rp.count>=6,0);
+   CHECK(strstr(rp.lines[0],"Digit explain PHP")!=NULL,0);
+   CHECK(strstr(rp.lines[1],"irc.incoming")!=NULL,0);
+   CHECK(strstr(rp.lines[4],"sqlite3")!=NULL,0);
+   rq.origin[0]=10;
+   CHECK(report_service(&rq,sizeof rq,&rp,sizeof rp,&received,NULL)==
+     STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
+  }
   cmd.previous_trace_id=60;
   snprintf(cmd.command,sizeof cmd.command,"show trace");
   CHECK(command_text(&cmd,&reply)&&strstr(reply.text,"corpus_fts")!=NULL,0);
