@@ -115,7 +115,16 @@ static int topic_matches(const char *source,const digit_interpretation_result_t 
   const char *t=in->terms[i];
   if(!strcmp(t,"explain")||!strcmp(t,"describe")||
      !strcmp(t,"what")||!strcmp(t,"is")||!strcmp(t,"the")||
-     !strcmp(t,"a")||!strcmp(t,"an")||!strcmp(t,"of"))continue;
+     !strcmp(t,"a")||!strcmp(t,"an")||!strcmp(t,"of")||
+     !strcmp(t,"who")||!strcmp(t,"where")||!strcmp(t,"when")||
+     !strcmp(t,"why")||!strcmp(t,"how")||!strcmp(t,"which")||
+     !strcmp(t,"are")||!strcmp(t,"was")||!strcmp(t,"were")||
+     !strcmp(t,"do")||!strcmp(t,"does")||!strcmp(t,"did")||
+     !strcmp(t,"can")||!strcmp(t,"could")||!strcmp(t,"would")||
+     !strcmp(t,"should")||!strcmp(t,"your")||!strcmp(t,"you")||
+     !strcmp(t,"my")||!strcmp(t,"me")||!strcmp(t,"i")||
+     !strcmp(t,"our")||!strcmp(t,"we")||!strcmp(t,"please")||
+     !strcmp(t,"so")||!strcmp(t,"hey"))continue;
   subjects++;
   if(!subject_occurs(source,t))return 0;
  }
@@ -257,6 +266,14 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  strcpy(mutated.corpus.hits[0].verification_status,"unverified");
  check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&
    response.outcome==DIGIT_REASONING_OUTCOME_UNKNOWN,1);
+ mutated=request;
+ mutated.interpretation.term_count=4;
+ strcpy(mutated.interpretation.terms[0],"what");
+ strcpy(mutated.interpretation.terms[1],"is");
+ strcpy(mutated.interpretation.terms[2],"your");
+ strcpy(mutated.interpretation.terms[3],"php");
+ check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&
+   response.outcome==DIGIT_REASONING_OUTCOME_EVIDENCE,0);
  mutated=request;mutated.interpretation.features=0;
  check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_CLARIFY,1);
  mutated=request;mutated.corpus.count=0;
@@ -322,7 +339,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="reasoning",.name="Evidence Constrained Reasoning",
- .version_major=0,.version_minor=1,.version_patch=6,
+ .version_major=0,.version_minor=1,.version_patch=7,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
