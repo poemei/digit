@@ -4,11 +4,50 @@
 #include <stdint.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdio.h>
+#include "dsd.h"
 #include "module.h"
 #include "reasoning.h"
 
 static const stnlabz_module_host_t *runtime_host;
 
+/* Record the actual Reasoning decision at its source, not at Conversation's
+ * delivery boundary. DSD is advisory; unavailable tracing cannot alter output. */
+static void trace_decision(const digit_reasoning_result_t *decision,
+                          unsigned line){
+ digit_dsd_record_t record={0};
+ uint64_t token=1,trace=0;
+ size_t used=0;
+ const char *status;
+ if(!runtime_host||!runtime_host->invoke_service||!decision)return;
+ if(runtime_host->invoke_service(DIGIT_DSD_CURRENT_SERVICE,
+    &token,sizeof token,&trace,sizeof trace,&used)!=STNLABZ_MODULE_OK||
+    used!=sizeof trace||!trace)return;
+ switch(decision->outcome){
+  case DIGIT_REASONING_OUTCOME_EVIDENCE:status="EVIDENCE_AVAILABLE";break;
+  case DIGIT_REASONING_OUTCOME_UNKNOWN:status="KNOWLEDGE_UNKNOWN";break;
+  case DIGIT_REASONING_OUTCOME_CLARIFY:status="CLARIFICATION_REQUIRED";break;
+  case DIGIT_REASONING_OUTCOME_FAILURE:status="RETRIEVAL_FAILED";break;
+  case DIGIT_REASONING_OUTCOME_CONFLICT:status="EVIDENCE_CONFLICT";break;
+  default:status="EVIDENCE_INSUFFICIENT";break;
+ }
+ record.trace_id=record.event.trace_id=trace;
+ record.event.span_id=4;
+ record.event.parent_span_id=1;
+ record.event.line=line;
+ record.event.records=decision->evidence_count;
+ record.event.result=decision->outcome==DIGIT_REASONING_OUTCOME_FAILURE?1:
+    decision->outcome==DIGIT_REASONING_OUTCOME_EVIDENCE?0:2;
+ snprintf(record.event.module,sizeof record.event.module,"reasoning");
+ snprintf(record.event.method,sizeof record.event.method,"evaluate");
+ snprintf(record.event.file,sizeof record.event.file,
+          "modules/reasoning/reasoning.c");
+ snprintf(record.event.operation,sizeof record.event.operation,
+          "digit.reasoning.evaluate");
+ snprintf(record.event.status,sizeof record.event.status,"%s",status);
+ (void)runtime_host->invoke_service(DIGIT_DSD_RECORD_SERVICE,
+   &record,sizeof record,NULL,0,&used);
+}
 static int bounded(const char *s,size_t n){
  return s&&memchr(s,0,n)!=NULL;
 }
@@ -132,6 +171,7 @@ static stnlabz_module_result_t service(
     !validate((const digit_reasoning_request_t *)request))
    return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  evaluate((const digit_reasoning_request_t *)request,&r);
+ trace_decision(&r,__LINE__);
  memcpy(response,&r,sizeof r);
  *used=sizeof r;
  return STNLABZ_MODULE_OK;
@@ -228,7 +268,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="reasoning",.name="Evidence Constrained Reasoning",
- .version_major=0,.version_minor=1,.version_patch=3,
+ .version_major=0,.version_minor=1,.version_patch=4,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
