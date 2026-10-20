@@ -15,3 +15,8 @@ This integration **does not implement general conversation understanding, topic 
 - Descriptor qualification exercises Interpretation dispatch and context service calls with deterministic mocks. This is not live SQLite or IRC acceptance.
 - Validate SQLite3 v0.4.5 context registration, actual persisted context rows, provenance, and Conversation's readback after operator-controlled hotload.
 - Do not claim full conversational participation based only on ACTIVE status.
+
+
+## Runtime persistence correction (v1.0.4)
+
+Conversation no longer creates a second context record or attempts to reconstruct an Observation by text and account. SQLite3 creates Observation-linked context atomically when the existing Observation service writes the record; Conversation reads a bounded context history. This change does not add general conversational understanding or automatic participation. Live acceptance requires SQLite3 v0.4.6 followed by Conversation v1.0.4.
