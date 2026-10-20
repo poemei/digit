@@ -177,6 +177,7 @@ static stnlabz_module_result_t mock_invoke(const char *service,
 {
     const digit_interpretation_request_t *q = request;
     digit_interpretation_result_t r = {0};
+    if(!strcmp(service,DIGIT_DSD_CURRENT_SERVICE))return STNLABZ_MODULE_ERR_NOT_FOUND;
     if (!strcmp(service, DIGIT_CONTEXT_STORE_SERVICE)) {
         const digit_context_store_request_t *s=request;
         if (!s || bytes!=sizeof *s || strcmp(s->channel,"#stn-labz") ||
