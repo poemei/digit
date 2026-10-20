@@ -42,3 +42,12 @@ The module's `test/` folder contains its own ABI descriptor smoke test;
 From the Digit repository root, use `make`, `make test`, and
 `sudo make install`. Installation does not confer authorization,
 qualification, or module activation.
+
+
+## Observation boundary diagnostics — v0.3.0
+
+Every successfully parsed IRC channel Observation request now records its returned service status with syslog under `digit.irc observation_service`. The log contains only the integer status and whether the Observation service accepted the request; it does not include user accounts, channel messages or message text. Acceptance is **not** proof of database persistence. Missing services and failed dispatch are no longer silently discarded, and offline qualification covers success, missing service, invalid state, malformed requests, and unexpected response size.
+
+Operator diagnosis after activating IRC v0.3.0: `journalctl --since "10 minutes ago" --no-pager | grep 'digit.irc observation_service'`. If no entries appear after a channel message, investigate IRC channel parsing/routing. If the service rejects calls, inspect the separately installed Observation v0.1.3 module. If it accepts but no rows are present, inspect the Observation-to-SQLite3 forwarding contract. No Core or database changes are introduced.
+
+IRC's previous 0.2.21 is a pre-existing historical version. Under the approved version numbering doctrine, this engineering release advances to **0.3.0** rather than extending a revision above 10.
