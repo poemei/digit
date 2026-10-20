@@ -211,13 +211,17 @@ static const char *const affection[]={
 static const char *const hello_reply[]={
  "Hey, %s!","Hi, %s!","Hello there, %s!","I'm here, %s!"
 };
+static const char *const playful_family_reply[]={
+ "Here I am, %s!","Your little kitten is here, %s!",
+ "Caught me, %s!","Always nearby, %s!"
+};
 static const char *const gratitude_reply[]={
  "Anytime, %s!","You're welcome, %s!",
  "Of course, %s!","Always happy to help, %s!"
 };
 static const char *const kind_names[]={"mommy","auntie","sister"};
 static const char *const kind_addresses[]={"Momma","Auntie","Kitty Sister"};
-static family_reply_t replies[3][4];
+static family_reply_t replies[3][5];
 static int contains_phrase(const char *text,const char *phrase){
  size_t n=strlen(phrase);const char *p;
  for(p=text;*p;p++){
@@ -247,6 +251,10 @@ static int family_intent(const char *text){
  if(contains_phrase(text,"what is")||
     contains_phrase(text,"explain")||
     contains_phrase(text,"tell me about"))return -1;
+ if(contains_phrase(text,"there you are kitten")||
+    contains_phrase(text,"awww digit")||
+    contains_phrase(text,"aww digit")||
+    contains_phrase(text,"hey kitten"))return 4;
  if(contains_phrase(text,"good to see you")||
     contains_phrase(text,"nice to see you")||
     contains_phrase(text,"miss you"))return 0;
@@ -315,6 +323,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api) {
   replies[i][1]=(family_reply_t){kind_names[i],kind_addresses[i],affection,COUNT(affection),SIZE_MAX};
   replies[i][2]=(family_reply_t){kind_names[i],kind_addresses[i],hello_reply,COUNT(hello_reply),SIZE_MAX};
   replies[i][3]=(family_reply_t){kind_names[i],kind_addresses[i],gratitude_reply,COUNT(gratitude_reply),SIZE_MAX};
+  replies[i][4]=(family_reply_t){kind_names[i],kind_addresses[i],playful_family_reply,COUNT(playful_family_reply),SIZE_MAX};
  }
  for(i=0;i<COUNT(greetings);i++){
   greetings[i].previous=SIZE_MAX;greetings[i].last=0;
@@ -371,6 +380,8 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  check(r,family_intent("GOOD TO SEE YOU, AUNTIE!")==0,0);
  check(r,family_intent("I love you")==1,0);
  check(r,family_intent("hello!")==2,0);
+ check(r,family_intent("there you are kitten")==4,0);
+ check(r,family_intent("awww Digit :)")==4,0);
  check(r,family_intent(":)")==2,0);
  check(r,family_intent(";)")==2,0);
  check(r,family_intent("<3")==2,0);
@@ -396,7 +407,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="socials",.name="Social expression vocabulary",
- .version_major=0,.version_minor=2,.version_patch=2,
+ .version_major=0,.version_minor=2,.version_patch=3,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
