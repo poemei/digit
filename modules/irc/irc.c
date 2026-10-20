@@ -351,6 +351,7 @@ static int dsd_send_full_trace(SSL *ssl,const char *target,const char *account){
 static stnlabz_module_result_t submit_observation(
  const stnlabz_module_host_t *api,const digit_observation_record_t *rec){
  size_t used=0;
+ digit_observation_receipt_t receipt={0};
  stnlabz_module_result_t rc;
  if(!api||!api->invoke_service||!rec)
      return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
@@ -365,10 +366,17 @@ static stnlabz_module_result_t submit_observation(
        "digit.irc observation_route=sqlite3_direct reason=observation_invalid_argument");
      used=0;
      rc=api->invoke_service(DIGIT_OBSERVATION_INSERT_SERVICE,
-          rec,sizeof *rec,NULL,0,&used);
+          rec,sizeof *rec,&receipt,sizeof receipt,&used);
+     if(rc==STNLABZ_MODULE_OK &&
+        (used!=sizeof receipt || receipt.observation_id<=0 ||
+         receipt.context_id<=0 || !memchr(receipt.event_id,0,sizeof receipt.event_id) ||
+         !receipt.event_id[0]))
+         rc=STNLABZ_MODULE_ERR_INVALID_STATE;
      syslog(rc==STNLABZ_MODULE_OK?LOG_INFO:LOG_ERR,
-         "digit.irc observation_route=sqlite3_direct completed=1 status=%d response_bytes=%zu",
-         (int)rc,used);
+         "digit.irc observation_route=sqlite3_direct completed=1 status=%d verified=%d observation_id=%lld context_id=%lld",
+         (int)rc,rc==STNLABZ_MODULE_OK,
+         (long long)receipt.observation_id,(long long)receipt.context_id);
+     return rc;
  }
  if(rc!=STNLABZ_MODULE_OK)return rc;
  return used==0?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
@@ -383,9 +391,20 @@ static stnlabz_module_result_t observation_fixture_invoke(
  if(!service||!request||size!=sizeof(digit_observation_record_t))
     return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  if(!strcmp(service,DIGIT_OBSERVATION_INSERT_SERVICE)){
+    digit_observation_receipt_t receipt={0};
     ++observation_fixture_fallback;
-    return observation_fixture_mode==4?STNLABZ_MODULE_OK:
-           STNLABZ_MODULE_ERR_INVALID_STATE;
+    if(observation_fixture_mode!=4 && observation_fixture_mode!=5)
+        return STNLABZ_MODULE_ERR_INVALID_STATE;
+    if(!response||capacity<sizeof receipt||!used)
+        return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+    if(observation_fixture_mode==4){
+       receipt.observation_id=111;
+       receipt.context_id=222;
+       snprintf(receipt.event_id,sizeof receipt.event_id,"irc-fixture-111");
+    }
+    memcpy(response,&receipt,sizeof receipt);
+    *used=sizeof receipt;
+    return STNLABZ_MODULE_OK;
  }
  if(strcmp(service,DIGIT_OBSERVATION_RECORD_SERVICE))
     return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
@@ -396,7 +415,8 @@ static stnlabz_module_result_t observation_fixture_invoke(
     if(used)*used=1;
     return STNLABZ_MODULE_OK;
  }
- if(observation_fixture_mode==4)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ if(observation_fixture_mode==4||observation_fixture_mode==5)
+    return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  return STNLABZ_MODULE_OK;
 }
 static void observation_status(stnlabz_module_result_t rc) {
@@ -830,6 +850,9 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
       observation_fixture_primary=0;observation_fixture_fallback=0;
       check(result,submit_observation(&mock,&rec)==STNLABZ_MODULE_OK &&
         observation_fixture_primary==1 && observation_fixture_fallback==1,0);
+      observation_fixture_mode=5;
+      check(result,submit_observation(&mock,&rec)==
+        STNLABZ_MODULE_ERR_INVALID_STATE,1);
       observation_fixture_mode=0;
       observation_fixture_primary=0;observation_fixture_fallback=0;
       check(result,submit_observation(&mock,&rec)==STNLABZ_MODULE_OK &&
@@ -901,7 +924,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=3,.version_patch=2,
+    .version_major=0,.version_minor=3,.version_patch=3,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
