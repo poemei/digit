@@ -128,6 +128,7 @@ static stnlabz_module_result_t digit_service(const char *name,
             core_dsd_service_result(name,STNLABZ_MODULE_ERR_NOT_FOUND,0,__LINE__);
             return STNLABZ_MODULE_ERR_NOT_FOUND;
         }
+        core_dsd_service_begin(name,__LINE__);
         rc=handler(request,request_size,response,response_size,response_used,
                    context);
         service_lock_acquire();
@@ -153,7 +154,9 @@ static stnlabz_module_result_t digit_service(const char *name,
     if (strcmp(msg->message, "show modules") &&
         strncmp(msg->message, "activate module", 15) &&
         strncmp(msg->message, "deactivate module", 17)) {
-        stnlabz_module_result_t rc=digit_service(DIGIT_MESSAGE_ROUTE,
+        stnlabz_module_result_t rc;
+        core_dsd_service_begin("digit.message",__LINE__);
+        rc=digit_service(DIGIT_MESSAGE_ROUTE,
                 request,request_size,response,response_size,response_used);
         core_dsd_service_result("digit.message",rc,
                 response_used?*response_used:0,__LINE__);
