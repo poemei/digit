@@ -274,6 +274,18 @@ static stnlabz_module_result_t family_service(
  if(n<=0||(size_t)n>=sizeof out->text){
   unlock();return STNLABZ_MODULE_ERR_INVALID_STATE;
  }
+ /* Existing Socials catalogs own expressive variation. */
+ {
+  category_t *expression=&catalog[intent==1?0:intent==3?9:1];
+  size_t expression_index=0;
+  int appended;
+  if(pick(expression,&expression_index)){
+   appended=snprintf(out->text+(size_t)n,
+       sizeof out->text-(size_t)n," %s",expression->tokens[expression_index]);
+   if(appended>0&&(size_t)appended<sizeof out->text-(size_t)n)
+      expression->previous=expression_index;
+  }
+ }
  entry->previous=index;
  unlock();
  *response_used=sizeof *out;
@@ -341,6 +353,14 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
    total++;
   }
  }
+ check(r,family_intent("good to see you")==0,0);
+ check(r,family_intent("GOOD TO SEE YOU, AUNTIE!")==0,0);
+ check(r,family_intent("I love you")==1,0);
+ check(r,family_intent("hello!")==2,0);
+ check(r,family_intent("thank you")==3,0);
+ check(r,family_intent("What is C?")==-1,1);
+ check(r,family_intent("this is technical")==-1,1);
+ check(r,family_intent("ship")==-1,1);
  check(r,total>=100,0);
  for(i=0;i<COUNT(greetings);i++){
   check(r,strlen(greetings[i].kind)<DIGIT_SOCIALS_GREETING_KIND_MAX,0);
