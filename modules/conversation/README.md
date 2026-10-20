@@ -1,15 +1,17 @@
-# Digit Conversation v1.0.1 — Interpretation ABI integration
+# Digit Conversation v1.0.2 — evidence-bound participation
 
-Conversation registers `digit.conversation` and `digit.conversation.listen`, preserving the existing IRC and Core ABI routing. Both routes pass incoming message text into the independently registered `digit.interpretation` ABI service. There are no direct shared-library calls between modules.
+Conversation retains `digit.conversation` and `digit.conversation.listen`, receiving messages through the established Core and IRC service routing. It invokes `digit.interpretation` via the Core ABI. On public-channel traffic it can also consult `digit.sqlite3.observation_recent` without altering observations.
 
-The module validates inbound envelopes, the service status, and the exact Interpretation result layout. Successful interpretation produces zero response bytes; passive listening and direct input both remain silent until authorized reasoning, participation and response generation exist. An absent Interpretation service reports `NOT_FOUND` rather than pretending processing succeeded.
+## First bounded participation capability
 
-**No LLM, Ollama, external inference provider, scripted responses, or unauthorized Core changes.**
+A structural diagnostic recognizes one demonstrable code error: a PHP `if (...)` statement posted following a visible HTML `</div>` boundary, without a PHP opening tag intervening in the observed channel context. In that case Conversation returns a short technical diagnosis; IRC already sends nonempty responses as PRIVMSG. It never claims the code was fixed. It avoids replying when evidence is absent, when PHP was already opened, or when the output buffer is insufficient.
 
-## Existing hotload lifecycle
+This is a **specific syntax-analysis capability**, not general semantic conversation. It does **not** solve all PHP defects, comprehend arbitrary dialogue, synthesize knowledge generally, or satisfy the full mission requirement. In particular the bounded recent context can omit an earlier PHP opening tag, so human acceptance must assess false positives. Source parsing and contextual evidence are necessary before this diagnostic is enabled operationally.
 
-The manifest remains `id=conversation`. The descriptor patch revision increases from 1.0.0 to **1.0.1**, permitting the existing Core hotload replacement process to evaluate a new binary (SHA-256 change and strictly newer descriptor version). Core stages the candidate, qualifies it, checks authorization, stops and replaces the incumbent, and rolls back where needed. Neither Core nor IRC needs to be modified or restarted by the design.
+Conversation has no Ollama, LLM, neural inference or external inference dependency. No Core or IRC source changes were made. This work does not replace Digit's intended autonomous reasoning architecture with canned chatbot responses.
 
-Build with `make`. The local `make test` target currently verifies **compilation only**. Core's descriptor qualification executes dispatch tests with a deterministic mock Interpretation service; passing them is not evidence of live IRC-to-Interpretation behavior. An operator must verify qualification, hotload, logs, and actual message behavior.
+## Qualification and hotload
 
-No database schema changes. No conversational generation is claimed. Installation/deployment remains operator-controlled.
+Conversation descriptor revision is **1.0.2**, up from 1.0.1; `module.conf` remains `id=conversation`. The existing Core hotload system requires a changed binary hash and a strictly increased version and performs candidate qualification and authorization.
+
+Build with `make`. The `make test` target currently compiles only. Descriptor qualification includes synthetic positive and negative source-diagnostic checks plus Interpretation dispatch tests. Real integration, false-positive review, and operator acceptance have **not** been performed in this session; qualification cannot substitute for those tests.
