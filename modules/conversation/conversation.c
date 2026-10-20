@@ -11,6 +11,7 @@
 #include "../sqlite3/context.h"
 #include "module.h"
 #include "../interpretation/interpretation.h"
+#include "../dsd/dsd.h"
 
 #define LISTEN "digit.conversation.listen"
 #define DIRECT "digit.conversation"
@@ -66,6 +67,27 @@ static int code_diagnostic(const message_t *msg,
     return 1;
 }
 
+/* Request-correlated evidence. Inert when no DSD trace is bound. */
+static void trace_stage(const stnlabz_module_host_t *api,
+ const char *method,const char *operation,const char *status,
+ unsigned result,unsigned records,unsigned line){
+ uint64_t trace=0,token=1;size_t used=0;
+ digit_dsd_record_t r={0};
+ if(!api||!api->invoke_service)return;
+ if(api->invoke_service(DIGIT_DSD_CURRENT_SERVICE,&token,sizeof token,
+   &trace,sizeof trace,&used)!=STNLABZ_MODULE_OK||
+   used!=sizeof trace||!trace)return;
+ r.trace_id=r.event.trace_id=trace;
+ r.event.span_id=3; r.event.parent_span_id=1;
+ r.event.line=line;r.event.result=(unsigned char)result;
+ r.event.records=records;
+ snprintf(r.event.module,sizeof r.event.module,"conversation");
+ snprintf(r.event.method,sizeof r.event.method,"%s",method);
+ snprintf(r.event.file,sizeof r.event.file,"modules/conversation/conversation.c");
+ snprintf(r.event.operation,sizeof r.event.operation,"%s",operation);
+ snprintf(r.event.status,sizeof r.event.status,"%s",status);
+ (void)api->invoke_service(DIGIT_DSD_RECORD_SERVICE,&r,sizeof r,NULL,0,&used);
+}
 static stnlabz_module_result_t process(const stnlabz_module_host_t *host,
     const void *request, size_t bytes, void *response, size_t capacity,
     size_t *used)
@@ -88,6 +110,10 @@ static stnlabz_module_result_t process(const stnlabz_module_host_t *host,
     memcpy(query.text, msg->message, sizeof query.text);
     rc = host->invoke_service(DIGIT_INTERPRETATION_SERVICE, &query,
         sizeof query, &result, sizeof result, &returned);
+    trace_stage(host,"process","digit.interpretation",
+      rc==STNLABZ_MODULE_OK?"SERVICE_OK":
+      rc==STNLABZ_MODULE_ERR_NOT_FOUND?"SERVICE_NOT_FOUND":"SERVICE_ERROR",
+      rc==STNLABZ_MODULE_OK?0:1,(unsigned)returned,__LINE__);
     if (rc != STNLABZ_MODULE_OK) return rc;
     if (returned != sizeof result ||
         result.kind > DIGIT_UTTERANCE_QUESTION ||
@@ -105,6 +131,10 @@ static stnlabz_module_result_t process(const stnlabz_module_host_t *host,
         seen = 0;
         rc = host->invoke_service(DIGIT_CONTEXT_RECENT_SERVICE, &lookup,
             sizeof lookup, &history, sizeof history, &seen);
+        trace_stage(host,"process","digit.sqlite3.context_recent",
+          rc==STNLABZ_MODULE_OK?"SERVICE_OK":
+          rc==STNLABZ_MODULE_ERR_NOT_FOUND?"SERVICE_NOT_FOUND":"SERVICE_ERROR",
+          rc==STNLABZ_MODULE_OK?0:1,rc==STNLABZ_MODULE_OK?history.count:0,__LINE__);
         if (rc != STNLABZ_MODULE_OK) return rc;
         if (seen != sizeof history || history.count > DIGIT_CONTEXT_MAX)
             return STNLABZ_MODULE_ERR_INVALID_STATE;
@@ -123,6 +153,9 @@ static stnlabz_module_result_t process(const stnlabz_module_host_t *host,
             (void)code_diagnostic(msg, &visible, response, capacity, used);
         }
     }
+    trace_stage(host,"process","participation",
+      used&&*used?"RESPONSE_RETURNED":"NO_RESPONSE",0,
+      used?(unsigned)*used:0,__LINE__);
     return STNLABZ_MODULE_OK;
 }
 
@@ -350,7 +383,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 0, .version_patch = 4,
+    .version_major = 1, .version_minor = 0, .version_patch = 5,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
