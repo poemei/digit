@@ -178,6 +178,7 @@ static int ingest(sqlite3 *db,const char *path,int type){
   * error and must not discard thousands of valid imported rows. */
  while((n=getline(&line,&cap,fp))!=-1){
   line_number++;
+  if(!(line_number%5000))syslog(LOG_INFO,"digit.sqlite3 ingest: scanning %s line=%lu",path,line_number);
   if(n&&line[n-1]=='\n')line[--n]=0;
   if(n&&line[n-1]=='\r')line[--n]=0;
   if(!n)continue;
@@ -214,6 +215,17 @@ static void *watcher(void *unused){
   report("database open",0,0,0,1);return NULL;
  }
  sqlite3_busy_timeout(db,5000);
+ /* Without indexes, each of ~49K Corpus lines scans the entire table
+  * twice. That is quadratic and makes the initial transaction appear hung. */
+ if(sqlite3_exec(db,
+    "CREATE INDEX IF NOT EXISTS idx_digit_ingest_corpus_source ON corpus(source_record_id);"
+    "CREATE INDEX IF NOT EXISTS idx_digit_ingest_corpus_content ON corpus(category,text);"
+    "CREATE INDEX IF NOT EXISTS idx_digit_ingest_observation_source ON observations(source_record_id);",
+    NULL,NULL,NULL)!=SQLITE_OK){
+   syslog(LOG_ERR,"digit.sqlite3 ingest: index setup failure: %s",sqlite3_errmsg(db));
+   report("ingest indexes",0,0,0,1);
+   sqlite3_close(db);return NULL;
+ }
  report("watcher started: corpus.tsv, observations.jsonl, lessons/*.txt",0,0,0,0);
  while(running()){
   int i;DIR *dir;
