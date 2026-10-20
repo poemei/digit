@@ -157,3 +157,8 @@ executes. DSD does not control or extend Core dispatch.
 `digit.dsd.report` accepts `digit_dsd_report_request_t` (trace ID and an authenticated adapter-provided originating term) and returns a bounded `digit_dsd_report_result_t` containing Originating Term, observed Route, Module, Code source location, SQL evidence, and an evidence-qualified Assessment. The source of report policy and interpretation is DSD, not IRC. Trace ID ownership remains the responsibility of the authenticated entry adapter; do not expose report to untrusted users without that check. Origin text is not retained in the generic DSD event store. DSD reports missing SQL spans as unknown rather than fabricating a SQLite response.
 
 This service operates on *actual retained trace events*. It cannot infer invisible Core/service internals or supply actual SQL codes unless SQLite3 was instrumented to record them for the same request. It is a bounded, observable diagnostic foundation, not completed end-to-end diagnosis or autonomous repair. Qualification covers report construction from multi-module fixtures and origin validation. Requires IRC 0.3.5 for DM delivery. Operator activates DSD first.
+
+
+## Request-path evidence (v0.7.3)
+
+DSD now renders a bounded sequence of actual recorded operation names, distinguishes observed Conversation and Interpretation events, and qualifies its no-response assessment accordingly. It continues to distinguish *missing evidence* from an executed SQL failure and never supplies fictional Core stages. It is a diagnostic/reporting change rather than autonomous repair. Requires Conversation 1.0.5 for its new stage events; no Core changes.
