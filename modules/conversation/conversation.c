@@ -201,8 +201,16 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
         social.interpretation=result;social.passive=(uint32_t)passive;
         rc=host->invoke_service(DIGIT_SOCIAL_INTELLIGENCE_SERVICE,
             &social,sizeof social,&social_result,sizeof social_result,&social_used);
-        if(rc==STNLABZ_MODULE_OK&&social_used==sizeof social_result&&
-           social_result.handled){
+        trace_stage(host,"process",DIGIT_SOCIAL_INTELLIGENCE_SERVICE,
+           rc==STNLABZ_MODULE_OK?"SERVICE_OK":
+           rc==STNLABZ_MODULE_ERR_NOT_FOUND?"SERVICE_UNAVAILABLE":"SERVICE_ERROR",
+           rc==STNLABZ_MODULE_OK?0:1,
+           rc==STNLABZ_MODULE_OK?(unsigned)social_used:0,__LINE__);
+        if(rc==STNLABZ_MODULE_OK&&
+           (social_used!=sizeof social_result||social_result.handled>1||
+            !memchr(social_result.response,0,sizeof social_result.response)))
+            return STNLABZ_MODULE_ERR_INVALID_STATE;
+        if(rc==STNLABZ_MODULE_OK&&social_result.handled){
             if(response&&capacity&&social_result.response[0]){
                 int n=snprintf(response,capacity,"%s",social_result.response);
                 if(n<=0||(size_t)n>=capacity)
@@ -1009,7 +1017,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 19,
+    .version_major = 1, .version_minor = 1, .version_patch = 20,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
