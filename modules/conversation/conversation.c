@@ -91,9 +91,9 @@ static void trace_stage(const stnlabz_module_host_t *api,
  snprintf(r.event.status,sizeof r.event.status,"%s",status);
  (void)api->invoke_service(DIGIT_DSD_RECORD_SERVICE,&r,sizeof r,NULL,0,&used);
 }
-static stnlabz_module_result_t process(const stnlabz_module_host_t *host,
+static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
     const void *request, size_t bytes, void *response, size_t capacity,
-    size_t *used)
+    size_t *used, int passive)
 {
     const message_t *msg = request;
     digit_interpretation_request_t query = {{0}};
@@ -179,7 +179,7 @@ static stnlabz_module_result_t process(const stnlabz_module_host_t *host,
            decision.reference_count>DIGIT_REASONING_MAX_REFERENCES)
             return STNLABZ_MODULE_ERR_INVALID_STATE;
         /* A skipped View must be diagnosable, not invisible in DSD. */
-        if(strcmp(msg->sender,msg->target)){
+        if(passive){
             trace_stage(host,"process","response.view","CHANNEL_OBSERVATION",2,0,__LINE__);
         }else if(!response||!capacity){
             trace_stage(host,"process","response.view","OUTPUT_UNAVAILABLE",2,0,__LINE__);
@@ -214,7 +214,7 @@ static stnlabz_module_result_t process(const stnlabz_module_host_t *host,
         if (rc != STNLABZ_MODULE_OK) return rc;
         if (seen != sizeof history || history.count > DIGIT_CONTEXT_MAX)
             return STNLABZ_MODULE_ERR_INVALID_STATE;
-        if (response && capacity) {
+        if (response && capacity && (!used || !*used)) {
             digit_observation_recent_result_t visible = {0};
             uint32_t i, first = history.count > DIGIT_OBSERVATION_RECENT_MAX ?
                 history.count - DIGIT_OBSERVATION_RECENT_MAX : 0;
@@ -229,12 +229,25 @@ static stnlabz_module_result_t process(const stnlabz_module_host_t *host,
             (void)code_diagnostic(msg, &visible, response, capacity, used);
         }
     }
-    /* A grounded View response is possible when Reasoning selected
-     * complete source evidence; otherwise the response is withheld. */
+    /* Addressed channel messages may return the View result. Passive
+     * channel messages remain observations, not obligatory replies. */
     trace_stage(host,"process","participation",
       used&&*used?"RESPONSE_RETURNED":"RESPONSE_ABSTAIN",0,
       used?(unsigned)*used:0,__LINE__);
     return STNLABZ_MODULE_OK;
+}
+
+static stnlabz_module_result_t process(const stnlabz_module_host_t *host,
+    const void *request,size_t bytes,void *response,size_t capacity,size_t *used)
+{
+    return process_route(host,request,bytes,response,capacity,used,0);
+}
+
+static stnlabz_module_result_t listen(const void *request,size_t bytes,
+    void *response,size_t capacity,size_t *used,void *context)
+{
+    (void)context;
+    return process_route(host_api,request,bytes,response,capacity,used,1);
 }
 
 static stnlabz_module_result_t handle(const void *request, size_t bytes,
@@ -360,6 +373,16 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
         check(q, rc == expected && used == 0, 1);
     }
     mock_mode = 0;
+    {
+        message_t addressed=msg;
+        size_t emitted=99;
+        strcpy(addressed.target,"#stn-labz");
+        check(q,process_route(&mock,&addressed,sizeof addressed,response,
+           sizeof response,&emitted,1)==STNLABZ_MODULE_OK&&emitted==0,0);
+        emitted=99;
+        check(q,process_route(&mock,&addressed,sizeof addressed,response,
+           sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&emitted==0,0);
+    }
     used = 17; before = mock_calls;
     check(q, process(&mock, NULL, sizeof msg, response, sizeof response, &used)
           == STNLABZ_MODULE_ERR_INVALID_ARGUMENT && used == 0 &&
@@ -505,7 +528,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api)
     if (host_api || !api || !api->invoke_service ||
         !api->register_service || !api->unregister_service)
         return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
-    if (!api->register_service(LISTEN, handle, NULL))
+    if (!api->register_service(LISTEN, listen, NULL))
         return STNLABZ_MODULE_ERR_START_FAILED;
     if (!api->register_service(DIRECT, handle, NULL)) {
         api->unregister_service(LISTEN, NULL);
@@ -529,7 +552,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 2,
+    .version_major = 1, .version_minor = 1, .version_patch = 3,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
