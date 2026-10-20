@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <limits.h>
 #include <string.h>
-#include "../modules/dsd/dsd.h"
+#include "stnlabz_abi/dsd.h"
 #include "core_dsd.h"
 #define SLOTS 64
 typedef struct {
@@ -199,7 +199,7 @@ static stnlabz_module_result_t bind_service(
   e.line=__LINE__;
   snprintf(e.module,sizeof e.module,"dsd");
   snprintf(e.method,sizeof e.method,"bind");
-  snprintf(e.file,sizeof e.file,"modules/dsd/dsd.c");
+  snprintf(e.file,sizeof e.file,"core/core_dsd.c");
   snprintf(e.status,sizeof e.status,"TRACE_BOUND");
   snprintf(e.operation,sizeof e.operation,"request_trace");
   if(!record(&e)){
