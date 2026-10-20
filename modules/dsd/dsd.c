@@ -548,7 +548,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
    CHECK(report_service(&rq,sizeof rq,&rp,sizeof rp,&received,NULL)==
      STNLABZ_MODULE_OK&&received==sizeof rp&&rp.count>=6,0);
    CHECK(strstr(rp.lines[0],"Digit explain PHP")!=NULL,0);
-   CHECK(strstr(rp.lines[1],"irc.incoming")!=NULL,0);
+   CHECK(strstr(rp.lines[1],"digit.message")!=NULL,0);
    CHECK(strstr(rp.lines[4],"sqlite3")!=NULL,0);
    rq.origin[0]=10;
    CHECK(report_service(&rq,sizeof rq,&rp,sizeof rp,&received,NULL)==
