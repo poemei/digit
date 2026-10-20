@@ -519,6 +519,19 @@ static stnlabz_module_result_t mock_invoke(const char *service,
         memcpy(response,&out,sizeof out);*used=sizeof out;
         return STNLABZ_MODULE_OK;
     }
+    if(!strcmp(service,DIGIT_SOCIAL_INTELLIGENCE_SERVICE)){
+        const digit_social_intelligence_request_t *in=request;
+        digit_social_intelligence_result_t out={0};
+        if(used)*used=0;
+        if(!in||bytes!=sizeof *in||!response||
+           capacity<sizeof out||!used)
+            return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+        if(!strcmp(in->text,":)")||!strcmp(in->text,":xD")){
+            out.handled=1;strcpy(out.response,"=^.^=");
+        }
+        memcpy(response,&out,sizeof out);*used=sizeof out;
+        return STNLABZ_MODULE_OK;
+    }
     if(!strcmp(service,DIGIT_SOCIALS_SERVICE)){
         const digit_socials_request_t *req=request;
         digit_socials_response_t value={{0}};
@@ -998,7 +1011,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 18,
+    .version_major = 1, .version_minor = 1, .version_patch = 19,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
