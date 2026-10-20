@@ -153,8 +153,12 @@ static stnlabz_module_result_t process(const stnlabz_module_host_t *host,
             (void)code_diagnostic(msg, &visible, response, capacity, used);
         }
     }
+    /* The current Conversation implementation has no general response
+     * generator or autonomous participation decision. The only positive
+     * response path above is the narrow code diagnostic. Report the actual
+     * capability boundary rather than a generic transport silence. */
     trace_stage(host,"process","participation",
-      used&&*used?"RESPONSE_RETURNED":"NO_RESPONSE",0,
+      used&&*used?"RESPONSE_RETURNED":"NO_GENERATOR",0,
       used?(unsigned)*used:0,__LINE__);
     return STNLABZ_MODULE_OK;
 }
@@ -384,7 +388,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 0, .version_patch = 5,
+    .version_major = 1, .version_minor = 0, .version_patch = 6,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
