@@ -165,14 +165,16 @@ static stnlabz_module_result_t process(const stnlabz_module_host_t *host,
             rc==STNLABZ_MODULE_OK&&decision_used==sizeof decision?
               (decision.outcome==DIGIT_REASONING_OUTCOME_EVIDENCE?
                 "EVIDENCE_AVAILABLE":decision.outcome==DIGIT_REASONING_OUTCOME_CLARIFY?
-                "CLARIFICATION_REQUIRED":"EVIDENCE_INSUFFICIENT"):
+                "CLARIFICATION_REQUIRED":decision.outcome==DIGIT_REASONING_OUTCOME_UNKNOWN?
+                "KNOWLEDGE_UNKNOWN":decision.outcome==DIGIT_REASONING_OUTCOME_FAILURE?
+                "RETRIEVAL_FAILED":"EVIDENCE_INSUFFICIENT"):
               rc==STNLABZ_MODULE_ERR_NOT_FOUND?"SERVICE_NOT_FOUND":"SERVICE_ERROR",
             rc==STNLABZ_MODULE_OK&&decision_used==sizeof decision?0:1,
             rc==STNLABZ_MODULE_OK&&decision_used==sizeof decision?
                 decision.evidence_count:0,__LINE__);
         if(rc!=STNLABZ_MODULE_OK)return rc;
         if(decision_used!=sizeof decision||
-           decision.outcome>DIGIT_REASONING_OUTCOME_CONFLICT||
+           decision.outcome>DIGIT_REASONING_OUTCOME_FAILURE||
            decision.reference_count>DIGIT_REASONING_MAX_REFERENCES)
             return STNLABZ_MODULE_ERR_INVALID_STATE;
         /* A skipped View must be diagnosable, not invisible in DSD. */
@@ -180,17 +182,15 @@ static stnlabz_module_result_t process(const stnlabz_module_host_t *host,
             trace_stage(host,"process","response.view","CHANNEL_OBSERVATION",2,0,__LINE__);
         }else if(!response||!capacity){
             trace_stage(host,"process","response.view","OUTPUT_UNAVAILABLE",2,0,__LINE__);
-        }else if(!reasoning.retrieval_succeeded){
-            trace_stage(host,"process","response.view","RETRIEVAL_UNAVAILABLE",2,0,__LINE__);
-        }else if(decision.outcome!=DIGIT_REASONING_OUTCOME_EVIDENCE){
-            trace_stage(host,"process","response.view",
-                decision.outcome==DIGIT_REASONING_OUTCOME_CLARIFY?
-                  "CLARIFICATION_REQUIRED":"INSUFFICIENT_EVIDENCE",
-                2,decision.evidence_count,__LINE__);
         }else{
             int rendered=digit_response_render(&decision,&found,response,capacity,used);
-            trace_stage(host,"process","response.view",
-                rendered?"RESPONSE_COMPOSED":"EVIDENCE_NOT_RENDERABLE",
+            const char *status=rendered?
+                (decision.outcome==DIGIT_REASONING_OUTCOME_UNKNOWN?
+                  "UNKNOWN_STATED":decision.outcome==DIGIT_REASONING_OUTCOME_CLARIFY?
+                  "CLARIFICATION_REQUESTED":decision.outcome==DIGIT_REASONING_OUTCOME_FAILURE?
+                  "RETRIEVAL_FAILURE_STATED":"RESPONSE_COMPOSED"):
+                "EVIDENCE_NOT_RENDERABLE";
+            trace_stage(host,"process","response.view",status,
                 rendered?0:2,rendered?(unsigned)*used:0,__LINE__);
         }
     }
@@ -505,7 +505,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 0, .version_patch = 10,
+    .version_major = 1, .version_minor = 1, .version_patch = 0,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
