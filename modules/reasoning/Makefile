@@ -6,7 +6,7 @@ PREFIX ?= /opt/digit
 MODULE_DIR := $(PREFIX)/modules/reasoning
 .PHONY: all clean test install
 all: $(TARGET)
-$(TARGET): reasoning.c reasoning.h ../interpretation/interpretation.h ../sqlite3/corpus_search.h ../../core/stnlabz_abi/module.h
+$(TARGET): reasoning.c reasoning.h ../interpretation/interpretation.h ../sqlite3/corpus_search.h ../../core/stnlabz_abi/module.h ../../core/stnlabz_abi/dsd.h
 	@mkdir -p bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared reasoning.c -o $@
 test: $(TARGET)
