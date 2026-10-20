@@ -143,6 +143,7 @@ static stnlabz_module_result_t observation_insert(
  sqlite3_stmt *stmt=NULL;
  sqlite3_int64 person=0,conversation=0,observation_id=0;
  int rc;
+ const char *phase="validate";
  (void)response;(void)response_size;(void)context;
  if(response_used)*response_used=0;
  if(!observation_writer||!r||request_size!=sizeof *r||
@@ -154,12 +155,17 @@ static stnlabz_module_result_t observation_insert(
     !r->sender[0]||!r->text[0]||
     strcmp(r->transport,"irc")||strcmp(r->channel,"#stn-labz"))
     return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ phase="lookup_person";
  rc=sqlite3_prepare_v2(observation_writer,
    "SELECT id FROM people WHERE display_name=?1 LIMIT 1",-1,&stmt,NULL);
- if(rc!=SQLITE_OK)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(rc!=SQLITE_OK){
+   syslog(LOG_ERR,"digit.sqlite3 observation_atomic status=rejected phase=%s sqlite_code=%d",phase,rc);
+   return STNLABZ_MODULE_ERR_INVALID_STATE;
+ }
  sqlite3_bind_text(stmt,1,r->sender,-1,SQLITE_TRANSIENT);
  if(sqlite3_step(stmt)==SQLITE_ROW)person=sqlite3_column_int64(stmt,0);
  sqlite3_finalize(stmt);stmt=NULL;
+ phase="lookup_conversation";
  rc=sqlite3_prepare_v2(observation_writer,
    "SELECT id FROM conversations WHERE transport=?1 AND channel=?2 LIMIT 1",
    -1,&stmt,NULL);
@@ -168,9 +174,16 @@ static stnlabz_module_result_t observation_insert(
  sqlite3_bind_text(stmt,2,r->channel,-1,SQLITE_TRANSIENT);
  if(sqlite3_step(stmt)==SQLITE_ROW)conversation=sqlite3_column_int64(stmt,0);
  sqlite3_finalize(stmt);stmt=NULL;
- if(!conversation)return STNLABZ_MODULE_ERR_INVALID_STATE;
- if(sqlite3_exec(observation_writer,"BEGIN IMMEDIATE",NULL,NULL,NULL)!=SQLITE_OK)
+ if(!conversation){
+   syslog(LOG_ERR,"digit.sqlite3 observation_atomic status=rejected phase=conversation_missing");
+   return STNLABZ_MODULE_ERR_INVALID_STATE;
+ }
+ phase="begin_transaction";
+ if(sqlite3_exec(observation_writer,"BEGIN IMMEDIATE",NULL,NULL,NULL)!=SQLITE_OK){
+     syslog(LOG_ERR,"digit.sqlite3 observation_atomic status=rejected phase=begin_transaction sqlite_code=%d",sqlite3_errcode(observation_writer));
      return STNLABZ_MODULE_ERR_INVALID_STATE;
+ }
+ phase="insert_observation";
  rc=sqlite3_prepare_v2(observation_writer,
    "INSERT INTO observations(event_id,sender_id,conversation_id,text,timestamp,source_record_id) "
    "VALUES ('irc-live-'||lower(hex(randomblob(16))),?1,?2,?3,"
@@ -185,6 +198,7 @@ static stnlabz_module_result_t observation_insert(
  sqlite3_finalize(stmt);stmt=NULL;
  if(rc!=SQLITE_DONE)goto rollback;
  observation_id=sqlite3_last_insert_rowid(observation_writer);
+ phase="insert_context";
  rc=sqlite3_prepare_v2(observation_writer,
    "INSERT INTO context(subject_type,subject_id,context_type,value,source_id,confidence,expires_at) "
    "SELECT 'conversation',?1,'utterance.observed',text,event_id,1.0,NULL "
@@ -196,11 +210,14 @@ static stnlabz_module_result_t observation_insert(
  rc=sqlite3_step(stmt);
  sqlite3_finalize(stmt);stmt=NULL;
  if(rc!=SQLITE_DONE||sqlite3_changes(observation_writer)!=1)goto rollback;
+ phase="commit";
  if(sqlite3_exec(observation_writer,"COMMIT",NULL,NULL,NULL)!=SQLITE_OK)
      goto rollback;
+ syslog(LOG_INFO,"digit.sqlite3 observation_atomic status=committed");
  return STNLABZ_MODULE_OK;
 rollback:
  if(stmt)sqlite3_finalize(stmt);
+ syslog(LOG_ERR,"digit.sqlite3 observation_atomic status=rollback phase=%s sqlite_code=%d",phase,sqlite3_errcode(observation_writer));
  (void)sqlite3_exec(observation_writer,"ROLLBACK",NULL,NULL,NULL);
  return STNLABZ_MODULE_ERR_INVALID_STATE;
 }
@@ -779,7 +796,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="sqlite3",.name="SQLite3 persistence",
-    .version_major=0,.version_minor=4,.version_patch=7,
+    .version_major=0,.version_minor=4,.version_patch=8,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
