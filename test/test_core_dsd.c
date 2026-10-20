@@ -16,6 +16,9 @@ int main(void){
  assert(core_dsd_handles(DIGIT_DSD_CURRENT_SERVICE));
  assert(!core_dsd_handles("digit.conversation"));
  assert(core_dsd_dispatch(DIGIT_DSD_BIND_SERVICE,&id,sizeof id,NULL,0,&used)==STNLABZ_MODULE_OK);
+ core_dsd_service_begin("digit.message",__LINE__);
+ core_dsd_service_begin("digit.conversation",__LINE__);
+ core_dsd_service_begin("digit.interpretation",__LINE__);
  record.trace_id=record.event.trace_id=id;
  record.event.span_id=3;record.event.line=157;
  record.event.result=0;
@@ -34,6 +37,7 @@ int main(void){
  assert(used==sizeof report);
  assert(report.count>=6);
  assert(strstr(report.lines[0],"Digit explain PHP"));
+ assert(strstr(report.lines[1],"digit.message -> digit.conversation -> digit.interpretation"));
  assert(strstr(report.lines[3],"modules/conversation/conversation.c:157"));
  assert(strstr(report.lines[5],"no general response generator"));
  trace_query.trace_id=id;used=0;
