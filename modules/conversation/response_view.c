@@ -6,15 +6,52 @@
 #include <ctype.h>
 #include "response_view.h"
 
+/* A capitalization follow-up concerns the orthography of a named term,
+ * not the source's entire definition. Keep the user's original casing. */
+static int spelling_followup(const char *text,char *term,size_t capacity){
+ const char *p=text;size_t n=0;
+ static const char prefix[]="or is it ";
+ size_t i;
+ if(!text||!term||capacity<2)return 0;
+ while(*p&&isspace((unsigned char)*p))p++;
+ for(i=0;i<sizeof prefix-1;i++)
+  if(!p[i]||tolower((unsigned char)p[i])!=prefix[i])return 0;
+ p+=sizeof prefix-1;
+ while(*p&&isspace((unsigned char)*p))p++;
+ while(isalnum((unsigned char)p[n])||p[n]=='_'||p[n]=='-'){
+  if(n+1>=capacity)return 0;
+  term[n]=p[n];n++;
+ }
+ if(!n)return 0;
+ term[n]=0;p+=n;
+ while(*p&&isspace((unsigned char)*p))p++;
+ return !*p||(*p=='?'&&!p[1]);
+}
+static int corpus_spelling(const char *source,const char *term,
+ char *spelling,size_t capacity){
+ size_t i,j,n=strlen(term);
+ if(!n||n>=capacity)return 0;
+ for(i=0;source[i];i++){
+  if(i&&isalnum((unsigned char)source[i-1]))continue;
+  for(j=0;j<n&&source[i+j]&&
+      tolower((unsigned char)source[i+j])==
+      tolower((unsigned char)term[j]);j++);
+  if(j==n&&!isalnum((unsigned char)source[i+j])){
+   memcpy(spelling,source+i,n);spelling[n]=0;return 1;
+  }
+ }
+ return 0;
+}
+
 int digit_response_render(const digit_reasoning_result_t *d,
  const digit_corpus_result_t *corpus,const digit_interpretation_result_t *question,
- char *output,size_t capacity,size_t *used){
+ const char *original_text,char *output,size_t capacity,size_t *used){
  unsigned i,j;const digit_corpus_hit_t *hit=NULL;
  size_t length=0,end=0,source_length,words=0;
  int inword=0,has_detail=0;
  int n;
  if(used)*used=0;
- if(!d||!corpus||!question||!output||!used||capacity<2)return 0;
+ if(!d||!corpus||!question||!original_text||!output||!used||capacity<2)return 0;
  if(d->outcome==DIGIT_REASONING_OUTCOME_UNKNOWN||
     d->outcome==DIGIT_REASONING_OUTCOME_CLARIFY||
     d->outcome==DIGIT_REASONING_OUTCOME_FAILURE){
@@ -42,6 +79,17 @@ int digit_response_render(const digit_reasoning_result_t *d,
    }
  if(!hit||!memchr(hit->excerpt,0,sizeof hit->excerpt)||!hit->excerpt[0])
   return 0;
+ {char asked[48],stored[48];
+  if(spelling_followup(original_text,asked,sizeof asked)&&
+     corpus_spelling(hit->excerpt,asked,stored,sizeof stored)){
+   n=snprintf(output,capacity,
+     "Corpus #%lld writes it as \"%s\". This source does not establish "
+     "whether that capitalization is required.",
+     (long long)hit->id,stored);
+   if(n<=0||(size_t)n>=capacity)return 0;
+   *used=(size_t)n;return 1;
+  }
+ }
  /* A source discussing an activity is not proof Digit can perform it. */
  if(question->term_count>0&&
     (!strcmp(question->terms[0],"can")||
