@@ -703,6 +703,10 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
         test_check(result,rc==SQLITE_ROW &&
           sqlite3_column_int(verify,0)==1,0);
         if(verify)sqlite3_finalize(verify);
+        test_check(result,sqlite3_exec(db,
+          "DELETE FROM context WHERE context_type='utterance.observed';"
+          "DELETE FROM observations WHERE text='Atomic context fixture';",
+          NULL,NULL,NULL)==SQLITE_OK,0);
         strcpy(rec.channel,"#other");
         test_check(result,observation_insert(&rec,sizeof rec,NULL,0,
           &used,NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
