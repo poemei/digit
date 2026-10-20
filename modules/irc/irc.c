@@ -24,7 +24,7 @@
 #include <openssl/evp.h>
 #include "module.h"
 #include "socials.h"
-#include "../dsd/dsd.h"
+#include "dsd.h"
 #include "../observation/observation.h"
 #include <time.h>
 #include <syslog.h>
