@@ -682,6 +682,11 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
         sizeof found,&used,NULL)==STNLABZ_MODULE_OK &&
         found.count==2 &&
         !strcmp(found.items[1].source_id,"irc-event-2"),0);
+      test_check(result,context_store(&request,sizeof request,NULL,0,
+        &used,NULL)==STNLABZ_MODULE_OK,0);
+      test_check(result,context_recent(&lookup,sizeof lookup,&found,
+        sizeof found,&used,NULL)==STNLABZ_MODULE_OK &&
+        found.count==2,0);
       used=0;
       test_check(result,context_recent(&lookup,sizeof lookup,&found,
         sizeof found,&used,NULL)==STNLABZ_MODULE_OK &&
