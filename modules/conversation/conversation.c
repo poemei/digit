@@ -16,6 +16,7 @@
 #include "../reasoning/reasoning.h"
 #include "../sqlite3/corpus_search.h"
 #include "response_view.h"
+#include "../socials/socials.h"
 
 #define LISTEN "digit.conversation.listen"
 #define DIRECT "digit.conversation"
@@ -133,6 +134,26 @@ static int conversation_invitation(const digit_interpretation_result_t *r){
  }
  return 0;
 }
+/* Nonverbal contact is identifiable without interpreting factual
+ * content. General social reactions are available to every sender.
+ * No account, nickname or familial role is inferred here. */
+static int nonverbal_social_contact(const char *text,
+ const digit_interpretation_result_t *result){
+ size_t i,n;int expressive=0;
+ if(!text||!result||result->kind!=DIGIT_UTTERANCE_UNRESOLVED||
+    result->term_count||!text[0])return 0;
+ n=strlen(text);
+ if(n>24)return 0;
+ for(i=0;i<n;i++){
+  unsigned char c=(unsigned char)text[i];
+  if(c=='?'||c=='!'||c=='\\r'||c=='\\n')return 0;
+  if(c>=128||c==':'||c==';'||c=='<'||c=='^'||c==')')
+   expressive=1;
+  else if(!isspace(c)&&c!='('&&c!='='&&c!='3'&&c!='-'&&
+          c!='.'&&c!='*')return 0;
+ }
+ return expressive;
+}
 static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
     const void *request, size_t bytes, void *response, size_t capacity,
     size_t *used, int passive)
@@ -178,6 +199,30 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
         trace_stage(host,"process","participation","CONTACT_ACKNOWLEDGED",
             0,(unsigned)*used,__LINE__);
         return STNLABZ_MODULE_OK;
+    }
+    if(!passive&&response&&capacity&&
+       nonverbal_social_contact(msg->message,&result)){
+        digit_socials_request_t request={{0}};
+        digit_socials_response_t expression={{0}};
+        size_t expression_used=0;
+        strcpy(request.category,"cats");
+        rc=host->invoke_service(DIGIT_SOCIALS_SERVICE,&request,sizeof request,
+           &expression,sizeof expression,&expression_used);
+        if(rc==STNLABZ_MODULE_OK&&
+           expression_used==sizeof expression&&
+           memchr(expression.expression,0,sizeof expression.expression)){
+            int n=snprintf(response,capacity,"%s",expression.expression);
+            if(n>0&&(size_t)n<capacity){
+                *used=(size_t)n;
+                trace_stage(host,"process",DIGIT_SOCIALS_SERVICE,
+                    "SOCIAL_NONVERBAL_RESPONSE",0,(unsigned)*used,__LINE__);
+                return STNLABZ_MODULE_OK;
+            }
+        }
+        trace_stage(host,"process",DIGIT_SOCIALS_SERVICE,
+             "SOCIAL_EXPRESSION_UNAVAILABLE",2,0,__LINE__);
+        /* Missing optional vocabulary must not turn a smile into a
+         * factual inquiry. Continue to regular context processing. */
     }
     trace_stage(host,"process","participation",
        participate?"ENGAGEMENT_SELECTED":"PASSIVE_OBSERVATION",
@@ -396,6 +441,18 @@ static stnlabz_module_result_t mock_invoke(const char *service,
         memcpy(response,&out,sizeof out);*used=sizeof out;
         return STNLABZ_MODULE_OK;
     }
+    if(!strcmp(service,DIGIT_SOCIALS_SERVICE)){
+        const digit_socials_request_t *req=request;
+        digit_socials_response_t value={{0}};
+        if(used)*used=0;
+        if(!req||bytes!=sizeof *req||!response||
+           capacity<sizeof value||!used||
+           strcmp(req->category,"cats"))
+            return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+        strcpy(value.expression,"=^.^=");
+        memcpy(response,&value,sizeof value);*used=sizeof value;
+        return STNLABZ_MODULE_OK;
+    }
     if(!strcmp(service,DIGIT_DSD_CURRENT_SERVICE))return STNLABZ_MODULE_ERR_NOT_FOUND;
     if(!strcmp(service,DIGIT_CORPUS_SEARCH_SERVICE)){
         digit_corpus_result_t empty={0};
@@ -600,7 +657,15 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
          * generate a factual uncertainty or clarification response. */
         strcpy(channel.message,":)");emitted=99;
         check(q,process_route(&mock,&channel,sizeof channel,response,
-            sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&emitted==0,0);
+            sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&
+            emitted>0&&!strcmp(response,"=^.^="),0);
+        strcpy(channel.message,"...");emitted=99;
+        check(q,process_route(&mock,&channel,sizeof channel,response,
+            sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&emitted==0,1);
+        strcpy(channel.message,"?");emitted=99;
+        check(q,process_route(&mock,&channel,sizeof channel,response,
+            sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&emitted>0&&
+            strstr(response,"I'm here")!=NULL,0);
         strcpy(channel.message,"good to see you");emitted=99;
         check(q,process_route(&mock,&channel,sizeof channel,response,
             sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&emitted==0,0);
@@ -782,7 +847,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 6,
+    .version_major = 1, .version_minor = 1, .version_patch = 7,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
