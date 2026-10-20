@@ -250,7 +250,7 @@ static stnlabz_module_result_t report_service(
  const digit_dsd_report_request_t *q=request;
  digit_dsd_report_result_t *out=response;
  digit_dsd_result_t d={0};
- unsigned i,sql=0,conversation=0,no_reply=0,failure=0;
+ unsigned i,sql=0,conversation=0,no_reply=0,failure=0,interpreted=0;
  const digit_dsd_event_t *last=NULL;
  size_t n;
  (void)ctx;
@@ -654,7 +654,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="dsd",.name="Developer Self-Diagnostics",
- .version_major=0,.version_minor=7,.version_patch=2,
+ .version_major=0,.version_minor=7,.version_patch=3,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
