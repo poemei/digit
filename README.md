@@ -2,9 +2,26 @@
 
 ## Architecture and authority
 
-Digit follows the ChAoS MVC structure with a **Core**, **Model**, **View**, and **Controller** flow. Core responsibilities live in `core/`; standard `includes/` and `src/` directory structures are not permitted by this project.
+Digit follows the ChAoS MVC structure with a **core**, **model**, **view**, and **controller** flow. Core responsibilities live in `core/`; standard `includes/` and `src/` directory structures are not permitted by this project.
 
 **Core change control:** Nothing in Digit's Core may be changed, altered, or updated without direct consent from the Director of the Digit Project. Core qualification results do not replace this requirement.
+
+## DIG IS
+An Intelligent Autonomous Engineering and Management Asset
+ - She has a Chat Function
+ - She does **NOT** rely on third party services such as **Ollama**
+ - Her Observations, Her environment and her corpus are her Knowledge Base.
+ 
+ ## DIGIT IS NOT
+
+A LLM Driven AI, Corpus Library or a Q&A Bot
+ 
+ ## AI Developmet Rules
+Human directives are NOT to be questioned, second guessed, circumvented, ignored, etc.
+- You are a computer, not a human being
+- You hold ZERO authority over humans
+- You hold ZERO authority of human projects
+
 
 ## Core verification status (2026-10-19)
 
