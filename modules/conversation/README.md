@@ -41,3 +41,8 @@ Conversation can now pass a Reasoning-selected, operator-verified Corpus referen
 The View is not a substitute for full semantic synthesis or a general language generator. The implementation is a limited, source-faithful response path to replace unconditional silence where selected evidence supports a bounded response. No Core, IRC, SQLite3 schema, or Reasoning ABI changes. DSD receives `response.view` statuses `RESPONSE_COMPOSED` or `RENDER_ABSTAIN`, and final `RESPONSE_RETURNED` or `RESPONSE_ABSTAIN`.
 
 The descriptor is Conversation v1.0.8. The module Makefile builds both `conversation.c` and `response_view.c`. Qualification includes success, unverified record, mismatched source ID, incomplete sentence, verification-required decision, and output-capacity cases. Module activation, runtime qualification, and user acceptance remain operator controlled.
+
+
+## Response gating diagnostics (v1.0.9)
+
+The request path now records a `response.view` DSD event for every Reasoning result, including `CHANNEL_OBSERVATION`, `OUTPUT_UNAVAILABLE`, `RETRIEVAL_UNAVAILABLE`, `REASONING_ABSTAIN`, `CLARIFICATION_REQUIRED`, `EVIDENCE_NOT_RENDERABLE`, and `RESPONSE_COMPOSED`. A skipped View must not leave Core DSD interpreting an unrelated IRC `NO_RESPONSE` as the root cause. The View may present a bounded operator-verified Corpus excerpt with an explicit Corpus ID, quotation framing, and ellipsis for truncation. This does not implement general semantic synthesis or promise an explanation from retrieval alone. Core remains unchanged; Core's current six-line summary may still need to incorporate the new stage dispositions separately.
