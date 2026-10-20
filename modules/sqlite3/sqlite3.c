@@ -133,12 +133,15 @@ static int corpus_search(sqlite3 *db,const digit_corpus_query_t *query,
 }
 /* Observation is the only permitted write operation. Keep the main corpus
  * connection READONLY. The writer must never execute caller-provided SQL. */
+/* Observation and context are one SQLite transaction. An accepted
+ * observation cannot become visible without its provenance-linked context.
+ * The module owns all writes; Core and the Observation ABI remain unchanged. */
 static stnlabz_module_result_t observation_insert(
  const void *request,size_t request_size,void *response,size_t response_size,
  size_t *response_used,void *context){
  const digit_observation_record_t *r=request;
  sqlite3_stmt *stmt=NULL;
- sqlite3_int64 person=0,conversation=0;
+ sqlite3_int64 person=0,conversation=0,observation_id=0;
  int rc;
  (void)response;(void)response_size;(void)context;
  if(response_used)*response_used=0;
@@ -150,16 +153,13 @@ static stnlabz_module_result_t observation_insert(
     !memchr(r->text,0,sizeof r->text)||
     !r->sender[0]||!r->text[0]||
     strcmp(r->transport,"irc")||strcmp(r->channel,"#stn-labz"))
-  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
- /* Source identities must exist; never guess an identity or create a person. */
+    return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  rc=sqlite3_prepare_v2(observation_writer,
    "SELECT id FROM people WHERE display_name=?1 LIMIT 1",-1,&stmt,NULL);
  if(rc!=SQLITE_OK)return STNLABZ_MODULE_ERR_INVALID_STATE;
  sqlite3_bind_text(stmt,1,r->sender,-1,SQLITE_TRANSIENT);
  if(sqlite3_step(stmt)==SQLITE_ROW)person=sqlite3_column_int64(stmt,0);
  sqlite3_finalize(stmt);stmt=NULL;
- /* Unrecognized speakers must still be observed. A NULL sender_id is
-  * preferable to falsely attributing an event to someone else. */
  rc=sqlite3_prepare_v2(observation_writer,
    "SELECT id FROM conversations WHERE transport=?1 AND channel=?2 LIMIT 1",
    -1,&stmt,NULL);
@@ -169,19 +169,40 @@ static stnlabz_module_result_t observation_insert(
  if(sqlite3_step(stmt)==SQLITE_ROW)conversation=sqlite3_column_int64(stmt,0);
  sqlite3_finalize(stmt);stmt=NULL;
  if(!conversation)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(sqlite3_exec(observation_writer,"BEGIN IMMEDIATE",NULL,NULL,NULL)!=SQLITE_OK)
+     return STNLABZ_MODULE_ERR_INVALID_STATE;
  rc=sqlite3_prepare_v2(observation_writer,
    "INSERT INTO observations(event_id,sender_id,conversation_id,text,timestamp,source_record_id) "
-   "VALUES ('irc-live-'||lower(hex(randomblob(16))),?2,?3,?4,strftime('%Y-%m-%d %H:%M:%S','now'),?5)",
-   -1,&stmt,NULL);
- if(rc!=SQLITE_OK)return STNLABZ_MODULE_ERR_INVALID_STATE;
- if(person)sqlite3_bind_int64(stmt,2,person);
- else sqlite3_bind_null(stmt,2);
- sqlite3_bind_int64(stmt,3,conversation);
- sqlite3_bind_text(stmt,4,r->text,-1,SQLITE_TRANSIENT);
- sqlite3_bind_text(stmt,5,r->account,-1,SQLITE_TRANSIENT);
+   "VALUES ('irc-live-'||lower(hex(randomblob(16))),?1,?2,?3,"
+   "strftime('%Y-%m-%d %H:%M:%S','now'),?4)",-1,&stmt,NULL);
+ if(rc!=SQLITE_OK)goto rollback;
+ if(person)sqlite3_bind_int64(stmt,1,person);
+ else sqlite3_bind_null(stmt,1);
+ sqlite3_bind_int64(stmt,2,conversation);
+ sqlite3_bind_text(stmt,3,r->text,-1,SQLITE_TRANSIENT);
+ sqlite3_bind_text(stmt,4,r->account,-1,SQLITE_TRANSIENT);
  rc=sqlite3_step(stmt);
- sqlite3_finalize(stmt);
- return rc==SQLITE_DONE?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
+ sqlite3_finalize(stmt);stmt=NULL;
+ if(rc!=SQLITE_DONE)goto rollback;
+ observation_id=sqlite3_last_insert_rowid(observation_writer);
+ rc=sqlite3_prepare_v2(observation_writer,
+   "INSERT INTO context(subject_type,subject_id,context_type,value,source_id,confidence,expires_at) "
+   "SELECT 'conversation',?1,'utterance.observed',text,event_id,1.0,NULL "
+   "FROM observations WHERE id=?2 AND conversation_id=?1",
+   -1,&stmt,NULL);
+ if(rc!=SQLITE_OK)goto rollback;
+ sqlite3_bind_int64(stmt,1,conversation);
+ sqlite3_bind_int64(stmt,2,observation_id);
+ rc=sqlite3_step(stmt);
+ sqlite3_finalize(stmt);stmt=NULL;
+ if(rc!=SQLITE_DONE||sqlite3_changes(observation_writer)!=1)goto rollback;
+ if(sqlite3_exec(observation_writer,"COMMIT",NULL,NULL,NULL)!=SQLITE_OK)
+     goto rollback;
+ return STNLABZ_MODULE_OK;
+rollback:
+ if(stmt)sqlite3_finalize(stmt);
+ (void)sqlite3_exec(observation_writer,"ROLLBACK",NULL,NULL,NULL);
+ return STNLABZ_MODULE_ERR_INVALID_STATE;
 }
 /* Bounded, read-only IRC context; exact channel match, oldest first.
  * SQL text is fixed and caller data is only ever bound as a parameter. */
@@ -722,7 +743,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="sqlite3",.name="SQLite3 persistence",
-    .version_major=0,.version_minor=4,.version_patch=5,
+    .version_major=0,.version_minor=4,.version_patch=6,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
