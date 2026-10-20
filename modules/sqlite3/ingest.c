@@ -153,7 +153,7 @@ static int observation_upsert(sqlite3 *db,const char *line,unsigned *add,unsigne
 static int ingest(sqlite3 *db,const char *path,int type){
  FILE *fp=fopen(path,"rb");char *line=NULL;size_t cap=0;ssize_t n;
  if(!fp){syslog(LOG_ERR,"digit.sqlite3 ingest: cannot open %s",path);report(path,0,0,0,1);return 0;}
- unsigned add=0,change=0,skip=0,batch=0;int ok=1;unsigned long line_number=0;const char *reason="unknown";const char *name=strrchr(path,'/');
+ unsigned add=0,change=0,skip=0,batch=0;int transaction_open=0,ok=1;unsigned long line_number=0;const char *reason="unknown";const char *name=strrchr(path,'/');
  if(!begin(db)){
   syslog(LOG_ERR,"digit.sqlite3 ingest: transaction begin failed %s: %s",path,sqlite3_errmsg(db));
   {char detail[180];int code=sqlite3_extended_errcode(db);
@@ -162,6 +162,7 @@ static int ingest(sqlite3 *db,const char *path,int type){
   }
   fclose(fp);return 0;
  }
+ transaction_open=1;
  if(type==2){
   long len;char id[256];char *body;
   if(fseek(fp,0,SEEK_END)||(len=ftell(fp))<0||len>1048576||
@@ -192,10 +193,11 @@ static int ingest(sqlite3 *db,const char *path,int type){
    * starved by a full-file import. Previously 48K rows were one transaction. */
   if(++batch==100){
    if(!commit(db)){reason="batch commit";ok=0;break;}
-   batch=0;
+   transaction_open=0;batch=0;
    if(!running())break;
    {struct timespec pause={0,20000000};nanosleep(&pause,NULL);}
    if(!begin(db)){reason="batch begin";ok=0;break;}
+   transaction_open=1;
   }
  }
 
@@ -205,7 +207,7 @@ static int ingest(sqlite3 *db,const char *path,int type){
  }
 done:
  free(line);fclose(fp);
- if(ok&&!commit(db)){reason="commit";ok=0;}
+ if(ok&&transaction_open&&!commit(db)){reason="commit";ok=0;}
  if(!ok){
   char error_report[170];
   snprintf(error_report,sizeof error_report,"%s line %lu %s (SQLite %d)",
@@ -213,7 +215,7 @@ done:
   report(error_report,0,0,skip,1);
   syslog(LOG_ERR,"digit.sqlite3 ingest: rollback %s line=%lu stage=%s sqlite=%d %s",
     path,line_number,reason,sqlite3_extended_errcode(db),sqlite3_errmsg(db));
-  (void)sqlite3_exec(db,"ROLLBACK",NULL,NULL,NULL);
+  if(transaction_open)(void)sqlite3_exec(db,"ROLLBACK",NULL,NULL,NULL);
  }
  if(ok)report(name?name+1:path,add,change,skip,0);
  /* Do not mark a partially processed file as fully synchronized. */
