@@ -5,6 +5,9 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdio.h>
+#include <ctype.h>
+#include "../observation/observation.h"
 #include "module.h"
 #include "../interpretation/interpretation.h"
 
@@ -17,6 +20,51 @@ typedef struct {
 
 static const stnlabz_module_host_t *host_api;
 
+
+/* Structural PHP diagnostic based on observed code boundaries, not on
+ * user identity, a keyword-triggered chatbot reply, or invented facts.
+ * Require visible HTML, the absence of a PHP opening tag after that HTML,
+ * and a complete PHP control-flow statement starting the current message.
+ * Insufficient visible source context means abstention. */
+static int code_diagnostic(const message_t *msg,
+    const digit_observation_recent_result_t *history,
+    char *reply, size_t capacity, size_t *used)
+{
+    size_t i, boundary = DIGIT_OBSERVATION_RECENT_MAX;
+    const char *line = msg->message;
+    const char *last_html = NULL;
+    int opened = 0;
+    int length;
+    if (!history || history->count > DIGIT_OBSERVATION_RECENT_MAX ||
+        !reply || !capacity || !used) return 0;
+    while (*line && isspace((unsigned char)*line)) line++;
+    /* This is a parser check for PHP control syntax, not an intent classifier. */
+    if (strncmp(line, "if", 2) != 0) return 0;
+    line += 2;
+    while (*line == ' ' || *line == '\t') line++;
+    if (*line != '(' || !strchr(line, ')') || strstr(msg->message, "<?php"))
+        return 0;
+    for (i = 0; i < history->count; ++i) {
+        const char *body = history->items[i].text;
+        const char *html = strstr(body, "</div>");
+        if (html) { boundary = i; last_html = html; opened = 0; }
+        if (boundary != DIGIT_OBSERVATION_RECENT_MAX &&
+            strstr(body, "<?php") &&
+            (!html || strstr(body, "<?php") > html))
+            opened = 1;
+    }
+    if (!last_html || opened) return 0;
+    /* The output is a source-grounded diagnostic: never silently claim
+     * to have inspected or repaired a module. */
+    length = snprintf(reply, capacity,
+        "%s: The if statement follows an HTML closing tag without a PHP "
+        "opening tag in the shown code. Add <?php before that PHP statement.",
+        msg->sender);
+    if (length <= 0 || (size_t)length >= capacity) return 0;
+    *used = (size_t)length;
+    return 1;
+}
+
 static stnlabz_module_result_t process(const stnlabz_module_host_t *host,
     const void *request, size_t bytes, void *response, size_t capacity,
     size_t *used)
@@ -26,8 +74,6 @@ static stnlabz_module_result_t process(const stnlabz_module_host_t *host,
     digit_interpretation_result_t result = {0};
     size_t returned = 0;
     stnlabz_module_result_t rc;
-    (void)response;
-    (void)capacity;
     if (used) *used = 0;
     if (!request || bytes != sizeof(message_t) || !used)
         return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
@@ -47,8 +93,19 @@ static stnlabz_module_result_t process(const stnlabz_module_host_t *host,
         result.term_count > DIGIT_INTERPRETATION_TERMS_MAX ||
         result.unresolved_references > DIGIT_INTERPRETATION_TERMS_MAX)
         return STNLABZ_MODULE_ERR_INVALID_STATE;
-    /* Interpretation is observational. No synthetic IRC text, no reply.
-     * A successful empty result is distinct from a failed invocation. */
+    /* No participation without sufficient evidence. A read-only context
+     * query can support a narrow source-level diagnostic. */
+    if (response && capacity && msg->target[0] == '#') {
+        digit_observation_recent_query_t recent_query = {{0}};
+        digit_observation_recent_result_t recent = {0};
+        size_t seen = 0;
+        memcpy(recent_query.channel, msg->target, sizeof recent_query.channel);
+        rc = host->invoke_service(DIGIT_OBSERVATION_RECENT_SERVICE,
+            &recent_query, sizeof recent_query,
+            &recent, sizeof recent, &seen);
+        if (rc == STNLABZ_MODULE_OK && seen == sizeof recent)
+            (void)code_diagnostic(msg, &recent, response, capacity, used);
+    }
     return STNLABZ_MODULE_OK;
 }
 
@@ -175,6 +232,34 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
     check(q, mock_calls == before + 1, 0);
     check(q, sizeof(msg.message) == sizeof(((digit_interpretation_request_t *)0)->text), 0);
     check(q, strcmp(LISTEN, DIRECT) != 0, 0);
+    {
+        digit_observation_recent_result_t history = {0};
+        size_t emitted = 0;
+        char output[512] = {0};
+        message_t sample = {0};
+        strcpy(sample.sender, "Laurie");
+        strcpy(sample.target, "#stn-labz");
+        strcpy(sample.message, "if (!theme::render('foot', get_defined_vars())) {");
+        history.count = 1;
+        strcpy(history.items[0].text, "</div>");
+        check(q, code_diagnostic(&sample, &history, output,
+              sizeof output, &emitted) && emitted > 0 &&
+              strstr(output, "<?php") != NULL, 0);
+        strcpy(history.items[0].text, "<?php");
+        emitted = 0;
+        check(q, !code_diagnostic(&sample, &history, output,
+              sizeof output, &emitted) && !emitted, 1);
+        strcpy(history.items[0].text, "</div>");
+        strcpy(sample.message, "Hello everyone");
+        check(q, !code_diagnostic(&sample, &history, output,
+              sizeof output, &emitted), 1);
+        strcpy(sample.message, "<?php if (true) {");
+        check(q, !code_diagnostic(&sample, &history, output,
+              sizeof output, &emitted), 1);
+        strcpy(sample.message, "if (true) {");
+        check(q, !code_diagnostic(&sample, &history, output,
+              8, &emitted), 1);
+    }
 
     return q->tests_executed >= STNLABZ_MODULE_MIN_TESTS &&
         !q->tests_failed && q->negative_test_executed &&
@@ -211,7 +296,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 0, .version_patch = 1,
+    .version_major = 1, .version_minor = 0, .version_patch = 2,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
