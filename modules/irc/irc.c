@@ -238,18 +238,7 @@ static int nick_mention(const char *body,const char *nick) {
     return strlen(body)>=n && !strncasecmp(body,nick,n) &&
         (body[n]==':' || body[n]==',' || body[n]==' ');
 }
-/* Channel questions merit evaluation; ordinary statements remain passive.
- * Address aliases are case-insensitive, token-bounded, and not credentials. */
-static int channel_question(const char *body){
- const char *p=body;int visible=0;
- if(!p)return 0;
- while(*p){
-  if(*p=='?')return visible;
-  if(isalnum((unsigned char)*p))visible=1;
-  p++;
- }
- return 0;
-}
+/* Address parsing is transport normalization, not a participation decision. */
 static size_t address_prefix(const char *body,const char *nick){
  const char *names[3]={nick,"digit","digicat"};unsigned i;
  if(!body)return 0;
@@ -565,8 +554,8 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled
                 body+=prefix;
                 if(*body==':'||*body==',')body++;
                 while(*body==' ')body++;
-                if(!*body)body="?";
-            }else if(!channel_question(body)){
+                /* Bare address remains an empty contact message. */
+            }else{
                 passive_channel=1;
             }
         }
@@ -881,8 +870,6 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
     check(result,address_prefix("digit who is your creator?","digicat")==5,0);
     check(result,address_prefix("digicat who are you?","digicat")==7,0);
     check(result,address_prefix("digital keyboard","digicat")==0,1);
-    check(result,channel_question("hey so What's the Chaos Foundation?"),0);
-    check(result,channel_question("Database latency increased")==0,1);
     check(result,nick_mention("Digit: hello","Digit"),0);
     check(result,nick_mention("digit, hello","Digit"),0);
     check(result,!nick_mention("DigitXYZ: hello","Digit"),1);
@@ -1000,7 +987,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=3,.version_patch=6,
+    .version_major=0,.version_minor=3,.version_patch=7,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
