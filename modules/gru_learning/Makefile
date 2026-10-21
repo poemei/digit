@@ -6,7 +6,7 @@ PREFIX ?= /opt/digit
 MODULE_DIR := $(PREFIX)/modules/gru_learning
 .PHONY: all test install clean
 all: $(TARGET)
-$(TARGET): gru_learning.c gru_learning.h ../observation/observation.h ../sqlite3/corpus_search.h ../../core/stnlabz_abi/module.h
+$(TARGET): gru_learning.c gru_learning.h ../observation/observation.h ../sqlite3/corpus_search.h ../sqlite3/context.h ../gru_bridge/gru_bridge.h ../../core/stnlabz_abi/module.h
 	@mkdir -p bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared gru_learning.c -o $@
 test: $(TARGET)
