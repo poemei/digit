@@ -490,6 +490,54 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
         trace_stage(host,"process","response.view",
             "NON_INQUIRY_ABSTENTION",2,0,__LINE__);
     }
+    /* [AI:GPT-6 | 2026-10-20 UTC]
+     * GRU is optional conversational assistance, not evidence. Invoke only
+     * when existing MVC response production has not produced grounded text;
+     * never feed this unverified generation back into GRU learning. */
+    if(participate && !passive && response && capacity && used && !*used &&
+       !strcmp(msg->target,"#stn-labz") && msg->message[0] &&
+       host->invoke_service){
+        digit_gru_generate_request_t assist={0};
+        digit_gru_generate_result_t suggestion={0};
+        size_t generated=0;
+        stnlabz_module_result_t assist_rc;
+        int n;
+        /* Bounded IRC context, supplied as context only, not as facts. */
+        if(have_history && history.count){
+            const digit_context_item_t *prior=&history.items[history.count-1];
+            if(memchr(prior->value,0,sizeof prior->value)&&prior->value[0] &&
+               strcmp(prior->value,msg->message))
+                snprintf(assist.prompt,sizeof assist.prompt,
+                    "Conversation context (unverified IRC speech): %.320s\n"
+                    "Current IRC message: %.510s\n"
+                    "Offer a brief, relevant conversational suggestion:",
+                    prior->value,msg->message);
+        }
+        if(!assist.prompt[0])
+            snprintf(assist.prompt,sizeof assist.prompt,
+                "Current IRC message: %.510s\n"
+                "Offer a brief, relevant conversational suggestion:",
+                msg->message);
+        assist.length=128;
+        assist_rc=host->invoke_service(DIGIT_GRU_GENERATE_SERVICE,
+            &assist,sizeof assist,&suggestion,sizeof suggestion,&generated);
+        if(assist_rc==STNLABZ_MODULE_OK &&
+           generated==sizeof suggestion &&
+           memchr(suggestion.text,0,sizeof suggestion.text) &&
+           suggestion.generated_bytes>0 && suggestion.text[0] &&
+           !strchr(suggestion.text,'\r') &&
+           !strchr(suggestion.text,'\n')){
+            n=snprintf(response,capacity,"GRU suggestion (unverified): %.320s",
+                       suggestion.text);
+            if(n>0 && (size_t)n<capacity)
+                *used=(size_t)n;
+        }
+        trace_stage(host,"process",DIGIT_GRU_GENERATE_SERVICE,
+            *used?"GRU_ASSISTANCE_RETURNED":
+            assist_rc==STNLABZ_MODULE_ERR_NOT_FOUND?"SERVICE_NOT_FOUND":
+            "NO_ASSISTANCE",*used?0:2,*used?(unsigned)*used:0,__LINE__);
+    }
+    /* [End AI:GPT-6] */
     /* Observation persistence and context creation are atomic in SQLite3.
      * Conversation reads that context; it never duplicates observation writes.
      * A nonempty IRC account remains required for this channel route. */
@@ -1056,7 +1104,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 21,
+    .version_major = 1, .version_minor = 1, .version_patch = 22,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
