@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <strings.h>
 #include <stdio.h>
 #include <ctype.h>
 #include "../observation/observation.h"
@@ -289,8 +290,14 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
     /* Conversation coordinates model retrieval and evidence evaluation.
      * Retrieval terms are candidates, not scripted response triggers.
      * Reasoning cannot claim a fact unless a model provided evidence. */
+    /* [AI:GPT-6 | 2026-10-21 UTC]
+     * Imperative information requests ("tell me about PHP") are inquiries
+     * even if Interpretation does not classify them as a question. */
     if(result.kind==DIGIT_UTTERANCE_QUESTION ||
-       (result.features&DIGIT_FEATURE_EXPLANATION_REQUEST)){
+       (result.features&DIGIT_FEATURE_EXPLANATION_REQUEST) ||
+       !strncasecmp(msg->message,"tell me about ",14) ||
+       !strncasecmp(msg->message,"explain ",8) ||
+       !strncasecmp(msg->message,"describe ",9)){ /* [End AI:GPT-6] */
         digit_reasoning_request_t reasoning={0};
         digit_reasoning_result_t decision={0};
         digit_corpus_query_t search={0};
@@ -1066,7 +1073,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 26,
+    .version_major = 1, .version_minor = 1, .version_patch = 27,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
