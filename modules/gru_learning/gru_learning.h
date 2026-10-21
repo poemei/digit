@@ -2,6 +2,15 @@
 #define DIGIT_GRU_LEARNING_H
 #include <stdint.h>
 /* [AI:GPT-6 | 2026-10-20 UTC] */
+/* [AI:GPT-6 | 2026-10-20 UTC] */
+#define DIGIT_GRU_LEARNING_PAIR_SERVICE "digit.gru.learning_pair"
+typedef struct {
+ char channel[128];
+ char input[512];
+ char response[512];
+ uint32_t approved;
+} digit_gru_learning_pair_request_t;
+/* [End AI:GPT-6] */
 #define DIGIT_GRU_LEARNING_EXCHANGE_SERVICE "digit.gru.learning_exchange"
 typedef struct {
  char channel[128];
