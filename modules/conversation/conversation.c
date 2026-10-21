@@ -482,36 +482,47 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
             (void)code_diagnostic(msg, &visible, response, capacity, used);
         }
     }
-    /* [AI:GPT-6 | 2026-10-20 UTC] */
-    /* Pair the exact routed IRC utterance with Digit's actual MVC output.
-     * Never teach the GRU a receipt, generated suggestion, or made-up reply. */
-    if(participate && !passive && response && used && *used>0 &&
-       *used<512 && !strcmp(msg->target,"#stn-labz") &&
-       msg->message[0] && memchr(response,0,capacity) &&
-       strcmp(response,"Message sent -> GRU")){
-        digit_gru_learning_pair_request_t pair={0};
-        digit_gru_learn_result_t receipt={0};
-        size_t receipt_bytes=0;
-        stnlabz_module_result_t learned;
+    /* [AI:GPT-6 | 2026-10-21 UTC]
+     * Temporary operator-requested IRC diagnostics for real learning calls.
+     * Do not echo message content, account details or training secrets. */
+    if(participate && !passive && !strcmp(msg->target,"#stn-labz")){
         struct {char report[384];} notice={{0}};
         size_t ignored=0;
-        snprintf(pair.channel,sizeof pair.channel,"%s",msg->target);
-        snprintf(pair.input,sizeof pair.input,"%s",msg->message);
-        snprintf(pair.response,sizeof pair.response,"%s",response);
-        pair.approved=1;
-        learned=host->invoke_service(DIGIT_GRU_LEARNING_PAIR_SERVICE,
-             &pair,sizeof pair,&receipt,sizeof receipt,&receipt_bytes);
-        if(learned==STNLABZ_MODULE_OK &&
-           receipt_bytes==sizeof receipt && receipt.accepted==1 &&
-           receipt.trained==0){
-            snprintf(notice.report,sizeof notice.report,"Message sent -> GRU");
-            (void)host->invoke_service("digit.irc.deliver",
-                &notice,sizeof notice,NULL,0,&ignored);
+        if(response && used && *used>0 && *used<512 &&
+           msg->message[0] && memchr(response,0,capacity) &&
+           strcmp(response,"Message sent -> GRU")){
+            digit_gru_learning_pair_request_t pair={0};
+            digit_gru_learn_result_t receipt={0};
+            size_t receipt_bytes=0;
+            stnlabz_module_result_t learned;
+            snprintf(pair.channel,sizeof pair.channel,"%s",msg->target);
+            snprintf(pair.input,sizeof pair.input,"%s",msg->message);
+            snprintf(pair.response,sizeof pair.response,"%s",response);
+            pair.approved=1;
+            learned=host->invoke_service(DIGIT_GRU_LEARNING_PAIR_SERVICE,
+                &pair,sizeof pair,&receipt,sizeof receipt,&receipt_bytes);
+            if(learned==STNLABZ_MODULE_OK &&
+               receipt_bytes==sizeof receipt && receipt.accepted==1 &&
+               receipt.trained==0){
+                snprintf(notice.report,sizeof notice.report,
+                         "[GRU DEBUG] /learn accepted, queued_for_review (NOT verified persisted)");
+            }else{
+                snprintf(notice.report,sizeof notice.report,
+                         "[GRU DEBUG] learning_pair failed rc=%d receipt_bytes=%zu accepted=%u",
+                         (int)learned,receipt_bytes,
+                         receipt_bytes==sizeof receipt?receipt.accepted:0u);
+            }
+            trace_stage(host,"process",DIGIT_GRU_LEARNING_PAIR_SERVICE,
+                learned==STNLABZ_MODULE_OK&&receipt_bytes==sizeof receipt&&
+                receipt.accepted==1?"PAIR_ACCEPTED":"PAIR_NOT_ACCEPTED",
+                learned==STNLABZ_MODULE_OK?0:2,0,__LINE__);
+        }else{
+            snprintf(notice.report,sizeof notice.report,
+                     "[GRU DEBUG] pair skipped: no eligible Digit response (bytes=%zu)",
+                     used?*used:0u);
         }
-        trace_stage(host,"process",DIGIT_GRU_LEARNING_PAIR_SERVICE,
-            learned==STNLABZ_MODULE_OK&&receipt_bytes==sizeof receipt&&
-            receipt.accepted==1?"PAIR_ACCEPTED":"PAIR_NOT_ACCEPTED",
-            learned==STNLABZ_MODULE_OK?0:2,0,__LINE__);
+        (void)host->invoke_service("digit.irc.deliver",
+            &notice,sizeof notice,NULL,0,&ignored);
     }
     /* [End AI:GPT-6] */
     /* Addressed channel messages may return the View result. Passive
@@ -1061,7 +1072,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 24,
+    .version_major = 1, .version_minor = 1, .version_patch = 25,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
