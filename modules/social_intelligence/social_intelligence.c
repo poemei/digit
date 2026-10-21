@@ -135,6 +135,14 @@ static stnlabz_module_result_t process(const void *request,size_t bytes,
   if(!strcmp(quiet_channel,q->channel))quiet_channel[0]=0;
   turns=0;out->handled=1;
   snprintf(out->response,sizeof out->response,"Okay, I can join in again.");
+ }else if(q->passive&&
+           q->interpretation.kind==DIGIT_UTTERANCE_QUESTION&&
+           q->interpretation.term_count<=2&&!addressed(q)){
+  /* An unaddressed, elliptical channel question does not establish
+   * Digit as its recipient. Abstain rather than dispatching it to factual
+   * reasoning. Longer independent questions remain eligible for routing.
+   * This is a conservative recipient decision, not a claim of semantics. */
+  out->handled=1;
  }else if(q->account[0]&&preference(q->text,desired)){
   snprintf(channel,sizeof channel,"%s",q->channel);
   snprintf(language,sizeof language,"%s",desired);
@@ -320,6 +328,30 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  strcpy(in.interpretation.terms[1],"discussion");
  check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
    !out.handled,1);
+ /* Recipient ambiguity: short public follow-ups are not invitations.
+  * A direct address or a DM remains an actionable question. */
+ memset(&in,0,sizeof in);
+ strcpy(in.channel,"#social");strcpy(in.account,"speaker-b");
+ strcpy(in.text,"why?");in.passive=1;
+ in.interpretation.kind=DIGIT_UTTERANCE_QUESTION;
+ in.interpretation.term_count=1;strcpy(in.interpretation.terms[0],"why");
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
+   used==sizeof out&&out.handled&&!out.response[0],1);
+ in.passive=0;
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
+   !out.handled,0);
+ in.passive=1;strcpy(in.text,"digit why?");
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
+   !out.handled,0);
+ strcpy(in.text,"why is the database down?");
+ in.interpretation.term_count=5;
+ strcpy(in.interpretation.terms[0],"why");
+ strcpy(in.interpretation.terms[1],"is");
+ strcpy(in.interpretation.terms[2],"the");
+ strcpy(in.interpretation.terms[3],"database");
+ strcpy(in.interpretation.terms[4],"down");
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
+   !out.handled,0);
  /* Directly addressed quiet request and explicit re-entry. */
  memset(&in,0,sizeof in);
  strcpy(in.channel,"#social");strcpy(in.account,"speaker-b");
@@ -367,7 +399,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="social_intelligence",.name="Social Intelligence",
- .version_major=0,.version_minor=1,.version_patch=4,
+ .version_major=0,.version_minor=1,.version_patch=5,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
