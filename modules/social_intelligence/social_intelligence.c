@@ -111,6 +111,17 @@ static int resume_request(const digit_social_intelligence_request_t *q){
          (has_word(q->text,"join")&&has_word(q->text,"in"))) &&
         !has_word(q->text,"not")&&!has_word(q->text,"dont");
 }
+/* Self-directed social inquiry is not a Corpus verification request.
+ * Return only what this module actually knows about its present activity. */
+static int self_inquiry(const digit_social_intelligence_request_t *q){
+ const digit_interpretation_result_t *r=&q->interpretation;
+ if(r->kind!=DIGIT_UTTERANCE_QUESTION)return 0;
+ if(!(has_word(q->text,"digit")||has_word(q->text,"digits")||
+      has_word(q->text,"digicat")))return 0;
+ return (has_word(q->text,"up")&&has_word(q->text,"to"))||
+        (has_word(q->text,"doing")||
+         (has_word(q->text,"been")&&has_word(q->text,"what")));
+}
 static stnlabz_module_result_t process(const void *request,size_t bytes,
  void *response,size_t capacity,size_t *used,void *ctx){
  const digit_social_intelligence_request_t *q=request;
@@ -135,6 +146,10 @@ static stnlabz_module_result_t process(const void *request,size_t bytes,
   if(!strcmp(quiet_channel,q->channel))quiet_channel[0]=0;
   turns=0;out->handled=1;
   snprintf(out->response,sizeof out->response,"Okay, I can join in again.");
+ }else if(self_inquiry(q)){
+  out->handled=1;
+  snprintf(out->response,sizeof out->response,
+           "I've been listening to the conversation here.");
  }else if(q->passive&&
            q->interpretation.kind==DIGIT_UTTERANCE_QUESTION&&
            q->interpretation.term_count<=2&&!addressed(q)){
@@ -328,6 +343,18 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  strcpy(in.interpretation.terms[1],"discussion");
  check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
    !out.handled,1);
+ /* Questions about Digit's observed presence are social, not factual
+  * Corpus lookups. Distinguish a named subject from arbitrary people. */
+ memset(&in,0,sizeof in);
+ strcpy(in.account,"speaker-a");strcpy(in.channel,"#social");
+ strcpy(in.text,"I dowonder what digits been up to?");
+ in.passive=1;in.interpretation.kind=DIGIT_UTTERANCE_QUESTION;
+ in.interpretation.term_count=7;
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
+   out.handled&&strstr(out.response,"listening"),0);
+ strcpy(in.text,"I wonder what Laurie has been up to?");
+ check(q,process(&in,sizeof in,&out,sizeof out,&used,NULL)==STNLABZ_MODULE_OK&&
+   !out.handled,1);
  /* Recipient ambiguity: short public follow-ups are not invitations.
   * A direct address or a DM remains an actionable question. */
  memset(&in,0,sizeof in);
@@ -399,7 +426,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="social_intelligence",.name="Social Intelligence",
- .version_major=0,.version_minor=1,.version_patch=5,
+ .version_major=0,.version_minor=1,.version_patch=6,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
