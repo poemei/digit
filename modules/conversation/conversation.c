@@ -446,41 +446,7 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
                   "RETRIEVAL_FAILURE_STATED":decision.outcome==DIGIT_REASONING_OUTCOME_PARTIAL?
                   "PARTIAL_KNOWLEDGE_STATED":"RESPONSE_COMPOSED"):
                 "EVIDENCE_NOT_RENDERABLE";
-/* [AI:GPT-6 | 2026-10-20 UTC] */
-            /* Learn only from an actually rendered verified Corpus response,
-             * never from unsourced chatter, GRU output or abstention. */
-            if(rendered&&found.count==1&&!strcmp(msg->target,"#stn-labz")&&
-               (!strcmp(found.hits[0].verification_status,"verified")||
-                !strcmp(found.hits[0].verification_status,"operator-verified"))){
-                digit_gru_learning_exchange_request_t ex={0};
-                digit_gru_learn_result_t accepted={0};
-                size_t receipt_size=0;
-                stnlabz_module_result_t learn_rc;
-                snprintf(ex.channel,sizeof ex.channel,"%s",msg->target);
-                snprintf(ex.input,sizeof ex.input,"%s",msg->message);
-                snprintf(ex.response,sizeof ex.response,"%s",(const char *)response);
-                ex.corpus_id=found.hits[0].id;
-                snprintf(ex.verification_status,sizeof ex.verification_status,
-                         "%s",found.hits[0].verification_status);
-                learn_rc=host->invoke_service(DIGIT_GRU_LEARNING_EXCHANGE_SERVICE,
-                    &ex,sizeof ex,&accepted,sizeof accepted,&receipt_size);
-                trace_stage(host,"process",DIGIT_GRU_LEARNING_EXCHANGE_SERVICE,
-                    learn_rc==STNLABZ_MODULE_OK&&receipt_size==sizeof accepted&&
-                    accepted.accepted==1?"QUEUED_FOR_REVIEW":
-                    learn_rc==STNLABZ_MODULE_ERR_NOT_FOUND?"SOURCE_UNAVAILABLE":
-                    "NOT_SUBMITTED",learn_rc==STNLABZ_MODULE_OK?0:2,0,__LINE__);
-                if(learn_rc==STNLABZ_MODULE_OK&&receipt_size==sizeof accepted&&
-                   accepted.accepted==1){
-                    /* Existing IRC delivery queue; no transport modifications. */
-                    struct {char report[384];} notice={{0}};
-                    size_t ignored=0;
-                    snprintf(notice.report,sizeof notice.report,
-                             "Message sent -> GRU");
-                    (void)host->invoke_service("digit.irc.deliver",
-                        &notice,sizeof notice,NULL,0,&ignored);
-                }
-            }
-/* [End AI:GPT-6] */
+
             trace_stage(host,"process","response.view",status,
                 rendered?0:2,rendered?(unsigned)*used:0,__LINE__);
         }
@@ -490,49 +456,7 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
         trace_stage(host,"process","response.view",
             "NON_INQUIRY_ABSTENTION",2,0,__LINE__);
     }
-    /* [AI:GPT-6 | 2026-10-20 UTC]
-     * GRU is optional conversational assistance, not evidence. Invoke only
-     * when existing MVC response production has not produced grounded text;
-     * never feed this unverified generation back into GRU learning. */
-    if(participate && !passive && response && capacity && used && !*used &&
-       !strcmp(msg->target,"#stn-labz") && msg->message[0] &&
-       host->invoke_service){
-        digit_gru_generate_request_t assist={0};
-        digit_gru_generate_result_t suggestion={0};
-        size_t generated=0;
-        stnlabz_module_result_t assist_rc;
-        int n;
-        /* Bounded IRC context, supplied as context only, not as facts. */
-        if(have_history && history.count){
-            const digit_context_item_t *prior=&history.items[history.count-1];
-            if(memchr(prior->value,0,sizeof prior->value)&&prior->value[0] &&
-               strcmp(prior->value,msg->message))
-                snprintf(assist.prompt,sizeof assist.prompt,
-                    "Conversation context (unverified IRC speech): %.320s\n"
-                    "Current IRC message: %.510s\n"
-                    "Offer a brief, relevant conversational suggestion:",
-                    prior->value,msg->message);
-        }
-        if(!assist.prompt[0])
-            snprintf(assist.prompt,sizeof assist.prompt,
-                "Current IRC message: %.510s\n"
-                "Offer a brief, relevant conversational suggestion:",
-                msg->message);
-        assist.length=128;
-        assist_rc=host->invoke_service(DIGIT_GRU_GENERATE_SERVICE,
-            &assist,sizeof assist,&suggestion,sizeof suggestion,&generated);
-        /* [AI:GPT-6 | 2026-10-20 UTC]
-         * A successful GRU generation response confirms receipt. Do not
-         * expose unreviewed generation text as Digit's IRC reply. */
-        if(assist_rc==STNLABZ_MODULE_OK &&
-           generated==sizeof suggestion &&
-           memchr(suggestion.text,0,sizeof suggestion.text) &&
-           suggestion.generated_bytes>0){
-            n=snprintf(response,capacity,"Message sent -> GRU");
-            if(n>0 && (size_t)n<capacity)
-                *used=(size_t)n;
-        }
-        /* [End AI:GPT-6] */
+
         trace_stage(host,"process",DIGIT_GRU_GENERATE_SERVICE,
             *used?"GRU_ASSISTANCE_RETURNED":
             assist_rc==STNLABZ_MODULE_ERR_NOT_FOUND?"SERVICE_NOT_FOUND":
@@ -558,6 +482,38 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
             (void)code_diagnostic(msg, &visible, response, capacity, used);
         }
     }
+    /* [AI:GPT-6 | 2026-10-20 UTC] */
+    /* Pair the exact routed IRC utterance with Digit's actual MVC output.
+     * Never teach the GRU a receipt, generated suggestion, or made-up reply. */
+    if(participate && !passive && response && used && *used>0 &&
+       *used<512 && !strcmp(msg->target,"#stn-labz") &&
+       msg->message[0] && memchr(response,0,capacity) &&
+       strcmp(response,"Message sent -> GRU")){
+        digit_gru_learning_pair_request_t pair={0};
+        digit_gru_learn_result_t receipt={0};
+        size_t receipt_bytes=0;
+        stnlabz_module_result_t learned;
+        struct {char report[384];} notice={{0}};
+        size_t ignored=0;
+        snprintf(pair.channel,sizeof pair.channel,"%s",msg->target);
+        snprintf(pair.input,sizeof pair.input,"%s",msg->message);
+        snprintf(pair.response,sizeof pair.response,"%s",response);
+        pair.approved=1;
+        learned=host->invoke_service(DIGIT_GRU_LEARNING_PAIR_SERVICE,
+             &pair,sizeof pair,&receipt,sizeof receipt,&receipt_bytes);
+        if(learned==STNLABZ_MODULE_OK &&
+           receipt_bytes==sizeof receipt && receipt.accepted==1 &&
+           receipt.trained==0){
+            snprintf(notice.report,sizeof notice.report,"Message sent -> GRU");
+            (void)host->invoke_service("digit.irc.deliver",
+                &notice,sizeof notice,NULL,0,&ignored);
+        }
+        trace_stage(host,"process",DIGIT_GRU_LEARNING_PAIR_SERVICE,
+            learned==STNLABZ_MODULE_OK&&receipt_bytes==sizeof receipt&&
+            receipt.accepted==1?"PAIR_ACCEPTED":"PAIR_NOT_ACCEPTED",
+            learned==STNLABZ_MODULE_OK?0:2,0,__LINE__);
+    }
+    /* [End AI:GPT-6] */
     /* Addressed channel messages may return the View result. Passive
      * channel messages remain observations, not obligatory replies. */
     trace_stage(host,"process","participation",
@@ -1105,7 +1061,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 23,
+    .version_major = 1, .version_minor = 1, .version_patch = 24,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
