@@ -46,12 +46,22 @@ static pthread_mutex_t socket_mutex=PTHREAD_MUTEX_INITIALIZER;
 #define S2_DELIVER_SERVICE "digit.irc.deliver"
 #define S2_REPORT_BYTES 384
 #define S2_QUEUE_CAP 16
+/* One queued status report at most every 15 seconds. Normal replies unaffected. */
+#define S2_REPORT_INTERVAL_SEC 15
 typedef struct {char report[S2_REPORT_BYTES];} irc_s2_report_t;
 static irc_s2_report_t outbound[S2_QUEUE_CAP];
 static unsigned outbound_head,outbound_count;
 static pthread_mutex_t outbound_mutex=PTHREAD_MUTEX_INITIALIZER;
 static int wake_pipe[2]={-1,-1};
 static int irc_ready;
+static struct timespec outbound_last_sent;
+static int outbound_last_valid;
+static int report_interval_elapsed(const struct timespec *now,const struct timespec *last){
+ time_t seconds=now->tv_sec-last->tv_sec;
+ long nanos=now->tv_nsec-last->tv_nsec;
+ if(nanos<0){seconds--;nanos+=1000000000L;}
+ return seconds>=S2_REPORT_INTERVAL_SEC;
+}
 static int safe_report(const char *p,size_t cap) {
     size_t i;
     if(!p||!memchr(p,0,cap))return 0;
@@ -68,6 +78,16 @@ static stnlabz_module_result_t deliver_service(
     if(!r||request_size!=sizeof *r||!safe_report(r->report,sizeof r->report))
       return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
     pthread_mutex_lock(&outbound_mutex);
+    /* Coalesce repeated status reports instead of growing a flood queue. */
+    {unsigned i;
+     for(i=0;i<outbound_count;i++){
+      unsigned slot=(outbound_head+i)%S2_QUEUE_CAP;
+      if(!strcmp(outbound[slot].report,r->report)){
+       pthread_mutex_unlock(&outbound_mutex);
+       return STNLABZ_MODULE_OK;
+      }
+     }
+    }
     if(!irc_ready||outbound_count==S2_QUEUE_CAP){
       pthread_mutex_unlock(&outbound_mutex);return STNLABZ_MODULE_ERR_INVALID_STATE;
     }
@@ -821,14 +841,20 @@ static void session(const irc_config_t *cfg) {
         fd_set readfds;int rc;struct timeval timeout={1,0};
         char ch;int n;
         irc_s2_report_t pending;int have=0;
+        struct timespec now={0,0};
+        int clock_ok=clock_gettime(CLOCK_MONOTONIC,&now)==0;
         pthread_mutex_lock(&outbound_mutex);
-        if(outbound_count){pending=outbound[outbound_head];have=1;}
+        if(outbound_count&&clock_ok&&
+           (!outbound_last_valid||report_interval_elapsed(&now,&outbound_last_sent))){
+            pending=outbound[outbound_head];have=1;
+        }
         pthread_mutex_unlock(&outbound_mutex);
         if(have){
             char wire[512];int k=snprintf(wire,sizeof wire,"PRIVMSG %s :%s\r\n",cfg->channel,pending.report);
             if(k<=0||(size_t)k>=sizeof wire||!write_line(ssl,wire))break;
             pthread_mutex_lock(&outbound_mutex);
             outbound_head=(outbound_head+1)%S2_QUEUE_CAP;outbound_count--;
+            outbound_last_sent=now;outbound_last_valid=1;
             pthread_mutex_unlock(&outbound_mutex);
             continue;
         }
@@ -991,6 +1017,10 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
     check(result,!reply_valid(cr,sizeof cr-1),1);
     check(result,!reply_valid(lf,sizeof lf-1),1);
     check(result,!reply_valid(nul,sizeof nul),1);
+    {struct timespec base={100,500000000L},early={115,499999999L},late={115,500000000L};
+     check(result,!report_interval_elapsed(&early,&base),1);
+     check(result,report_interval_elapsed(&late,&base),0);
+    }
     {irc_s2_report_t test_report={{0}};
      snprintf(test_report.report,sizeof test_report.report,"[S2] test report");
      check(result,safe_report(test_report.report,sizeof test_report.report),0);
@@ -1079,6 +1109,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *host) {
        !host->register_service||!host->unregister_service)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
     host_api=host;stopping=0;
     outbound_head=0;outbound_count=0;irc_ready=0;
+    outbound_last_valid=0;
     memset(dsd_dm,0,sizeof dsd_dm);dsd_next_trace=1;dsd_dm_evict=0;
     if(pipe(wake_pipe)!=0){host_api=NULL;return STNLABZ_MODULE_ERR_START_FAILED;}
     (void)fcntl(wake_pipe[0],F_SETFL,O_NONBLOCK);
@@ -1109,7 +1140,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=3,.version_patch=14,
+    .version_major=0,.version_minor=3,.version_patch=15,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
