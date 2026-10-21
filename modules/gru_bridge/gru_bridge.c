@@ -126,27 +126,24 @@ static stnlabz_module_result_t learn(const void *req,size_t bytes,
  void *res,size_t cap,size_t *used,void *ctx){
  const digit_gru_learn_request_t *q=req;
  digit_gru_learn_result_t *out=res;
- const char *token,*status;
+ const char *status;
  json_object *payload=NULL,*parsed=NULL;body_t body;long code=0;
  int accepted,trained;
  (void)ctx;if(used)*used=0;
  if(!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
  if(bytes!=sizeof *q||!learn_valid(q)||!out||cap<sizeof *out||!used)
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
- /* The caller must explicitly present approved=1; no automatic harvesting.
-  * Token is taken only from process configuration, never committed. */
- /* [AI:GPT-6 | 2026-10-21 UTC] */
- token=getenv("STN_LABZ_LEARN_TOKEN");
- if(!token||!token[0])token=getenv("STN_GRU_LEARN_TOKEN");
- /* [End AI:GPT-6] */
- if(!token||!token[0])return STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
+ /* [AI:GPT-6 | 2026-10-21 UTC]
+  * GRU /learn is bound to the operator-controlled loopback environment.
+  * No token header required; preserve approved input/response/source. 
+  * [End AI:GPT-6] */
  memset(out,0,sizeof *out);
  payload=json_object_new_object();if(!payload)return STNLABZ_MODULE_ERR_INVALID_STATE;
  json_object_object_add(payload,"input",json_object_new_string(q->input));
  json_object_object_add(payload,"response",json_object_new_string(q->response));
  json_object_object_add(payload,"source",json_object_new_string(q->source));
  json_object_object_add(payload,"approved",json_object_new_boolean(1));
- if(!send_json(LEARN_URL,payload,token,&body,&code)||code!=202)goto fail;
+ if(!send_json(LEARN_URL,payload,NULL,&body,&code)||code!=202)goto fail;
  parsed=json_tokener_parse(body.data);if(!parsed)goto fail;
  status=string_field(parsed,"status");
  if(!status||strlen(status)>=sizeof out->status||
@@ -225,7 +222,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="gru_bridge",.name="Experimental STN GRU Bridge",
- .version_major=0,.version_minor=2,.version_patch=0,
+ .version_major=0,.version_minor=3,.version_patch=0,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
