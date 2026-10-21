@@ -457,12 +457,6 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
             "NON_INQUIRY_ABSTENTION",2,0,__LINE__);
     }
 
-        trace_stage(host,"process",DIGIT_GRU_GENERATE_SERVICE,
-            *used?"GRU_ASSISTANCE_RETURNED":
-            assist_rc==STNLABZ_MODULE_ERR_NOT_FOUND?"SERVICE_NOT_FOUND":
-            "NO_ASSISTANCE",*used?0:2,*used?(unsigned)*used:0,__LINE__);
-    }
-    /* [End AI:GPT-6] */
     /* Observation persistence and context creation are atomic in SQLite3.
      * Conversation reads that context; it never duplicates observation writes.
      * A nonempty IRC account remains required for this channel route. */
@@ -1072,7 +1066,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 25,
+    .version_major = 1, .version_minor = 1, .version_patch = 26,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
