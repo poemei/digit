@@ -259,6 +259,70 @@ static stnlabz_module_result_t exchange(const void *raw,size_t bytes,
  return STNLABZ_MODULE_OK;
 }
 /* [End AI:GPT-6] */
+/* [AI:GPT-6 | 2026-10-20 UTC] */
+/* Submit the exact observed IRC request and the exact produced Digit reply.
+ * Match provenance against persisted Context. API acceptance means queued
+ * for review; the API does not claim training completed. */
+static int pair_valid(const digit_gru_learning_pair_request_t *q){
+ return q&&terminated(q->channel,sizeof q->channel)&&
+  !strcmp(q->channel,"#stn-labz")&&
+  terminated(q->input,sizeof q->input)&&q->input[0]&&
+  terminated(q->response,sizeof q->response)&&q->response[0]&&
+  q->approved==1;
+}
+static stnlabz_module_result_t learning_pair(const void *raw,size_t bytes,
+ void *response,size_t cap,size_t *used,void *context){
+ const digit_gru_learning_pair_request_t *q=raw;
+ digit_context_recent_query_t query={0};
+ digit_context_recent_result_t recent={0};
+ digit_gru_learn_request_t req={0};
+ digit_gru_learn_result_t result={0};
+ stnlabz_module_result_t rc;
+ size_t read=0;
+ unsigned i;
+ const char *source=NULL;
+ int n;
+ (void)context;
+ if(used)*used=0;
+ if(!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(bytes!=sizeof *q||!pair_valid(q)||!response||
+    cap<sizeof result||!used)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ memcpy(query.channel,q->channel,sizeof query.channel);
+ rc=host->invoke_service(DIGIT_CONTEXT_RECENT_SERVICE,&query,sizeof query,
+                          &recent,sizeof recent,&read);
+ if(rc!=STNLABZ_MODULE_OK)return rc;
+ if(read!=sizeof recent||recent.count>DIGIT_CONTEXT_MAX)
+  return STNLABZ_MODULE_ERR_INVALID_STATE;
+ for(i=0;i<recent.count;i++){
+  const digit_context_item_t *item=&recent.items[i];
+  if(!terminated(item->source_id,sizeof item->source_id)||
+     !terminated(item->context_type,sizeof item->context_type)||
+     !terminated(item->value,sizeof item->value))
+   return STNLABZ_MODULE_ERR_INVALID_STATE;
+  if(!strcmp(item->context_type,"utterance.observed")&&
+     input_matches_observation(item->value,q->input)&&item->source_id[0])
+   source=item->source_id;
+ }
+ if(!source)return STNLABZ_MODULE_ERR_NOT_FOUND;
+ memcpy(req.input,q->input,sizeof q->input);
+ memcpy(req.response,q->response,sizeof q->response);
+ n=snprintf(req.source,sizeof req.source,"irc:%s",source);
+ if(n<=0||(size_t)n>=sizeof req.source)
+  return STNLABZ_MODULE_ERR_INVALID_STATE;
+ req.approved=1;
+ read=0;
+ rc=host->invoke_service(DIGIT_GRU_LEARN_SERVICE,&req,sizeof req,
+                          &result,sizeof result,&read);
+ if(rc!=STNLABZ_MODULE_OK)return rc;
+ if(read!=sizeof result||result.accepted!=1||result.trained!=0||
+    !terminated(result.status,sizeof result.status)||
+    strcmp(result.status,"queued_for_review"))
+  return STNLABZ_MODULE_ERR_INVALID_STATE;
+ memcpy(response,&result,sizeof result);
+ *used=sizeof result;
+ return STNLABZ_MODULE_OK;
+}
+/* [End AI:GPT-6] */
 static void check(stnlabz_module_qualification_result_t *r,int pass,int negative){
  r->tests_executed++;
  if(pass)r->tests_passed++;else r->tests_failed++;
@@ -340,6 +404,21 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  check(r,!input_matches_observation("not a match","What is PHP?"),1);
  }
 /* [End AI:GPT-6] */
+/* [AI:GPT-6 | 2026-10-20 UTC] */
+ {digit_gru_learning_pair_request_t p={0};
+ check(r,!pair_valid(&p),1);
+ strcpy(p.channel,"#stn-labz");
+ strcpy(p.input,"digit tell me about PHP");
+ strcpy(p.response,"PHP is a programming language.");
+ check(r,!pair_valid(&p),1);
+ p.approved=1;check(r,pair_valid(&p),0);
+ p.approved=0;check(r,!pair_valid(&p),1);
+ p.approved=1;strcpy(p.channel,"#other");
+ check(r,!pair_valid(&p),1);
+ strcpy(p.channel,"#stn-labz");
+ check(r,pair_valid(&p),0);
+ }
+/* [End AI:GPT-6] */
  return r->tests_executed>=STNLABZ_MODULE_MIN_TESTS&&
         !r->tests_failed&&r->negative_test_executed&&r->negative_test_passed?
         STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_QUALIFICATION;
@@ -362,12 +441,22 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api){
   return STNLABZ_MODULE_ERR_START_FAILED;
  }
 /* [End AI:GPT-6] */
+/* [AI:GPT-6 | 2026-10-20 UTC] */
+ if(!api->register_service(DIGIT_GRU_LEARNING_PAIR_SERVICE,learning_pair,NULL)){
+  api->unregister_service(DIGIT_GRU_LEARNING_EXCHANGE_SERVICE,NULL);
+  api->unregister_service(DIGIT_GRU_LEARNING_SUBMIT_SERVICE,NULL);
+  api->unregister_service(DIGIT_GRU_LEARNING_PREVIEW_SERVICE,NULL);
+  return STNLABZ_MODULE_ERR_START_FAILED;
+ }
+ /* [End AI:GPT-6] */
  host=api;return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t stop(void){
  if(!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
 /* [AI:GPT-6 | 2026-10-21 05:41:12 UTC] */
 /* [AI:GPT-6 | 2026-10-20 UTC] */
+ if(!host->unregister_service(DIGIT_GRU_LEARNING_PAIR_SERVICE,NULL))
+  return STNLABZ_MODULE_ERR_STOP_FAILED;
  if(!host->unregister_service(DIGIT_GRU_LEARNING_EXCHANGE_SERVICE,NULL))
   return STNLABZ_MODULE_ERR_STOP_FAILED;
 /* [End AI:GPT-6] */
@@ -380,7 +469,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="gru_learning",.name="GRU Learning IRC Evidence Preview and Approved Submission",
- .version_major=0,.version_minor=4,.version_patch=0,
+ .version_major=0,.version_minor=5,.version_patch=0,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
