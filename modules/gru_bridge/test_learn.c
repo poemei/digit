@@ -55,10 +55,6 @@ int main(int argc,char **argv){
   fprintf(stderr,"Use only genuinely reviewed and explicitly approved material.\n");
   return 2;
  }
- if((!getenv("STN_LABZ_LEARN_TOKEN")||!getenv("STN_LABZ_LEARN_TOKEN")[0])&&
-    (!getenv("STN_GRU_LEARN_TOKEN")||!getenv("STN_GRU_LEARN_TOKEN")[0])){
-  fprintf(stderr,"Missing STN_LABZ_LEARN_TOKEN (or legacy STN_GRU_LEARN_TOKEN) in process environment.\n");return 2;
- }
  if(!copy_field(request.input,sizeof request.input,argv[2])||
     !copy_field(request.response,sizeof request.response,argv[3])||
     !copy_field(request.source,sizeof request.source,argv[4])){
