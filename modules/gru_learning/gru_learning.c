@@ -61,6 +61,36 @@ static stnlabz_module_result_t preview(const void *raw,size_t request_size,
    }
   }else if(rc!=STNLABZ_MODULE_ERR_NOT_FOUND)return rc;
  }
+/* [AI:GPT-6 | 2026-10-20 UTC] */
+ /* Context carries event provenance; do not interpret utterances as facts. */
+ if(request->channel[0]){
+  digit_context_recent_query_t cq={0};
+  digit_context_recent_result_t contexts={0};
+  size_t context_used=0;
+  unsigned i;
+  memcpy(cq.channel,request->channel,sizeof cq.channel);
+  rc=host->invoke_service(DIGIT_CONTEXT_RECENT_SERVICE,
+      &cq,sizeof cq,&contexts,sizeof contexts,&context_used);
+  if(rc==STNLABZ_MODULE_OK){
+   if(context_used!=sizeof contexts||contexts.count>DIGIT_CONTEXT_MAX)
+    return STNLABZ_MODULE_ERR_INVALID_STATE;
+   for(i=0;i<contexts.count;i++){
+    if(!terminated(contexts.items[i].source_id,sizeof contexts.items[i].source_id)||
+       !terminated(contexts.items[i].context_type,sizeof contexts.items[i].context_type)||
+       !terminated(contexts.items[i].value,sizeof contexts.items[i].value))
+      return STNLABZ_MODULE_ERR_INVALID_STATE;
+    memcpy(out->context[i].source_id,contexts.items[i].source_id,
+           sizeof contexts.items[i].source_id);
+    memcpy(out->context[i].context_type,contexts.items[i].context_type,
+           sizeof contexts.items[i].context_type);
+    memcpy(out->context[i].value,contexts.items[i].value,
+           sizeof contexts.items[i].value);
+   }
+   out->context_available=1;
+   out->context_count=contexts.count;
+  }else if(rc!=STNLABZ_MODULE_ERR_NOT_FOUND)return rc;
+ }
+/* [End AI:GPT-6] */
  if(request->query[0]){
   digit_corpus_query_t query={0};
   digit_corpus_result_t found={0};
@@ -233,8 +263,8 @@ static stnlabz_module_result_t stop(void){
  host=NULL;return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
- .id="gru_learning",.name="GRU Learning Preview and Approved Submission",
- .version_major=0,.version_minor=2,.version_patch=0,
+ .id="gru_learning",.name="GRU Learning IRC Evidence Preview and Approved Submission",
+ .version_major=0,.version_minor=3,.version_patch=0,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
