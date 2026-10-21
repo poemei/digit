@@ -11,7 +11,7 @@ $(TARGET): conversation.c response_view.c response_view.h ../interpretation/inte
 	@mkdir -p bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared conversation.c response_view.c -o $@
 test: $(TARGET)
-	@echo "Build only; qualification executes when Digit Core verifies Conversation 1.1.20."
+	@echo "Build only; qualification executes when Digit Core verifies Conversation 1.1.22."
 install: $(TARGET)
 	install -d "$(DESTDIR)$(MODULE_DIR)/bin"
 	install -m 0644 module.conf "$(DESTDIR)$(MODULE_DIR)/module.conf"
