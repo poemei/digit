@@ -1,7 +1,8 @@
-/* Read-only learning-material preview, ABI 1.5.
- * Observations are claims about speech; Corpus excerpts retain their
- * verification metadata. No examples are approved, queued, or trained.
- * This module does not fabricate response pairs or read SQLite directly. */
+/* GRU learning module, ABI 1.5.
+ * Existing preview and reviewed-pair services remain available.
+ * The sync worker reads via SQLite3-owned services and submits source-labeled
+ * learning records to the GRU review queue; it never trains the model. */
+#define _POSIX_C_SOURCE 200809L
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -13,7 +14,6 @@
 #include <unistd.h>
 #include <time.h>
 #include <syslog.h>
-#include "unistd.h"
 #include "../sqlite3/gru_feed.h"
 #include "../sqlite3/context.h"
 #include "../gru_bridge/gru_bridge.h"
@@ -602,7 +602,7 @@ static stnlabz_module_result_t stop(void){
  host=NULL;return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
- .id="gru_learning",.name="GRU Learning IRC Evidence Preview and Approved Submission",
+ .id="gru_learning",.name="GRU Learning and SQLite3 Continuous Sync",
  .version_major=0,.version_minor=7,.version_patch=0,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
