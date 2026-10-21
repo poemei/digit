@@ -306,9 +306,11 @@ static stnlabz_module_result_t learning_pair(const void *raw,size_t bytes,
  if(!source)return STNLABZ_MODULE_ERR_NOT_FOUND;
  memcpy(req.input,q->input,sizeof q->input);
  memcpy(req.response,q->response,sizeof q->response);
- n=snprintf(req.source,sizeof req.source,"irc:%s",source);
- if(n<=0||(size_t)n>=sizeof req.source)
-  return STNLABZ_MODULE_ERR_INVALID_STATE;
+ /* [AI:GPT-6 | 2026-10-21 UTC] */
+ (void)n;
+ if(!source[0])return STNLABZ_MODULE_ERR_INVALID_STATE;
+ snprintf(req.source,sizeof req.source,"digit");
+ /* [End AI:GPT-6] */
  req.approved=1;
  read=0;
  rc=host->invoke_service(DIGIT_GRU_LEARN_SERVICE,&req,sizeof req,
@@ -469,7 +471,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="gru_learning",.name="GRU Learning IRC Evidence Preview and Approved Submission",
- .version_major=0,.version_minor=5,.version_patch=0,
+ .version_major=0,.version_minor=6,.version_patch=0,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
