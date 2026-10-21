@@ -122,6 +122,18 @@ fail:
  if(parsed)json_object_put(parsed);
  json_object_put(payload);return STNLABZ_MODULE_ERR_INVALID_STATE;
 }
+/* [AI:GPT-6 | 2026-10-21 UTC]
+ * Minimal temporary status reporting, without payloads or credentials. */
+static void learn_debug(const char *stage,long code){
+ struct {char report[384];} notice={{0}};
+ size_t ignored=0;
+ if(!host||!host->invoke_service)return;
+ snprintf(notice.report,sizeof notice.report,
+          "[GRU DEBUG] bridge /learn %s HTTP=%ld",stage,code);
+ (void)host->invoke_service("digit.irc.deliver",
+        &notice,sizeof notice,NULL,0,&ignored);
+}
+/* [End AI:GPT-6] */
 static stnlabz_module_result_t learn(const void *req,size_t bytes,
  void *res,size_t cap,size_t *used,void *ctx){
  const digit_gru_learn_request_t *q=req;
@@ -143,19 +155,24 @@ static stnlabz_module_result_t learn(const void *req,size_t bytes,
  json_object_object_add(payload,"response",json_object_new_string(q->response));
  json_object_object_add(payload,"source",json_object_new_string(q->source));
  json_object_object_add(payload,"approved",json_object_new_boolean(1));
- if(!send_json(LEARN_URL,payload,NULL,&body,&code)||code!=202)goto fail;
+ if(!send_json(LEARN_URL,payload,NULL,&body,&code)){
+  learn_debug("transport failed",code);goto fail;
+ }
+ if(code!=202){learn_debug("unexpected HTTP response",code);goto fail;}
  parsed=json_tokener_parse(body.data);if(!parsed)goto fail;
  status=string_field(parsed,"status");
  if(!status||strlen(status)>=sizeof out->status||
     !bool_field(parsed,"accepted",&accepted)||
     !bool_field(parsed,"trained",&trained)||
     !accepted||trained||strcmp(status,"queued_for_review"))goto fail;
+ learn_debug("API confirmed queued_for_review",code);
  out->accepted=1;out->trained=0;
  snprintf(out->status,sizeof out->status,"%s",status);
  *used=sizeof *out;
  json_object_put(parsed);json_object_put(payload);return STNLABZ_MODULE_OK;
 fail:
  if(parsed)json_object_put(parsed);
+ if(code==202)learn_debug("invalid API receipt JSON",code);
  json_object_put(payload);return STNLABZ_MODULE_ERR_INVALID_STATE;
 }
 static void check(stnlabz_module_qualification_result_t *r,int ok,int negative){
@@ -222,7 +239,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="gru_bridge",.name="Experimental STN GRU Bridge",
- .version_major=0,.version_minor=3,.version_patch=0,
+ .version_major=0,.version_minor=4,.version_patch=0,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
