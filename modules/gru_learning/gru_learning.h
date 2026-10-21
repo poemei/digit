@@ -9,6 +9,12 @@ typedef struct {
  uint32_t approved;
 } digit_gru_learning_submit_request_t;
 /* [End AI:GPT-6] */
+/* [AI:GPT-6 | 2026-10-20 UTC] */
+#define DIGIT_GRU_LEARNING_CONTEXT_MAX 8
+typedef struct {
+ char source_id[96], context_type[32], value[512];
+} digit_gru_learning_context_t;
+/* [End AI:GPT-6] */
 #define DIGIT_GRU_LEARNING_OBSERVATIONS_MAX 6
 #define DIGIT_GRU_LEARNING_CORPUS_MAX 3
 typedef struct {
@@ -25,6 +31,10 @@ typedef struct {
 typedef struct {
  uint32_t observations_count, corpus_count;
  uint32_t observations_available, corpus_available;
+/* [AI:GPT-6 | 2026-10-20 UTC] */
+ uint32_t context_count, context_available;
+ digit_gru_learning_context_t context[8];
+/* [End AI:GPT-6] */
  uint32_t approved, submitted, trained; /* always zero in preview */
  digit_gru_learning_observation_t observations[6];
  digit_gru_learning_corpus_t corpus[3];
