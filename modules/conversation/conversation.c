@@ -475,7 +475,7 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
                     struct {char report[384];} notice={{0}};
                     size_t ignored=0;
                     snprintf(notice.report,sizeof notice.report,
-                             "Learning example sent -> GRU");
+                             "Message sent -> GRU");
                     (void)host->invoke_service("digit.irc.deliver",
                         &notice,sizeof notice,NULL,0,&ignored);
                 }
@@ -521,17 +521,18 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
         assist.length=128;
         assist_rc=host->invoke_service(DIGIT_GRU_GENERATE_SERVICE,
             &assist,sizeof assist,&suggestion,sizeof suggestion,&generated);
+        /* [AI:GPT-6 | 2026-10-20 UTC]
+         * A successful GRU generation response confirms receipt. Do not
+         * expose unreviewed generation text as Digit's IRC reply. */
         if(assist_rc==STNLABZ_MODULE_OK &&
            generated==sizeof suggestion &&
            memchr(suggestion.text,0,sizeof suggestion.text) &&
-           suggestion.generated_bytes>0 && suggestion.text[0] &&
-           !strchr(suggestion.text,'\r') &&
-           !strchr(suggestion.text,'\n')){
-            n=snprintf(response,capacity,"GRU suggestion (unverified): %.320s",
-                       suggestion.text);
+           suggestion.generated_bytes>0){
+            n=snprintf(response,capacity,"Message sent -> GRU");
             if(n>0 && (size_t)n<capacity)
                 *used=(size_t)n;
         }
+        /* [End AI:GPT-6] */
         trace_stage(host,"process",DIGIT_GRU_GENERATE_SERVICE,
             *used?"GRU_ASSISTANCE_RETURNED":
             assist_rc==STNLABZ_MODULE_ERR_NOT_FOUND?"SERVICE_NOT_FOUND":
@@ -1104,7 +1105,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 1, .version_patch = 22,
+    .version_major = 1, .version_minor = 1, .version_patch = 23,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
