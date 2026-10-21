@@ -1,6 +1,15 @@
 #ifndef DIGIT_GRU_LEARNING_H
 #define DIGIT_GRU_LEARNING_H
 #include <stdint.h>
+/* [AI:GPT-6 | 2026-10-20 UTC] */
+#define DIGIT_GRU_LEARNING_EXCHANGE_SERVICE "digit.gru.learning_exchange"
+typedef struct {
+ char channel[128];
+ char input[512], response[512];
+ int64_t corpus_id;
+ char verification_status[48];
+} digit_gru_learning_exchange_request_t;
+/* [End AI:GPT-6] */
 #define DIGIT_GRU_LEARNING_PREVIEW_SERVICE "digit.gru.learning_preview"
 /* [AI:GPT-6 | 2026-10-21 05:41:12 UTC] */
 #define DIGIT_GRU_LEARNING_SUBMIT_SERVICE "digit.gru.learning_submit"
