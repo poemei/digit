@@ -7,6 +7,14 @@
 #include <string.h>
 /* [AI:GPT-6 | 2026-10-21 05:41:12 UTC] */
 #include <stdio.h>
+#include <pthread.h>
+#include <stdatomic.h>
+#include <errno.h>
+#include <unistd.h>
+#include <time.h>
+#include <syslog.h>
+#include "unistd.h"
+#include "../sqlite3/gru_feed.h"
 #include "../sqlite3/context.h"
 #include "../gru_bridge/gru_bridge.h"
 /* [End AI:GPT-6] */
@@ -325,6 +333,105 @@ static stnlabz_module_result_t learning_pair(const void *raw,size_t bytes,
  return STNLABZ_MODULE_OK;
 }
 /* [End AI:GPT-6] */
+/* [AI:GPT-6 | 2026-10-21 UTC]
+ * Automatic, restart-resumable engineering data synchronization.
+ * At-least-once delivery: a crash between API acceptance and cursor
+ * checkpoint can retry a record; training API should de-duplicate source IDs.
+ * A GRU API 202 means queued for Friday review/rebuild, NOT trained. */
+#define GRU_SYNC_CHECKPOINT "/opt/digit/data/gru_learning.cursor"
+static pthread_t sync_worker;
+static atomic_int sync_running;
+static int sync_started;
+static int64_t sync_cursor[3];
+static int checkpoint_save(void){
+ char temp[256];
+ FILE *fp;
+ int fd;
+ if(snprintf(temp,sizeof temp,"%s.tmp",GRU_SYNC_CHECKPOINT)<=0)return 0;
+ fp=fopen(temp,"w");
+ if(!fp)return 0;
+ if(fprintf(fp,"%lld %lld %lld\n",
+    (long long)sync_cursor[0],(long long)sync_cursor[1],
+    (long long)sync_cursor[2])<0){fclose(fp);unlink(temp);return 0;}
+ if(fflush(fp)!=0){fclose(fp);unlink(temp);return 0;}
+ fd=fileno(fp);
+ if(fd<0||fsync(fd)!=0){fclose(fp);unlink(temp);return 0;}
+ if(fclose(fp)!=0){unlink(temp);return 0;}
+ if(rename(temp,GRU_SYNC_CHECKPOINT)!=0){unlink(temp);return 0;}
+ return 1;
+}
+static int checkpoint_load(void){
+ FILE *fp=fopen(GRU_SYNC_CHECKPOINT,"r");
+ long long a=0,b=0,c=0;
+ if(!fp)return errno==ENOENT;
+ if(fscanf(fp,"%lld %lld %lld",&a,&b,&c)!=3||
+    a<0||b<0||c<0){fclose(fp);return 0;}
+ fclose(fp);
+ sync_cursor[0]=a;sync_cursor[1]=b;sync_cursor[2]=c;
+ return 1;
+}
+static int feed_one(unsigned index){
+ digit_gru_feed_query_t query={0};
+ digit_gru_feed_result_t page={0};
+ digit_gru_learn_request_t learn={0};
+ digit_gru_learn_result_t receipt={0};
+ stnlabz_module_result_t rc;
+ size_t used=0;
+ const digit_gru_feed_item_t *row;
+ const char *kind;
+ int written;
+ query.source_type=index+1;
+ query.after_id=sync_cursor[index];
+ rc=host->invoke_service(DIGIT_SQLITE3_GRU_FEED_SERVICE,
+      &query,sizeof query,&page,sizeof page,&used);
+ if(rc!=STNLABZ_MODULE_OK||used!=sizeof page||
+    page.count>DIGIT_GRU_FEED_PAGE_SIZE)return -1;
+ if(!page.count)return 0;
+ row=&page.items[0];
+ if(row->id<=query.after_id||
+    !terminated(row->text,sizeof row->text)||
+    !terminated(row->category,sizeof row->category)||
+    !terminated(row->verification_status,sizeof row->verification_status))
+    return -1;
+ kind=index==0?"Corpus":index==1?"Observation":"Context";
+ /* The question is metadata, not a fabricated user question. The response
+  * is a byte-for-byte copy of the SQLite feed's sanitized text. */
+ written=snprintf(learn.input,sizeof learn.input,
+     "Digit %s record %lld, category %.60s, verification %.44s:",
+     kind,(long long)row->id,row->category,row->verification_status);
+ if(written<=0||(size_t)written>=sizeof learn.input)return -1;
+ if(!row->text[0]){
+  sync_cursor[index]=row->id;
+  return checkpoint_save()?1:-1;
+ }
+ memcpy(learn.response,row->text,sizeof row->text);
+ snprintf(learn.source,sizeof learn.source,"digit");
+ learn.approved=1;
+ used=0;
+ rc=host->invoke_service(DIGIT_GRU_LEARN_SERVICE,
+      &learn,sizeof learn,&receipt,sizeof receipt,&used);
+ if(rc!=STNLABZ_MODULE_OK||used!=sizeof receipt||
+    receipt.accepted!=1||receipt.trained!=0||
+    !terminated(receipt.status,sizeof receipt.status)||
+    strcmp(receipt.status,"queued_for_review"))return -1;
+ sync_cursor[index]=row->id;
+ return checkpoint_save()?1:-1;
+}
+static void *sync_loop(void *arg){
+ unsigned source=0;
+ struct timespec delay={1,0};
+ (void)arg;
+ while(atomic_load(&sync_running)){
+  int result=feed_one(source);
+  source=(source+1)%3;
+  /* Back-pressure and retries; no IRC chatter, no uncontrolled bursts. */
+  if(result<0)syslog(LOG_WARNING,
+       "digit.gru_learning sync paused/retrying source=%u",source);
+  nanosleep(&delay,NULL);
+ }
+ return NULL;
+}
+/* [End AI:GPT-6] */
 static void check(stnlabz_module_qualification_result_t *r,int pass,int negative){
  r->tests_executed++;
  if(pass)r->tests_passed++;else r->tests_failed++;
@@ -451,10 +558,35 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api){
   return STNLABZ_MODULE_ERR_START_FAILED;
  }
  /* [End AI:GPT-6] */
- host=api;return STNLABZ_MODULE_OK;
+ /* [AI:GPT-6 | 2026-10-21 UTC] */
+ if(!checkpoint_load()){
+  api->unregister_service(DIGIT_GRU_LEARNING_PAIR_SERVICE,NULL);
+  api->unregister_service(DIGIT_GRU_LEARNING_EXCHANGE_SERVICE,NULL);
+  api->unregister_service(DIGIT_GRU_LEARNING_SUBMIT_SERVICE,NULL);
+  api->unregister_service(DIGIT_GRU_LEARNING_PREVIEW_SERVICE,NULL);
+  return STNLABZ_MODULE_ERR_START_FAILED;
+ }
+ host=api;
+ atomic_store(&sync_running,1);
+ if(pthread_create(&sync_worker,NULL,sync_loop,NULL)!=0){
+  atomic_store(&sync_running,0);
+  host=NULL;
+  api->unregister_service(DIGIT_GRU_LEARNING_PAIR_SERVICE,NULL);
+  api->unregister_service(DIGIT_GRU_LEARNING_EXCHANGE_SERVICE,NULL);
+  api->unregister_service(DIGIT_GRU_LEARNING_SUBMIT_SERVICE,NULL);
+  api->unregister_service(DIGIT_GRU_LEARNING_PREVIEW_SERVICE,NULL);
+  return STNLABZ_MODULE_ERR_START_FAILED;
+ }
+ sync_started=1;
+ return STNLABZ_MODULE_OK;
+ /* [End AI:GPT-6] */
 }
 static stnlabz_module_result_t stop(void){
  if(!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ /* [AI:GPT-6 | 2026-10-21 UTC] */
+ atomic_store(&sync_running,0);
+ if(sync_started){pthread_join(sync_worker,NULL);sync_started=0;}
+ /* [End AI:GPT-6] */
 /* [AI:GPT-6 | 2026-10-21 05:41:12 UTC] */
 /* [AI:GPT-6 | 2026-10-20 UTC] */
  if(!host->unregister_service(DIGIT_GRU_LEARNING_PAIR_SERVICE,NULL))
@@ -471,7 +603,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="gru_learning",.name="GRU Learning IRC Evidence Preview and Approved Submission",
- .version_major=0,.version_minor=6,.version_patch=0,
+ .version_major=0,.version_minor=7,.version_patch=0,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
