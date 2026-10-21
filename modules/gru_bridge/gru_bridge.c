@@ -135,7 +135,10 @@ static stnlabz_module_result_t learn(const void *req,size_t bytes,
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  /* The caller must explicitly present approved=1; no automatic harvesting.
   * Token is taken only from process configuration, never committed. */
- token=getenv("STN_GRU_LEARN_TOKEN");
+ /* [AI:GPT-6 | 2026-10-21 UTC] */
+ token=getenv("STN_LABZ_LEARN_TOKEN");
+ if(!token||!token[0])token=getenv("STN_GRU_LEARN_TOKEN");
+ /* [End AI:GPT-6] */
  if(!token||!token[0])return STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
  memset(out,0,sizeof *out);
  payload=json_object_new_object();if(!payload)return STNLABZ_MODULE_ERR_INVALID_STATE;
@@ -222,7 +225,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="gru_bridge",.name="Experimental STN GRU Bridge",
- .version_major=0,.version_minor=1,.version_patch=0,
+ .version_major=0,.version_minor=2,.version_patch=0,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
