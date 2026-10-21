@@ -14,6 +14,7 @@
 #include "ingest.h"
 #include "corpus_search.h"
 #include "context.h"
+#include "gru_feed.h"
 #include "../observation/observation.h"
 #include "../s2/s2_observations.h"
 #include "dsd.h"
@@ -534,6 +535,58 @@ static stnlabz_module_result_t diagnostic_service(
  memcpy(response,&out,sizeof out);*response_used=sizeof out;
  return STNLABZ_MODULE_OK;
 }
+/* [AI:GPT-6 | 2026-10-21 UTC]
+ * Read-only, cursor-paginated knowledge feed. The service never transforms
+ * observations into facts, approves material or accesses GRU directly. */
+static stnlabz_module_result_t gru_feed(const void *request,size_t bytes,
+ void *response,size_t capacity,size_t *used,void *context){
+ const digit_gru_feed_query_t *q=request;
+ digit_gru_feed_result_t out={0};
+ sqlite3_stmt *stmt=NULL;
+ const char *sql=NULL;
+ int rc;
+ (void)context;
+ if(used)*used=0;
+ if(!database)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(!q||bytes!=sizeof *q||q->after_id<0||!response||
+    capacity<sizeof out||!used)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ switch(q->source_type){
+ case DIGIT_GRU_FEED_CORPUS:
+  sql="SELECT id,category,verification_status,"
+      "coalesce(source_record_id,source,''),text "
+      "FROM corpus WHERE id>?1 ORDER BY id LIMIT 4";break;
+ case DIGIT_GRU_FEED_OBSERVATIONS:
+  sql="SELECT id,'observation','unverified',"
+      "coalesce(event_id,source_record_id,''),text "
+      "FROM observations WHERE id>?1 ORDER BY id LIMIT 4";break;
+ case DIGIT_GRU_FEED_CONTEXT:
+  sql="SELECT id,coalesce(context_type,'context'),'unverified',"
+      "coalesce(source_id,''),value "
+      "FROM context WHERE id>?1 ORDER BY id LIMIT 4";break;
+ default:return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ }
+ rc=sqlite3_prepare_v2(database,sql,-1,&stmt,NULL);
+ if(rc!=SQLITE_OK)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ sqlite3_bind_int64(stmt,1,q->after_id);
+ while((rc=sqlite3_step(stmt))==SQLITE_ROW){
+  digit_gru_feed_item_t *item;
+  if(out.count>=DIGIT_GRU_FEED_PAGE_SIZE)break;
+  item=&out.items[out.count++];
+  item->id=sqlite3_column_int64(stmt,0);
+  copy_column(stmt,1,item->category,sizeof item->category);
+  copy_column(stmt,2,item->verification_status,
+              sizeof item->verification_status);
+  copy_column(stmt,3,item->source_id,sizeof item->source_id);
+  copy_column(stmt,4,item->text,sizeof item->text);
+ }
+ sqlite3_finalize(stmt);
+ if(rc!=SQLITE_DONE&&rc!=SQLITE_ROW)
+  return STNLABZ_MODULE_ERR_INVALID_STATE;
+ memcpy(response,&out,sizeof out);
+ *used=sizeof out;
+ return STNLABZ_MODULE_OK;
+}
+/* [End AI:GPT-6] */
 static const char op_get[]="get",op_search[]="search";
 /* [AI:GPT-6 | 2026-10-18] Startup diagnostics go to the service journal.
  * No credentials, SQL row values, or database content are logged.
@@ -622,8 +675,17 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api) {
         host->unregister_service(DIGIT_CONTEXT_STORE_SERVICE,NULL);
         goto fail_registered;
     }
+    /* [AI:GPT-6 | 2026-10-21 UTC] */
+    stage="register_gru_feed";
+    if(!host->register_service(DIGIT_SQLITE3_GRU_FEED_SERVICE,gru_feed,NULL)){
+        host->unregister_service(DIGIT_CONTEXT_RECENT_SERVICE,NULL);
+        host->unregister_service(DIGIT_CONTEXT_STORE_SERVICE,NULL);
+        goto fail_registered;
+    }
+    /* [End AI:GPT-6] */
     if(!digit_ingest_start(host)){
         startup_log("ingest",SQLITE_ERROR,"watcher_start_failed");
+        host->unregister_service(DIGIT_SQLITE3_GRU_FEED_SERVICE,NULL);
         host->unregister_service(DIGIT_CONTEXT_RECENT_SERVICE,NULL);
         host->unregister_service(DIGIT_CONTEXT_STORE_SERVICE,NULL);
         goto fail_registered;
@@ -646,6 +708,7 @@ fail:
 static stnlabz_module_result_t stop(void) {
     if(!database||!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
     digit_ingest_stop();
+    host->unregister_service(DIGIT_SQLITE3_GRU_FEED_SERVICE,NULL);
     host->unregister_service(DIGIT_CONTEXT_RECENT_SERVICE,NULL);
     host->unregister_service(DIGIT_CONTEXT_STORE_SERVICE,NULL);
     host->unregister_service(DIGIT_OBSERVATION_RECENT_SERVICE,NULL);
@@ -879,7 +942,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="sqlite3",.name="SQLite3 persistence",
-    .version_major=0,.version_minor=4,.version_patch=19,
+    .version_major=0,.version_minor=4,.version_patch=20,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
