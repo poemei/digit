@@ -2,6 +2,13 @@
 #define DIGIT_GRU_LEARNING_H
 #include <stdint.h>
 #define DIGIT_GRU_LEARNING_PREVIEW_SERVICE "digit.gru.learning_preview"
+/* [AI:GPT-6 | 2026-10-21 05:41:12 UTC] */
+#define DIGIT_GRU_LEARNING_SUBMIT_SERVICE "digit.gru.learning_submit"
+typedef struct {
+ char channel[128], event_id[96], response[1025];
+ uint32_t approved;
+} digit_gru_learning_submit_request_t;
+/* [End AI:GPT-6] */
 #define DIGIT_GRU_LEARNING_OBSERVATIONS_MAX 6
 #define DIGIT_GRU_LEARNING_CORPUS_MAX 3
 typedef struct {
