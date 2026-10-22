@@ -9,7 +9,7 @@
 #define AUTH "/opt/digit/auth/sites/login.conf"
 typedef struct {char data[262144];size_t len;} page_t;
 static size_t collect(char *p,size_t sz,size_t count,void *v){
- page_t *b=v;size_t n=sz*count;if(sz&&n/sz!=count||n>=sizeof b->data-b->len)return 0;
+ page_t *b=v;size_t n=sz*count;if((sz&&n/sz!=count)||n>=sizeof b->data-b->len)return 0;
  memcpy(b->data+b->len,p,n);b->len+=n;b->data[b->len]=0;return n;
 }
 static int get_config(char *user,size_t uc,char *pass,size_t pc){
@@ -27,7 +27,11 @@ static int get_config(char *user,size_t uc,char *pass,size_t pc){
  f=fopen(AUTH,"r");if(!f){perror("credentials file open");return 0;}
  while(fgets(line,sizeof line,f)){
   char *eq=strchr(line,'='),*v;size_t n;
-  if(!eq)continue;*eq++=0;v=eq;n=strcspn(v,"\r\n");v[n]=0;
+  if(!eq)continue;
+  *eq++=0;
+  v=eq;
+  n=strcspn(v,"\r\n");
+  v[n]=0;
   if(!strcmp(line,"username")&&n>0&&n<uc){memcpy(user,v,n+1);u=1;}
   if(!strcmp(line,"password")&&n>0&&n<pc){memcpy(pass,v,n+1);p=1;}
  }
@@ -88,7 +92,7 @@ static int post_site(const char *host,const char *user,const char *pass){
  if(request(curl,url,page,form,&code)!=CURLE_OK||code!=302)goto done;
  session_started=1;
  memset(form,0,strlen(form));free(form);form=NULL;
- snprintf(url,sizeof url,"%s/admin/announcements",host);
+ snprintf(url,sizeof url,"%s/admin/posts",host);
  if(request(curl,url,page,NULL,&code)!=CURLE_OK||code!=200)goto cleanup;
  authenticated=1;
  if(!strstr(page->data,"name=\"title\"")||
@@ -177,7 +181,9 @@ done:
   created?"POSTED_NOT_VERIFIED":"NOT_PUBLISHED",
   logout_verified?"VERIFIED":session_started?"NOT_VERIFIED":"NOT_STARTED");
  if(form){memset(form,0,strlen(form));free(form);}
- if(u)curl_free(u);if(p)curl_free(p);if(t)curl_free(t);
+ if(u)curl_free(u);
+ if(p)curl_free(p);
+ if(t)curl_free(t);
  if(title_encoded)curl_free(title_encoded);
  if(body_encoded)curl_free(body_encoded);
  memset(token,0,sizeof token);
@@ -191,9 +197,9 @@ int main(void){
   fprintf(stderr,"Credentials missing or insecure: %s\n",AUTH);return 2;
  }
  if(curl_global_init(CURL_GLOBAL_DEFAULT)!=CURLE_OK)return 2;
- ok+=announcement_site("https://poemei.com",username,password);
+ ok+=post_site("https://poemei.com",username,password);
  memset(username,0,sizeof username);memset(password,0,sizeof password);
  curl_global_cleanup();
- printf("Announcement acceptance: %d/1 domain\n",ok);
+ printf("Core Posts acceptance: %d/1 domain\n",ok);
  return ok==1?0:1;
 }
