@@ -98,6 +98,35 @@ static int post_site(const char *host,const char *user,const char *pass){
   fprintf(stderr,"%s: verified Core Posts create form not found; refusing submission\n",host);
   goto cleanup;
  }
+ /* Core Media selector maps filenames to numeric featured_image_id values.
+  * Do not publish without the exact digit.png entry. */
+ const char *media=strstr(page->data,"name=\\"featured_image_id\\"");
+ if(!media){fprintf(stderr,"%s: Core Media selector missing\\n",host);goto cleanup;}
+ const char *select_end=strstr(media,"</select>");
+ if(!select_end){fprintf(stderr,"%s: Core Media selector incomplete\\n",host);goto cleanup;}
+ int image_id=0,matched=0;
+ const char *cursor=media;
+ while((cursor=strstr(cursor,"<option"))&&cursor<select_end){
+  const char *option_end=strstr(cursor,"</option>");
+  if(!option_end||option_end>select_end)break;
+  const char *label=strchr(cursor,'>');
+  const char *val=strstr(cursor,"value=\\"");
+  if(label&&label<option_end&&val&&val<label){
+   val+=7;
+   char *endptr=NULL;
+   long id=strtol(val,&endptr,10);
+   if(endptr&&*endptr=='"'&&id>0&&id<=2147483647){
+    const char *filename=label+1;
+    while(filename<option_end&&(*filename==' '||*filename=='\\n'||*filename=='\\t'))filename++;
+    if((size_t)(option_end-filename)==strlen("digit.png")&&
+       !memcmp(filename,"digit.png",strlen("digit.png"))){
+      image_id=(int)id;matched++;
+    }
+   }
+  }
+  cursor=option_end+9;
+ }
+ if(matched!=1){fprintf(stderr,"%s: digit.png Media ID not uniquely resolved\\n",host);goto cleanup;}
  if(strstr(page->data,title)){
   already_present=1;found=1;
   printf("%s: post already exists; not submitting duplicate\n",host);
@@ -108,10 +137,10 @@ static int post_site(const char *host,const char *user,const char *pass){
  if(t){curl_free(t);t=NULL;}
  t=curl_easy_escape(curl,token,0);
  if(!title_encoded||!body_encoded||!t)goto cleanup;
- need=strlen(title_encoded)+strlen(body_encoded)+strlen(t)+128;
+ need=strlen(title_encoded)+strlen(body_encoded)+strlen(t)+160;
  form=malloc(need);if(!form)goto cleanup;
- snprintf(form,need,"title=%s&body=%s&published=on&csrf_token=%s",
-   title_encoded,body_encoded,t);
+ snprintf(form,need,"title=%s&body=%s&published=on&featured_image_id=%d&csrf_token=%s",
+   title_encoded,body_encoded,image_id,t);
  if(request(curl,url,page,form,&code)!=CURLE_OK||code!=302){
   fprintf(stderr,"%s: post POST not confirmed (HTTP %ld)\n",host,code);
   goto cleanup;
