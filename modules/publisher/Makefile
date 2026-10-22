@@ -75,3 +75,10 @@ bin/fix_stnlabz_existing_posts: fix_stnlabz_existing_posts.c
 	$(CC) $(CFLAGS) fix_stnlabz_existing_posts.c -o $@ -lcurl
 fix-stnlabz-existing-posts: bin/fix_stnlabz_existing_posts
 	./bin/fix_stnlabz_existing_posts
+
+# Live Core Pages acceptance test, chaos-mvc.org only.
+bin/test_core_page: test_core_page.c
+	@mkdir -p bin
+	$(CC) $(CFLAGS) test_core_page.c -o $@ -lcurl
+test-core-page: bin/test_core_page
+	./bin/test_core_page
