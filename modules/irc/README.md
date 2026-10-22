@@ -99,3 +99,7 @@ IRC normalizes bounded direct-address aliases and routes addressed traffic to `d
 ## v0.3.9 — authenticated family replies
 
 For directly addressed messages, IRC compares the supplied IRC account tag with the operator-configured family account bindings already used for JOIN greetings. Only matching family accounts are offered to `digit.socials.family`. Successful bounded replies are returned to IRC; nonmatching or unsupported interactions continue through the ordinary Conversation route. Nicknames, operator status, and other channel claims cannot establish family status. Existing Core, Interpretation, and Conversation interfaces remain unchanged. This does not address unaddressed social messages or general contextual interpretation.
+
+## v0.3.16 — Public IRC / Slack bridge
+
+The IRC transport now registers `digit.irc.bridge.deliver` and consumes `digit.slack.bridge.deliver` through the ABI 1.5 service registry. Authenticated IRC channel speech is forwarded to Slack's explicitly configured general-chat bridge channel, excluding IRC private messages and Digit's own posts. Slack-origin chat uses the existing IRC bounded outbound queue and its flood interval. No private DSD command, S2 intelligence brief, or private Slack operations channel is automatically bridged. The bridge is best-effort and only functions while both transport modules are active; no Core changes are required. Live acceptance and cross-transport replay testing remain pending.
