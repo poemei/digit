@@ -1,4 +1,4 @@
-# Digit Slack v0.1.4 — ABI 1.5 transport candidate
+# Digit Slack v0.1.5 — ABI 1.5 transport candidate
 
 This is a **source candidate**, not a certified or connected Slack deployment.
 It is separate from Digit Core and uses the existing ABI 1.5 named service registry.
@@ -8,7 +8,8 @@ It is separate from Digit Core and uses the existing ABI 1.5 named service regis
 - Socket Mode message delivery for direct messages and app mentions through `digit.conversation`.
 - General public and private channel messages (including messages without mentions) are sent through `digit.conversation.listen`, matching IRC's passive observation behavior. Conversation determines relevance and whether to reply.
 - Direct messages and addressed `app_mention` events use `digit.conversation`; Slack `<@USER>` markup is stripped from addressed mentions. The transport does not manufacture a greeting or override Conversation's participation decision.
-- DSD commands are **not** implemented by this Slack revision; general channels are never treated as authenticated DSD command surfaces.
+- DM-only DSD `show dsd`, `show trace`, and `diagnose my last request` commands now invoke the existing DSD ABI service. The transport stores each Slack user's previous DM trace separately. Unscoped trace/module commands remain denied. General channels cannot invoke DSD.
+- Channel event classification falls back to Slack channel IDs when `channel_type` is absent; it continues to reject bot and subtype events.
 - Two registered outgoing delivery endpoints: `digit.slack.intel.deliver` and `digit.slack.modules.deliver`, each restricted to its configured private-channel destination.
 - `learn_operator_user_id` and `learn_authorization_key` are parsed as reserved configuration for future Lessons integration, but Lessons is not active or implemented here.
 - Historical STN-2 intelligence investigations, full briefs, persistent alert outbox, Slack login, and memory support are not ported.
@@ -38,6 +39,6 @@ In Slack app configuration, subscribe to bot events `message.channels` and `mess
 
 ## Verification and limitations
 
-The offline qualification checks syntax-independent helper behaviors, mention normalization and direct/passive event routing (including negative cases), descriptor compatibility, and negative cases. It **does not** prove live Slack delivery, correct all-frame WebSocket handling, event replay deduplication, outbound delivery reliability, authorization for restricted content, S2 full intelligence generation, or shutdown/restart recovery. Manual end-to-end acceptance remains pending.
+The offline qualification checks helper behavior, mention normalization, direct/passive classification (including missing `channel_type`), DSD command classification, descriptor compatibility and negative cases. These tests do not constitute a live DSD or Slack integration test. It **does not** prove live Slack delivery, correct all-frame WebSocket handling, event replay deduplication, outbound delivery reliability, authorization for restricted content, S2 full intelligence generation, or shutdown/restart recovery. Manual end-to-end acceptance remains pending.
 
 Current revision is intended for code review; do not equate publishing it with operator activation or security certification.
