@@ -24,6 +24,8 @@
 #define CONVERSATION_LISTEN_SERVICE "digit.conversation.listen"
 #define INTEL_DELIVERY "digit.slack.intel.deliver"
 #define MODULE_DELIVERY "digit.slack.modules.deliver"
+#define BRIDGE_DELIVERY "digit.slack.bridge.deliver"
+#define IRC_BRIDGE "digit.irc.bridge.deliver"
 #define MAX_REPORT 16000
 #define WS_BUFFER 65536
 
@@ -33,7 +35,7 @@ typedef struct {
 typedef struct {
     int enabled;
     char workspace[64], app_token[512], bot_token[512];
-    char intel_channel[64], module_channel[64], learn_user[64];
+    char intel_channel[64], module_channel[64], bridge_channel[64], learn_user[64];
     char learn_key[256]; /* Reserved for unimplemented Lessons; never consumed. */
 } slack_config_t;
 typedef struct {char *bytes;size_t used,cap;} response_buffer_t;
@@ -98,6 +100,7 @@ static int load_config(slack_config_t *dst){
    else if(!strcmp(k,"bot_token"))ok=copy(c.bot_token,sizeof c.bot_token,v);
    else if(!strcmp(k,"intel_channel_id"))ok=copy(c.intel_channel,sizeof c.intel_channel,v);
    else if(!strcmp(k,"module_channel_id"))ok=copy(c.module_channel,sizeof c.module_channel,v);
+   else if(!strcmp(k,"bridge_channel_id"))ok=copy(c.bridge_channel,sizeof c.bridge_channel,v);
    else if(!strcmp(k,"learn_operator_user_id"))ok=copy(c.learn_user,sizeof c.learn_user,v);
    else if(!strcmp(k,"learn_authorization_key"))ok=copy(c.learn_key,sizeof c.learn_key,v);
    else ok=0;
@@ -179,6 +182,40 @@ static stnlabz_module_result_t delivery(const void *request,size_t bytes,
     !clean_report(request,bytes))return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  if(!atomic_load(&running))return STNLABZ_MODULE_ERR_INVALID_STATE;
  return posted(channel,(const char *)request,NULL)?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
+}
+/* Cross-transport bridge only accepts one-line bounded public chat, never
+ * private intelligence or module lifecycle content. 0 disables bridging. */
+typedef struct {char report[384];} bridge_report_t;
+static int bridge_allowed(const char *channel){
+ return config.bridge_channel[0]&&channel&&
+  !strcmp(channel,config.bridge_channel)&&
+  strcmp(channel,config.intel_channel)&&strcmp(channel,config.module_channel);
+}
+static stnlabz_module_result_t bridge_delivery(const void *request,size_t bytes,
+ void *response,size_t cap,size_t *used,void *context){
+ const bridge_report_t *msg=request;
+ (void)response;(void)cap;(void)context;
+ if(used)*used=0;
+ if(!bridge_allowed(config.bridge_channel)||!request||bytes!=sizeof *msg||
+    !memchr(msg->report,0,sizeof msg->report)||!msg->report[0])return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ for(size_t i=0;msg->report[i];i++)
+  if((unsigned char)msg->report[i]<32||(unsigned char)msg->report[i]==127)
+   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ if(!atomic_load(&running))return STNLABZ_MODULE_ERR_INVALID_STATE;
+ return posted(config.bridge_channel,msg->report,NULL)?
+  STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
+}
+static void relay_irc(const char *channel,const char *user,const char *body){
+ bridge_report_t request={0};
+ char clean[224]={0};size_t i,j=0,used=0;
+ if(!bridge_allowed(channel)||!host_api||!host_api->invoke_service||!user||!body)return;
+ for(i=0;body[i]&&j<sizeof clean-1;i++){
+  unsigned char ch=(unsigned char)body[i];
+  if(ch>=32&&ch!=127)clean[j++]=(char)ch;
+ }
+ if(!j)return;
+ if(snprintf(request.report,sizeof request.report,"[Slack %.*s] %s",32,user,clean)<0)return;
+ (void)host_api->invoke_service(IRC_BRIDGE,&request,sizeof request,NULL,0,&used);
 }
 static int ws_send(CURL *curl,const char *text){size_t sent=0;size_t len=strlen(text);
  return curl_ws_send(curl,text,len,&sent,0,CURLWS_TEXT)==CURLE_OK&&sent==len;
@@ -313,6 +350,9 @@ static void on_event(struct json_object *root){
   answer[used]=0;
   (void)posted(channel,answer,thread);
  }
+ /* Only configured general-channel traffic leaves Slack. DMs, intelligence
+  * and module/private operations must never be bridged. */
+ if(mode==1||mode==2)relay_irc(channel,user,msg.message);
 }
 static void socket_session(const char *url){
  CURL *ws=curl_easy_init();char frame[WS_BUFFER];size_t length=0;
@@ -426,6 +466,16 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  check(r,route_kind("other","channel","C123",0,0)==0,1);
  check(r,route_kind("message",NULL,NULL,0,0)==0,1);
  check(r,is_dsd("diagnose my last request"),0);
+ check(r,!strcmp(BRIDGE_DELIVERY,"digit.slack.bridge.deliver"),0);
+ check(r,!strcmp(IRC_BRIDGE,"digit.irc.bridge.deliver"),0);
+ {slack_config_t previous=config; memset(&config,0,sizeof config);
+  check(r,!bridge_allowed("C123"),1);
+  snprintf(config.bridge_channel,sizeof config.bridge_channel,"C123");
+  check(r,bridge_allowed("C123"),0);
+  check(r,!bridge_allowed("C999"),1);
+  snprintf(config.intel_channel,sizeof config.intel_channel,"C123");
+  check(r,!bridge_allowed("C123"),1);
+  config=previous;}
  check(r,is_dsd("show trace"),0);
  check(r,!is_dsd("hi"),1);
  check(r,!is_dsd(NULL),1);
@@ -456,9 +506,15 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api){
  if(!api->register_service(MODULE_DELIVERY,delivery,config.module_channel)){
   (void)api->unregister_service(INTEL_DELIVERY,config.intel_channel);goto fail;
  }
+ if(!api->register_service(BRIDGE_DELIVERY,bridge_delivery,NULL)){
+  (void)api->unregister_service(MODULE_DELIVERY,config.module_channel);
+  (void)api->unregister_service(INTEL_DELIVERY,config.intel_channel);
+  goto fail;
+ }
  atomic_store(&running,1);
  if(pthread_create(&worker,NULL,socket_worker,NULL)!=0){
   atomic_store(&running,0);
+  (void)api->unregister_service(BRIDGE_DELIVERY,NULL);
   (void)api->unregister_service(MODULE_DELIVERY,config.module_channel);
   (void)api->unregister_service(INTEL_DELIVERY,config.intel_channel);goto fail;
  }
@@ -469,14 +525,15 @@ static stnlabz_module_result_t stop(void){
  if(!host_api)return STNLABZ_MODULE_ERR_INVALID_STATE;
  atomic_store(&running,0);
  if(worker_started){pthread_join(worker,NULL);worker_started=0;}
- if(!host_api->unregister_service(MODULE_DELIVERY,config.module_channel)||
+ if(!host_api->unregister_service(BRIDGE_DELIVERY,NULL)||
+    !host_api->unregister_service(MODULE_DELIVERY,config.module_channel)||
     !host_api->unregister_service(INTEL_DELIVERY,config.intel_channel))
     return STNLABZ_MODULE_ERR_STOP_FAILED;
  host_api=NULL;wipe(&config,sizeof config);return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="slack",.name="Slack ABI Transport",
- .version_major=0,.version_minor=1,.version_patch=5,
+ .version_major=0,.version_minor=1,.version_patch=6,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
