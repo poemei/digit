@@ -219,6 +219,62 @@ static void relay_irc(const char *channel,const char *user,const char *body){
  if(snprintf(request.report,sizeof request.report,"[Slack %.*s] %s",32,user,clean)<0)return;
  (void)host_api->invoke_service(IRC_BRIDGE,&request,sizeof request,NULL,0,&used);
 }
+/* Core hotload writes authoritative lifecycle results to its module audit
+ * log. Read forward only, without changing Core or inferring successes. */
+#define MODULE_AUDIT "/opt/digit/logs/modules.log"
+static FILE *module_audit;
+static ino_t audit_inode;
+static void audit_token(const char *line,const char *key,char *out,size_t cap){
+ const char *p=strstr(line,key);size_t n;
+ if(!cap)return;
+ out[0]=0;
+ if(!p)return;
+ p+=strlen(key);n=strcspn(p," \t\r\n");
+ if(!n||n>=cap)return;
+ memcpy(out,p,n);out[n]=0;
+}
+static void poll_module_audit(void){
+ struct stat st;
+ char line[2048],event[64],id[96],prior[48],candidate[48],reason[128],recovery[128];
+ int count=0;
+ if(!config.module_channel[0]||!atomic_load(&running))return;
+ if(lstat(MODULE_AUDIT,&st)||!S_ISREG(st.st_mode))return;
+ if(module_audit&&audit_inode!=st.st_ino){
+  fclose(module_audit);module_audit=NULL;
+ }
+ if(!module_audit){
+  module_audit=fopen(MODULE_AUDIT,"r");
+  if(!module_audit)return;
+  audit_inode=st.st_ino;
+  /* On first open, do not replay old notices into an operations flood. */
+  if(fseek(module_audit,0,SEEK_END))return;
+ }
+ while(count++<16&&fgets(line,sizeof line,module_audit)){
+  char report[384];
+  const char *detail=strstr(line,"detail=reported_event=");
+  if(!strchr(line,'\n')){int c;while((c=fgetc(module_audit))!='\n'&&c!=EOF){}continue;}
+  if(!detail)continue;
+  detail+=strlen("detail=");
+  audit_token(detail,"reported_event=",event,sizeof event);
+  if(strcmp(event,"HOTLOAD_REPLACED")&&strcmp(event,"HOTLOAD_ADMITTED"))continue;
+  audit_token(detail,"module=",id,sizeof id);
+  audit_token(detail,"incumbent_version=",prior,sizeof prior);
+  audit_token(detail,"candidate_version=",candidate,sizeof candidate);
+  audit_token(detail,"reason=",reason,sizeof reason);
+  audit_token(detail,"recovery=",recovery,sizeof recovery);
+  if(!id[0]||!candidate[0])continue;
+  if(snprintf(report,sizeof report,
+    "[MODULE] HOTLOAD_ACTIVE id=%s active=%s incumbent=%s candidate=%s reason=%s recovery=%s",
+    id,candidate,prior[0]?prior:"unknown",candidate,
+    reason[0]?reason:"unknown",recovery[0]?recovery:"unknown")>=(int)sizeof report)continue;
+  if(!posted(config.module_channel,report,NULL)){
+   /* Retry the complete event instead of silently losing it on HTTP failure. */
+   (void)fseek(module_audit,-(long)strlen(line),SEEK_CUR);
+   break;
+  }
+ }
+ clearerr(module_audit);
+}
 static int ws_send(CURL *curl,const char *text){size_t sent=0;size_t len=strlen(text);
  return curl_ws_send(curl,text,len,&sent,0,CURLWS_TEXT)==CURLE_OK&&sent==len;
 }
@@ -419,7 +475,7 @@ static void socket_session(const char *url){
   while(atomic_load(&running)){
    const struct curl_ws_frame *meta=NULL;size_t got=0;
    CURLcode rc=curl_ws_recv(ws,frame+length,sizeof(frame)-length-1,&got,&meta);
-   if(rc==CURLE_AGAIN){struct timespec nap={0,100000000L};nanosleep(&nap,NULL);continue;}
+   if(rc==CURLE_AGAIN){struct timespec nap={0,100000000L};poll_module_audit();nanosleep(&nap,NULL);continue;}
    if(rc!=CURLE_OK||!meta)break;
    length+=got;
    if(length>=sizeof(frame)-1)break;
@@ -454,6 +510,7 @@ static void *socket_worker(void *unused){(void)unused;
   if(j)json_object_put(j);
   free(raw);
   for(int i=0;i<30&&atomic_load(&running);i++){
+   poll_module_audit();
    struct timespec nap={1,0};nanosleep(&nap,NULL);
   }
  }
@@ -502,6 +559,17 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  check(r,!strcmp(CONVERSATION_SERVICE,"digit.conversation"),0);
  check(r,!strcmp(INTEL_DELIVERY,"digit.slack.intel.deliver"),0);
  check(r,!strcmp(MODULE_DELIVERY,"digit.slack.modules.deliver"),0);
+ {char token[40]={0};
+  audit_token("reported_event=HOTLOAD_REPLACED module=irc","reported_event=",token,sizeof token);
+  check(r,!strcmp(token,"HOTLOAD_REPLACED"),0);
+  audit_token("module=irc incumbent_version=0.3.15","module=",token,sizeof token);
+  check(r,!strcmp(token,"irc"),0);
+  audit_token("reason=qualification_and_activation_passed recovery=replacement_active","reason=",token,sizeof token);
+  check(r,!strcmp(token,"qualification_and_activation_passed"),0);
+  audit_token("other=foo","module=",token,sizeof token);
+  check(r,!token[0],1);
+ }
+
  check(r,strcmp(INTEL_DELIVERY,MODULE_DELIVERY)!=0,0);
  check(r,MAX_REPORT>=8192,0);
  check(r,sizeof cfg_check.learn_key>=128,0);
@@ -593,6 +661,7 @@ static stnlabz_module_result_t stop(void){
  if(!host_api)return STNLABZ_MODULE_ERR_INVALID_STATE;
  atomic_store(&running,0);
  if(worker_started){pthread_join(worker,NULL);worker_started=0;}
+ if(module_audit){fclose(module_audit);module_audit=NULL;audit_inode=0;}
  if(!host_api->unregister_service(BRIDGE_DELIVERY,NULL)||
     !host_api->unregister_service(MODULE_DELIVERY,config.module_channel)||
     !host_api->unregister_service(INTEL_DELIVERY,config.intel_channel))
@@ -601,7 +670,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="slack",.name="Slack ABI Transport",
- .version_major=0,.version_minor=1,.version_patch=8,
+ .version_major=0,.version_minor=1,.version_patch=9,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
