@@ -1,3 +1,5 @@
+IRC v0.3.17: The IRC↔Slack chat bridge has been removed. Regular IRC conversation, DSD and the separate S2 IRC status delivery remain unchanged. No Core restart; use the existing module hot-load lifecycle.
+
 # Digit IRC transport — Libera.Chat
 
 **Version:** 0.1.0 (unqualified, inactive)
