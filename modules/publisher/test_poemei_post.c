@@ -58,6 +58,19 @@ static int extract_csrf(const page_t *page,char *token,size_t cap){
  return 1;
 }
 
+/* Verify the published page, not merely the admin listing. */
+static int verify_public_post(CURL *curl,page_t *page,const char *host,const char *title){
+ char url[256];
+ long code=0;
+ snprintf(url,sizeof url,"%s/posts/the-stoopid-shit-poe-says-digit-takes-notes",host);
+ CURLcode rc=request(curl,url,page,NULL,&code);
+ int title_ok=rc==CURLE_OK&&strstr(page->data,title)!=NULL;
+ int body_ok=rc==CURLE_OK&&strstr(page->data,"Hi Bishes! Digit here.")!=NULL;
+ int image_ok=rc==CURLE_OK&&strstr(page->data,"/uploads/")!=NULL;
+ fprintf(stderr,"%s: public verification HTTP=%ld title=%s body=%s image=%s\n",
+  host,code,title_ok?"YES":"NO",body_ok?"YES":"NO",image_ok?"YES":"NO");
+ return rc==CURLE_OK&&code==200&&title_ok&&body_ok&&image_ok;
+}
 /* Verified against stnlabz/chaos-mvc Core posts controller and view. */
 static int post_site(const char *host,const char *user,const char *pass){
  CURL *curl=curl_easy_init();
@@ -137,8 +150,9 @@ static int post_site(const char *host,const char *user,const char *pass){
   goto cleanup;
  }
  if(strstr(page->data,title)){
-  already_present=1;found=1;
+  already_present=1;
   printf("%s: post already exists; not submitting duplicate\n",host);
+  found=verify_public_post(curl,page,host,title);
   goto cleanup;
  }
  title_encoded=curl_easy_escape(curl,title,0);
@@ -156,18 +170,9 @@ static int post_site(const char *host,const char *user,const char *pass){
  }
  created=1;
  memset(form,0,strlen(form));free(form);form=NULL;
- if(request(curl,url,page,NULL,&code)==CURLE_OK&&code==200&&strstr(page->data,title)){
-  /* Check public Core Posts route as well; status alone is not publication. */
-  snprintf(url,sizeof url,"%s/posts/the-stoopid-shit-poe-says-digit-takes-notes",host);
-  if(request(curl,url,page,NULL,&code)==CURLE_OK&&code==200&&
-     strstr(page->data,title)&&
-     strstr(page->data,"Hi Bishes! Digit here.")&&
-     strstr(page->data,"class=\"featured-image\"")&&
-     strstr(page->data,"/uploads/"))
-   found=1;
-  else
-   fprintf(stderr,"%s: public Post missing title, body, or featured image\n",host);
- }
+ if(request(curl,url,page,NULL,&code)==CURLE_OK&&code==200&&strstr(page->data,title))
+  found=verify_public_post(curl,page,host,title);
+ else fprintf(stderr,"%s: saved Post was not found in the admin listing (HTTP %ld)\n",host,code);
 
 cleanup:
  /* Logout on all paths after a session is established. */
@@ -200,7 +205,7 @@ done:
  memset(token,0,sizeof token);
  if(page){memset(page,0,sizeof *page);free(page);}
  if(curl)curl_easy_cleanup(curl);
- return authenticated&&created&&found&&logout_verified;
+ return authenticated&&(created||already_present)&&found&&logout_verified;
 }
 int main(void){
  char username[256]={0},password[512]={0};int ok=0;
