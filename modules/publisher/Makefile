@@ -4,7 +4,7 @@ CPPFLAGS += -I../../core/stnlabz_abi
 LDLIBS += -lcurl -ljson-c
 PREFIX ?= /opt/digit
 TARGET := bin/publisher.so
-.PHONY: all test clean install test-login test-announcement test-poemei-announcement test-poemei-post test-poemei-followup
+.PHONY: all test clean install test-login test-announcement test-poemei-announcement test-poemei-post test-poemei-followup test-other-sites-posts
 all: $(TARGET)
 $(TARGET): publisher.c ../../core/stnlabz_abi/module.h
 	@mkdir -p bin
@@ -54,3 +54,10 @@ bin/test_poemei_followup: test_poemei_followup.c
 	$(CC) $(CFLAGS) test_poemei_followup.c -o $@ -lcurl
 test-poemei-followup: bin/test_poemei_followup
 	./bin/test_poemei_followup
+
+# Live Core Posts tests for chaos-mvc.org and STN-LABZ (distinct public posts).
+bin/test_other_sites_posts: test_other_sites_posts.c
+	@mkdir -p bin
+	$(CC) $(CFLAGS) test_other_sites_posts.c -o $@ -lcurl
+test-other-sites-posts: bin/test_other_sites_posts
+	./bin/test_other_sites_posts
