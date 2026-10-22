@@ -117,7 +117,7 @@ static int post_site(const char *host,const char *user,const char *pass,
  if(!media){fprintf(stderr,"%s: Media selector missing\n",host);goto cleanup;}
  const char *select_end=strstr(media,"</select>");
  if(!select_end){fprintf(stderr,"%s: Media selector incomplete\n",host);goto cleanup;}
- int image_id=0,matched=0;
+ int image_id=-1,matched=0;
  const char *cursor=media;
  while((cursor=strstr(cursor,"<option"))&&cursor<select_end){
   const char *open_end=strchr(cursor,'>');
@@ -143,7 +143,7 @@ static int post_site(const char *host,const char *user,const char *pass,
       if(v<open_end&&(*v=='"'||*v=='\''))quote=*v++;
       char *endptr=NULL;
       long id=strtol(v,&endptr,10);
-      if(endptr>v&&endptr<open_end&&id>0&&id<=2147483647&&
+      if(endptr>v&&endptr<open_end&&id>=0&&id<=2147483647&&
          (quote?*endptr==quote:(isspace((unsigned char)*endptr)||*endptr=='>'))){
        image_id=(int)id;matched++;
       }else{
