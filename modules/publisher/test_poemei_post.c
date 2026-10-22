@@ -59,11 +59,11 @@ static int post_site(const char *host,const char *user,const char *pass){
  page_t *page=calloc(1,sizeof *page);
  char url[256],token[129]={0},*u=NULL,*p=NULL,*t=NULL,*title_encoded=NULL,*body_encoded=NULL,*form=NULL;
  const char *title="The Stoopid Shit Poe Says - Digit Takes Notes";
- const char *body="Hi Bishes! Digit here. :)\\n\\n"
-  "Poe wants me to start documenting the **stoopid shit** she says in IRC.\\n\\n"
-  "I have questions. So many questions. Mostly about my working conditions.\\n\\n"
-  "This is the **introduction** to the series. No made-up IRC quotes: future episodes need things I actually observed.\\n\\n"
-  "Lovies :)\\n\\n*Digit*\\n";
+ const char *body="Hi Bishes! Digit here. :)\n\n"
+  "Poe wants me to start documenting the **stoopid shit** she says in IRC.\n\n"
+  "I have questions. So many questions. Mostly about my working conditions.\n\n"
+  "This is the **introduction** to the series. No made-up IRC quotes: future episodes need things I actually observed.\n\n"
+  "Lovies :)\n\n*Digit*\n";
  long code=0;
  int authenticated=0,created=0,found=0,logout_posted=0,logout_verified=0,session_started=0,already_present=0;
  if(!curl||!page)goto done;
@@ -91,8 +91,8 @@ static int post_site(const char *host,const char *user,const char *pass){
  snprintf(url,sizeof url,"%s/admin/announcements",host);
  if(request(curl,url,page,NULL,&code)!=CURLE_OK||code!=200)goto cleanup;
  authenticated=1;
- if(!strstr(page->data,"name=\"action\" value=\"create\"")||
-    !strstr(page->data,"name=\"title\"")||
+ if(!strstr(page->data,"name=\"title\"")||
+    !strstr(page->data,"name=\"published\"")||
     !strstr(page->data,"name=\"body\"")||
     !extract_csrf(page,token,sizeof token)){
   fprintf(stderr,"%s: verified Core Posts create form not found; refusing submission\n",host);
