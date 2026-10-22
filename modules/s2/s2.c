@@ -510,6 +510,7 @@ static void *scheduler_main(void *unused){
  digit_s2_report_t result={0},pending={0},poll_snapshot={0};size_t used=0;
  int64_t pending_observation=0;
  int drain_observations=0;
+ int poll_ready=0;
  struct timespec until;
  (void)unused;
  for(;;){
@@ -518,6 +519,11 @@ static void *scheduler_main(void *unused){
   stopping_now=scheduler_stop;
   pthread_mutex_unlock(&scheduler_mutex);
   if(stopping_now)break;
+  if(!pending.report[0]&&poll_ready){
+   pending=poll_snapshot;
+   memset(&poll_snapshot,0,sizeof poll_snapshot);
+   poll_ready=0;
+  }
   if(!pending.report[0]&&observation_report(&pending,&pending_observation)){
    /* Send the selected Rictus-linked observation as an investigative
     * update to private Slack. Do not advance its cursor on failure. */
@@ -551,14 +557,8 @@ static void *scheduler_main(void *unused){
     pthread_mutex_lock(&intel_mutex);
     if(!strcmp(intel_pending,brief))intel_pending[0]=0;
     pthread_mutex_unlock(&intel_mutex);
-    if(poll_snapshot.report[0]&&!pending.report[0]){
-     pending=poll_snapshot;
-     memset(&poll_snapshot,0,sizeof poll_snapshot);
-    }
+    if(poll_snapshot.report[0])poll_ready=1;
    }
-  }
-  if(!pending.report[0]&&poll_snapshot.report[0]){
-   /* Do not advertise an undelivered Slack report. */
   }
   if(pending.report[0]&&host&&host->invoke_service){
    size_t delivered=0;
