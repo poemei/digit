@@ -369,8 +369,15 @@ static void *scheduler_main(void *unused){
   pthread_mutex_unlock(&scheduler_mutex);
   if(stopping_now)break;
   if(!pending.report[0]&&observation_report(&pending,&pending_observation)){
-   /* Observation delivery is prioritized; the existing Sentinel/Rictus
-    * cycle resumes when the observation queue has been drained. */
+   /* Send the selected Rictus-linked observation as an investigative
+    * update to private Slack. Do not advance its cursor on failure. */
+   char update[INTEL_REPORT_CAP]={0};
+   intelligence_brief(update,sizeof update,pending.report,-1,0,0,0,
+     "S2 observation ID in summary",1);
+   if(!deliver_intel(update)){
+    memset(&pending,0,sizeof pending);
+    pending_observation=0;
+   }
   }
   if(!pending.report[0]){
    memset(&result,0,sizeof result);used=0;
