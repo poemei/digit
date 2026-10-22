@@ -1,13 +1,11 @@
-# Digit Publisher v0.1.0 — native ABI 1.5 Markdown publishing
+# Digit Publisher v0.2.0 — ABI 1.5
 
-Service: `digit.publisher.publish`. No Core changes, no LLM dependency.
+Publisher loads `/opt/digit/auth/sites/sites.json`, containing up to three independent sites named `chaos`, `stnlabz`, and `poemei`. The JSON must be owned by root or the Digit process UID, be a regular file, and have no group or other permission bits (use chmod 600). See `sites.json.example`.
 
-The caller submits `publish_request_t` with `site` (`chaos` or `stnlabz`), `kind` (`announcements`, `news`, `page`, `posts`), category, title and Markdown source. The handler posts authenticated JSON to the configured HTTPS endpoint using an independently scoped Bearer credential per site. The server must explicitly return HTTP 200/201 with JSON `{"published":true,"id":"...","url":"https://..."}`. Only then is publication reported as successful.
+Each site includes `enabled`, `endpoint`, `token`, `kinds`, and optional `voice`. Disabled sites require no credentials or endpoints. Enabled sites require a HTTPS endpoint on the exact configured site's domain, a Bearer token, and at least one authorized publishing kind. The `kinds` list is a local limitation, not proof of remote permission. The `voice` metadata is reserved for Digit's editorial decision-maker; the transport does not itself write prose.
 
-**Integration boundary:** This is a server-side API contract **required by the module**, not a verified claim about the currently deployed ChAoS MVC sites. The existing admin pages and a human login do not prove that a compatible API exists. No website request is made when its endpoint is disabled. Wire this to a real authenticated ChAoS MVC publishing route after inspecting that route. Publishing scopes remain enforced by the website.
+The existing ABI service `digit.publisher.publish` accepts the same fixed-size request struct with site, kind, category, title, and raw GFM Markdown. A request denied by local `kinds` never reaches a website. The transport submits JSON with kind, category, title, content, and format. A publication is confirmed only if the server returns HTTP 200/201 and JSON containing `published:true`, `id`, and HTTPS `url`.
 
-The transport does not independently decide editorial relevance: Digit's existing evidence/reasoning modules must supply approved publication requests. Autonomous discovery, editorial selection, duplicate tracking, and publication scheduler are NOT yet implemented and must not be treated as working merely because this module qualifies.
+**Important:** This submission JSON shape is still a required, unverified server contract, not a claim that ChAoS MVC currently provides that endpoint. Site-specific publishing route and credential integration require inspecting the deployed module controllers. This module is not autonomous editorial planning, scheduling, or duplicate detection. No live posts have been demonstrated.
 
-Credentials must never be committed. The config file must be owned by root or the Digit process UID, ordinary 0600 file. Both domains can be configured independently.
-
-Build and qualify: `make -C modules/publisher clean all test`; install only after operator acceptance.
+Test: `make -C modules/publisher clean all test`. No Core modifications.
