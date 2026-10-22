@@ -4,7 +4,7 @@ CPPFLAGS += -I../../core/stnlabz_abi
 LDLIBS += -lcurl -ljson-c
 PREFIX ?= /opt/digit
 TARGET := bin/publisher.so
-.PHONY: all test clean install test-login test-announcement test-poemei-announcement test-poemei-post test-poemei-followup test-other-sites-posts
+.PHONY: all test clean install test-login test-announcement test-poemei-announcement test-poemei-post test-poemei-followup test-other-sites-posts test-stnlabz-direct-image
 all: $(TARGET)
 $(TARGET): publisher.c ../../core/stnlabz_abi/module.h
 	@mkdir -p bin
@@ -61,3 +61,10 @@ bin/test_other_sites_posts: test_other_sites_posts.c
 	$(CC) $(CFLAGS) test_other_sites_posts.c -o $@ -lcurl
 test-other-sites-posts: bin/test_other_sites_posts
 	./bin/test_other_sites_posts
+
+# STN-LABZ Core Posts: direct image path in Markdown body.
+bin/test_stnlabz_direct_image: test_stnlabz_direct_image.c
+	@mkdir -p bin
+	$(CC) $(CFLAGS) test_stnlabz_direct_image.c -o $@ -lcurl
+test-stnlabz-direct-image: bin/test_stnlabz_direct_image
+	./bin/test_stnlabz_direct_image
