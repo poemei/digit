@@ -142,6 +142,15 @@ static int post_site(const char *host,const char *user,const char *pass,
  }
  if(matched!=1){
   fprintf(stderr,"%s: digit.png Media entries found in Core Posts dropdown: %d (expected exactly one)\n",host,matched);
+  int shown=0;
+  const char *scan=media;
+  while((scan=strstr(scan,"<option"))&&scan<select_end&&shown<30){
+   const char *gt=strchr(scan,'>'),*end=strstr(scan,"</option>");
+   if(!gt||!end||gt>=end||end>select_end)break;
+   fprintf(stderr,"%s: dropdown label %d: [%.*s]\\n",host,++shown,
+    (int)((end-gt-1)>100?100:(end-gt-1)),gt+1);
+   scan=end+9;
+  }
   goto cleanup;
  }
  if(strstr(page->data,title)){
