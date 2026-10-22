@@ -2,26 +2,35 @@
   "sites": [
     {
       "name": "chaos",
-      "enabled": false,
-      "endpoint": "",
-      "token": "",
-      "kinds": ["announcements", "news", "page", "posts"],
+      "enabled": true,
+      "kinds": [
+        "announcements",
+        "news",
+        "page",
+        "posts"
+      ],
       "voice": "technical"
     },
     {
       "name": "stnlabz",
-      "enabled": false,
-      "endpoint": "",
-      "token": "",
-      "kinds": ["announcements", "news", "page", "posts"],
+      "enabled": true,
+      "kinds": [
+        "announcements",
+        "news",
+        "page",
+        "posts"
+      ],
       "voice": "professional"
     },
     {
       "name": "poemei",
-      "enabled": false,
-      "endpoint": "",
-      "token": "",
-      "kinds": ["announcements", "news", "page", "posts"],
+      "enabled": true,
+      "kinds": [
+        "announcements",
+        "news",
+        "page",
+        "posts"
+      ],
       "voice": "playful"
     }
   ]
