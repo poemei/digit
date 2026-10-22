@@ -10,6 +10,7 @@
 #include <time.h>
 #include <pthread.h>
 #include <errno.h>
+#include <sqlite3.h>
 #include "module.h"
 #include "s2.h"
 #include "s2_observations.h"
@@ -21,6 +22,7 @@
 #define DELIVER_SERVICE "digit.irc.deliver"
 #define INTEL_DELIVERY "digit.slack.intel.deliver"
 #define INTEL_REPORT_CAP 8192
+#define CASE_DB "/opt/digit/state/s2_cases.sqlite3"
 typedef struct {char *data;size_t length;} buffer_t;
 static const stnlabz_module_host_t *host;
 static volatile int busy;
@@ -91,6 +93,111 @@ static int high(const char *severity,const char *relevance){
  return ((!strcmp(severity,"HIGH")||!strcmp(severity,"CRITICAL"))&&
          (!strcmp(relevance,"HIGH")||!strcmp(relevance,"CRITICAL")));
 }
+
+/* MEDIUM begins investigation. A repeated API snapshot is not new evidence.
+ * SQLite keeps per-source case state across S2 hotloads. */
+static int rank_level(const char *s){
+ if(!strcmp(s,"CRITICAL"))return 4;
+ if(!strcmp(s,"HIGH"))return 3;
+ if(!strcmp(s,"MEDIUM"))return 2;
+ if(!strcmp(s,"LOW"))return 1;
+ return 0;
+}
+static int investigation_candidate(const char *severity,const char *relevance){
+ return rank_level(severity)>=2&&rank_level(relevance)>=2;
+}
+static int case_db_open(sqlite3 **db){
+ if(sqlite3_open_v2(CASE_DB,db,SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE,NULL)!=SQLITE_OK){
+  if(*db)sqlite3_close(*db);*db=NULL;return 0;
+ }
+ sqlite3_busy_timeout(*db,1000);
+ const char *ddl="CREATE TABLE IF NOT EXISTS s2_cases ("
+  "source_id TEXT PRIMARY KEY, severity TEXT NOT NULL, relevance TEXT NOT NULL,"
+  "source_time TEXT NOT NULL, primary_ip TEXT NOT NULL, detail_ip TEXT NOT NULL,"
+  "domain TEXT NOT NULL, request_url TEXT NOT NULL, first_seen INTEGER NOT NULL,"
+  "last_seen INTEGER NOT NULL, revisions INTEGER NOT NULL DEFAULT 1)";
+ if(sqlite3_exec(*db,ddl,NULL,NULL,NULL)!=SQLITE_OK){
+  sqlite3_close(*db);*db=NULL;return 0;
+ }
+ return 1;
+}
+static int update_case(sqlite3 *db,json_object *entry,char *event,size_t cap){
+ const char *id=field(entry,"id"),*severity=field(entry,"severity"),
+  *relevance=field(entry,"relevance"),*when=field(entry,"created_at"),
+  *primary=field(entry,"ip");
+ json_object *details=NULL;
+ json_object_object_get_ex(entry,"details",&details);
+ const char *other=field(details,"ip_address"),*domain=field(details,"domain"),
+  *path=field(details,"request_url");
+ if(!investigation_candidate(severity,relevance)||!id[0]||strlen(id)>120||
+    !when[0]||strlen(when)>63)return 0;
+ sqlite3_stmt *st=NULL;int prior=-1,previous_relevance=-1;
+ const char *old_time="";
+ if(sqlite3_prepare_v2(db,
+   "SELECT severity,relevance,source_time FROM s2_cases WHERE source_id=?1",
+   -1,&st,NULL)!=SQLITE_OK)return -1;
+ sqlite3_bind_text(st,1,id,-1,SQLITE_TRANSIENT);
+ int rc=sqlite3_step(st);
+ if(rc==SQLITE_ROW){
+  prior=rank_level((const char*)sqlite3_column_text(st,0));
+  previous_relevance=rank_level((const char*)sqlite3_column_text(st,1));
+  old_time=(const char*)sqlite3_column_text(st,2);
+  if(!old_time)old_time="";
+  if(!strcmp(old_time,when)&&prior==rank_level(severity)&&
+     previous_relevance==rank_level(relevance)){
+   sqlite3_finalize(st);return 0;
+  }
+ }else if(rc!=SQLITE_DONE){sqlite3_finalize(st);return -1;}
+ sqlite3_finalize(st);
+ const char *sql="INSERT INTO s2_cases "
+ "(source_id,severity,relevance,source_time,primary_ip,detail_ip,domain,"
+ "request_url,first_seen,last_seen,revisions) VALUES "
+ "(?1,?2,?3,?4,?5,?6,?7,?8,strftime('%s','now'),strftime('%s','now'),1) "
+ "ON CONFLICT(source_id) DO UPDATE SET "
+ "severity=excluded.severity,relevance=excluded.relevance,"
+ "source_time=excluded.source_time,primary_ip=excluded.primary_ip,"
+ "detail_ip=excluded.detail_ip,domain=excluded.domain,"
+ "request_url=excluded.request_url,last_seen=excluded.last_seen,"
+ "revisions=s2_cases.revisions+1";
+ if(sqlite3_prepare_v2(db,sql,-1,&st,NULL)!=SQLITE_OK)return -1;
+ const char *v[]={id,severity,relevance,when,primary,other,domain,path};
+ for(int i=0;i<8;i++)sqlite3_bind_text(st,i+1,v[i],-1,SQLITE_TRANSIENT);
+ rc=sqlite3_step(st);sqlite3_finalize(st);
+ if(rc!=SQLITE_DONE)return -1;
+ snprintf(event,cap,"%s id=%.90s severity=%s relevance=%s source_time=%.40s "
+  "primary_ip=%.45s details_ip=%.45s domain=%.80s request=%.100s",
+  prior<0?"OPENED":rank_level(severity)>prior?"ESCALATED":"UPDATED",
+  id,severity,relevance,when,primary,other,domain,path);
+ return 1;
+}
+static int ingest_cases(json_object *records,char *summary,size_t cap,int *total){
+ sqlite3 *db=NULL;
+ if(!case_db_open(&db))return -1;
+ int updates=0,errors=0;size_t pos=0;
+ size_t length=json_object_array_length(records);
+ if(length>5000)length=5000;
+ for(size_t i=0;i<length;i++){
+  json_object *entry=json_object_array_get_idx(records,(int)i);
+  if(!entry||!json_object_is_type(entry,json_type_object))continue;
+  char event[600]={0};
+  int rc=update_case(db,entry,event,sizeof event);
+  if(rc<0){errors++;continue;}
+  if(rc>0){
+   updates++;
+   if(updates<=5&&pos<cap){
+    int n=snprintf(summary+pos,cap-pos,"%s\n",event);
+    if(n>0&&(size_t)n<cap-pos)pos+=(size_t)n;
+   }
+  }
+ }
+ sqlite3_stmt *st=NULL;*total=-1;
+ if(sqlite3_prepare_v2(db,"SELECT count(*) FROM s2_cases",-1,&st,NULL)==SQLITE_OK){
+  if(sqlite3_step(st)==SQLITE_ROW)*total=sqlite3_column_int(st,0);
+  sqlite3_finalize(st);
+ }
+ sqlite3_close(db);
+ return errors?-1:updates;
+}
 static long local_tail(char lines[RICTUS_LINES][512],size_t *stored){
  FILE *f=fopen(RICTUS,"r");char line[512];long count=0;
  *stored=0;
@@ -128,6 +235,7 @@ static stnlabz_module_result_t poll_service(
  digit_s2_report_t *out=response;buffer_t b={0};
  char lines[RICTUS_LINES][512];size_t stored=0;
  long count;int available,has_priority=0,matched=0,stale=0,source_state,first_report;
+ int case_updates=0,case_total=-1;char case_summary[3500]={0};
  json_object *root=NULL,*records=NULL,*entry;
  const char *severity,*relevance,*id,*first,*second,*date,*best_date="";
  char signature[192]={0};char report[DIGIT_S2_REPORT_CAP]={0};
@@ -155,13 +263,14 @@ static stnlabz_module_result_t poll_service(
   if(!records||!json_object_is_type(records,json_type_array))available=0;
  }else available=0;
  if(available){
+  case_updates=ingest_cases(records,case_summary,sizeof case_summary,&case_total);
   length=json_object_array_length(records);
   if(length>5000)length=5000;
   for(i=0;i<length;i++){
    entry=json_object_array_get_idx(records,(int)i);
    if(!entry||!json_object_is_type(entry,json_type_object))continue;
    severity=field(entry,"severity");relevance=field(entry,"relevance");
-   if(!high(severity,relevance))continue;
+   if(!investigation_candidate(severity,relevance))continue;
    has_priority=1;id=field(entry,"id");date=field(entry,"created_at");
    first=field(entry,"ip");
    {json_object *details=NULL;
@@ -186,11 +295,11 @@ static stnlabz_module_result_t poll_service(
   snprintf(report,sizeof report,"[S2] Rictus log unavailable; Sentinel feed read. Correlation incomplete.");
  }else if(has_priority){
   snprintf(report,sizeof report,
-   "[S2] HIGH/CRITICAL severity and relevance observed in Sentinel; Rictus indicator match=%s; investigation pending (not proof of compromise).",
+   "[S2] MEDIUM-or-higher severity AND relevance under investigation; Rictus indicator match=%s (not proof of compromise).",
    matched?"yes":"not found");
  }else if(first_report){
   snprintf(report,sizeof report,
-   "[S2] Mission online: Rictus accessible; Sentinel accessible; no HIGH/CRITICAL paired findings in this snapshot. No all-clear implied.");
+   "[S2] Mission online: Rictus accessible; Sentinel accessible; no MEDIUM-or-higher paired findings in this snapshot. No all-clear implied.");
  }else if(count>previous_lines){
   snprintf(report,sizeof report,
    "[S2] Rictus has %ld new log records in current file; Sentinel available; unclassified observations require review.",
@@ -198,7 +307,7 @@ static stnlabz_module_result_t poll_service(
  }else stale=1;
  if(!stale&&report[0]){
   lock();
-  if(has_reported && source_state==last_source_state &&
+  if(case_updates==0 && has_reported && source_state==last_source_state &&
      !strcmp(signature,previous_signature)&&count==previous_lines){
    unlock();goto done;
   }
@@ -210,6 +319,14 @@ static stnlabz_module_result_t poll_service(
   char brief[INTEL_REPORT_CAP]={0};
   intelligence_brief(brief,sizeof brief,report,count,available,has_priority,matched,
     signature,!first_report);
+  if(case_updates>0){
+   size_t used=strlen(brief);
+   snprintf(brief+used,sizeof brief-used,"\n\n*CASE ACTIVITY* (records opened/changed: %d; tracked cases: %d)\n%.3000s",
+     case_updates,case_total,case_summary);
+  }else if(case_updates<0){
+   size_t used=strlen(brief);
+   snprintf(brief+used,sizeof brief-used,"\n\n*CASE PERSISTENCE WARNING*: local case database failed; do not treat this as a complete investigation history.");
+  }
   pthread_mutex_lock(&intel_mutex);
   /* Never overwrite an undelivered private brief. */
   if(!intel_pending[0])snprintf(intel_pending,sizeof intel_pending,"%s",brief);
@@ -238,6 +355,10 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  test(r,high("HIGH","CRITICAL"),0);
  test(r,high("CRITICAL","CRITICAL"),0);
  test(r,!high("MEDIUM","MEDIUM"),1);
+ test(r,investigation_candidate("MEDIUM","MEDIUM"),0);
+ test(r,investigation_candidate("HIGH","MEDIUM"),0);
+ test(r,!investigation_candidate("LOW","HIGH"),1);
+ test(r,rank_level("CRITICAL")>rank_level("HIGH"),0);
  test(r,!high("HIGH","LOW"),1);
  test(r,!high("LOW","HIGH"),1);
  test(r,!high("","HIGH"),1);
@@ -451,7 +572,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=1,.version_patch=6,
+ .version_major=0,.version_minor=1,.version_patch=7,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
