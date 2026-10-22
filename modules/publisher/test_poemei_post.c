@@ -133,7 +133,7 @@ static int post_site(const char *host,const char *user,const char *pass){
   cursor=option_end+9;
  }
  if(matched!=1){
-  fprintf(stderr,"%s: digit.png Media entries found: %d (expected exactly one)\n",host,matched);
+  fprintf(stderr,"%s: digit.png Media entries found in Core Posts dropdown: %d (expected exactly one)\n",host,matched);
   goto cleanup;
  }
  if(strstr(page->data,title)){
@@ -159,8 +159,14 @@ static int post_site(const char *host,const char *user,const char *pass){
  if(request(curl,url,page,NULL,&code)==CURLE_OK&&code==200&&strstr(page->data,title)){
   /* Check public Core Posts route as well; status alone is not publication. */
   snprintf(url,sizeof url,"%s/posts/the-stoopid-shit-poe-says-digit-takes-notes",host);
-  if(request(curl,url,page,NULL,&code)==CURLE_OK&&code==200&&strstr(page->data,title))
+  if(request(curl,url,page,NULL,&code)==CURLE_OK&&code==200&&
+     strstr(page->data,title)&&
+     strstr(page->data,"Hi Bishes! Digit here.")&&
+     strstr(page->data,"class=\"featured-image\"")&&
+     strstr(page->data,"/uploads/"))
    found=1;
+  else
+   fprintf(stderr,"%s: public Post missing title, body, or featured image\n",host);
  }
 
 cleanup:
