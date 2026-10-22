@@ -128,17 +128,34 @@ static int post_site(const char *host,const char *user,const char *pass,
   while(last>first&&isspace((unsigned char)last[-1]))last--;
   if((size_t)(last-first)==sizeof("digit.png")-1&&
      !memcmp(first,"digit.png",sizeof("digit.png")-1)){
-   const char *attr=strstr(cursor,"value=");
-   if(attr&&attr<open_end){
-    attr+=6;
-    char quote=(*attr=='"'||*attr=='\'')?*attr++:0;
-    char *endptr=NULL;
-    long id=strtol(attr,&endptr,10);
-    if(endptr>attr&&endptr<open_end&&id>0&&id<=2147483647&&
-       (!quote||*endptr==quote)){
-     image_id=(int)id;matched++;
-    }else fprintf(stderr,"%s: digit.png option has invalid Media ID\n",host);
-   }else fprintf(stderr,"%s: digit.png option lacks a Media ID\n",host);
+   /* Read the value attribute only within this option's opening tag. */
+   const char *attr=cursor;
+   while(attr<open_end){
+    while(attr<open_end&&isspace((unsigned char)*attr))attr++;
+    if(attr>=open_end)break;
+    if((size_t)(open_end-attr)>=5&&!memcmp(attr,"value",5)){
+     const char *v=attr+5;
+     while(v<open_end&&isspace((unsigned char)*v))v++;
+     if(v<open_end&&*v=='='){
+      v++;
+      while(v<open_end&&isspace((unsigned char)*v))v++;
+      char quote=0;
+      if(v<open_end&&(*v=='"'||*v=='\''))quote=*v++;
+      char *endptr=NULL;
+      long id=strtol(v,&endptr,10);
+      if(endptr>v&&endptr<open_end&&id>0&&id<=2147483647&&
+         (quote?*endptr==quote:(isspace((unsigned char)*endptr)||*endptr=='>'))){
+       image_id=(int)id;matched++;
+      }else{
+       fprintf(stderr,"%s: digit.png option ID not parseable; option opening tag: [%.*s]\n",
+        host,(int)((open_end-cursor)>200?200:(open_end-cursor+1)),cursor);
+      }
+      break;
+     }
+    }
+    while(attr<open_end&&!isspace((unsigned char)*attr))attr++;
+   }
+
   }
   cursor=option_end+9;
  }
