@@ -12,7 +12,7 @@
 #include <curl/curl.h>
 #include <json-c/json.h>
 #include "module.h"
-#define CONFIG "/opt/digit/auth/publisher/publisher.conf"
+#define CONFIG "/opt/digit/auth/sites/sites.json"
 #define SERVICE "digit.publisher.publish"
 #define MAX_BODY 16384
 typedef struct {
@@ -21,8 +21,8 @@ typedef struct {
 typedef struct {
  int published;char publication_id[128],url[1024],error[160];
 } publish_response_t;
-typedef struct {char name[32],endpoint[512],token[512];} destination_t;
-static destination_t destinations[2];
+typedef struct {char name[32],endpoint[512],token[512];char kinds[4][32];int kind_count;} destination_t;
+static destination_t destinations[3];
 static const stnlabz_module_host_t *host_api;
 static void erase(void *p,size_t n){volatile unsigned char *b=p;while(n--)*b++=0;}
 static int bounded(const char *s,size_t max){return s&&memchr(s,0,max)!=NULL;}
@@ -40,7 +40,8 @@ static int endpoint_allowed(const char *site,const char *url){
  const char *host;
  if(!site||!url||strncmp(url,"https://",8))return 0;
  host=!strcmp(site,"chaos")?"chaos-mvc.org":
-      !strcmp(site,"stnlabz")?"stn-labz.com":NULL;
+      !strcmp(site,"stnlabz")?"stn-labz.com":
+      !strcmp(site,"poemei")?"poemei.com":NULL;
  if(!host)return 0;
  url+=8;
  if(!strncmp(url,"www.",4))url+=4;
@@ -64,48 +65,52 @@ static int input_valid(const publish_request_t *p){
  return 1;
 }
 static int load_config(void){
- FILE *fp;char line[1536];int seen[6]={0};
- destination_t local[2]={0};
- if(!secure_config(CONFIG)||(fp=fopen(CONFIG,"r"))==NULL)return 0;
- copy(local[0].name,sizeof local[0].name,"chaos");
- copy(local[1].name,sizeof local[1].name,"stnlabz");
- while(fgets(line,sizeof line,fp)){
-  char *key=line,*value,*end;int index=-1,field=-1;
-  if(!strchr(line,'\n')&&!feof(fp))goto fail;
-  while(isspace((unsigned char)*key))key++;
-  if(!*key||*key=='#')continue;
-  value=strchr(key,'=');if(!value)goto fail;
-  *value++=0;end=key+strlen(key);
-  while(end>key&&isspace((unsigned char)end[-1]))*--end=0;
-  end=value+strlen(value);
-  while(end>value&&isspace((unsigned char)end[-1]))*--end=0;
-  if(!strncmp(key,"chaos_",6)){index=0;key+=6;}
-  else if(!strncmp(key,"stnlabz_",8)){index=1;key+=8;}
-  else goto fail;
-  if(!strcmp(key,"endpoint"))field=0;
-  else if(!strcmp(key,"token"))field=1;
-  else if(!strcmp(key,"enabled"))field=2;
-  else goto fail;
-  if(field==0){
-   if((*value&&!endpoint_allowed(local[index].name,value))||!copy(local[index].endpoint,sizeof local[index].endpoint,value))goto fail;
-  }else if(field==1){
-   if((*value&&!safe_token(value))||!copy(local[index].token,sizeof local[index].token,value))goto fail;
-  }else if(strcmp(value,"true")&&strcmp(value,"false"))goto fail;
-  seen[index*3+field]=field==2?(!strcmp(value,"true")?1:2):1;
+ FILE *fp=NULL;char data[8192]={0};size_t n;
+ struct json_object *root=NULL,*sites=NULL;
+ destination_t local[3]={0};
+ const char *names[]={"chaos","stnlabz","poemei"};
+ int ok=0,seen[3]={0};
+ if(!secure_config(CONFIG)||(fp=fopen(CONFIG,"rb"))==NULL)return 0;
+ n=fread(data,1,sizeof data,fp);
+ if(ferror(fp)||n==sizeof data)goto done;
+ data[n]=0;
+ root=json_tokener_parse(data);
+ if(!root||!json_object_is_type(root,json_type_object)||
+    !json_object_object_get_ex(root,"sites",&sites)||
+    !json_object_is_type(sites,json_type_array))goto done;
+ for(int i=0;i<3;i++)copy(local[i].name,sizeof local[i].name,names[i]);
+ int total=json_object_array_length(sites);
+ if(total>3)goto done;
+ for(int i=0;i<total;i++){
+  struct json_object *site=json_object_array_get_idx(sites,i),*enabled=NULL,*kinds=NULL;
+  const char *name=json_string(site,"name"),*endpoint=json_string(site,"endpoint"),*token=json_string(site,"token");
+  int index=-1;
+  if(!name||!json_object_object_get_ex(site,"enabled",&enabled)||
+     !json_object_is_type(enabled,json_type_boolean))goto done;
+  for(int j=0;j<3;j++)if(!strcmp(name,names[j]))index=j;
+  if(index<0||seen[index])goto done;
+  seen[index]=1;
+  if(!json_object_get_boolean(enabled))continue;
+  if(!endpoint||!token||!endpoint_allowed(name,endpoint)||
+     !safe_token(token)||!copy(local[index].endpoint,sizeof local[index].endpoint,endpoint)||
+     !copy(local[index].token,sizeof local[index].token,token)||
+     !json_object_object_get_ex(site,"kinds",&kinds)||
+     !json_object_is_type(kinds,json_type_array))goto done;
+  int ktotal=json_object_array_length(kinds);
+  if(ktotal<1||ktotal>4)goto done;
+  for(int k=0;k<ktotal;k++){
+   struct json_object *kind=json_object_array_get_idx(kinds,k);
+   if(!json_object_is_type(kind,json_type_string))goto done;
+   const char *value=json_object_get_string(kind);
+   if(!kind_allowed(value)||!copy(local[index].kinds[k],sizeof local[index].kinds[k],value))goto done;
+  }
+  local[index].kind_count=ktotal;
  }
- if(ferror(fp))goto fail;
- fclose(fp);
- for(int i=0;i<2;i++){
-  if(seen[i*3+2]==1){
-   if(seen[i*3]!=1||seen[i*3+1]!=1||!local[i].endpoint[0]||!local[i].token[0])goto fail_closed;
-  }else {erase(local[i].token,sizeof local[i].token);local[i].endpoint[0]=0;}
- }
- memcpy(destinations,local,sizeof local);
- erase(local,sizeof local);erase(line,sizeof line);return 1;
-fail:
- fclose(fp);
-fail_closed:
- erase(local,sizeof local);erase(line,sizeof line);return 0;
+ memcpy(destinations,local,sizeof local);ok=1;
+done:
+ if(root)json_object_put(root);
+ if(fp)fclose(fp);
+ erase(local,sizeof local);erase(data,sizeof data);return ok;
 }
 typedef struct {char bytes[8192];size_t length;} buffer_t;
 static size_t read_response(char *ptr,size_t size,size_t count,void *ctx){
@@ -133,8 +138,11 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
  if(used)*used=0;
  if(!req||bytes!=sizeof *p||!res||cap<sizeof answer||!used||!input_valid(p))
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
- for(int i=0;i<2;i++)if(!strcmp(p->site,destinations[i].name))dest=&destinations[i];
+ for(int i=0;i<3;i++)if(!strcmp(p->site,destinations[i].name))dest=&destinations[i];
  if(!dest||!dest->endpoint[0]||!dest->token[0])return STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
+ int allowed=0;
+ for(int j=0;j<dest->kind_count;j++)if(!strcmp(dest->kinds[j],p->kind))allowed=1;
+ if(!allowed)return STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
  if(snprintf(authorization,sizeof authorization,"Authorization: Bearer %s",dest->token)>=(int)sizeof authorization)
   return STNLABZ_MODULE_ERR_INVALID_STATE;
  payload=json_object_new_object();if(!payload)goto done;
@@ -192,6 +200,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  check(r,endpoint_allowed("chaos","https://chaos-mvc.org/api/publish"),0);
  check(r,endpoint_allowed("stnlabz","https://stn-labz.com/api/publish"),0);
  check(r,endpoint_allowed("chaos","https://www.chaos-mvc.org/api/publish"),0);
+ check(r,endpoint_allowed("poemei","https://poemei.com/api/publish"),0);
  check(r,!endpoint_allowed("chaos","http://chaos-mvc.org/api/publish"),1);
  check(r,!endpoint_allowed("chaos","https://chaos-mvc.org.evil.test/"),1);
  check(r,!endpoint_allowed("chaos","https://evil.test/api"),1);
@@ -240,7 +249,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="publisher",.name="Digit Markdown Publisher",
- .version_major=0,.version_minor=1,.version_patch=0,
+ .version_major=0,.version_minor=2,.version_patch=0,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
