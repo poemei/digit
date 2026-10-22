@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
@@ -17,6 +18,7 @@
 #include <json-c/json.h>
 #include "module.h"
 #include "dsd.h"
+#include "../observation/observation.h"
 #include <stdint.h>
 
 #define CONFIG_PATH "/opt/digit/auth/slack/slack.conf"
@@ -273,6 +275,47 @@ static const char *event_team(struct json_object *root,struct json_object *paylo
  if(!team)team=field(root,"team");
  return team;
 }
+/* IRC records ambient channel speech before deciding participation. Slack
+ * submits the same Observation ABI envelope, including quiet messages. */
+static stnlabz_module_result_t observe_slack(const char *channel,
+ const char *user,const char *body){
+ digit_observation_record_t rec={0};
+ digit_observation_receipt_t receipt={0};
+ size_t used=0;
+ stnlabz_module_result_t rc;
+ if(!host_api||!host_api->invoke_service||!channel||!user||!body)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ if(!copy(rec.transport,sizeof rec.transport,"slack")||
+    !copy(rec.channel,sizeof rec.channel,channel)||
+    !copy(rec.sender,sizeof rec.sender,user)||
+    !copy(rec.account,sizeof rec.account,user)||
+    !copy(rec.text,sizeof rec.text,body))return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ rc=host_api->invoke_service(DIGIT_OBSERVATION_RECORD_SERVICE,
+    &rec,sizeof rec,NULL,0,&used);
+ if(rc==STNLABZ_MODULE_ERR_INVALID_ARGUMENT){
+  used=0;
+  rc=host_api->invoke_service(DIGIT_OBSERVATION_INSERT_SERVICE,
+     &rec,sizeof rec,&receipt,sizeof receipt,&used);
+  if(rc==STNLABZ_MODULE_OK&&
+    (used!=sizeof receipt||receipt.observation_id<=0||
+     receipt.context_id<=0||!memchr(receipt.event_id,0,sizeof receipt.event_id)||
+     !receipt.event_id[0]))return STNLABZ_MODULE_ERR_INVALID_STATE;
+ }else if(rc==STNLABZ_MODULE_OK&&used!=0)
+  return STNLABZ_MODULE_ERR_INVALID_STATE;
+ return rc;
+}
+/* IRC treats a leading nick as an explicit address without a platform mention. */
+static size_t slack_address_prefix(const char *text){
+ const char *names[]={"digit","digicat"};
+ if(!text)return 0;
+ while(isspace((unsigned char)*text))text++;
+ for(size_t i=0;i<sizeof names/sizeof names[0];i++){
+  size_t n=strlen(names[i]);
+  if(!strncasecmp(text,names[i],n)&&
+     (!text[n]||text[n]==':'||text[n]==','||
+      isspace((unsigned char)text[n])))return n;
+ }
+ return 0;
+}
 static void on_event(struct json_object *root){
  struct json_object *payload=obj(root,"payload"),*event=obj(payload,"event");
  const char *type=field(event,"type"),*team=event_team(root,payload);
@@ -288,14 +331,26 @@ static void on_event(struct json_object *root){
     !text||!host_api||!host_api->invoke_service)return;
  mode=route_kind(type,channel_type,channel,bot_id!=NULL,subtype!=NULL);
  if(mode==0)return;
+ /* Observation is independent of interpretation and response selection. */
+ if(mode==1||mode==2)(void)observe_slack(channel,user,text);
+ if(mode==1&&slack_address_prefix(text))mode=2;
  if(!copy(msg.sender,sizeof msg.sender,user)||
     !copy(msg.account,sizeof msg.account,user)||
     !copy(msg.target,sizeof msg.target,channel))return;
- if(!normalized_message(text,mode==2,msg.message,sizeof msg.message)){
+ if(!normalized_message(text,mode==2&&strstr(text,"<@")!=NULL,
+       msg.message,sizeof msg.message)){
   /* The passive listener never creates synthetic speech or replies.
    * Even an empty mention is passed to Conversation for its own decision. */
   if(mode!=2)return;
   msg.message[0]=0;
+ }
+ /* Remove an IRC-style leading address after Slack mention normalization. */
+ if(mode==2&&slack_address_prefix(msg.message)){
+  size_t offset=slack_address_prefix(msg.message);
+  char *p=msg.message+offset;
+  if(*p==':'||*p==',')p++;
+  while(isspace((unsigned char)*p))p++;
+  memmove(msg.message,p,strlen(p)+1);
  }
  service=mode==1?CONVERSATION_LISTEN_SERVICE:CONVERSATION_SERVICE;
  if(mode==3&&is_dsd(msg.message)){
@@ -480,6 +535,11 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
   check(r,!bridge_allowed("C123"),1);
   config=previous;}
  check(r,is_dsd("show trace"),0);
+ check(r,slack_address_prefix("digit what is your mission?")==5,0);
+ check(r,slack_address_prefix("Digit, hello")==5,0);
+ check(r,slack_address_prefix("digicat: hi")==7,0);
+ check(r,slack_address_prefix("digital")==0,1);
+ check(r,slack_address_prefix("hello digit")==0,1);
  check(r,!is_dsd("hi"),1);
  check(r,!is_dsd(NULL),1);
  check(r,!strcmp(CONVERSATION_LISTEN_SERVICE,"digit.conversation.listen"),0);
@@ -536,7 +596,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="slack",.name="Slack ABI Transport",
- .version_major=0,.version_minor=1,.version_patch=6,
+ .version_major=0,.version_minor=1,.version_patch=7,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
