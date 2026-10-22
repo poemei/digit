@@ -1,6 +1,6 @@
-# Digit Publisher v0.3.0 — ABI 1.5
+# Digit Publisher v0.4.0 — ABI 1.5
 
-The production service `digit.publisher.publish` now uses the tested ChAoS MVC browser-form contract, not an invented Bearer JSON API. It accepts the original fixed-size request (`site`, `kind`, `category`, `title`, `markdown`) and responds with confirmation/error in the original response shape. Supported sites: `chaos`, `stnlabz`, `poemei`. Supported kinds: `announcements`, `news`, `page`, `posts`. SRT and Intelligence are not enabled.
+The production service `digit.publisher.publish` now uses the tested ChAoS MVC browser-form contract, not an invented Bearer JSON API. It accepts a revised fixed-size request (`site`, `kind`, `category`, `title`, `markdown`, `subject`, `source_actor`, `evidence_ref`, `post_title`, `post_markdown`) and responds with confirmation/error in the original response shape. Configured sites: `chaos`, `stnlabz`, `poemei`. PoeMei publishing is temporarily fail-closed until the existing identity file/gate is integrated. Supported kinds: `announcements`, `news`, `page`, `posts`. SRT and Intelligence are not enabled.
 
 ## Credentials and permissions
 
@@ -22,3 +22,15 @@ The Publisher refuses an existing title/slug found in its admin view; it does no
 Offline ABI qualification: `make -C modules/publisher clean all test`. This does not make live publication requests. The existing standalone acceptance tests previously demonstrated the corresponding website form operations across three domains. **The updated production service itself still requires a build, qualification, and runtime integration test on Digit's host; source commit is not proof it is operational.**
 
 Do not run the hardcoded live acceptance targets unless a new public test entry is intended. No changes to ChAoS MVC Core are required by this version.
+
+## Editorial gate (v0.4.0)
+
+`subject` must be `chaos_mvc` for `chaos`, and `stnlabz` for `stnlabz`. An evidence reference is required, but Publisher cannot independently validate the semantic relevance or veracity of arbitrary source content; Digit's trusted editorial selector must do so before invocation. **Do not treat caller-provided subject/evidence text as independent proof.**
+
+`poemei` is intentionally **blocked in the production service** until its existing hardcoded PoeMei identity gate is integrated. A bare claimed `source_actor` string is not enough to prove the speaker was PoeMei. This does not affect already completed historical acceptance tests.
+
+Announcements require **both** `post_title` and `post_markdown`. Publisher first submits and verifies a same-domain explanatory Core Post (using the existing `digit.png` Media selection) and only then submits the Announcement. This ordering prioritizes preventing orphan Announcements: the Post may appear before its Announcement. If Announcement fails after the Post succeeds, the Post remains published, and the caller receives failure; there is **no rollback**. Optional deep explanatory Pages remain separately invoked and are not automatically inferred or generated. Other publication kinds must leave `post_title` and `post_markdown` empty.
+
+**ABI compatibility:** The request struct is larger in v0.4.0; service consumers built against v0.3.0 must update their request layouts. Calls with the old size are rejected. The service name remains `digit.publisher.publish`. This policy gate is not a replacement for independently authenticated origin, evidence validation, or authorization.
+
+Run offline qualification with `make -C modules/publisher clean all test` before deployment. Do not run live acceptance test targets without intent to publish public material.
