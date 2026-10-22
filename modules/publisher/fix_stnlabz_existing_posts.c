@@ -84,7 +84,7 @@ static int fix_post(CURL *curl,page_t *page,const char *title,const char *body,
  if(!link){fprintf(stderr,"Edit link not found: %s\n",title);goto done;}
  link+=strlen("/admin/posts/edit/");
  char *after=NULL;long id=strtol(link,&after,10);
- if(after==link||id<=0||id>2147483647){fprintf(stderr,"Invalid existing Post ID\n");goto done;}
+ if(after==link||id<=0||id>2147483647){fprintf(stderr,"Existing Post edit link ID=%ld (numeric=%s); cannot safely edit this record through the Core form\n",id,after==link?"NO":"YES");goto done;}
  snprintf(url,sizeof url,"https://www.stn-labz.com/admin/posts/edit/%ld",id);
  if(request(curl,url,page,NULL,&code)!=CURLE_OK||code!=200||
     !strstr(page->data,"name=\"featured_image_id\"")||
