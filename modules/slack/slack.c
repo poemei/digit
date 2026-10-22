@@ -16,6 +16,8 @@
 #include <curl/curl.h>
 #include <json-c/json.h>
 #include "module.h"
+#include "dsd.h"
+#include <stdint.h>
 
 #define CONFIG_PATH "/opt/digit/auth/slack/slack.conf"
 #define CONVERSATION_SERVICE "digit.conversation"
@@ -41,6 +43,34 @@ static pthread_t worker;
 static atomic_int running=0;
 static int worker_started;
 static pthread_mutex_t post_lock=PTHREAD_MUTEX_INITIALIZER;
+#define DSD_SLOTS 64
+typedef struct {char user[128];uint64_t trace;} dsd_slot_t;
+static dsd_slot_t dsd_slots[DSD_SLOTS];
+static unsigned dsd_evict;
+static uint64_t dsd_next=1;
+static uint64_t dsd_previous(const char *user){
+ for(unsigned i=0;i<DSD_SLOTS;i++)
+  if(!strcmp(dsd_slots[i].user,user))return dsd_slots[i].trace;
+ return 0;
+}
+static void dsd_remember(const char *user,uint64_t trace){
+ unsigned slot=DSD_SLOTS;
+ for(unsigned i=0;i<DSD_SLOTS;i++){
+  if(!strcmp(dsd_slots[i].user,user)){slot=i;break;}
+  if(slot==DSD_SLOTS&&!dsd_slots[i].user[0])slot=i;
+ }
+ if(slot==DSD_SLOTS)slot=dsd_evict++%DSD_SLOTS;
+ memset(&dsd_slots[slot],0,sizeof dsd_slots[slot]);
+ snprintf(dsd_slots[slot].user,sizeof dsd_slots[slot].user,"%s",user);
+ dsd_slots[slot].trace=trace;
+}
+static int is_dsd(const char *message){
+ return message&&(!strcmp(message,"show dsd")||
+  !strcmp(message,"show trace")||
+  !strcmp(message,"diagnose my last request")||
+  !strncmp(message,"diagnose trace ",15)||
+  !strncmp(message,"diagnose module ",16));
+}
 
 static void wipe(void *p,size_t n){volatile unsigned char *b=p;while(n--)*b++=0;}
 static int copy(char *dst,size_t cap,const char *src){size_t n;
@@ -188,13 +218,16 @@ static int normalized_message(const char *raw,int mention,char *out,size_t cap){
  * general channel speech -> passive Conversation listen.
  * Ordinary channel text is NEVER dropped just because Digit was not tagged.
  */
-static int route_kind(const char *type,const char *channel_type,int is_bot,int has_subtype){
+static int route_kind(const char *type,const char *channel_type,const char *channel,int is_bot,int has_subtype){
  if(is_bot||has_subtype||!type)return 0;
  if(!strcmp(type,"app_mention"))return 2;
  if(strcmp(type,"message"))return 0;
  if(channel_type&&!strcmp(channel_type,"im"))return 3;
  if(channel_type&&(!strcmp(channel_type,"channel")||!strcmp(channel_type,"group")))
   return 1;
+ /* Slack can omit channel_type. Classify by channel ID only as fallback. */
+ if(!channel_type&&channel&&channel[0]=='D')return 3;
+ if(!channel_type&&channel&&(channel[0]=='C'||channel[0]=='G'))return 1;
  return 0;
 }
 static const char *event_team(struct json_object *root,struct json_object *payload){
@@ -216,7 +249,7 @@ static void on_event(struct json_object *root){
  int mode;
  if(!event||!team||strcmp(team,config.workspace)||!type||!user||!channel||
     !text||!host_api||!host_api->invoke_service)return;
- mode=route_kind(type,channel_type,bot_id!=NULL,subtype!=NULL);
+ mode=route_kind(type,channel_type,channel,bot_id!=NULL,subtype!=NULL);
  if(mode==0)return;
  if(!copy(msg.sender,sizeof msg.sender,user)||
     !copy(msg.account,sizeof msg.account,user)||
@@ -228,7 +261,53 @@ static void on_event(struct json_object *root){
   msg.message[0]=0;
  }
  service=mode==1?CONVERSATION_LISTEN_SERVICE:CONVERSATION_SERVICE;
- if(host_api->invoke_service(service,&msg,sizeof msg,
+ if(mode==3&&is_dsd(msg.message)){
+  digit_dsd_command_request_t query={0};
+  digit_dsd_command_result_t result={0};
+  size_t returned=0;
+  stnlabz_module_result_t rc;
+  if(strcmp(msg.message,"show dsd")&&strcmp(msg.message,"show trace")&&
+     strcmp(msg.message,"diagnose my last request")){
+   (void)posted(channel,"DSD: Use diagnose my last request. Other trace investigations require scoped authorization.",thread);
+   return;
+  }
+  query.previous_trace_id=dsd_previous(user);
+  (void)copy(query.command,sizeof query.command,msg.message);
+  rc=host_api->invoke_service(DIGIT_DSD_COMMAND_SERVICE,&query,sizeof query,
+    &result,sizeof result,&returned);
+  if(rc==STNLABZ_MODULE_OK&&returned==sizeof result&&
+     memchr(result.text,0,sizeof result.text))
+    (void)posted(channel,result.text,thread);
+  else (void)posted(channel,"DSD is unavailable or not active.",thread);
+  return;
+ }
+ if(mode==3){
+  digit_dsd_record_t record={0};
+  uint64_t trace=dsd_next++;
+  uint64_t clear=0;
+  size_t trace_used=0;
+  stnlabz_module_result_t rc;
+  if(!trace)trace=dsd_next++;
+  (void)host_api->invoke_service(DIGIT_DSD_BIND_SERVICE,
+      &trace,sizeof trace,NULL,0,&trace_used);
+  rc=host_api->invoke_service(service,&msg,sizeof msg,answer,sizeof answer,&used);
+  (void)host_api->invoke_service(DIGIT_DSD_BIND_SERVICE,
+      &clear,sizeof clear,NULL,0,&trace_used);
+  record.trace_id=record.event.trace_id=trace;
+  record.event.span_id=1;
+  record.event.line=__LINE__;
+  record.event.result=rc==STNLABZ_MODULE_OK?0:1;
+  snprintf(record.event.module,sizeof record.event.module,"slack");
+  snprintf(record.event.file,sizeof record.event.file,"modules/slack/slack.c");
+  snprintf(record.event.method,sizeof record.event.method,"on_event");
+  snprintf(record.event.operation,sizeof record.event.operation,"digit.conversation");
+  snprintf(record.event.status,sizeof record.event.status,"%s",
+    rc==STNLABZ_MODULE_OK?(used?"RESPONSE_RETURNED":"NO_RESPONSE"):
+    rc==STNLABZ_MODULE_ERR_NOT_FOUND?"SERVICE_NOT_FOUND":"SERVICE_ERROR");
+  if(host_api->invoke_service(DIGIT_DSD_RECORD_SERVICE,&record,sizeof record,
+      NULL,0,&trace_used)==STNLABZ_MODULE_OK)dsd_remember(user,trace);
+  if(rc!=STNLABZ_MODULE_OK)return;
+ }else if(host_api->invoke_service(service,&msg,sizeof msg,
       answer,sizeof answer,&used)!=STNLABZ_MODULE_OK)return;
  if(used&&used<sizeof answer){
   answer[used]=0;
@@ -333,17 +412,24 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  check(r,MAX_REPORT>=8192,0);
  check(r,sizeof cfg_check.learn_key>=128,0);
  check(r,sizeof cfg_check.intel_channel==sizeof cfg_check.module_channel,0);
- /* Verify routing follows IRC's direct/passive distinction. */
- check(r,route_kind("message","channel",0,0)==1,0);
- check(r,route_kind("message","group",0,0)==1,0);
- check(r,route_kind("message","im",0,0)==3,0);
- check(r,route_kind("app_mention","channel",0,0)==2,0);
- check(r,route_kind("message","channel",1,0)==0,1);
- check(r,route_kind("message","channel",0,1)==0,1);
- check(r,route_kind("message","mpim",0,0)==0,1);
- check(r,route_kind("other","channel",0,0)==0,1);
+ /* End-to-end routing classification contract, including missing metadata. */
+ check(r,route_kind("message","channel","C123",0,0)==1,0);
+ check(r,route_kind("message","group","G123",0,0)==1,0);
+ check(r,route_kind("message","im","D123",0,0)==3,0);
+ check(r,route_kind("app_mention","channel","C123",0,0)==2,0);
+ check(r,route_kind("message",NULL,"C123",0,0)==1,0);
+ check(r,route_kind("message",NULL,"G123",0,0)==1,0);
+ check(r,route_kind("message",NULL,"D123",0,0)==3,0);
+ check(r,route_kind("message","channel","C123",1,0)==0,1);
+ check(r,route_kind("message","channel","C123",0,1)==0,1);
+ check(r,route_kind("message","mpim","G123",0,0)==0,1);
+ check(r,route_kind("other","channel","C123",0,0)==0,1);
+ check(r,route_kind("message",NULL,NULL,0,0)==0,1);
+ check(r,is_dsd("diagnose my last request"),0);
+ check(r,is_dsd("show trace"),0);
+ check(r,!is_dsd("hi"),1);
+ check(r,!is_dsd(NULL),1);
  check(r,!strcmp(CONVERSATION_LISTEN_SERVICE,"digit.conversation.listen"),0);
-
  {char output[64]={0};
   check(r,normalized_message("<@U123> hi",1,output,sizeof output)&&
    !strcmp(output,"hi"),0);
@@ -390,7 +476,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="slack",.name="Slack ABI Transport",
- .version_major=0,.version_minor=1,.version_patch=4,
+ .version_major=0,.version_minor=1,.version_patch=5,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
