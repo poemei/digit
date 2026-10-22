@@ -40,6 +40,7 @@ static char intel_pending[INTEL_REPORT_CAP];
 static pthread_mutex_t intel_mutex=PTHREAD_MUTEX_INITIALIZER;
 static void intelligence_brief(char *,size_t,const char *,long,int,int,int,const char *,int,int,int);
 static int deliver_intel(const char *);
+static void irc_notice(digit_s2_report_t *,const char *);
 static void lock(void){while(__sync_lock_test_and_set(&busy,1)){}}
 static void unlock(void){__sync_lock_release(&busy);}
 static size_t collect(char *input,size_t size,size_t count,void *userdata){
@@ -376,6 +377,13 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
   test(r,strstr(brief,"Rictus: unavailable")!=NULL,0);
   test(r,strstr(brief,"12 source-record cases")!=NULL,0);
   test(r,strstr(brief,"3 source records opened or changed")!=NULL,0);
+  {
+   digit_s2_report_t notice={0};
+   irc_notice(&notice,"MEDIUM investigation opened");
+   test(r,strstr(notice.report,"MEDIUM investigation opened")!=NULL,0);
+   test(r,strstr(notice.report,"Slack -> #stn-labz")!=NULL,0);
+   test(r,strlen(notice.report)<sizeof notice.report,0);
+  }
  }
  strcpy(lines[0],"connection from 108.178.43.142");
  strcpy(lines[1],"other 34.66.92.201");
