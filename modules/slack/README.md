@@ -1,4 +1,4 @@
-# Digit Slack v0.1.6 — ABI 1.5 transport candidate
+# Digit Slack v0.1.7 — ABI 1.5 transport candidate
 
 This is a **source candidate**, not a certified or connected Slack deployment.
 It is separate from Digit Core and uses the existing ABI 1.5 named service registry.
@@ -6,7 +6,8 @@ It is separate from Digit Core and uses the existing ABI 1.5 named service regis
 ## Scope
 
 - Socket Mode message delivery for direct messages and app mentions through `digit.conversation`.
-- General public and private channel messages (including messages without mentions) are sent through `digit.conversation.listen`, matching IRC's passive observation behavior. Conversation determines relevance and whether to reply.
+- Every eligible public/private channel message is submitted to the same Observation ABI service and SQLite3 fallback used by IRC, whether Digit responds or not. General conversation then reaches `digit.conversation.listen`; Conversation decides relevance and participation.
+- A leading `digit ...`, `digit, ...`, or `digicat: ...` in a Slack channel takes the direct Conversation route just as an explicit IRC nick address does. A Slack `@Digit` mention also uses the direct route. Other ambient chat remains observational.
 - Direct messages and addressed `app_mention` events use `digit.conversation`; Slack `<@USER>` markup is stripped from addressed mentions. The transport does not manufacture a greeting or override Conversation's participation decision.
 - DM-only DSD `show dsd`, `show trace`, and `diagnose my last request` commands now invoke the existing DSD ABI service. The transport stores each Slack user's previous DM trace separately. Unscoped trace/module commands remain denied. General channels cannot invoke DSD.
 - Channel event classification falls back to Slack channel IDs when `channel_type` is absent; it continues to reject bot and subtype events.
