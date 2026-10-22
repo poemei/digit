@@ -82,3 +82,10 @@ bin/test_core_page: test_core_page.c
 	$(CC) $(CFLAGS) test_core_page.c -o $@ -lcurl
 test-core-page: bin/test_core_page
 	./bin/test_core_page
+
+# Publish distinct Core Pages on STN-LABZ and poemei.com.
+bin/test_other_sites_pages: test_other_sites_pages.c
+	@mkdir -p bin
+	$(CC) $(CFLAGS) test_other_sites_pages.c -o $@ -lcurl
+test-other-sites-pages: bin/test_other_sites_pages
+	./bin/test_other_sites_pages
