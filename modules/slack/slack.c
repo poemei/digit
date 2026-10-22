@@ -307,7 +307,6 @@ static stnlabz_module_result_t observe_slack(const char *channel,
 static size_t slack_address_prefix(const char *text){
  const char *names[]={"digit","digicat"};
  if(!text)return 0;
- while(isspace((unsigned char)*text))text++;
  for(size_t i=0;i<sizeof names/sizeof names[0];i++){
   size_t n=strlen(names[i]);
   if(!strncasecmp(text,names[i],n)&&
@@ -540,6 +539,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  check(r,slack_address_prefix("digicat: hi")==7,0);
  check(r,slack_address_prefix("digital")==0,1);
  check(r,slack_address_prefix("hello digit")==0,1);
+ check(r,slack_address_prefix(" digit hi")==0,1);
  check(r,!is_dsd("hi"),1);
  check(r,!is_dsd(NULL),1);
  check(r,!strcmp(CONVERSATION_LISTEN_SERVICE,"digit.conversation.listen"),0);
