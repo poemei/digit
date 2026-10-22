@@ -1,4 +1,4 @@
-/* Digit publisher v0.1.0 - ABI 1.5. Authorized Markdown submission only.
+/* Digit publisher v0.4.0 - ABI 1.5. Evidence-gated publishing.
  * Site authentication contract is configured explicitly, never inferred.
  */
 #define _POSIX_C_SOURCE 200809L
@@ -17,6 +17,12 @@
 #define MAX_BODY 16384
 typedef struct {
  char site[32],kind[32],category[64],title[256],markdown[MAX_BODY];
+ /* Editorial evidence is supplied by Digit's trusted caller, not inferred here. */
+ char subject[32];       /* chaos_mvc | stnlabz | poemei_quote */
+ char source_actor[128]; /* canonical identity from Digit's identity gate */
+ char evidence_ref[512]; /* caller-verified source reference */
+ char post_title[256];   /* required for announcements */
+ char post_markdown[MAX_BODY];
 } publish_request_t;
 typedef struct {
  int published;char publication_id[128],url[1024],error[160];
@@ -45,6 +51,29 @@ static const char *json_string(struct json_object *o,const char *key){
 static int kind_allowed(const char *kind){
  return kind&&(!strcmp(kind,"announcements")||!strcmp(kind,"news")||
   !strcmp(kind,"page")||!strcmp(kind,"posts"));
+}
+static int editorial_valid(const publish_request_t *p){
+ if(!bounded(p->subject,sizeof p->subject)||
+    !bounded(p->source_actor,sizeof p->source_actor)||
+    !bounded(p->evidence_ref,sizeof p->evidence_ref)||
+    !bounded(p->post_title,sizeof p->post_title)||
+    !bounded(p->post_markdown,sizeof p->post_markdown)||
+    !p->evidence_ref[0])return 0;
+ /* Never classify content by searching keywords; the trusted selection
+  * pipeline must supply provenance and an explicit, matching subject. */
+ if(!strcmp(p->site,"chaos")){
+  if(strcmp(p->subject,"chaos_mvc"))return 0;
+ }else if(!strcmp(p->site,"stnlabz")){
+  if(strcmp(p->subject,"stnlabz"))return 0;
+ }else if(!strcmp(p->site,"poemei")){
+  /* A claimed string is not proof of PoeMei authorship. Until the existing
+   * hardcoded identity service is connected, this site fails closed. */
+  return 0;
+ }else return 0;
+ if(!strcmp(p->kind,"announcements")){
+  if(!p->post_title[0]||!p->post_markdown[0])return 0;
+ }else if(p->post_title[0]||p->post_markdown[0])return 0;
+ return 1;
 }
 static int input_valid(const publish_request_t *p){
  if(!p||!bounded(p->site,sizeof p->site)||!bounded(p->kind,sizeof p->kind)||
@@ -191,10 +220,34 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  destination_t *site=NULL;
  for(int i=0;i<3;i++)if(!strcmp(destinations[i].name,p->site))site=&destinations[i];
- if(!site)return STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
+ if(!site||!editorial_valid(p))return STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
  int permitted=0;for(int k=0;k<site->kind_count;k++)
   if(!strcmp(site->kinds[k],p->kind))permitted=1;
  if(!permitted)return STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
+ /* Ensure an Announcement never goes live without its required Post.
+  * The Post is created and verified first; failure prevents Announcement.
+  * A previously created Post is not retried automatically. */
+ if(!strcmp(p->kind,"announcements")){
+  publish_request_t *follow=calloc(1,sizeof *follow);
+  publish_response_t follow_answer={0};size_t follow_used=0;
+  if(!follow)return STNLABZ_MODULE_ERR_INVALID_STATE;
+  copy(follow->site,sizeof follow->site,p->site);
+  copy(follow->kind,sizeof follow->kind,"posts");
+  copy(follow->subject,sizeof follow->subject,p->subject);
+  copy(follow->source_actor,sizeof follow->source_actor,p->source_actor);
+  copy(follow->evidence_ref,sizeof follow->evidence_ref,p->evidence_ref);
+  copy(follow->title,sizeof follow->title,p->post_title);
+  copy(follow->markdown,sizeof follow->markdown,p->post_markdown);
+  stnlabz_module_result_t pr=publish(follow,sizeof *follow,&follow_answer,
+   sizeof follow_answer,&follow_used,NULL);
+  erase(follow,sizeof *follow);free(follow);
+  if(pr!=STNLABZ_MODULE_OK||!follow_answer.published){
+   copy(answer.error,sizeof answer.error,
+    "Required explanatory Post was not published; Announcement withheld.");
+   memcpy(res,&answer,sizeof answer);*used=sizeof answer;
+   return STNLABZ_MODULE_ERR_INVALID_STATE;
+  }
+ }
  CURL *c=curl_easy_init();page_t *page=calloc(1,sizeof *page);
  char url[512],form[24000]={0},token[128]={0},slug[256]={0},*html=NULL;
  long code=0;size_t flen=0;int session=0,verified=0,logout=0;
@@ -332,7 +385,19 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  check(r,csrf("<input name=\"csrf_token\" value=\"abc\">",out,sizeof out)&&!strcmp(out,"abc"),0);
  copy(p.site,sizeof p.site,"chaos");copy(p.kind,sizeof p.kind,"news");
  copy(p.title,sizeof p.title,"Digit");copy(p.markdown,sizeof p.markdown,"Content");
+ copy(p.subject,sizeof p.subject,"chaos_mvc");
+ copy(p.evidence_ref,sizeof p.evidence_ref,"verified-source");
  check(r,input_valid(&p),0);
+ check(r,editorial_valid(&p),0);
+ copy(p.site,sizeof p.site,"poemei");check(r,!editorial_valid(&p),1);
+ copy(p.site,sizeof p.site,"chaos");
+ copy(p.subject,sizeof p.subject,"stnlabz");check(r,!editorial_valid(&p),1);
+ copy(p.subject,sizeof p.subject,"chaos_mvc");
+ copy(p.kind,sizeof p.kind,"announcements");check(r,!editorial_valid(&p),1);
+ copy(p.post_title,sizeof p.post_title,"Details");
+ copy(p.post_markdown,sizeof p.post_markdown,"Evidence");check(r,editorial_valid(&p),0);
+ copy(p.kind,sizeof p.kind,"news");check(r,!editorial_valid(&p),1);
+ p.post_title[0]=0;p.post_markdown[0]=0;
  p.markdown[0]=0;check(r,!input_valid(&p),1);
  copy(p.markdown,sizeof p.markdown,"Content");
  copy(p.kind,sizeof p.kind,"srt");check(r,!input_valid(&p),1);
@@ -356,7 +421,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="publisher",.name="Digit Markdown Publisher",
- .version_major=0,.version_minor=3,.version_patch=0,
+ .version_major=0,.version_minor=4,.version_patch=0,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
