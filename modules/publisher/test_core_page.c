@@ -93,11 +93,11 @@ static int page_site(const char *host,const char *user,const char *pass){
  snprintf(url,sizeof url,"%s/admin/page",host);
  if(request(curl,url,page,NULL,&code)!=CURLE_OK||code!=200)goto cleanup;
  authenticated=1;
- if(!strstr(page->data,"name=\\"action\\"")||
-    !strstr(page->data,"name=\\"slug\\"")||
-    !strstr(page->data,"name=\\"content_file\\"")||
-    !strstr(page->data,"name=\\"status\\"")||
-    !strstr(page->data,"name=\\"content\\"")||
+ if(!strstr(page->data,"name=\"action\"")||
+    !strstr(page->data,"name=\"slug\"")||
+    !strstr(page->data,"name=\"content_file\"")||
+    !strstr(page->data,"name=\"status\"")||
+    !strstr(page->data,"name=\"content\"")||
     !extract_csrf(page,token,sizeof token)){
   fprintf(stderr,"%s: Core Pages form not found; no submission\n",host);
   goto cleanup;
