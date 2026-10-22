@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <curl/curl.h>
@@ -30,7 +31,7 @@ typedef struct {
 
 typedef struct {char name[32],base[128],kinds[4][32];int kind_count;} destination_t;
 static destination_t destinations[3];
-static char username[256],password[512];
+static char username[256],password[512],poemei_account[128];
 static const stnlabz_module_host_t *host_api;
 static void erase(void *p,size_t n){volatile unsigned char *b=p;while(n--)*b++=0;}
 static int bounded(const char *s,size_t max){return s&&memchr(s,0,max)!=NULL;}
@@ -66,9 +67,11 @@ static int editorial_valid(const publish_request_t *p){
  }else if(!strcmp(p->site,"stnlabz")){
   if(strcmp(p->subject,"stnlabz"))return 0;
  }else if(!strcmp(p->site,"poemei")){
-  /* A claimed string is not proof of PoeMei authorship. Until the existing
-   * hardcoded identity service is connected, this site fails closed. */
-  return 0;
+  /* Caller must supply the account tag from authenticated IRC transport.
+   * Compare it against the same existing account Digit already recognizes.
+   * Not a substitute for trusted origin/provenance in the calling pipeline. */
+  if(strcmp(p->subject,"poemei_quote")||!poemei_account[0]||
+     strcasecmp(p->source_actor,poemei_account))return 0;
  }else return 0;
  if(!strcmp(p->kind,"announcements")){
   if(!p->post_title[0]||!p->post_markdown[0])return 0;
@@ -96,6 +99,31 @@ static int load_credentials(void){
  }
  erase(line,sizeof line);fclose(f);
  return u&&p;
+}
+static int load_poemei_identity(void){
+ /* Same authoritative IRC config already consumed by Digit's IRC module. */
+ const char *path="/opt/digit/state/auth/irc.env";
+ if(!secure_config(path))return 0;
+ FILE *f=fopen(path,"r");if(!f)return 0;
+ char line[1024];int found=0;
+ while(fgets(line,sizeof line,f)){
+  char *p=line,*sep,*end;
+  while(isspace((unsigned char)*p))p++;
+  if(!strncmp(p,"export ",7))p+=7;
+  if(*p=='#'||!strchr(p,'='))continue;
+  sep=strchr(p,'=');*sep++=0;
+  end=p+strlen(p);while(end>p&&isspace((unsigned char)end[-1]))*--end=0;
+  end=sep+strlen(sep);while(end>sep&&isspace((unsigned char)end[-1]))*--end=0;
+  if(strcmp(p,"DIGIT_IRC_MOMMY_ACCOUNT"))continue;
+  size_t n=strlen(sep);
+  if(n>=2&&((*sep=='"'&&sep[n-1]=='"')||
+             (*sep=='\''&&sep[n-1]=='\''))){sep++;n-=2;}
+  if(n&&n<sizeof poemei_account&&!memchr(sep,'\r',n)&&!memchr(sep,'\n',n)){
+   memcpy(poemei_account,sep,n);poemei_account[n]=0;found=1;
+  }
+ }
+ erase(line,sizeof line);fclose(f);
+ return found;
 }
 static int load_config(void){
  static const char *names[]={"chaos","stnlabz","poemei"};
@@ -135,10 +163,10 @@ static int load_config(void){
   local[idx].kind_count=kc;
  }
  memcpy(destinations,local,sizeof local);
- ok=load_credentials();
+ ok=load_credentials()&&load_poemei_identity();
 done:
  if(root)json_object_put(root);erase(data,sizeof data);
- if(!ok){erase(username,sizeof username);erase(password,sizeof password);}
+ if(!ok){erase(username,sizeof username);erase(password,sizeof password);erase(poemei_account,sizeof poemei_account);}
  return ok;
 }
 typedef struct {char data[262144];size_t len;} page_t;
@@ -390,6 +418,14 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  check(r,input_valid(&p),0);
  check(r,editorial_valid(&p),0);
  copy(p.site,sizeof p.site,"poemei");check(r,!editorial_valid(&p),1);
+ copy(poemei_account,sizeof poemei_account,"TestPoeAccount");
+ copy(p.subject,sizeof p.subject,"poemei_quote");
+ copy(p.source_actor,sizeof p.source_actor,"TestPoeAccount");
+ check(r,editorial_valid(&p),0);
+ copy(p.source_actor,sizeof p.source_actor,"UnverifiedNick");
+ check(r,!editorial_valid(&p),1);
+ erase(poemei_account,sizeof poemei_account);
+ copy(p.subject,sizeof p.subject,"chaos_mvc");
  copy(p.site,sizeof p.site,"chaos");
  copy(p.subject,sizeof p.subject,"stnlabz");check(r,!editorial_valid(&p),1);
  copy(p.subject,sizeof p.subject,"chaos_mvc");
@@ -410,18 +446,18 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *host){
    !host->invoke_service)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  if(!load_config())return STNLABZ_MODULE_ERR_START_FAILED;
  if(!host->register_service(SERVICE,publish,NULL)){
-  erase(destinations,sizeof destinations);erase(username,sizeof username);erase(password,sizeof password);return STNLABZ_MODULE_ERR_START_FAILED;
+  erase(destinations,sizeof destinations);erase(username,sizeof username);erase(password,sizeof password);erase(poemei_account,sizeof poemei_account);return STNLABZ_MODULE_ERR_START_FAILED;
  }
  host_api=host;return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t stop(void){
  if(!host_api)return STNLABZ_MODULE_ERR_INVALID_STATE;
  if(!host_api->unregister_service(SERVICE,NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
- host_api=NULL;erase(destinations,sizeof destinations);erase(username,sizeof username);erase(password,sizeof password);return STNLABZ_MODULE_OK;
+ host_api=NULL;erase(destinations,sizeof destinations);erase(username,sizeof username);erase(password,sizeof password);erase(poemei_account,sizeof poemei_account);return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="publisher",.name="Digit Markdown Publisher",
- .version_major=0,.version_minor=4,.version_patch=0,
+ .version_major=0,.version_minor=4,.version_patch=1,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
