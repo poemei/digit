@@ -4,6 +4,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <ctype.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -86,9 +87,9 @@ static int load_config(void){
   else if(!strcmp(key,"enabled"))field=2;
   else goto fail;
   if(field==0){
-   if(!endpoint_allowed(local[index].name,value)||!copy(local[index].endpoint,sizeof local[index].endpoint,value))goto fail;
+   if((*value&&!endpoint_allowed(local[index].name,value))||!copy(local[index].endpoint,sizeof local[index].endpoint,value))goto fail;
   }else if(field==1){
-   if(!safe_token(value)||!copy(local[index].token,sizeof local[index].token,value))goto fail;
+   if((*value&&!safe_token(value))||!copy(local[index].token,sizeof local[index].token,value))goto fail;
   }else if(strcmp(value,"true")&&strcmp(value,"false"))goto fail;
   seen[index*3+field]=field==2?(!strcmp(value,"true")?1:2):1;
  }
@@ -96,7 +97,7 @@ static int load_config(void){
  fclose(fp);
  for(int i=0;i<2;i++){
   if(seen[i*3+2]==1){
-   if(seen[i*3]!=1||seen[i*3+1]!=1)goto fail_closed;
+   if(seen[i*3]!=1||seen[i*3+1]!=1||!local[i].endpoint[0]||!local[i].token[0])goto fail_closed;
   }else {erase(local[i].token,sizeof local[i].token);local[i].endpoint[0]=0;}
  }
  memcpy(destinations,local,sizeof local);
