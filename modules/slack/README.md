@@ -1,4 +1,4 @@
-# Digit Slack v0.1.1 — ABI 1.5 transport candidate
+# Digit Slack v0.1.3 — ABI 1.5 transport candidate
 
 This is a **source candidate**, not a certified or connected Slack deployment.
 It is separate from Digit Core and uses the existing ABI 1.5 named service registry.
@@ -6,6 +6,7 @@ It is separate from Digit Core and uses the existing ABI 1.5 named service regis
 ## Scope
 
 - Socket Mode message delivery for direct messages and app mentions through `digit.conversation`.
+- Incoming `app_mention` text has Slack `<@USER>` markup removed before Conversation dispatch; a successfully delivered mention-only event gets a transport-level acknowledgement. This cannot change Slack's composer/Enter behavior.
 - Two registered outgoing delivery endpoints: `digit.slack.intel.deliver` and `digit.slack.modules.deliver`, each restricted to its configured private-channel destination.
 - `learn_operator_user_id` and `learn_authorization_key` are parsed as reserved configuration for future Lessons integration, but Lessons is not active or implemented here.
 - Historical STN-2 intelligence investigations, full briefs, persistent alert outbox, Slack login, and memory support are not ported.
@@ -31,6 +32,6 @@ Previously exposed Slack and learning credentials must be rotated before live ac
 
 ## Verification and limitations
 
-The offline qualification checks syntax-independent helper behaviors, descriptor compatibility, and negative cases. It **does not** prove live Slack delivery, correct all-frame WebSocket handling, event replay deduplication, outbound delivery reliability, authorization for restricted content, S2 full intelligence generation, or shutdown/restart recovery. Manual end-to-end acceptance remains pending.
+The offline qualification checks syntax-independent helper behaviors, mention normalization (including empty, malformed, and oversize cases), descriptor compatibility, and negative cases. It **does not** prove live Slack delivery, correct all-frame WebSocket handling, event replay deduplication, outbound delivery reliability, authorization for restricted content, S2 full intelligence generation, or shutdown/restart recovery. Manual end-to-end acceptance remains pending.
 
 Current revision is intended for code review; do not equate publishing it with operator activation or security certification.
