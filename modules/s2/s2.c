@@ -19,6 +19,8 @@
 #define RICTUS_LINES 128u
 #define POLL_SECONDS 300
 #define DELIVER_SERVICE "digit.irc.deliver"
+#define INTEL_DELIVERY "digit.slack.intel.deliver"
+#define INTEL_REPORT_CAP 8192
 typedef struct {char *data;size_t length;} buffer_t;
 static const stnlabz_module_host_t *host;
 static volatile int busy;
@@ -32,6 +34,10 @@ static long previous_lines;
 static int has_reported;
 static int last_source_state=-1;
 static int64_t observation_cursor;
+static char intel_pending[INTEL_REPORT_CAP];
+static pthread_mutex_t intel_mutex=PTHREAD_MUTEX_INITIALIZER;
+static void intelligence_brief(char *,size_t,const char *,long,int,int,int,const char *,int);
+static int deliver_intel(const char *);
 static void lock(void){while(__sync_lock_test_and_set(&busy,1)){}}
 static void unlock(void){__sync_lock_release(&busy);}
 static size_t collect(char *input,size_t size,size_t count,void *userdata){
@@ -201,6 +207,13 @@ static stnlabz_module_result_t poll_service(
   has_reported=1;
   last_source_state=source_state;
   unlock();
+  char brief[INTEL_REPORT_CAP]={0};
+  intelligence_brief(brief,sizeof brief,report,count,available,has_priority,matched,
+    signature,!first_report);
+  pthread_mutex_lock(&intel_mutex);
+  /* Never overwrite an undelivered private brief. */
+  if(!intel_pending[0])snprintf(intel_pending,sizeof intel_pending,"%s",brief);
+  pthread_mutex_unlock(&intel_mutex);
   memset(out,0,sizeof *out);
   snprintf(out->report,sizeof out->report,"%s",report);
   *response_used=sizeof *out;
@@ -233,6 +246,14 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  test(r,!exact_ip("999.1.1.1"),1);
  test(r,!exact_ip("1.1.1.1x"),1);
  test(r,!exact_ip(""),1);
+ {
+  char brief[INTEL_REPORT_CAP]={0};
+  intelligence_brief(brief,sizeof brief,"Source event",-1,0,0,0,"",0);
+  test(r,strstr(brief,"1. EXECUTIVE SUMMARY")!=NULL,0);
+  test(r,strstr(brief,"6. FINAL ASSESSMENT")!=NULL,0);
+  test(r,strstr(brief,"not established")!=NULL,0);
+  test(r,strstr(brief,"Rictus log: unavailable")!=NULL,0);
+ }
  strcpy(lines[0],"connection from 108.178.43.142");
  strcpy(lines[1],"other 34.66.92.201");
  test(r,match_lines((const char (*)[512])lines,2,2,"108.178.43.142",""),0);
@@ -249,6 +270,54 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  * STN-Labz S2 intelligence transported through IRC. The current SQLite3
  * query does not authenticate sender identity; this label must not be used
  * as proof that the agent or an external claim was independently verified. */
+/* Structured private assessment. Unknown counts are not invented.
+ * Only source state, bounded log counts and direct indicator correlations
+ * evidenced by this poll are reported. No raw log entries leave S2. */
+static void intelligence_brief(char *dst,size_t cap,const char *short_report,
+ long rictus_count,int sentinel_ok,int priority,int correlated,
+ const char *signature,int is_update){
+ char stamp[40]="unknown";time_t now=time(NULL);
+ struct tm utc={0};
+ if(now!=(time_t)-1&&gmtime_r(&now,&utc))
+  strftime(stamp,sizeof stamp,"%Y-%m-%d %H:%M UTC",&utc);
+ snprintf(dst,cap,
+  "*S2 INTELLIGENCE %s* | %s\n"
+  "*1. EXECUTIVE SUMMARY*\n%s\n"
+  "Rictus log: %s. Sentinel threat feed: %s. "
+  "New active investigation count: not established by current S2.\n\n"
+  "*2. ACTIVE INVESTIGATIONS*\n"
+  "No case registry is implemented in this S2 revision. "
+  "Persistent case IDs and lifecycle status are unavailable; do not infer zero incidents.\n\n"
+  "*3. THREAT INTELLIGENCE OVERVIEW*\n"
+  "HIGH/CRITICAL severity AND relevance indicator: %s. "
+  "Rictus log records in current file: %ld. "
+  "Historical classifications and 24-hour totals: not established.\n\n"
+  "*4. CROSS-SOURCE INTELLIGENCE*\n"
+  "Exact IPv4 indicator overlap between current Sentinel findings and "
+  "last 128 Rictus log records: %s. "
+  "Selected source signature: %.180s. "
+  "Overlap is not proof of compromise.\n\n"
+  "*5. INTELLIGENCE GAPS*\n"
+  "Rictus event grammar, durable investigation history, source-specific "
+  "24-hour windows, attribution, and corroborated case outcomes are not established.\n\n"
+  "*6. FINAL ASSESSMENT*\n"
+  "Current evidence supports source-monitoring and further investigation, "
+  "not attribution or confirmed compromise. Confidence in any threat conclusion: "
+  "insufficient evidence. Investigate meaningful changes and preserve source context.",
+  is_update?"INVESTIGATIVE UPDATE":"BRIEF",stamp,short_report,
+  rictus_count<0?"unavailable":"accessible",
+  sentinel_ok?"accessible":"unavailable or unrecognized",
+  priority?"observed":"not observed in available snapshot",
+  rictus_count,correlated?"found":"not found or unavailable",
+  signature&&*signature?signature:"none");
+}
+static int deliver_intel(const char *brief){
+ size_t used=0;
+ if(!host||!host->invoke_service||!brief||!brief[0])return 0;
+ size_t bytes=strlen(brief)+1;
+ if(bytes>INTEL_REPORT_CAP)return 0;
+ return host->invoke_service(INTEL_DELIVERY,brief,bytes,NULL,0,&used)==STNLABZ_MODULE_OK;
+}
 static int observation_report(digit_s2_report_t *out,int64_t *selected){
  digit_s2_observations_query_t query={0};
  digit_s2_observations_result_t result={0};
@@ -309,6 +378,19 @@ static void *scheduler_main(void *unused){
       used==sizeof result&&memchr(result.report,0,sizeof result.report))
     pending=result;
   }
+  /* Deliver the full source-backed assessment only to the configured private
+   * Slack intelligence channel, never to an IRC bridge or public website. */
+  {
+   char brief[INTEL_REPORT_CAP]={0};
+   pthread_mutex_lock(&intel_mutex);
+   if(intel_pending[0])memcpy(brief,intel_pending,sizeof brief);
+   pthread_mutex_unlock(&intel_mutex);
+   if(brief[0]&&deliver_intel(brief)){
+    pthread_mutex_lock(&intel_mutex);
+    if(!strcmp(intel_pending,brief))intel_pending[0]=0;
+    pthread_mutex_unlock(&intel_mutex);
+   }
+  }
   if(pending.report[0]&&host&&host->invoke_service){
    size_t delivered=0;
    if(host->invoke_service(DELIVER_SERVICE,&pending,sizeof pending,
@@ -339,6 +421,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api){
   host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
  }
  observation_cursor=0;
+ pthread_mutex_lock(&intel_mutex);intel_pending[0]=0;pthread_mutex_unlock(&intel_mutex);
  scheduler_stop=0;
  if(pthread_create(&scheduler,NULL,scheduler_main,NULL)){
   (void)api->unregister_service(DIGIT_S2_POLL_SERVICE,NULL);
@@ -361,7 +444,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=1,.version_patch=5,
+ .version_major=0,.version_minor=1,.version_patch=6,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
