@@ -38,7 +38,7 @@ static int last_source_state=-1;
 static int64_t observation_cursor;
 static char intel_pending[INTEL_REPORT_CAP];
 static pthread_mutex_t intel_mutex=PTHREAD_MUTEX_INITIALIZER;
-static void intelligence_brief(char *,size_t,const char *,long,int,int,int,const char *,int);
+static void intelligence_brief(char *,size_t,const char *,long,int,int,int,const char *,int,int,int);
 static int deliver_intel(const char *);
 static void lock(void){while(__sync_lock_test_and_set(&busy,1)){}}
 static void unlock(void){__sync_lock_release(&busy);}
@@ -318,7 +318,7 @@ static stnlabz_module_result_t poll_service(
   unlock();
   char brief[INTEL_REPORT_CAP]={0};
   intelligence_brief(brief,sizeof brief,report,count,available,has_priority,matched,
-    signature,!first_report);
+    signature,!first_report,case_total,case_updates);
   if(case_updates>0){
    size_t used=strlen(brief);
    snprintf(brief+used,sizeof brief-used,"\n\n*CASE ACTIVITY* (records opened/changed: %d; tracked cases: %d)\n%.3000s",
@@ -369,11 +369,13 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  test(r,!exact_ip(""),1);
  {
   char brief[INTEL_REPORT_CAP]={0};
-  intelligence_brief(brief,sizeof brief,"Source event",-1,0,0,0,"",0);
+  intelligence_brief(brief,sizeof brief,"Source event",-1,0,0,0,"",0,12,3);
   test(r,strstr(brief,"1. EXECUTIVE SUMMARY")!=NULL,0);
   test(r,strstr(brief,"6. FINAL ASSESSMENT")!=NULL,0);
   test(r,strstr(brief,"not established")!=NULL,0);
-  test(r,strstr(brief,"Rictus log: unavailable")!=NULL,0);
+  test(r,strstr(brief,"Rictus: unavailable")!=NULL,0);
+  test(r,strstr(brief,"12 source-record cases")!=NULL,0);
+  test(r,strstr(brief,"3 source records opened or changed")!=NULL,0);
  }
  strcpy(lines[0],"connection from 108.178.43.142");
  strcpy(lines[1],"other 34.66.92.201");
@@ -396,48 +398,60 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  * evidenced by this poll are reported. No raw log entries leave S2. */
 static void intelligence_brief(char *dst,size_t cap,const char *short_report,
  long rictus_count,int sentinel_ok,int priority,int correlated,
- const char *signature,int is_update){
- char stamp[40]="unknown";time_t now=time(NULL);
+ const char *signature,int is_update,int case_total,int case_updates){
+ char stamp[40]="unknown",cases[128],changes[128];time_t now=time(NULL);
  struct tm utc={0};
  if(now!=(time_t)-1&&gmtime_r(&now,&utc))
   strftime(stamp,sizeof stamp,"%Y-%m-%d %H:%M UTC",&utc);
+ if(case_total>=0)snprintf(cases,sizeof cases,"%d source-record cases",case_total);
+ else snprintf(cases,sizeof cases,"unavailable (case database not read)");
+ if(case_updates>=0)snprintf(changes,sizeof changes,"%d source records opened or changed",case_updates);
+ else snprintf(changes,sizeof changes,"case persistence unavailable");
  snprintf(dst,cap,
-  "*STN-LABZ | SECURITY INTELLIGENCE*\n"
-  "*S2 INTELLIGENCE %s*\n"
-  "Report generated: %s\n"
+  "STN-LABZ | SECURITY INTELLIGENCE\n\n"
+  "*S2 INTELLIGENCE %s*\n\n"
+  "Report generated: %s\n\n"
   "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-  "*1. EXECUTIVE SUMMARY*\n\n%s\n"
-  "Rictus log: %s. Sentinel threat feed: %s. "
-  "New active investigation count: not established by current S2.\n\n"
+  "*1. EXECUTIVE SUMMARY*\n\n"
+  "%s\n\n"
+  "Rictus: %s | Sentinel: %s\n"
+  "Case register: %s. This poll: %s.\n\n"
   "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
   "*2. ACTIVE INVESTIGATIONS*\n\n"
-  "No case registry is implemented in this S2 revision. "
-  "Persistent case IDs and lifecycle status are unavailable; do not infer zero incidents.\n\n"
+  "Tracked: %s.\n"
+  "Latest ingestion: %s.\n"
+  "Cases are keyed by Sentinel source ID; open/closed lifecycle and "
+  "independent incident confirmation have not been established. "
+  "Initial bulk ingestion is historical import, not newly occurring attacks.\n\n"
   "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
   "*3. THREAT INTELLIGENCE OVERVIEW*\n\n"
-  "HIGH/CRITICAL severity AND relevance indicator: %s. "
-  "Rictus log records in current file: %ld. "
-  "Historical classifications and 24-hour totals: not established.\n\n"
+  "Investigation threshold: MEDIUM severity AND MEDIUM relevance or higher.\n"
+  "Qualifying source findings in this feed snapshot: %s.\n"
+  "Rictus log records in current file: %ld.\n"
+  "Higher severity requires explicit source evidence; historical "
+  "24-hour rates and incident counts are not yet established.\n\n"
   "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
   "*4. CROSS-SOURCE INTELLIGENCE*\n\n"
-  "Exact IPv4 indicator overlap between current Sentinel findings and "
-  "last 128 Rictus log records: %s. "
-  "Selected source signature: %.180s. "
-  "Overlap is not proof of compromise.\n\n"
+  "Exact IPv4 overlap with the last 128 Rictus log records: %s.\n"
+  "Source record signature: %.180s.\n"
+  "An indicator match does not independently prove compromise; "
+  "primary and details IPs retain separate roles.\n\n"
   "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
   "*5. INTELLIGENCE GAPS*\n\n"
-  "Rictus event grammar, durable investigation history, source-specific "
-  "24-hour windows, attribution, and corroborated case outcomes are not established.\n\n"
+  "Rictus event grammar, identity and role of IP fields, "
+  "24-hour source windows, independent attribution and confirmed "
+  "case outcomes remain unresolved.\n\n"
   "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
   "*6. FINAL ASSESSMENT*\n\n"
-  "Current evidence supports source-monitoring and further investigation, "
-  "not attribution or confirmed compromise. Confidence in any threat conclusion: "
-  "insufficient evidence. Investigate meaningful changes and preserve source context.",
+  "Investigate MEDIUM immediately, retain source evidence, and "
+  "escalate only when corroborating records or severity changes support it. "
+  "Neither this snapshot nor an IP overlap alone establishes compromise.",
   is_update?"INVESTIGATIVE UPDATE":"BRIEF",stamp,short_report,
   rictus_count<0?"unavailable":"accessible",
   sentinel_ok?"accessible":"unavailable or unrecognized",
-  priority?"observed":"not observed in available snapshot",
-  rictus_count,correlated?"found":"not found or unavailable",
+  cases,changes,cases,changes,
+  priority?"observed":"not observed",rictus_count,
+  correlated?"found":"not found in inspected records",
   signature&&*signature?signature:"none");
 }
 static int deliver_intel(const char *brief){
@@ -502,7 +516,7 @@ static void *scheduler_main(void *unused){
     * update to private Slack. Do not advance its cursor on failure. */
    char update[INTEL_REPORT_CAP]={0};
    intelligence_brief(update,sizeof update,pending.report,-1,0,0,0,
-     "S2 observation ID in summary",1);
+     "S2 observation ID in summary",1,-1,-1);
    if(!deliver_intel(update)){
     memset(&pending,0,sizeof pending);
     pending_observation=0;
@@ -580,7 +594,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=1,.version_patch=8,
+ .version_major=0,.version_minor=1,.version_patch=9,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
