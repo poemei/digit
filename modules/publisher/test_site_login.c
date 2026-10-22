@@ -43,10 +43,20 @@ static CURLcode request(CURL *curl,const char *url,page_t *page,const char *form
  if(rc==CURLE_OK)curl_easy_getinfo(curl,CURLINFO_RESPONSE_CODE,status);
  return rc;
 }
+static int extract_csrf(const page_t *page,char *token,size_t cap){
+ const char *start=strstr(page->data,"name=\"csrf_token\" value=\"");
+ if(!start)return 0;
+ start+=strlen("name=\"csrf_token\" value=\"");
+ const char *end=strchr(start,'"');
+ if(!end||end==start||(size_t)(end-start)>=cap)return 0;
+ memcpy(token,start,(size_t)(end-start));token[end-start]=0;
+ return 1;
+}
 static int test_site(const char *host,const char *user,const char *pass){
  CURL *curl=curl_easy_init();page_t *page=calloc(1,sizeof *page);
- char url[256],token[129],*u=NULL,*p=NULL,*t=NULL,*form=NULL;
- long code=0;int result=0;
+ char url[256],token[129]={0},*u=NULL,*p=NULL,*t=NULL,*form=NULL;
+ long code=0;
+ int authenticated=0,logout_posted=0,logout_verified=0,session_started=0;
  if(!curl||!page)goto done;
  curl_easy_setopt(curl,CURLOPT_COOKIEFILE,"");
  curl_easy_setopt(curl,CURLOPT_WRITEFUNCTION,collect);
@@ -57,33 +67,57 @@ static int test_site(const char *host,const char *user,const char *pass){
  curl_easy_setopt(curl,CURLOPT_CONNECTTIMEOUT,8L);
  curl_easy_setopt(curl,CURLOPT_NOSIGNAL,1L);
  snprintf(url,sizeof url,"%s/login",host);
- if(request(curl,url,page,NULL,&code)!=CURLE_OK||code!=200)goto done;
- char *start=strstr(page->data,"name=\"csrf_token\" value=\"");
- if(!start)goto done;
- start+=strlen("name=\"csrf_token\" value=\"");
- char *end=strchr(start,'"');
- if(!end||(size_t)(end-start)>=sizeof token||end==start)goto done;
- memcpy(token,start,(size_t)(end-start));token[end-start]=0;
- u=curl_easy_escape(curl,user,0);p=curl_easy_escape(curl,pass,0);t=curl_easy_escape(curl,token,0);
+ if(request(curl,url,page,NULL,&code)!=CURLE_OK||code!=200||
+    !extract_csrf(page,token,sizeof token))goto done;
+ u=curl_easy_escape(curl,user,0);p=curl_easy_escape(curl,pass,0);
+ t=curl_easy_escape(curl,token,0);
  if(!u||!p||!t)goto done;
  size_t need=strlen(u)+strlen(p)+strlen(t)+64;
  form=malloc(need);if(!form)goto done;
  snprintf(form,need,"username=%s&password=%s&csrf_token=%s",u,p,t);
  snprintf(url,sizeof url,"%s/auth/login",host);
  if(request(curl,url,page,form,&code)!=CURLE_OK||code!=302)goto done;
+ session_started=1;
  snprintf(url,sizeof url,"%s/admin",host);
- if(request(curl,url,page,NULL,&code)!=CURLE_OK||code!=200)goto done;
- if(strstr(page->data,"Management Suite")&&strstr(page->data,"/admin/")){
-  result=1;
+ if(request(curl,url,page,NULL,&code)!=CURLE_OK||code!=200)goto cleanup;
+ authenticated=strstr(page->data,"Management Suite")!=NULL&&
+               strstr(page->data,"/admin/")!=NULL;
+cleanup:
+ /* Fetch fresh CSRF from authenticated dashboard, even if its marker check
+  * failed. Never keep a session open merely because verification failed. */
+ if(!extract_csrf(page,token,sizeof token)){
+  snprintf(url,sizeof url,"%s/admin",host);
+  if(request(curl,url,page,NULL,&code)!=CURLE_OK||code!=200||
+     !extract_csrf(page,token,sizeof token))goto done;
  }
+ if(form){memset(form,0,strlen(form));free(form);form=NULL;}
+ if(t){curl_free(t);t=NULL;}
+ t=curl_easy_escape(curl,token,0);
+ if(!t)goto done;
+ size_t logout_len=strlen(t)+16;
+ form=malloc(logout_len);
+ if(!form)goto done;
+ snprintf(form,logout_len,"csrf_token=%s",t);
+ snprintf(url,sizeof url,"%s/logout",host);
+ logout_posted=request(curl,url,page,form,&code)==CURLE_OK&&code==302;
+ if(!logout_posted)goto done;
+ snprintf(url,sizeof url,"%s/admin",host);
+ if(request(curl,url,page,NULL,&code)!=CURLE_OK)goto done;
+ /* A session is only considered invalidated if the admin dashboard is
+  * no longer accessible with the original cookie jar. */
+ logout_verified=(code==302||code==401||code==403||
+   (code==200&&!strstr(page->data,"Management Suite")));
 done:
- printf("%s: %s\n",host,result?"AUTHENTICATED":"NOT VERIFIED");
+ printf("%s: login=%s logout=%s%s\n",host,
+  authenticated?"AUTHENTICATED":"NOT VERIFIED",
+  logout_verified?"VERIFIED":"NOT VERIFIED",
+  session_started&&!logout_posted?" (logout POST unconfirmed)":"");
  if(form){memset(form,0,strlen(form));free(form);}
  if(u)curl_free(u);if(p)curl_free(p);if(t)curl_free(t);
  memset(token,0,sizeof token);
  if(page){memset(page,0,sizeof *page);free(page);}
  if(curl)curl_easy_cleanup(curl);
- return result;
+ return authenticated&&logout_verified;
 }
 int main(void){
  char username[256]={0},password[512]={0};int ok=0;
@@ -96,6 +130,6 @@ int main(void){
  ok+=test_site("https://poemei.com",username,password);
  memset(username,0,sizeof username);memset(password,0,sizeof password);
  curl_global_cleanup();
- printf("Login verification: %d/3 domains\n",ok);
+ printf("Login and logout verification: %d/3 domains\n",ok);
  return ok==3?0:1;
 }
