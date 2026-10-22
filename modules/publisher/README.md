@@ -9,3 +9,11 @@ The existing ABI service `digit.publisher.publish` accepts the same fixed-size r
 **Important:** This submission JSON shape is still a required, unverified server contract, not a claim that ChAoS MVC currently provides that endpoint. Site-specific publishing route and credential integration require inspecting the deployed module controllers. This module is not autonomous editorial planning, scheduling, or duplicate detection. No live posts have been demonstrated.
 
 Test: `make -C modules/publisher clean all test`. No Core modifications.
+
+## Verify the existing ChAoS MVC login first
+
+The independent read-only acceptance program is `test_site_login.c`. It follows the verified ChAoS MVC form: GET `/login`, read the hidden `csrf_token`, POST `username`, `password`, and `csrf_token` to `/auth/login`, and fetch `/admin` with the same session cookies. It checks the authenticated admin dashboard; no content is created or changed.
+
+The program reads a local file at `/opt/digit/auth/sites/login.conf` containing two lines: `username=...` and `password=...`. Only the Digit account or root should own the file; mode must be 0600. This file is not stored in GitHub. The same values are reused for all three domains, each with a separate cookie session. A failure is reported as NOT VERIFIED rather than assumed to be an invalid password.
+
+Run from the Digit checkout: `make -C modules/publisher test-login`. This performs real login attempts and is separate from offline module qualification. The result is **unverified** until executed on Digit's host with her account credentials. The earlier Bearer publishing transport is still unverified and must not be used for publication.
