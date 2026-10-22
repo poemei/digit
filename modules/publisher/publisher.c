@@ -1,4 +1,4 @@
-/* Digit publisher v0.4.0 - ABI 1.5. Evidence-gated publishing.
+/* Digit publisher v0.4.2 - ABI 1.5. Evidence-gated publishing.
  * Site authentication contract is configured explicitly, never inferred.
  */
 #define _POSIX_C_SOURCE 200809L
@@ -163,7 +163,10 @@ static int load_config(void){
   local[idx].kind_count=kc;
  }
  memcpy(destinations,local,sizeof local);
- ok=load_credentials()&&load_poemei_identity();
+ /* The IRC identity is optional to Publisher startup. PoeMei publishing
+  * remains fail-closed unless the known account can be read. */
+ ok=load_credentials();
+ if(ok)(void)load_poemei_identity();
 done:
  if(root)json_object_put(root);erase(data,sizeof data);
  if(!ok){erase(username,sizeof username);erase(password,sizeof password);erase(poemei_account,sizeof poemei_account);}
@@ -457,7 +460,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="publisher",.name="Digit Markdown Publisher",
- .version_major=0,.version_minor=4,.version_patch=1,
+ .version_major=0,.version_minor=4,.version_patch=2,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
