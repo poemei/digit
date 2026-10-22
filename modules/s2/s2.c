@@ -402,26 +402,34 @@ static void intelligence_brief(char *dst,size_t cap,const char *short_report,
  if(now!=(time_t)-1&&gmtime_r(&now,&utc))
   strftime(stamp,sizeof stamp,"%Y-%m-%d %H:%M UTC",&utc);
  snprintf(dst,cap,
-  "*S2 INTELLIGENCE %s* | %s\n"
-  "*1. EXECUTIVE SUMMARY*\n%s\n"
+  "*STN-LABZ | SECURITY INTELLIGENCE*\n"
+  "*S2 INTELLIGENCE %s*\n"
+  "Report generated: %s\n"
+  "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+  "*1. EXECUTIVE SUMMARY*\n\n%s\n"
   "Rictus log: %s. Sentinel threat feed: %s. "
   "New active investigation count: not established by current S2.\n\n"
-  "*2. ACTIVE INVESTIGATIONS*\n"
+  "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+  "*2. ACTIVE INVESTIGATIONS*\n\n"
   "No case registry is implemented in this S2 revision. "
   "Persistent case IDs and lifecycle status are unavailable; do not infer zero incidents.\n\n"
-  "*3. THREAT INTELLIGENCE OVERVIEW*\n"
+  "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+  "*3. THREAT INTELLIGENCE OVERVIEW*\n\n"
   "HIGH/CRITICAL severity AND relevance indicator: %s. "
   "Rictus log records in current file: %ld. "
   "Historical classifications and 24-hour totals: not established.\n\n"
-  "*4. CROSS-SOURCE INTELLIGENCE*\n"
+  "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+  "*4. CROSS-SOURCE INTELLIGENCE*\n\n"
   "Exact IPv4 indicator overlap between current Sentinel findings and "
   "last 128 Rictus log records: %s. "
   "Selected source signature: %.180s. "
   "Overlap is not proof of compromise.\n\n"
-  "*5. INTELLIGENCE GAPS*\n"
+  "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+  "*5. INTELLIGENCE GAPS*\n\n"
   "Rictus event grammar, durable investigation history, source-specific "
   "24-hour windows, attribution, and corroborated case outcomes are not established.\n\n"
-  "*6. FINAL ASSESSMENT*\n"
+  "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+  "*6. FINAL ASSESSMENT*\n\n"
   "Current evidence supports source-monitoring and further investigation, "
   "not attribution or confirmed compromise. Confidence in any threat conclusion: "
   "insufficient evidence. Investigate meaningful changes and preserve source context.",
@@ -572,7 +580,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=1,.version_patch=7,
+ .version_major=0,.version_minor=1,.version_patch=8,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
