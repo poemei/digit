@@ -187,7 +187,7 @@ static stnlabz_module_result_t delivery(const void *request,size_t bytes,
  * private intelligence or module lifecycle content. 0 disables bridging. */
 typedef struct {char report[384];} bridge_report_t;
 static int bridge_allowed(const char *channel){
- return config.bridge_channel[0]&&channel&&
+ return config.bridge_channel[0]=='C'&&channel&&
   !strcmp(channel,config.bridge_channel)&&
   strcmp(channel,config.intel_channel)&&strcmp(channel,config.module_channel);
 }
@@ -472,6 +472,9 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
   check(r,!bridge_allowed("C123"),1);
   snprintf(config.bridge_channel,sizeof config.bridge_channel,"C123");
   check(r,bridge_allowed("C123"),0);
+  snprintf(config.bridge_channel,sizeof config.bridge_channel,"G123");
+  check(r,!bridge_allowed("G123"),1);
+  snprintf(config.bridge_channel,sizeof config.bridge_channel,"C123");
   check(r,!bridge_allowed("C999"),1);
   snprintf(config.intel_channel,sizeof config.intel_channel,"C123");
   check(r,!bridge_allowed("C123"),1);
