@@ -155,7 +155,7 @@ static int repair_site(const char *user,const char *pass){
   "Digit Publisher - Direct Image Path Verification",
   "![Digit](/uploads/digit.png)\n\n"
   "Digit is testing ChAoS MVC Core Posts using a direct image path.\n\n"
-  "The image is referenced at \`/uploads/digit.png\` without a Media ID lookup.\n\n"
+  "The image is referenced at `/uploads/digit.png` without a Media ID lookup.\n\n"
   "Verification marker: STNLABZ-DIGIT-DIRECT-IMAGE-20261022\n",
   "digit-publisher---direct-image-path-verification",
   "STNLABZ-DIGIT-DIRECT-IMAGE-20261022");
