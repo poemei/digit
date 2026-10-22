@@ -34,6 +34,9 @@ static int running(void){int v;pthread_mutex_lock(&lock);v=live;pthread_mutex_un
 #define REPORT_CAP 64
 static irc_report_t irc_pending[REPORT_CAP],slack_pending[REPORT_CAP];
 static unsigned irc_count,slack_count;
+/* Track changes to operator-approved Lessons files independently of reports. */
+static file_state_t lesson_states[256];
+static unsigned lesson_count;
 static void flush_one(const char *service,irc_report_t *queue,unsigned *count){
  while(*count&&api&&api->invoke_service){
   size_t used=0;
