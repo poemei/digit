@@ -4,7 +4,7 @@ CPPFLAGS += -I../../core/stnlabz_abi
 LDLIBS += -lcurl -ljson-c
 PREFIX ?= /opt/digit
 TARGET := bin/publisher.so
-.PHONY: all test clean install test-login test-login
+.PHONY: all test clean install test-login
 all: $(TARGET)
 $(TARGET): publisher.c ../../core/stnlabz_abi/module.h
 	@mkdir -p bin
@@ -26,8 +26,3 @@ bin/test_site_login: test_site_login.c
 test-login: bin/test_site_login
 	./bin/test_site_login
 
-bin/test_site_login: test_site_login.c
-	@mkdir -p bin
-	$(CC) $(CFLAGS) test_site_login.c -o $@ -lcurl
-test-login: bin/test_site_login
-	./bin/test_site_login
