@@ -17,3 +17,11 @@ The independent read-only acceptance program is `test_site_login.c`. It follows 
 The program reads a local file at `/opt/digit/auth/sites/login.conf` containing two lines: `username=...` and `password=...`. Only the Digit account or root should own the file; mode must be 0600. This file is not stored in GitHub. The same values are reused for all three domains, each with a separate cookie session. A failure is reported as NOT VERIFIED rather than assumed to be an invalid password.
 
 Run from the Digit checkout: `make -C modules/publisher test-login`. This performs real login attempts and is separate from offline module qualification. The result is **unverified** until executed on Digit's host with her account credentials. The earlier Bearer publishing transport is still unverified and must not be used for publication.
+
+## Real announcement acceptance test (two domains)
+
+Verified against source in `poemei/announcements` version 1.3.5: authenticated POST `/admin/announcements` accepts `csrf_token`, `action=create`, `title`, `body`, and `published=1`. The Admin list provides confirmation by title; the controller returns a redirect after saving. Deployed module versions still need live confirmation.
+
+Run `make -C modules/publisher test-announcement` after the existing three-domain login/logout test. This **creates public content** on `chaos-mvc.org` and `stn-labz.com` using Digit's credentials, submits GFM Markdown, verifies the title appears in the authenticated admin listing, then sends CSRF-protected POST `/logout` and verifies admin access is revoked. A same-titled existing entry is never submitted twice; it reports ALREADY_EXISTS and does not count as a newly created acceptance success. There is intentionally no poemei.com publish in this two-domain acceptance test.
+
+The test reports separately whether the entry was created/listed and whether logout was verified. It does not establish working autonomous editorial decisions or the production Publisher ABI transport; those remain unverified. Build has not been executed on Digit's host by the assistant.
