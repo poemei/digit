@@ -123,20 +123,22 @@ static int post_site(const char *host,const char *user,const char *pass,
   const char *open_end=strchr(cursor,'>');
   const char *option_end=strstr(cursor,"</option>");
   if(!open_end||!option_end||open_end>=option_end||option_end>select_end)break;
-  const char *val=strstr(cursor,"value=\"");
-  if(val&&val<open_end){
-   val+=7;
-   char *endptr=NULL;
-   long id=strtol(val,&endptr,10);
-   if(endptr&&endptr<open_end&&*endptr=='"'&&id>0&&id<=2147483647){
-    const char *first=open_end+1,*last=option_end;
-    while(first<last&&isspace((unsigned char)*first))first++;
-    while(last>first&&isspace((unsigned char)last[-1]))last--;
-    if((size_t)(last-first)==sizeof("digit.png")-1&&
-       !memcmp(first,"digit.png",sizeof("digit.png")-1)){
-      image_id=(int)id;matched++;
-    }
-   }
+  const char *first=open_end+1,*last=option_end;
+  while(first<last&&isspace((unsigned char)*first))first++;
+  while(last>first&&isspace((unsigned char)last[-1]))last--;
+  if((size_t)(last-first)==sizeof("digit.png")-1&&
+     !memcmp(first,"digit.png",sizeof("digit.png")-1)){
+   const char *attr=strstr(cursor,"value=");
+   if(attr&&attr<open_end){
+    attr+=6;
+    char quote=(*attr=='"'||*attr=='\'')?*attr++:0;
+    char *endptr=NULL;
+    long id=strtol(attr,&endptr,10);
+    if(endptr>attr&&endptr<open_end&&id>0&&id<=2147483647&&
+       (!quote||*endptr==quote)){
+     image_id=(int)id;matched++;
+    }else fprintf(stderr,"%s: digit.png option has invalid Media ID\n",host);
+   }else fprintf(stderr,"%s: digit.png option lacks a Media ID\n",host);
   }
   cursor=option_end+9;
  }
