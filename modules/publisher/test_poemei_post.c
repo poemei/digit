@@ -62,7 +62,7 @@ static int extract_csrf(const page_t *page,char *token,size_t cap){
 static int verify_public_post(CURL *curl,page_t *page,const char *host,const char *title){
  char url[256];
  long code=0;
- snprintf(url,sizeof url,"%s/posts/the-stoopid-shit-poe-says-digit-takes-notes",host);
+ snprintf(url,sizeof url,"%s/posts/the-stoopid-shit-poe-says---digit-takes-notes",host);
  CURLcode rc=request(curl,url,page,NULL,&code);
  int title_ok=rc==CURLE_OK&&strstr(page->data,title)!=NULL;
  int body_ok=rc==CURLE_OK&&strstr(page->data,"Hi Bishes! Digit here.")!=NULL;
