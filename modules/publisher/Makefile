@@ -4,7 +4,7 @@ CPPFLAGS += -I../../core/stnlabz_abi
 LDLIBS += -lcurl -ljson-c
 PREFIX ?= /opt/digit
 TARGET := bin/publisher.so
-.PHONY: all test clean install test-login test-announcement test-poemei-announcement test-poemei-post
+.PHONY: all test clean install test-login test-announcement test-poemei-announcement test-poemei-post test-poemei-followup
 all: $(TARGET)
 $(TARGET): publisher.c ../../core/stnlabz_abi/module.h
 	@mkdir -p bin
@@ -47,3 +47,10 @@ bin/test_poemei_post: test_poemei_post.c
 	$(CC) $(CFLAGS) test_poemei_post.c -o $@ -lcurl
 test-poemei-post: bin/test_poemei_post
 	./bin/test_poemei_post
+
+# Separate Episode 002; never overwrites the introduction.
+bin/test_poemei_followup: test_poemei_followup.c
+	@mkdir -p bin
+	$(CC) $(CFLAGS) test_poemei_followup.c -o $@ -lcurl
+test-poemei-followup: bin/test_poemei_followup
+	./bin/test_poemei_followup
