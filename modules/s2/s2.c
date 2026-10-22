@@ -109,7 +109,9 @@ static int investigation_candidate(const char *severity,const char *relevance){
 }
 static int case_db_open(sqlite3 **db){
  if(sqlite3_open_v2(CASE_DB,db,SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE,NULL)!=SQLITE_OK){
-  if(*db)sqlite3_close(*db);*db=NULL;return 0;
+  if(*db)sqlite3_close(*db);
+  *db=NULL;
+  return 0;
  }
  sqlite3_busy_timeout(*db,1000);
  const char *ddl="CREATE TABLE IF NOT EXISTS s2_cases ("
@@ -238,7 +240,7 @@ static stnlabz_module_result_t poll_service(
  long count;int available,has_priority=0,matched=0,stale=0,source_state,first_report;
  int case_updates=0,case_total=-1;char case_summary[3500]={0};
  json_object *root=NULL,*records=NULL,*entry;
- const char *severity,*relevance,*id,*first,*second,*date,*best_date="";
+ const char *severity,*relevance,*id,*first,*date,*best_date="";
  char signature[192]={0};char report[DIGIT_S2_REPORT_CAP]={0};
  time_t now=time(NULL);
  size_t i,length;
@@ -278,7 +280,7 @@ static stnlabz_module_result_t poll_service(
     const char *second_ip="";
     if(json_object_object_get_ex(entry,"details",&details))
      second_ip=field(details,"ip_address");
-    if(count>=0&&match_lines(lines,count,stored,first,second_ip))matched=1;
+    if(count>=0&&match_lines((const char (*)[512])lines,count,stored,first,second_ip))matched=1;
    }
    if(strlen(date)==19&&strcmp(date,best_date)>0){
     best_date=date;
@@ -373,7 +375,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
   intelligence_brief(brief,sizeof brief,"Source event",-1,0,0,0,"",0,12,3);
   test(r,strstr(brief,"1. EXECUTIVE SUMMARY")!=NULL,0);
   test(r,strstr(brief,"6. FINAL ASSESSMENT")!=NULL,0);
-  test(r,strstr(brief,"not established")!=NULL,0);
+  test(r,strstr(brief,"not yet established")!=NULL,0);
   test(r,strstr(brief,"Rictus: unavailable")!=NULL,0);
   test(r,strstr(brief,"12 source-record cases")!=NULL,0);
   test(r,strstr(brief,"3 source records opened or changed")!=NULL,0);
@@ -621,7 +623,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=2,.version_patch=0,
+ .version_major=0,.version_minor=2,.version_patch=1,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
