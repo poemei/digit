@@ -1,0 +1,8 @@
+# Copy to /opt/digit/auth/publisher/publisher.conf; owner root/Digit; mode 0600
+# Both sites disabled until the actual authenticated server endpoint is verified.
+chaos_enabled=false
+chaos_endpoint=
+chaos_token=
+stnlabz_enabled=false
+stnlabz_endpoint=
+stnlabz_token=
