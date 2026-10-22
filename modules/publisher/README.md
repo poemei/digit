@@ -1,27 +1,24 @@
-# Digit Publisher v0.2.0 — ABI 1.5
+# Digit Publisher v0.3.0 — ABI 1.5
 
-Publisher loads `/opt/digit/auth/sites/sites.json`, containing up to three independent sites named `chaos`, `stnlabz`, and `poemei`. The JSON must be owned by root or the Digit process UID, be a regular file, and have no group or other permission bits (use chmod 600). See `sites.json.example`.
+The production service `digit.publisher.publish` now uses the tested ChAoS MVC browser-form contract, not an invented Bearer JSON API. It accepts the original fixed-size request (`site`, `kind`, `category`, `title`, `markdown`) and responds with confirmation/error in the original response shape. Supported sites: `chaos`, `stnlabz`, `poemei`. Supported kinds: `announcements`, `news`, `page`, `posts`. SRT and Intelligence are not enabled.
 
-Each site includes `enabled`, `endpoint`, `token`, `kinds`, and optional `voice`. Disabled sites require no credentials or endpoints. Enabled sites require a HTTPS endpoint on the exact configured site's domain, a Bearer token, and at least one authorized publishing kind. The `kinds` list is a local limitation, not proof of remote permission. The `voice` metadata is reserved for Digit's editorial decision-maker; the transport does not itself write prose.
+## Credentials and permissions
 
-The existing ABI service `digit.publisher.publish` accepts the same fixed-size request struct with site, kind, category, title, and raw GFM Markdown. A request denied by local `kinds` never reaches a website. The transport submits JSON with kind, category, title, content, and format. A publication is confirmed only if the server returns HTTP 200/201 and JSON containing `published:true`, `id`, and HTTPS `url`.
+The process reads `/opt/digit/auth/sites/login.conf` for `username=...` and `password=...`, and `/opt/digit/auth/sites/sites.json` for allowed destinations and `kinds`. Both must be ordinary files owned by root or Digit's UID, with permissions 0600. An enabled site's configured `kinds` gate controls whether requests can proceed. `endpoint` and `token` from older JSON configurations are no longer consulted. **Existing sites.json configurations with `enabled:false` remain disabled**: update that local file to enable allowed sites. Copy the shape from `sites.json.example`, preserving the private file ownership/mode. Do not put credentials in Git.
 
-**Important:** This submission JSON shape is still a required, unverified server contract, not a claim that ChAoS MVC currently provides that endpoint. Site-specific publishing route and credential integration require inspecting the deployed module controllers. This module is not autonomous editorial planning, scheduling, or duplicate detection. No live posts have been demonstrated.
+## Publishing contract
 
-Test: `make -C modules/publisher clean all test`. No Core modifications.
+For each call the Publisher performs fresh GET `/login`, CSRF-protected POST `/auth/login`, accesses the authenticated admin form, submits the kind-specific form, verifies the published result, POSTs `/logout` with CSRF, and checks the prior session cannot access `/admin`. It maintains cookies only in the request-local libcurl session.
 
-## Verify the existing ChAoS MVC login first
+- **Announcements:** `/admin/announcements`, `action=create`, `body`, `published=1`; verifies its admin listing. Announcement bodies' public Markdown rendering depends on the separately installed Announcements module.
+- **Core Posts:** `/admin/posts`, `body`, `published=on`, `featured_image_id` chosen by matching `digit.png` in the existing Media dropdown. Refuses a missing or mismatched image. Verifies the public `/posts/{slug}` includes an image. The Posts slug computation preserves the Core controller's hyphen behavior.
+- **Core Pages:** `/admin/page`, `action=create`, `slug`, `description`, `status=published`, `content_file=main.md`, `content`. Verifies the public `/{slug}` page.
+- **News:** `/admin/news`, `action=create`, `slug`, `title`, `category`, `summary`, `body_markdown`, `status=published`. Verifies public `/news/{slug}`.
 
-The independent read-only acceptance program is `test_site_login.c`. It follows the verified ChAoS MVC form: GET `/login`, read the hidden `csrf_token`, POST `username`, `password`, and `csrf_token` to `/auth/login`, and fetch `/admin` with the same session cookies. It checks the authenticated admin dashboard; no content is created or changed.
+The Publisher refuses an existing title/slug found in its admin view; it does not overwrite posts. **No automatic IRC ingestion, editorial writing, scheduling, authorization or external intelligence gathering is implemented here.** Calls must originate from an authorized service consumer. This is transport only.
 
-The program reads a local file at `/opt/digit/auth/sites/login.conf` containing two lines: `username=...` and `password=...`. Only the Digit account or root should own the file; mode must be 0600. This file is not stored in GitHub. The same values are reused for all three domains, each with a separate cookie session. A failure is reported as NOT VERIFIED rather than assumed to be an invalid password.
+## Qualification and deployment
 
-Run from the Digit checkout: `make -C modules/publisher test-login`. This performs real login attempts and is separate from offline module qualification. The result is **unverified** until executed on Digit's host with her account credentials. The earlier Bearer publishing transport is still unverified and must not be used for publication.
+Offline ABI qualification: `make -C modules/publisher clean all test`. This does not make live publication requests. The existing standalone acceptance tests previously demonstrated the corresponding website form operations across three domains. **The updated production service itself still requires a build, qualification, and runtime integration test on Digit's host; source commit is not proof it is operational.**
 
-## Real announcement acceptance test (two domains)
-
-Verified against source in `poemei/announcements` version 1.3.5: authenticated POST `/admin/announcements` accepts `csrf_token`, `action=create`, `title`, `body`, and `published=1`. The Admin list provides confirmation by title; the controller returns a redirect after saving. Deployed module versions still need live confirmation.
-
-Run `make -C modules/publisher test-announcement` after the existing three-domain login/logout test. This **creates public content** on `chaos-mvc.org` and `stn-labz.com` using Digit's credentials, submits GFM Markdown, verifies the title appears in the authenticated admin listing, then sends CSRF-protected POST `/logout` and verifies admin access is revoked. A same-titled existing entry is never submitted twice; it reports ALREADY_EXISTS and does not count as a newly created acceptance success. There is intentionally no poemei.com publish in this two-domain acceptance test.
-
-The test reports separately whether the entry was created/listed and whether logout was verified. It does not establish working autonomous editorial decisions or the production Publisher ABI transport; those remain unverified. Build has not been executed on Digit's host by the assistant.
+Do not run the hardcoded live acceptance targets unless a new public test entry is intended. No changes to ChAoS MVC Core are required by this version.
