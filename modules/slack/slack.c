@@ -152,28 +152,60 @@ static stnlabz_module_result_t delivery(const void *request,size_t bytes,
 static int ws_send(CURL *curl,const char *text){size_t sent=0;size_t len=strlen(text);
  return curl_ws_send(curl,text,len,&sent,0,CURLWS_TEXT)==CURLE_OK&&sent==len;
 }
+/* Normalize Slack's mention markup without treating channel text as a command.
+ * Reject mention-only inputs as empty; the transport supplies an acknowledgement.
+ */
+static int normalized_message(const char *raw,int mention,char *out,size_t cap){
+ const char *p=raw;size_t used=0;int seen=0;
+ if(!raw||!out||cap<2)return 0;
+ while(*p){
+  if(mention&&p[0]=='<'&&p[1]=='@'){
+   const char *end=strchr(p+2,'>');
+   if(end&&end>p+2&&end-p<128){
+    const char *q=p+2;
+    while(q<end&&(isalnum((unsigned char)*q)||*q=='_'||*q=='-'))q++;
+    if(q==end){p=end+1;seen=1;continue;}
+   }
+  }
+  if(used+1>=cap)return 0;
+  out[used++]=*p++;
+ }
+ out[used]=0;
+ if(mention&&!seen)return 0;
+ {
+  char *first=out;
+  while(isspace((unsigned char)*first))first++;
+  if(first!=out)memmove(out,first,strlen(first)+1);
+  used=strlen(out);
+  while(used&&isspace((unsigned char)out[used-1]))out[--used]=0;
+ }
+ return used!=0;
+}
 static void on_event(struct json_object *root){
  struct json_object *payload=obj(root,"payload"),*event=obj(payload,"event");
  const char *type=field(event,"type"),*team=field(payload,"team_id");
  const char *user=field(event,"user"),*channel=field(event,"channel");
  const char *text=field(event,"text"),*thread=field(event,"thread_ts");
- const char *subtype=field(event,"subtype"),*event_id=field(payload,"event_id");
+ const char *subtype=field(event,"subtype");
  digit_message_t msg={0};char answer[8192]={0};size_t used=0;
- int direct;
- (void)event_id;
+ int direct,mention;
  if(!event||!team||strcmp(team,config.workspace)||!type||!user||!channel||
     !text||subtype||!host_api||!host_api->invoke_service)return;
  direct=!strcmp(type,"message")&&field(event,"channel_type")&&
   !strcmp(field(event,"channel_type"),"im");
- if(!direct&&strcmp(type,"app_mention"))return;
+ mention=!strcmp(type,"app_mention");
+ if(!direct&&!mention)return;
  if(!copy(msg.sender,sizeof msg.sender,user)||
     !copy(msg.account,sizeof msg.account,user)||
     !copy(msg.target,sizeof msg.target,channel))return;
- /* Mentions retain the original user text; Conversation performs interpretation. */
- if(!copy(msg.message,sizeof msg.message,text))return;
+ if(!normalized_message(text,mention,msg.message,sizeof msg.message)){
+  if(mention)(void)posted(channel,"I'm here. What would you like me to do?",thread);
+  return;
+ }
  if(host_api->invoke_service(CONVERSATION_SERVICE,&msg,sizeof msg,
       answer,sizeof answer,&used)!=STNLABZ_MODULE_OK)return;
- if(used&&used<sizeof answer){answer[used]=0;
+ if(used&&used<sizeof answer){
+  answer[used]=0;
   (void)posted(channel,answer,thread);
  }
 }
@@ -275,6 +307,19 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  check(r,MAX_REPORT>=8192,0);
  check(r,sizeof cfg_check.learn_key>=128,0);
  check(r,sizeof cfg_check.intel_channel==sizeof cfg_check.module_channel,0);
+ {char output[64]={0};
+  check(r,normalized_message("<@U123> hi",1,output,sizeof output)&&
+   !strcmp(output,"hi"),0);
+  check(r,normalized_message("  <@U123> help  ",1,output,sizeof output)&&
+   !strcmp(output,"help"),0);
+  check(r,normalized_message("hi",0,output,sizeof output)&&
+   !strcmp(output,"hi"),0);
+  check(r,!normalized_message("<@U123>",1,output,sizeof output),1);
+  check(r,!normalized_message("hi",1,output,sizeof output),1);
+  check(r,!normalized_message("<@U123> abc",1,output,3),1);
+  check(r,!normalized_message("<@U123> bad",1,NULL,0),1);
+ }
+
  return r->tests_failed||r->tests_executed<STNLABZ_MODULE_MIN_TESTS||
    !r->negative_test_executed||!r->negative_test_passed?
    STNLABZ_MODULE_ERR_QUALIFICATION:STNLABZ_MODULE_OK;
@@ -308,7 +353,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="slack",.name="Slack ABI Transport",
- .version_major=0,.version_minor=1,.version_patch=2,
+ .version_major=0,.version_minor=1,.version_patch=3,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
