@@ -499,8 +499,15 @@ static int observation_report(digit_s2_report_t *out,int64_t *selected){
 }
 /* Dedicated scheduler: never invokes an ABI service from another service
  * handler, avoiding Core's non-recursive registry lock. */
+static void irc_notice(digit_s2_report_t *dst,const char *summary){
+ if(!dst)return;
+ memset(dst,0,sizeof *dst);
+ snprintf(dst->report,sizeof dst->report,
+  "[S2] %.255s | Full intelligence brief: Slack -> #stn-labz",
+  summary&&*summary?summary:"Intelligence report published");
+}
 static void *scheduler_main(void *unused){
- digit_s2_report_t result={0},pending={0};size_t used=0;
+ digit_s2_report_t result={0},pending={0},poll_snapshot={0};size_t used=0;
  int64_t pending_observation=0;
  int drain_observations=0;
  struct timespec until;
@@ -520,13 +527,18 @@ static void *scheduler_main(void *unused){
    if(!deliver_intel(update)){
     memset(&pending,0,sizeof pending);
     pending_observation=0;
+   }else{
+    digit_s2_report_t notice={0};
+    irc_notice(&notice,pending.report);
+    pending=notice;
    }
   }
   if(!pending.report[0]){
    memset(&result,0,sizeof result);used=0;
-   if(poll_service(NULL,0,&result,sizeof result,&used,NULL)==STNLABZ_MODULE_OK&&
+   if(!poll_snapshot.report[0]&&
+      poll_service(NULL,0,&result,sizeof result,&used,NULL)==STNLABZ_MODULE_OK&&
       used==sizeof result&&memchr(result.report,0,sizeof result.report))
-    pending=result;
+    irc_notice(&poll_snapshot,result.report);
   }
   /* Deliver the full source-backed assessment only to the configured private
    * Slack intelligence channel, never to an IRC bridge or public website. */
@@ -539,7 +551,14 @@ static void *scheduler_main(void *unused){
     pthread_mutex_lock(&intel_mutex);
     if(!strcmp(intel_pending,brief))intel_pending[0]=0;
     pthread_mutex_unlock(&intel_mutex);
+    if(poll_snapshot.report[0]&&!pending.report[0]){
+     pending=poll_snapshot;
+     memset(&poll_snapshot,0,sizeof poll_snapshot);
+    }
    }
+  }
+  if(!pending.report[0]&&poll_snapshot.report[0]){
+   /* Do not advertise an undelivered Slack report. */
   }
   if(pending.report[0]&&host&&host->invoke_service){
    size_t delivered=0;
@@ -594,7 +613,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=1,.version_patch=9,
+ .version_major=0,.version_minor=2,.version_patch=0,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
