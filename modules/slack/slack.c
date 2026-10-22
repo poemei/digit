@@ -233,23 +233,51 @@ static void check(stnlabz_module_qualification_result_t *r,int valid,int negativ
  if(negative){r->negative_test_executed=1;if(valid)r->negative_test_passed=1;}
 }
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r){
- slack_config_t saved=config;char x[8];char good[]={"hello"};
+ char x[8]={0};
+ char good[]="hello";
+ char empty[]="";
+ char carriage[]="x\r";
+ char newline[]="x\ny";
+ char tab[]="x\ty";
+ char nul[]={'x',0,'y'};
+ char control[]={'x',1,0};
+ char full[8]="1234567";
+ slack_config_t cfg_check={0};
  if(!r)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(r,0,sizeof *r);
+ /* Digit's checked-in ABI contract requires at least 20 executed cases.
+  * Exercise meaningful positive and negative paths; no fabricated counters. */
  check(r,copy(x,sizeof x,"abc"),0);
+ check(r,!strcmp(x,"abc"),0);
+ check(r,copy(x,sizeof x,"1234567"),0);
+ check(r,!strcmp(x,full),0);
  check(r,!copy(x,sizeof x,"abcdefgh"),1);
  check(r,!copy(x,sizeof x,"abcdefghijk"),1);
+ check(r,!copy(NULL,sizeof x,"abc"),1);
+ check(r,!copy(x,sizeof x,NULL),1);
+ check(r,copy(x,sizeof x,""),0);
+ check(r,x[0]==0,0);
  check(r,clean_report(good,sizeof good),0);
  check(r,!clean_report(NULL,0),1);
- {char e[]={""};check(r,!clean_report(e,sizeof e),1);}
- {char c[]={"x\r"};check(r,!clean_report(c,sizeof c),1);}
- {char c[]={"x\ny"};check(r,clean_report(c,sizeof c),0);}
+ check(r,!clean_report(empty,sizeof empty),1);
+ check(r,!clean_report(carriage,sizeof carriage),1);
+ check(r,clean_report(newline,sizeof newline),0);
+ check(r,clean_report(tab,sizeof tab),0);
+ check(r,!clean_report(control,sizeof control),1);
+ check(r,clean_report(nul,sizeof nul),0);
+ check(r,!clean_report(good,2),1);
  check(r,!private_config("/path/not/present"),1);
+ check(r,!private_config(NULL),1);
  check(r,!strcmp(CONVERSATION_SERVICE,"digit.conversation"),0);
+ check(r,!strcmp(INTEL_DELIVERY,"digit.slack.intel.deliver"),0);
+ check(r,!strcmp(MODULE_DELIVERY,"digit.slack.modules.deliver"),0);
  check(r,strcmp(INTEL_DELIVERY,MODULE_DELIVERY)!=0,0);
  check(r,MAX_REPORT>=8192,0);
- config=saved;
- return r->tests_failed?STNLABZ_MODULE_ERR_QUALIFICATION:STNLABZ_MODULE_OK;
+ check(r,sizeof cfg_check.learn_key>=128,0);
+ check(r,sizeof cfg_check.intel_channel==sizeof cfg_check.module_channel,0);
+ return r->tests_failed||r->tests_executed<STNLABZ_MODULE_MIN_TESTS||
+   !r->negative_test_executed||!r->negative_test_passed?
+   STNLABZ_MODULE_ERR_QUALIFICATION:STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t start(const stnlabz_module_host_t *api){
  if(host_api||!api||!api->invoke_service||!api->register_service||!api->unregister_service)
@@ -280,7 +308,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="slack",.name="Slack ABI Transport",
- .version_major=0,.version_minor=1,.version_patch=1,
+ .version_major=0,.version_minor=1,.version_patch=2,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
