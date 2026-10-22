@@ -19,6 +19,7 @@
 #define OBS "/opt/digit/observation/observations.jsonl"
 #define LESSONS "/opt/digit/lessons"
 #define REPORT "digit.irc.deliver"
+#define SLACK_REPORT "digit.slack.modules.deliver"
 typedef struct {char report[384];} irc_report_t;
 typedef struct {char path[1024];time_t mtime;long nsec;off_t size;int seen;} file_state_t;
 static pthread_t thread;
@@ -29,28 +30,43 @@ static file_state_t sources[2]={
  {CORPUS,0,0,0,0},{OBS,0,0,0,0}
 };
 static int running(void){int v;pthread_mutex_lock(&lock);v=live;pthread_mutex_unlock(&lock);return v;}
-static irc_report_t pending[64];
-static unsigned pending_count;
-static file_state_t lesson_states[256];
-static unsigned lesson_count;
-static void flush_reports(void){
- while(pending_count&&api&&api->invoke_service){
+/* Independent bounded queues: IRC downtime cannot suppress Slack reporting. */
+#define REPORT_CAP 64
+static irc_report_t irc_pending[REPORT_CAP],slack_pending[REPORT_CAP];
+static unsigned irc_count,slack_count;
+static void flush_one(const char *service,irc_report_t *queue,unsigned *count){
+ while(*count&&api&&api->invoke_service){
   size_t used=0;
-  if(api->invoke_service(REPORT,&pending[0],sizeof pending[0],
+  if(api->invoke_service(service,&queue[0],sizeof queue[0],
       NULL,0,&used)!=STNLABZ_MODULE_OK)break;
-  memmove(pending,pending+1,(--pending_count)*sizeof pending[0]);
+  --*count;
+  if(*count)memmove(queue,queue+1,(*count)*sizeof queue[0]);
  }
 }
-static void report(const char *name,unsigned add,unsigned change,unsigned skip,int error){
- irc_report_t r={{0}};
- snprintf(r.report,sizeof r.report,"[SQLite sync] %.100s: added=%u updated=%u skipped=%u %s",
- name,add,change,skip,error?"FAILED":"OK");
- syslog(error?LOG_ERR:LOG_INFO,"%s",r.report);
- if(pending_count==sizeof pending/sizeof pending[0]){
-  syslog(LOG_ERR,"digit.sqlite3 ingest: IRC report queue full");
-  return;
+static void flush_reports(void){
+ flush_one(REPORT,irc_pending,&irc_count);
+ flush_one(SLACK_REPORT,slack_pending,&slack_count);
+}
+static void push_report(irc_report_t *queue,unsigned *count,const irc_report_t *item,const char *name){
+ if(*count==REPORT_CAP){
+  /* Bound memory and preserve newer operational information. */
+  memmove(queue,queue+1,(REPORT_CAP-1)*sizeof queue[0]);
+  --*count;
+  syslog(LOG_WARNING,"digit.sqlite3 ingest: %s report queue overflow, oldest dropped",name);
  }
- pending[pending_count++]=r;
+ queue[(*count)++]=*item;
+}
+static void report(const char *name,unsigned add,unsigned change,unsigned skip,int error){
+ irc_report_t irc={{0}},slack={{0}};
+ snprintf(irc.report,sizeof irc.report,
+   "[SQLite sync] %.100s: added=%u updated=%u skipped=%u %s",
+   name,add,change,skip,error?"FAILED":"OK");
+ snprintf(slack.report,sizeof slack.report,
+   "[SQLITE MEMORY] %.100s: added=%u updated=%u skipped=%u %s",
+   name,add,change,skip,error?"FAILED":"OK");
+ syslog(error?LOG_ERR:LOG_INFO,"%s",slack.report);
+ push_report(irc_pending,&irc_count,&irc,"IRC");
+ push_report(slack_pending,&slack_count,&slack,"Slack");
  flush_reports();
 }
 static int begin(sqlite3 *db){return sqlite3_exec(db,"BEGIN IMMEDIATE",NULL,NULL,NULL)==SQLITE_OK;}
