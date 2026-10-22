@@ -1,6 +1,7 @@
 /* Digit Core Posts publishing acceptance test: poemei.com only. */
 #define _POSIX_C_SOURCE 200809L
 #include <curl/curl.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -102,8 +103,8 @@ static int post_site(const char *host,const char *user,const char *pass){
   fprintf(stderr,"%s: verified Core Posts create form not found; refusing submission\n",host);
   goto cleanup;
  }
- /* Resolve the Media selector entry for Digit before publishing.
-  * Refuse to post if an exact filename cannot be identified. */
+ /* Core renders <option value="ID" ...> whitespace filename whitespace </option>.
+  * Parse only this selector, trim both sides of its text, and reject ambiguity. */
  const char *media=strstr(page->data,"name=\"featured_image_id\"");
  if(!media){fprintf(stderr,"%s: Media selector missing\n",host);goto cleanup;}
  const char *select_end=strstr(media,"</select>");
@@ -111,26 +112,30 @@ static int post_site(const char *host,const char *user,const char *pass){
  int image_id=0,matched=0;
  const char *cursor=media;
  while((cursor=strstr(cursor,"<option"))&&cursor<select_end){
+  const char *open_end=strchr(cursor,'>');
   const char *option_end=strstr(cursor,"</option>");
-  if(!option_end||option_end>select_end)break;
-  const char *label=strchr(cursor,'>');
+  if(!open_end||!option_end||open_end>=option_end||option_end>select_end)break;
   const char *val=strstr(cursor,"value=\"");
-  if(label&&label<option_end&&val&&val<label){
+  if(val&&val<open_end){
    val+=7;
    char *endptr=NULL;
    long id=strtol(val,&endptr,10);
-   if(endptr&&*endptr=='"'&&id>0&&id<=2147483647){
-    const char *filename=label+1;
-    while(filename<option_end&&(*filename==' '||*filename=='\n'||*filename=='\t'))filename++;
-    if((size_t)(option_end-filename)==strlen("digit.png")&&
-       !memcmp(filename,"digit.png",strlen("digit.png"))){
+   if(endptr&&endptr<open_end&&*endptr=='"'&&id>0&&id<=2147483647){
+    const char *first=open_end+1,*last=option_end;
+    while(first<last&&isspace((unsigned char)*first))first++;
+    while(last>first&&isspace((unsigned char)last[-1]))last--;
+    if((size_t)(last-first)==sizeof("digit.png")-1&&
+       !memcmp(first,"digit.png",sizeof("digit.png")-1)){
       image_id=(int)id;matched++;
     }
    }
   }
   cursor=option_end+9;
  }
- if(matched!=1){fprintf(stderr,"%s: digit.png Media ID not uniquely resolved\n",host);goto cleanup;}
+ if(matched!=1){
+  fprintf(stderr,"%s: digit.png Media entries found: %d (expected exactly one)\n",host,matched);
+  goto cleanup;
+ }
  if(strstr(page->data,title)){
   already_present=1;found=1;
   printf("%s: post already exists; not submitting duplicate\n",host);
