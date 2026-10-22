@@ -1,4 +1,4 @@
-# Digit S2 v0.1.7 — Private Intelligence Reporting
+# Digit S2 v0.1.9 — Private Intelligence Reporting
 
 S2 uses the existing ABI 1.5 services and is hot-loadable without restarting Digit. This revision routes evidence-bounded, six-section assessment briefs and Rictus-linked observation updates through the **existing** `digit.slack.intel.deliver` service. Slack itself owns the configured private `intel_channel_id`. Neither Core nor Slack needs modification.
 
@@ -20,3 +20,9 @@ MEDIUM/MEDIUM or higher severity **and** relevance starts an investigation immed
 The active case count and up to five case changes per polling interval are included in S2's private Slack six-section report. This is a bounded, persistent **source-record case register**, not yet a full analytical investigation engine or independent proof of malicious activity. Cases are keyed by source ID and are not automatically merged on shared IP. Repeated unchanged API snapshots do not increment case revisions. SQLite must be available, and the existing Digit process must be permitted to create the case database under `/opt/digit/state`. Failure is reported as a persistence warning rather than silently claiming success.
 
 Operational limitation: the existing brief retry buffer is in-memory only. A change committed to SQLite could lose its unsent Slack notification across a process exit; there is no durable Slack outbox yet. This patch does not change Core, Slack, IRC, the SRT module, or website publishing. Build/install using Digit's established hot-load lifecycle; no service restart is required.
+
+## v0.1.9: Slack presentation and case-report corrections
+
+The title is now separated from its organizational masthead with a blank line and is rendered with Slack's single-asterisk bold syntax. The six section headings have explicit spacing. Sections 1 and 2 report the real persistent SQLite source-record count and current ingestion changes, rather than claiming that no case register exists. Section 3 consistently states the MEDIUM/MEDIUM investigation threshold. Initial bulk imports are identified as historical ingestion, not new attacks. Unknown case metrics are marked unavailable rather than invented.
+
+The source is committed but neither compilation nor live Slack formatting is independently verified by the repository update.
