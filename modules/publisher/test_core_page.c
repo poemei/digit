@@ -44,9 +44,9 @@ static CURLcode request(CURL *curl,const char *url,page_t *page,const char *form
  return rc;
 }
 static int extract_csrf(const page_t *page,char *token,size_t cap){
- const char *start=strstr(page->data,"name=\"csrf_token\" value=\"");
+ const char *start=strstr(page->data,"name="csrf_token" value="");
  if(!start)return 0;
- start+=strlen("name=\"csrf_token\" value=\"");
+ start+=strlen("name="csrf_token" value="");
  const char *end=strchr(start,'"');
  if(!end||end==start||(size_t)(end-start)>=cap)return 0;
  memcpy(token,start,(size_t)(end-start));token[end-start]=0;
@@ -62,9 +62,9 @@ static int page_site(const char *host,const char *user,const char *pass){
  page_t *page=calloc(1,sizeof *page);
  char url[256],token[129]={0},*u=NULL,*p=NULL,*t=NULL,*title_encoded=NULL,*body_encoded=NULL,*form=NULL;
  const char *title="Digit Pages Integration Verification";
- const char *body="Digit is verifying the existing ChAoS MVC **Core Pages** publishing form.\\n\\n"
-  "This page is managed through the filesystem-backed Pages system.\\n\\n"
-  "Verification marker: DIGIT-PAGES-CHAOS-20261022\\n";
+ const char *body="Digit is verifying the existing ChAoS MVC **Core Pages** publishing form.\n\n"
+  "This page is managed through the filesystem-backed Pages system.\n\n"
+  "Verification marker: DIGIT-PAGES-CHAOS-20261022\n";
  const char *slug="digit-pages-integration-verification";
  long code=0;
  int authenticated=0,created=0,found=0,logout_posted=0,logout_verified=0,session_started=0,already_present=0;
@@ -93,18 +93,20 @@ static int page_site(const char *host,const char *user,const char *pass){
  snprintf(url,sizeof url,"%s/admin/page",host);
  if(request(curl,url,page,NULL,&code)!=CURLE_OK||code!=200)goto cleanup;
  authenticated=1;
- if(!strstr(page->data,"name=\\\"action\\\"")||
-    !strstr(page->data,"name=\\\"slug\\\"")||
-    !strstr(page->data,"name=\\\"content_file\\\"")||
-    !strstr(page->data,"name=\\\"status\\\"")||
-    !strstr(page->data,"name=\\\"content\\\"")||
+ if(!strstr(page->data,"name=\\"action\\"")||
+    !strstr(page->data,"name=\\"slug\\"")||
+    !strstr(page->data,"name=\\"content_file\\"")||
+    !strstr(page->data,"name=\\"status\\"")||
+    !strstr(page->data,"name=\\"content\\"")||
     !extract_csrf(page,token,sizeof token)){
-  fprintf(stderr,"%s: Core Pages form not found; no submission\\n",host);
+  fprintf(stderr,"%s: Core Pages form not found; no submission\n",host);
   goto cleanup;
  }
  if(strstr(page->data,slug)){
-  already_present=1;found=1;
+  already_present=1;
   printf("%s: page already exists; not submitting duplicate\n",host);
+  snprintf(url,sizeof url,"%s/%s",host,slug);
+  if(request(curl,url,page,NULL,&code)==CURLE_OK&&code==200&&strstr(page->data,"DIGIT-PAGES-CHAOS-20261022"))found=1;
   goto cleanup;
  }
  title_encoded=curl_easy_escape(curl,title,0);
@@ -156,7 +158,7 @@ done:
  memset(token,0,sizeof token);
  if(page){memset(page,0,sizeof *page);free(page);}
  if(curl)curl_easy_cleanup(curl);
- return authenticated&&created&&found&&logout_verified;
+ return authenticated&&(created||already_present)&&found&&logout_verified;
 }
 int main(void){
  char username[256]={0},password[512]={0};int ok=0;
@@ -164,9 +166,9 @@ int main(void){
   fprintf(stderr,"Credentials missing or insecure: %s\n",AUTH);return 2;
  }
  if(curl_global_init(CURL_GLOBAL_DEFAULT)!=CURLE_OK)return 2;
- ok+=announcement_site("https://chaos-mvc.org",username,password);
+ ok+=page_site("https://chaos-mvc.org",username,password);
  memset(username,0,sizeof username);memset(password,0,sizeof password);
  curl_global_cleanup();
- printf("Announcement acceptance: %d/2 domains\n",ok);
+ printf("Core Pages acceptance: %d/1 domain\n",ok);
  return ok==1?0:1;
 }
