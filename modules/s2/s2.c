@@ -245,8 +245,10 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  return r->tests_executed>=20&&!r->tests_failed&&r->negative_test_executed&&
    r->negative_test_passed?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_QUALIFICATION;
 }
-/* Passive, bounded observation bridge. Report contains a reference to
- * source evidence, not an independently verified threat assertion. */
+/* Passive, bounded observation bridge. Rictus Intel is presented as
+ * STN-Labz S2 intelligence transported through IRC. The current SQLite3
+ * query does not authenticate sender identity; this label must not be used
+ * as proof that the agent or an external claim was independently verified. */
 static int observation_report(digit_s2_report_t *out,int64_t *selected){
  digit_s2_observations_query_t query={0};
  digit_s2_observations_result_t result={0};
@@ -278,7 +280,7 @@ static int observation_report(digit_s2_report_t *out,int64_t *selected){
  memset(out,0,sizeof *out);
  snprintf(out->report,sizeof out->report,
   "[S2] IRC observation #%lld, Rictus Intel %s: %.130s "
-  "(IRC-origin, not independently verified).",
+  "(STN-Labz S2 intelligence; IRC transport).",
   (long long)result.id,token,summary);
  *selected=result.id;
  return 1;
@@ -359,7 +361,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=1,.version_patch=4,
+ .version_major=0,.version_minor=1,.version_patch=5,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
