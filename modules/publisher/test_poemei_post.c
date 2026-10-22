@@ -98,26 +98,26 @@ static int post_site(const char *host,const char *user,const char *pass){
   fprintf(stderr,"%s: verified Core Posts create form not found; refusing submission\n",host);
   goto cleanup;
  }
- /* Core Media selector maps filenames to numeric featured_image_id values.
-  * Do not publish without the exact digit.png entry. */
- const char *media=strstr(page->data,"name=\\"featured_image_id\\"");
- if(!media){fprintf(stderr,"%s: Core Media selector missing\\n",host);goto cleanup;}
+ /* Resolve the Media selector entry for Digit before publishing.
+  * Refuse to post if an exact filename cannot be identified. */
+ const char *media=strstr(page->data,"name=\"featured_image_id\"");
+ if(!media){fprintf(stderr,"%s: Media selector missing\n",host);goto cleanup;}
  const char *select_end=strstr(media,"</select>");
- if(!select_end){fprintf(stderr,"%s: Core Media selector incomplete\\n",host);goto cleanup;}
+ if(!select_end){fprintf(stderr,"%s: Media selector incomplete\n",host);goto cleanup;}
  int image_id=0,matched=0;
  const char *cursor=media;
  while((cursor=strstr(cursor,"<option"))&&cursor<select_end){
   const char *option_end=strstr(cursor,"</option>");
   if(!option_end||option_end>select_end)break;
   const char *label=strchr(cursor,'>');
-  const char *val=strstr(cursor,"value=\\"");
+  const char *val=strstr(cursor,"value=\"");
   if(label&&label<option_end&&val&&val<label){
    val+=7;
    char *endptr=NULL;
    long id=strtol(val,&endptr,10);
    if(endptr&&*endptr=='"'&&id>0&&id<=2147483647){
     const char *filename=label+1;
-    while(filename<option_end&&(*filename==' '||*filename=='\\n'||*filename=='\\t'))filename++;
+    while(filename<option_end&&(*filename==' '||*filename=='\n'||*filename=='\t'))filename++;
     if((size_t)(option_end-filename)==strlen("digit.png")&&
        !memcmp(filename,"digit.png",strlen("digit.png"))){
       image_id=(int)id;matched++;
@@ -126,7 +126,7 @@ static int post_site(const char *host,const char *user,const char *pass){
   }
   cursor=option_end+9;
  }
- if(matched!=1){fprintf(stderr,"%s: digit.png Media ID not uniquely resolved\\n",host);goto cleanup;}
+ if(matched!=1){fprintf(stderr,"%s: digit.png Media ID not uniquely resolved\n",host);goto cleanup;}
  if(strstr(page->data,title)){
   already_present=1;found=1;
   printf("%s: post already exists; not submitting duplicate\n",host);
