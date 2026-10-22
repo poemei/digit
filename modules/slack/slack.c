@@ -310,7 +310,7 @@ static size_t slack_address_prefix(const char *text){
  for(size_t i=0;i<sizeof names/sizeof names[0];i++){
   size_t n=strlen(names[i]);
   if(!strncasecmp(text,names[i],n)&&
-     (!text[n]||text[n]==':'||text[n]==','||
+     (!text[n]||text[n]==':'||text[n]==','||text[n]=='?'||text[n]=='!'||
       isspace((unsigned char)text[n])))return n;
  }
  return 0;
@@ -347,7 +347,7 @@ static void on_event(struct json_object *root){
  if(mode==2&&slack_address_prefix(msg.message)){
   size_t offset=slack_address_prefix(msg.message);
   char *p=msg.message+offset;
-  if(*p==':'||*p==',')p++;
+  if(*p==':'||*p==','||*p=='?'||*p=='!')p++;
   while(isspace((unsigned char)*p))p++;
   memmove(msg.message,p,strlen(p)+1);
  }
@@ -538,6 +538,11 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  check(r,slack_address_prefix("Digit, hello")==5,0);
  check(r,slack_address_prefix("digicat: hi")==7,0);
  check(r,slack_address_prefix("digital")==0,1);
+ check(r,slack_address_prefix("digit?")==5,0);
+ check(r,slack_address_prefix("digicat?")==7,0);
+ check(r,slack_address_prefix("digit!")==5,0);
+ check(r,slack_address_prefix("Digit?")==5,0);
+ check(r,slack_address_prefix("digit? hi")==5,0);
  check(r,slack_address_prefix("hello digit")==0,1);
  check(r,slack_address_prefix(" digit hi")==0,1);
  check(r,!is_dsd("hi"),1);
@@ -596,7 +601,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="slack",.name="Slack ABI Transport",
- .version_major=0,.version_minor=1,.version_patch=7,
+ .version_major=0,.version_minor=1,.version_patch=8,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
