@@ -19,6 +19,7 @@
 
 #define CONFIG_PATH "/opt/digit/auth/slack/slack.conf"
 #define CONVERSATION_SERVICE "digit.conversation"
+#define CONVERSATION_LISTEN_SERVICE "digit.conversation.listen"
 #define INTEL_DELIVERY "digit.slack.intel.deliver"
 #define MODULE_DELIVERY "digit.slack.modules.deliver"
 #define MAX_REPORT 16000
@@ -181,28 +182,53 @@ static int normalized_message(const char *raw,int mention,char *out,size_t cap){
  }
  return used!=0;
 }
+/* Same channel contract as IRC:
+ * DM -> direct Conversation (DSD is private-only);
+ * addressed mention -> direct Conversation;
+ * general channel speech -> passive Conversation listen.
+ * Ordinary channel text is NEVER dropped just because Digit was not tagged.
+ */
+static int route_kind(const char *type,const char *channel_type,int is_bot,int has_subtype){
+ if(is_bot||has_subtype||!type)return 0;
+ if(!strcmp(type,"app_mention"))return 2;
+ if(strcmp(type,"message"))return 0;
+ if(channel_type&&!strcmp(channel_type,"im"))return 3;
+ if(channel_type&&(!strcmp(channel_type,"channel")||!strcmp(channel_type,"group")))
+  return 1;
+ return 0;
+}
+static const char *event_team(struct json_object *root,struct json_object *payload){
+ const char *team=field(payload,"team_id");
+ if(!team)team=field(root,"team_id");
+ if(!team)team=field(root,"team");
+ return team;
+}
 static void on_event(struct json_object *root){
  struct json_object *payload=obj(root,"payload"),*event=obj(payload,"event");
- const char *type=field(event,"type"),*team=field(payload,"team_id");
+ const char *type=field(event,"type"),*team=event_team(root,payload);
  const char *user=field(event,"user"),*channel=field(event,"channel");
  const char *text=field(event,"text"),*thread=field(event,"thread_ts");
  const char *subtype=field(event,"subtype");
+ const char *bot_id=field(event,"bot_id");
+ const char *channel_type=field(event,"channel_type");
  digit_message_t msg={0};char answer[8192]={0};size_t used=0;
- int direct,mention;
+ const char *service;
+ int mode;
  if(!event||!team||strcmp(team,config.workspace)||!type||!user||!channel||
-    !text||subtype||!host_api||!host_api->invoke_service)return;
- direct=!strcmp(type,"message")&&field(event,"channel_type")&&
-  !strcmp(field(event,"channel_type"),"im");
- mention=!strcmp(type,"app_mention");
- if(!direct&&!mention)return;
+    !text||!host_api||!host_api->invoke_service)return;
+ mode=route_kind(type,channel_type,bot_id!=NULL,subtype!=NULL);
+ if(mode==0)return;
  if(!copy(msg.sender,sizeof msg.sender,user)||
     !copy(msg.account,sizeof msg.account,user)||
     !copy(msg.target,sizeof msg.target,channel))return;
- if(!normalized_message(text,mention,msg.message,sizeof msg.message)){
-  if(mention)(void)posted(channel,"I'm here. What would you like me to do?",thread);
-  return;
+ if(!normalized_message(text,mode==2,msg.message,sizeof msg.message)){
+  /* The passive listener never creates synthetic speech or replies.
+   * Even an empty mention is passed to Conversation for its own decision. */
+  if(mode!=2)return;
+  msg.message[0]=0;
  }
- if(host_api->invoke_service(CONVERSATION_SERVICE,&msg,sizeof msg,
+ service=mode==1?CONVERSATION_LISTEN_SERVICE:CONVERSATION_SERVICE;
+ if(host_api->invoke_service(service,&msg,sizeof msg,
       answer,sizeof answer,&used)!=STNLABZ_MODULE_OK)return;
  if(used&&used<sizeof answer){
   answer[used]=0;
@@ -307,6 +333,17 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  check(r,MAX_REPORT>=8192,0);
  check(r,sizeof cfg_check.learn_key>=128,0);
  check(r,sizeof cfg_check.intel_channel==sizeof cfg_check.module_channel,0);
+ /* Verify routing follows IRC's direct/passive distinction. */
+ check(r,route_kind("message","channel",0,0)==1,0);
+ check(r,route_kind("message","group",0,0)==1,0);
+ check(r,route_kind("message","im",0,0)==3,0);
+ check(r,route_kind("app_mention","channel",0,0)==2,0);
+ check(r,route_kind("message","channel",1,0)==0,1);
+ check(r,route_kind("message","channel",0,1)==0,1);
+ check(r,route_kind("message","mpim",0,0)==0,1);
+ check(r,route_kind("other","channel",0,0)==0,1);
+ check(r,!strcmp(CONVERSATION_LISTEN_SERVICE,"digit.conversation.listen"),0);
+
  {char output[64]={0};
   check(r,normalized_message("<@U123> hi",1,output,sizeof output)&&
    !strcmp(output,"hi"),0);
@@ -353,7 +390,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="slack",.name="Slack ABI Transport",
- .version_major=0,.version_minor=1,.version_patch=3,
+ .version_major=0,.version_minor=1,.version_patch=4,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
