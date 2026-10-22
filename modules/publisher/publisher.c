@@ -64,6 +64,7 @@ static int input_valid(const publish_request_t *p){
   if((unsigned char)p->title[i]<32)return 0;
  return 1;
 }
+static const char *json_string(struct json_object *o,const char *key);
 static int load_config(void){
  FILE *fp=NULL;char data[8192]={0};size_t n;
  struct json_object *root=NULL,*sites=NULL;
