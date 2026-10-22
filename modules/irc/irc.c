@@ -44,8 +44,6 @@ static pthread_t worker;
 static int active_socket=-1;
 static pthread_mutex_t socket_mutex=PTHREAD_MUTEX_INITIALIZER;
 #define S2_DELIVER_SERVICE "digit.irc.deliver"
-#define IRC_BRIDGE_SERVICE "digit.irc.bridge.deliver"
-#define SLACK_BRIDGE_SERVICE "digit.slack.bridge.deliver"
 #define S2_REPORT_BYTES 384
 #define S2_QUEUE_CAP 16
 /* One queued status report at most every 15 seconds. Normal replies unaffected. */
@@ -105,23 +103,6 @@ static stnlabz_module_result_t deliver_service(
 }
 
 static const stnlabz_module_host_t *host_api;
-static stnlabz_module_result_t bridge_deliver_service(
- const void *request,size_t bytes,void *response,size_t cap,size_t *used,void *ctx){
- (void)ctx;
- return deliver_service(request,bytes,response,cap,used,NULL);
-}
-static void bridge_to_slack(const char *nick,const char *body){
- irc_s2_report_t report={0};char filtered[220]={0};
- size_t j=0,used=0;
- if(!nick||!body||!host_api||!host_api->invoke_service)return;
- for(size_t i=0;body[i]&&j<sizeof filtered-1;i++){
-  unsigned char ch=(unsigned char)body[i];
-  if(ch>=32&&ch!=127)filtered[j++]=(char)ch;
- }
- if(!j)return;
- if(snprintf(report.report,sizeof report.report,"[IRC %.*s] %s",32,nick,filtered)<0)return;
- (void)host_api->invoke_service(SLACK_BRIDGE_SERVICE,&report,sizeof report,NULL,0,&used);
-}
 /* DM-only DSD bridge; trace ownership never keyed by unverified nick. */
 #define DSD_DM_SLOTS 32
 typedef struct {char account[128];uint64_t trace;char origin[256];} dsd_dm_t;
@@ -634,7 +615,6 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled
     snprintf(input.target,sizeof input.target,"%s",target);
     snprintf(input.message,sizeof input.message,"%s",body);
     if(!host_api||!host_api->invoke_service)return 1;
-    if(!private_message&&strcasecmp(sender,cfg->nick))bridge_to_slack(sender,body);
     if(private_message&&
        (!strcmp(input.message,"show trace")||
         !strcmp(input.message,"diagnose my last request"))){
@@ -1138,13 +1118,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *host) {
         close(wake_pipe[0]);close(wake_pipe[1]);wake_pipe[0]=wake_pipe[1]=-1;
         host_api=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
     }
-    if(!host->register_service(IRC_BRIDGE_SERVICE,bridge_deliver_service,NULL)){
-        (void)host->unregister_service(S2_DELIVER_SERVICE,NULL);
-        close(wake_pipe[0]);close(wake_pipe[1]);wake_pipe[0]=wake_pipe[1]=-1;
-        host_api=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
-    }
     if(pthread_create(&worker,NULL,worker_main,NULL)) {
-        (void)host->unregister_service(IRC_BRIDGE_SERVICE,NULL);
         (void)host->unregister_service(S2_DELIVER_SERVICE,NULL);
         close(wake_pipe[0]);close(wake_pipe[1]);wake_pipe[0]=wake_pipe[1]=-1;
         host_api=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
@@ -1154,7 +1128,6 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *host) {
 static stnlabz_module_result_t stop(void) {
     if(!worker_started)return STNLABZ_MODULE_ERR_INVALID_STATE;
     stopping=1;
-    (void)host_api->unregister_service(IRC_BRIDGE_SERVICE,NULL);
     (void)host_api->unregister_service(S2_DELIVER_SERVICE,NULL);
     pthread_mutex_lock(&socket_mutex);
     if(active_socket>=0)shutdown(active_socket,SHUT_RDWR);
@@ -1167,7 +1140,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=3,.version_patch=16,
+    .version_major=0,.version_minor=3,.version_patch=17,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
