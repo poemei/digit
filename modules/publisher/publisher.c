@@ -21,8 +21,10 @@ typedef struct {
 typedef struct {
  int published;char publication_id[128],url[1024],error[160];
 } publish_response_t;
-typedef struct {char name[32],endpoint[512],token[512];char kinds[4][32];int kind_count;} destination_t;
+
+typedef struct {char name[32],base[128],kinds[4][32];int kind_count;} destination_t;
 static destination_t destinations[3];
+static char username[256],password[512];
 static const stnlabz_module_host_t *host_api;
 static void erase(void *p,size_t n){volatile unsigned char *b=p;while(n--)*b++=0;}
 static int bounded(const char *s,size_t max){return s&&memchr(s,0,max)!=NULL;}
@@ -35,159 +37,269 @@ static int copy(char *dst,size_t cap,const char *src){
  size_t n;if(!dst||!src||(n=strlen(src))>=cap)return 0;
  memcpy(dst,src,n+1);return 1;
 }
-static int safe_token(const char *v){return v&&*v&&!strpbrk(v,"\r\n");}
-static int endpoint_allowed(const char *site,const char *url){
- const char *host;
- if(!site||!url||strncmp(url,"https://",8))return 0;
- host=!strcmp(site,"chaos")?"chaos-mvc.org":
-      !strcmp(site,"stnlabz")?"stn-labz.com":
-      !strcmp(site,"poemei")?"poemei.com":NULL;
- if(!host)return 0;
- url+=8;
- if(!strncmp(url,"www.",4))url+=4;
- size_t n=strlen(host);
- return !strncmp(url,host,n)&&url[n]=='/'&&url[n+1]&&
-   !strchr(url,'#')&&!strchr(url,'@')&&!strchr(url,'?');
+static const char *json_string(struct json_object *o,const char *key){
+ struct json_object *v=NULL;
+ if(!o||!json_object_object_get_ex(o,key,&v)||!json_object_is_type(v,json_type_string))return NULL;
+ return json_object_get_string(v);
 }
 static int kind_allowed(const char *kind){
  return kind&&(!strcmp(kind,"announcements")||!strcmp(kind,"news")||
   !strcmp(kind,"page")||!strcmp(kind,"posts"));
 }
 static int input_valid(const publish_request_t *p){
- if(!p||!bounded(p->site,sizeof p->site)||
-    !bounded(p->kind,sizeof p->kind)||
-    !bounded(p->category,sizeof p->category)||
-    !bounded(p->title,sizeof p->title)||
-    !bounded(p->markdown,sizeof p->markdown))return 0;
- if(!kind_allowed(p->kind)||!p->title[0]||!p->markdown[0])return 0;
- for(size_t i=0;p->title[i];i++)
-  if((unsigned char)p->title[i]<32)return 0;
+ if(!p||!bounded(p->site,sizeof p->site)||!bounded(p->kind,sizeof p->kind)||
+  !bounded(p->category,sizeof p->category)||!bounded(p->title,sizeof p->title)||
+  !bounded(p->markdown,sizeof p->markdown)||!p->title[0]||!p->markdown[0]||
+  !kind_allowed(p->kind))return 0;
+ for(const char *c=p->title;*c;c++)if((unsigned char)*c<32)return 0;
  return 1;
 }
-static const char *json_string(struct json_object *o,const char *key);
-static int load_config(void){
- FILE *fp=NULL;char data[8192]={0};size_t n;
- struct json_object *root=NULL,*sites=NULL;
- destination_t local[3]={0};
- const char *names[]={"chaos","stnlabz","poemei"};
- int ok=0,seen[3]={0};
- if(!secure_config(CONFIG)||(fp=fopen(CONFIG,"rb"))==NULL)return 0;
- n=fread(data,1,sizeof data,fp);
- if(ferror(fp)||n==sizeof data)goto done;
- data[n]=0;
- root=json_tokener_parse(data);
- if(!root||!json_object_is_type(root,json_type_object)||
-    !json_object_object_get_ex(root,"sites",&sites)||
-    !json_object_is_type(sites,json_type_array))goto done;
- for(int i=0;i<3;i++)copy(local[i].name,sizeof local[i].name,names[i]);
- int total=json_object_array_length(sites);
- if(total>3)goto done;
- for(int i=0;i<total;i++){
-  struct json_object *site=json_object_array_get_idx(sites,i),*enabled=NULL,*kinds=NULL;
-  const char *name=json_string(site,"name"),*endpoint=json_string(site,"endpoint"),*token=json_string(site,"token");
-  int index=-1;
-  if(!name||!json_object_object_get_ex(site,"enabled",&enabled)||
-     !json_object_is_type(enabled,json_type_boolean))goto done;
-  for(int j=0;j<3;j++)if(!strcmp(name,names[j]))index=j;
-  if(index<0||seen[index])goto done;
-  seen[index]=1;
-  if(!json_object_get_boolean(enabled))continue;
-  if(!endpoint||!token||!endpoint_allowed(name,endpoint)||
-     !safe_token(token)||!copy(local[index].endpoint,sizeof local[index].endpoint,endpoint)||
-     !copy(local[index].token,sizeof local[index].token,token)||
-     !json_object_object_get_ex(site,"kinds",&kinds)||
-     !json_object_is_type(kinds,json_type_array))goto done;
-  int ktotal=json_object_array_length(kinds);
-  if(ktotal<1||ktotal>4)goto done;
-  for(int k=0;k<ktotal;k++){
-   struct json_object *kind=json_object_array_get_idx(kinds,k);
-   if(!json_object_is_type(kind,json_type_string))goto done;
-   const char *value=json_object_get_string(kind);
-   if(!kind_allowed(value)||!copy(local[index].kinds[k],sizeof local[index].kinds[k],value))goto done;
-  }
-  local[index].kind_count=ktotal;
+static int load_credentials(void){
+ const char *path="/opt/digit/auth/sites/login.conf";
+ if(!secure_config(path))return 0;
+ FILE *f=fopen(path,"r");if(!f)return 0;
+ char line[1024];int u=0,p=0;
+ while(fgets(line,sizeof line,f)){
+  char *eq=strchr(line,'=');if(!eq)continue;
+  *eq++=0;eq[strcspn(eq,"\r\n")]=0;
+  if(!strcmp(line,"username"))u=copy(username,sizeof username,eq);
+  if(!strcmp(line,"password"))p=copy(password,sizeof password,eq);
  }
- memcpy(destinations,local,sizeof local);ok=1;
+ erase(line,sizeof line);fclose(f);
+ return u&&p;
+}
+static int load_config(void){
+ static const char *names[]={"chaos","stnlabz","poemei"};
+ static const char *bases[]={"https://chaos-mvc.org","https://www.stn-labz.com","https://poemei.com"};
+ if(!secure_config(CONFIG))return 0;
+ FILE *f=fopen(CONFIG,"r");if(!f)return 0;
+ char data[8192]={0};size_t n=fread(data,1,sizeof data-1,f);int ok=0;
+ fclose(f);data[n]=0;
+ struct json_object *root=json_tokener_parse(data),*sites=NULL;
+ if(!root||!json_object_object_get_ex(root,"sites",&sites)||
+    !json_object_is_type(sites,json_type_array))goto done;
+ destination_t local[3]={0};int seen[3]={0};
+ for(int i=0;i<3;i++){
+  copy(local[i].name,sizeof local[i].name,names[i]);
+  copy(local[i].base,sizeof local[i].base,bases[i]);
+ }
+ int count=json_object_array_length(sites);
+ if(count>3)goto done;
+ for(int i=0;i<count;i++){
+  struct json_object *entry=json_object_array_get_idx(sites,i),*enabled=NULL,*kinds=NULL;
+  const char *name=json_string(entry,"name");int idx=-1;
+  if(!name||!json_object_object_get_ex(entry,"enabled",&enabled)||
+     !json_object_is_type(enabled,json_type_boolean))goto done;
+  for(int j=0;j<3;j++)if(!strcmp(name,names[j]))idx=j;
+  if(idx<0||seen[idx])goto done;seen[idx]=1;
+  if(!json_object_get_boolean(enabled))continue;
+  if(!json_object_object_get_ex(entry,"kinds",&kinds)||
+     !json_object_is_type(kinds,json_type_array))goto done;
+  int kc=json_object_array_length(kinds);
+  if(kc<1||kc>4)goto done;
+  for(int j=0;j<kc;j++){
+   struct json_object *v=json_object_array_get_idx(kinds,j);
+   if(!json_object_is_type(v,json_type_string))goto done;
+   const char *k=json_object_get_string(v);
+   if(!kind_allowed(k)||!copy(local[idx].kinds[j],sizeof local[idx].kinds[j],k))goto done;
+  }
+  local[idx].kind_count=kc;
+ }
+ memcpy(destinations,local,sizeof local);
+ ok=load_credentials();
 done:
- if(root)json_object_put(root);
- if(fp)fclose(fp);
- erase(local,sizeof local);erase(data,sizeof data);return ok;
+ if(root)json_object_put(root);erase(data,sizeof data);
+ if(!ok){erase(username,sizeof username);erase(password,sizeof password);}
+ return ok;
 }
-typedef struct {char bytes[8192];size_t length;} buffer_t;
-static size_t read_response(char *ptr,size_t size,size_t count,void *ctx){
- buffer_t *b=ctx;size_t n;
- if(size&&count>SIZE_MAX/size)return 0;
- n=size*count;
- if(n>=sizeof b->bytes-b->length)return 0;
- memcpy(b->bytes+b->length,ptr,n);b->length+=n;b->bytes[b->length]=0;return n;
+typedef struct {char data[262144];size_t len;} page_t;
+static size_t collect(char *p,size_t sz,size_t count,void *ctx){
+ page_t *b=ctx;if(sz&&count>SIZE_MAX/sz)return 0;
+ size_t n=sz*count;if(n>=sizeof b->data-b->len)return 0;
+ memcpy(b->data+b->len,p,n);b->len+=n;b->data[b->len]=0;return n;
 }
-static const char *json_string(struct json_object *o,const char *key){
- struct json_object *v=NULL;
- if(!o||!json_object_object_get_ex(o,key,&v)||
-   !json_object_is_type(v,json_type_string))return NULL;
- return json_object_get_string(v);
+static int http(CURL *c,const char *url,page_t *page,const char *post,long *code){
+ page->len=0;page->data[0]=0;
+ curl_easy_setopt(c,CURLOPT_URL,url);
+ curl_easy_setopt(c,CURLOPT_POSTFIELDS,post);
+ curl_easy_setopt(c,CURLOPT_HTTPGET,post?0L:1L);
+ curl_easy_setopt(c,CURLOPT_WRITEDATA,page);
+ CURLcode rc=curl_easy_perform(c);
+ if(rc!=CURLE_OK)return 0;
+ curl_easy_getinfo(c,CURLINFO_RESPONSE_CODE,code);return 1;
+}
+static int csrf(const char *html,char *out,size_t cap){
+ const char *p=strstr(html,"name=\"csrf_token\" value=\"");
+ if(!p)return 0;p+=strlen("name=\"csrf_token\" value=\"");
+ const char *e=strchr(p,'"');if(!e||e==p||(size_t)(e-p)>=cap)return 0;
+ memcpy(out,p,(size_t)(e-p));out[e-p]=0;return 1;
+}
+static int append(char *dst,size_t cap,size_t *len,const char *key,CURL *curl,const char *value){
+ char *encoded=curl_easy_escape(curl,value,0);if(!encoded)return 0;
+ int n=snprintf(dst+*len,cap-*len,"%s%s=%s",*len?"&":"",key,encoded);
+ curl_free(encoded);if(n<0||(size_t)n>=cap-*len)return 0;*len+=(size_t)n;return 1;
+}
+static int slugify(const char *title,char *out,size_t cap){
+ size_t n=0;for(const unsigned char *p=(const unsigned char*)title;*p;p++){
+  unsigned char c=*p;
+  if((c>='a'&&c<='z')||(c>='0'&&c<='9')){if(n+1>=cap)return 0;out[n++]=c;}
+  else if(c>='A'&&c<='Z'){if(n+1>=cap)return 0;out[n++]=(char)(c+32);}
+  else if(c==' '||c=='-'||c=='_'){if(n&&out[n-1]!='-'){if(n+1>=cap)return 0;out[n++]='-';}}
+ }
+ while(n&&out[n-1]=='-')n--;
+ if(!n)return 0;out[n]=0;return 1;
+}
+/* Core Posts retains runs of hyphens after replacing runs of non-alphanumerics. */
+static int posts_slug(const char *title,char *out,size_t cap){
+ size_t n=0;
+ for(const unsigned char *p=(const unsigned char*)title;*p;){
+  if((*p>='A'&&*p<='Z')||(*p>='a'&&*p<='z')||(*p>='0'&&*p<='9')||*p=='-'){
+   if(n+1>=cap)return 0;out[n++]=(char)tolower(*p++);
+  }else{
+   while(*p&&!((*p>='A'&&*p<='Z')||(*p>='a'&&*p<='z')||(*p>='0'&&*p<='9')||*p=='-'))p++;
+   if(n+1>=cap)return 0;out[n++]='-';
+  }
+ }
+ while(n&&out[n-1]=='-')n--;if(!n)return 0;out[n]=0;return 1;
+}
+static int image_id(const char *html){
+ const char *select=strstr(html,"name=\"featured_image_id\"");
+ if(!select)return -1;
+ const char *limit=strstr(select,"</select>");
+ if(!limit)return -1;
+ for(const char *p=select;(p=strstr(p,"<option"))&&p<limit;){
+  const char *gt=strchr(p,'>'),*end=strstr(p,"</option>");
+  if(!gt||!end||gt>=end||end>limit)break;
+  const char *first=gt+1,*last=end;
+  while(first<last&&isspace((unsigned char)*first))first++;
+  while(last>first&&isspace((unsigned char)last[-1]))last--;
+  if((size_t)(last-first)==9&&!memcmp(first,"digit.png",9)){
+   const char *v=strstr(p,"value=\"");
+   if(!v||v>=gt)return -1;
+   v+=7;char *q=NULL;long id=strtol(v,&q,10);
+   return q>v&&q<gt&&*q=='"'&&id>=0&&id<=2147483647?(int)id:-1;
+  }
+  p=end+9;
+ }
+ return -1;
 }
 static stnlabz_module_result_t publish(const void *req,size_t bytes,
  void *res,size_t cap,size_t *used,void *ctx){
- const publish_request_t *p=req;
- publish_response_t answer={0};destination_t *dest=NULL;
- CURL *curl=NULL;struct curl_slist *headers=NULL;
- struct json_object *payload=NULL,*parsed=NULL;
- buffer_t received={0};char authorization[560]={0};
- long code=0;int ok=0;
- (void)ctx;
- if(used)*used=0;
+ const publish_request_t *p=req;publish_response_t answer={0};
+ (void)ctx;if(used)*used=0;
  if(!req||bytes!=sizeof *p||!res||cap<sizeof answer||!used||!input_valid(p))
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
- for(int i=0;i<3;i++)if(!strcmp(p->site,destinations[i].name))dest=&destinations[i];
- if(!dest||!dest->endpoint[0]||!dest->token[0])return STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
- int allowed=0;
- for(int j=0;j<dest->kind_count;j++)if(!strcmp(dest->kinds[j],p->kind))allowed=1;
- if(!allowed)return STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
- if(snprintf(authorization,sizeof authorization,"Authorization: Bearer %s",dest->token)>=(int)sizeof authorization)
-  return STNLABZ_MODULE_ERR_INVALID_STATE;
- payload=json_object_new_object();if(!payload)goto done;
- json_object_object_add(payload,"kind",json_object_new_string(p->kind));
- json_object_object_add(payload,"category",json_object_new_string(p->category));
- json_object_object_add(payload,"title",json_object_new_string(p->title));
- json_object_object_add(payload,"content",json_object_new_string(p->markdown));
- json_object_object_add(payload,"format",json_object_new_string("markdown"));
- curl=curl_easy_init();if(!curl)goto done;
- headers=curl_slist_append(headers,authorization);
- headers=curl_slist_append(headers,"Content-Type: application/json");
- curl_easy_setopt(curl,CURLOPT_URL,dest->endpoint);
- curl_easy_setopt(curl,CURLOPT_HTTPHEADER,headers);
- curl_easy_setopt(curl,CURLOPT_POSTFIELDS,json_object_to_json_string(payload));
- curl_easy_setopt(curl,CURLOPT_POSTFIELDSIZE,(long)strlen(json_object_to_json_string(payload)));
- curl_easy_setopt(curl,CURLOPT_WRITEFUNCTION,read_response);
- curl_easy_setopt(curl,CURLOPT_WRITEDATA,&received);
- curl_easy_setopt(curl,CURLOPT_TIMEOUT,20L);
- curl_easy_setopt(curl,CURLOPT_CONNECTTIMEOUT,8L);
- curl_easy_setopt(curl,CURLOPT_FOLLOWLOCATION,0L);
- curl_easy_setopt(curl,CURLOPT_SSL_VERIFYPEER,1L);
- curl_easy_setopt(curl,CURLOPT_SSL_VERIFYHOST,2L);
- curl_easy_setopt(curl,CURLOPT_NOSIGNAL,1L);
- if(curl_easy_perform(curl)!=CURLE_OK)goto done;
- curl_easy_getinfo(curl,CURLINFO_RESPONSE_CODE,&code);
- if(code!=200&&code!=201)goto done;
- parsed=json_tokener_parse(received.bytes);
- if(parsed){
-  const char *id=json_string(parsed,"id"),*url=json_string(parsed,"url");
-  struct json_object *flag=NULL;
-  ok=json_object_object_get_ex(parsed,"published",&flag)&&
-      json_object_is_type(flag,json_type_boolean)&&json_object_get_boolean(flag);
-  if(ok&&id&&*id&&url&&!strncmp(url,"https://",8)&&
-     copy(answer.publication_id,sizeof answer.publication_id,id)&&
-     copy(answer.url,sizeof answer.url,url))answer.published=1;
+ destination_t *site=NULL;
+ for(int i=0;i<3;i++)if(!strcmp(destinations[i].name,p->site))site=&destinations[i];
+ if(!site)return STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
+ int permitted=0;for(int k=0;k<site->kind_count;k++)
+  if(!strcmp(site->kinds[k],p->kind))permitted=1;
+ if(!permitted)return STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
+ CURL *c=curl_easy_init();page_t *page=calloc(1,sizeof *page);
+ char url[512],form[24000]={0},token[128]={0},slug[256]={0},*html=NULL;
+ long code=0;size_t flen=0;int session=0,verified=0,logout=0;
+ if(!c||!page)goto done;
+ curl_easy_setopt(c,CURLOPT_COOKIEFILE,"");
+ curl_easy_setopt(c,CURLOPT_WRITEFUNCTION,collect);
+ curl_easy_setopt(c,CURLOPT_FOLLOWLOCATION,0L);
+ curl_easy_setopt(c,CURLOPT_SSL_VERIFYPEER,1L);
+ curl_easy_setopt(c,CURLOPT_SSL_VERIFYHOST,2L);
+ curl_easy_setopt(c,CURLOPT_TIMEOUT,20L);
+ curl_easy_setopt(c,CURLOPT_CONNECTTIMEOUT,8L);
+ curl_easy_setopt(c,CURLOPT_NOSIGNAL,1L);
+ snprintf(url,sizeof url,"%s/login",site->base);
+ if(!http(c,url,page,NULL,&code)||code!=200||!csrf(page->data,token,sizeof token))goto done;
+ if(!append(form,sizeof form,&flen,"username",c,username)||
+    !append(form,sizeof form,&flen,"password",c,password)||
+    !append(form,sizeof form,&flen,"csrf_token",c,token))goto done;
+ snprintf(url,sizeof url,"%s/auth/login",site->base);
+ if(!http(c,url,page,form,&code)||code!=302)goto done;
+ session=1;erase(form,sizeof form);flen=0;
+ const char *admin=!strcmp(p->kind,"announcements")?"/admin/announcements":
+  !strcmp(p->kind,"news")?"/admin/news":
+  !strcmp(p->kind,"page")?"/admin/page":"/admin/posts";
+ snprintf(url,sizeof url,"%s%s",site->base,admin);
+ if(!http(c,url,page,NULL,&code)||code!=200||!csrf(page->data,token,sizeof token))goto cleanup;
+ int img=-1;
+ if(!strcmp(p->kind,"posts")){img=image_id(page->data);if(img<0)goto cleanup;}
+ if(!slugify(p->title,slug,sizeof slug))goto cleanup;
+ if(!strcmp(p->kind,"posts")&&!posts_slug(p->title,slug,sizeof slug))goto cleanup;
+ /* Fail closed: publishing an identical title twice is never deliberate. */
+ if(strstr(page->data,p->title)||strstr(page->data,slug)){
+  copy(answer.error,sizeof answer.error,"Existing title or slug; publication refused.");
+  goto cleanup;
+ }
+ if(!strcmp(p->kind,"announcements")){
+  if(!strstr(page->data,"name=\"action\" value=\"create\""))goto cleanup;
+ }else if(!strstr(page->data,"name=\"title\""))goto cleanup;
+ erase(form,sizeof form);flen=0;
+ if(!append(form,sizeof form,&flen,"csrf_token",c,token)||
+    !append(form,sizeof form,&flen,"title",c,p->title))goto cleanup;
+ if(!strcmp(p->kind,"announcements")){
+  if(!append(form,sizeof form,&flen,"action",c,"create")||
+     !append(form,sizeof form,&flen,"body",c,p->markdown)||
+     !append(form,sizeof form,&flen,"published",c,"1"))goto cleanup;
+ }else if(!strcmp(p->kind,"posts")){
+  char id[32];snprintf(id,sizeof id,"%d",img);
+  if(!append(form,sizeof form,&flen,"body",c,p->markdown)||
+     !append(form,sizeof form,&flen,"featured_image_id",c,id)||
+     !append(form,sizeof form,&flen,"published",c,"on"))goto cleanup;
+ }else if(!strcmp(p->kind,"page")){
+  if(!append(form,sizeof form,&flen,"action",c,"create")||
+     !append(form,sizeof form,&flen,"slug",c,slug)||
+     !append(form,sizeof form,&flen,"description",c,"Digit publication")||
+     !append(form,sizeof form,&flen,"status",c,"published")||
+     !append(form,sizeof form,&flen,"content_file",c,"main.md")||
+     !append(form,sizeof form,&flen,"content",c,p->markdown))goto cleanup;
+ }else{
+  if(!append(form,sizeof form,&flen,"action",c,"create")||
+     !append(form,sizeof form,&flen,"slug",c,slug)||
+     !append(form,sizeof form,&flen,"category",c,p->category[0]?p->category:"development")||
+     !append(form,sizeof form,&flen,"summary",c,"Digit News publication")||
+     !append(form,sizeof form,&flen,"body_markdown",c,p->markdown)||
+     !append(form,sizeof form,&flen,"status",c,"published"))goto cleanup;
+ }
+ if(!http(c,url,page,form,&code)||code!=302)goto cleanup;
+ erase(form,sizeof form);flen=0;
+ if(!strcmp(p->kind,"announcements")){
+  if(http(c,url,page,NULL,&code)&&code==200&&strstr(page->data,p->title))verified=1;
+  if(verified)snprintf(answer.url,sizeof answer.url,"%s/announcements",site->base);
+ }else{
+  const char *route=!strcmp(p->kind,"posts")?"posts/":
+   !strcmp(p->kind,"news")?"news/":"";
+  snprintf(url,sizeof url,"%s/%s%s",site->base,route,slug);
+  if(http(c,url,page,NULL,&code)&&code==200&&strstr(page->data,p->title)){
+   if(!strcmp(p->kind,"posts")){
+    verified=strstr(page->data,"/uploads/")!=NULL;
+   }else verified=1;
+  }
+  if(verified)copy(answer.url,sizeof answer.url,url);
+ }
+ if(verified){answer.published=1;copy(answer.publication_id,sizeof answer.publication_id,slug);}
+cleanup:
+ /* Logout is required even when publishing or verification fails. */
+ if(session){
+  snprintf(url,sizeof url,"%s/admin",site->base);
+  if(http(c,url,page,NULL,&code)&&code==200&&csrf(page->data,token,sizeof token)){
+   erase(form,sizeof form);flen=0;
+   if(append(form,sizeof form,&flen,"csrf_token",c,token)){
+    snprintf(url,sizeof url,"%s/logout",site->base);
+    if(http(c,url,page,form,&code)&&code==302){
+     snprintf(url,sizeof url,"%s/admin",site->base);
+     if(http(c,url,page,NULL,&code)&&
+        (code==302||code==401||code==403||(code==200&&!strstr(page->data,"Management Suite"))))
+      logout=1;
+    }
+   }
+  }
  }
 done:
- if(!answer.published)copy(answer.error,sizeof answer.error,
-  "Publication not confirmed by a valid server receipt.");
- if(parsed)json_object_put(parsed);
- if(payload)json_object_put(payload);
- curl_slist_free_all(headers);if(curl)curl_easy_cleanup(curl);
- erase(authorization,sizeof authorization);
- memcpy(res,&answer,sizeof answer);*used=sizeof answer;
+ if(!logout)answer.published=0;
+ if(!answer.published&&!answer.error[0])
+  copy(answer.error,sizeof answer.error,"Submission, public verification, or logout failed.");
+ if(res&&cap>=sizeof answer&&used){memcpy(res,&answer,sizeof answer);*used=sizeof answer;}
+ erase(form,sizeof form);erase(token,sizeof token);
+ if(page)free(page);if(c)curl_easy_cleanup(c);
  return answer.published?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
 }
 static void check(stnlabz_module_qualification_result_t *r,int pass,int negative){
@@ -195,41 +307,35 @@ static void check(stnlabz_module_qualification_result_t *r,int pass,int negative
  if(negative){r->negative_test_executed=1;if(pass)r->negative_test_passed=1;}
 }
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r){
- publish_request_t p={0};char out[8]={0};
+ publish_request_t p={0};char out[32]={0},slug[256]={0};
  if(!r)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(r,0,sizeof *r);
- check(r,endpoint_allowed("chaos","https://chaos-mvc.org/api/publish"),0);
- check(r,endpoint_allowed("stnlabz","https://stn-labz.com/api/publish"),0);
- check(r,endpoint_allowed("chaos","https://www.chaos-mvc.org/api/publish"),0);
- check(r,endpoint_allowed("poemei","https://poemei.com/api/publish"),0);
- check(r,!endpoint_allowed("chaos","http://chaos-mvc.org/api/publish"),1);
- check(r,!endpoint_allowed("chaos","https://chaos-mvc.org.evil.test/"),1);
- check(r,!endpoint_allowed("chaos","https://evil.test/api"),1);
- check(r,!endpoint_allowed("chaos","https://chaos-mvc.org/"),1);
- check(r,!endpoint_allowed("chaos","https://chaos-mvc.org@evil.test/"),1);
- check(r,!endpoint_allowed("other","https://chaos-mvc.org/api"),1);
- check(r,kind_allowed("news"),0);
- check(r,kind_allowed("announcements"),0);
- check(r,kind_allowed("page"),0);
- check(r,kind_allowed("posts"),0);
+ const char *valid[]={"announcements","news","page","posts"};
+ for(int i=0;i<4;i++)check(r,kind_allowed(valid[i]),0);
+ check(r,!kind_allowed("intelligence"),1);
+ check(r,!kind_allowed("srt"),1);
  check(r,!kind_allowed("admin"),1);
  check(r,!kind_allowed(NULL),1);
  check(r,copy(out,sizeof out,"hello"),0);
- check(r,!copy(out,sizeof out,"12345678"),1);
- check(r,!copy(NULL,sizeof out,"a"),1);
+ check(r,!copy(out,3,"hello"),1);
+ check(r,!copy(NULL,sizeof out,"x"),1);
  check(r,!copy(out,sizeof out,NULL),1);
- check(r,safe_token("credential"),0);
- check(r,!safe_token("ab\ncd"),1);
- check(r,!safe_token(""),1);
+ check(r,slugify("Digit News - Test",slug,sizeof slug)&&!strcmp(slug,"digit-news-test"),0);
+ check(r,posts_slug("Digit News - Test",slug,sizeof slug)&&!strcmp(slug,"digit-news---test"),0);
+ check(r,!slugify("",slug,sizeof slug),1);
+ check(r,!posts_slug("",slug,sizeof slug),1);
  check(r,!secure_config("/definitely/missing/publisher.conf"),1);
- copy(p.site,sizeof p.site,"chaos");
- copy(p.kind,sizeof p.kind,"news");
- copy(p.title,sizeof p.title,"Test");
- copy(p.markdown,sizeof p.markdown,"# Test");
+ check(r,image_id("<select name=\"featured_image_id\"><option value=\"1\"> digit.png </option></select>")==1,0);
+ check(r,image_id("<select name=\"featured_image_id\"><option value=\"0\"> digit.png </option></select>")==0,0);
+ check(r,image_id("<select name=\"featured_image_id\"><option value=\"\"> No Image </option></select>")==-1,1);
+ check(r,!csrf("<input name=\"csrf_token\" value=\"\">",out,sizeof out),1);
+ check(r,csrf("<input name=\"csrf_token\" value=\"abc\">",out,sizeof out)&&!strcmp(out,"abc"),0);
+ copy(p.site,sizeof p.site,"chaos");copy(p.kind,sizeof p.kind,"news");
+ copy(p.title,sizeof p.title,"Digit");copy(p.markdown,sizeof p.markdown,"Content");
  check(r,input_valid(&p),0);
  p.markdown[0]=0;check(r,!input_valid(&p),1);
- copy(p.markdown,sizeof p.markdown,"# Test");
- copy(p.kind,sizeof p.kind,"admin");check(r,!input_valid(&p),1);
+ copy(p.markdown,sizeof p.markdown,"Content");
+ copy(p.kind,sizeof p.kind,"srt");check(r,!input_valid(&p),1);
  return r->tests_failed||r->tests_executed<STNLABZ_MODULE_MIN_TESTS||
   !r->negative_test_executed||!r->negative_test_passed?
   STNLABZ_MODULE_ERR_QUALIFICATION:STNLABZ_MODULE_OK;
@@ -239,18 +345,18 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *host){
    !host->invoke_service)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  if(!load_config())return STNLABZ_MODULE_ERR_START_FAILED;
  if(!host->register_service(SERVICE,publish,NULL)){
-  erase(destinations,sizeof destinations);return STNLABZ_MODULE_ERR_START_FAILED;
+  erase(destinations,sizeof destinations);erase(username,sizeof username);erase(password,sizeof password);return STNLABZ_MODULE_ERR_START_FAILED;
  }
  host_api=host;return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t stop(void){
  if(!host_api)return STNLABZ_MODULE_ERR_INVALID_STATE;
  if(!host_api->unregister_service(SERVICE,NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
- host_api=NULL;erase(destinations,sizeof destinations);return STNLABZ_MODULE_OK;
+ host_api=NULL;erase(destinations,sizeof destinations);erase(username,sizeof username);erase(password,sizeof password);return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="publisher",.name="Digit Markdown Publisher",
- .version_major=0,.version_minor=2,.version_patch=0,
+ .version_major=0,.version_minor=3,.version_patch=0,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
