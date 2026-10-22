@@ -4,7 +4,7 @@ CPPFLAGS += -I../../core/stnlabz_abi
 LDLIBS += -lcurl -ljson-c
 PREFIX ?= /opt/digit
 TARGET := bin/publisher.so
-.PHONY: all test clean install test-login test-announcement
+.PHONY: all test clean install test-login test-announcement test-poemei-announcement
 all: $(TARGET)
 $(TARGET): publisher.c ../../core/stnlabz_abi/module.h
 	@mkdir -p bin
@@ -33,3 +33,10 @@ bin/test_site_announcement: test_site_announcement.c
 	$(CC) $(CFLAGS) test_site_announcement.c -o $@ -lcurl
 test-announcement: bin/test_site_announcement
 	./bin/test_site_announcement
+
+# Live poemei.com-only witty announcement acceptance test.
+bin/test_poemei_announcement: test_poemei_announcement.c
+	@mkdir -p bin
+	$(CC) $(CFLAGS) test_poemei_announcement.c -o $@ -lcurl
+test-poemei-announcement: bin/test_poemei_announcement
+	./bin/test_poemei_announcement
