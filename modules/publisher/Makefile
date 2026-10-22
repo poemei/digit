@@ -4,7 +4,7 @@ CPPFLAGS += -I../../core/stnlabz_abi
 LDLIBS += -lcurl -ljson-c
 PREFIX ?= /opt/digit
 TARGET := bin/publisher.so
-.PHONY: all test clean install test-login
+.PHONY: all test clean install test-login test-announcement
 all: $(TARGET)
 $(TARGET): publisher.c ../../core/stnlabz_abi/module.h
 	@mkdir -p bin
@@ -26,3 +26,10 @@ bin/test_site_login: test_site_login.c
 test-login: bin/test_site_login
 	./bin/test_site_login
 
+
+# Live two-domain announcement acceptance test (creates publicly visible entries).
+bin/test_site_announcement: test_site_announcement.c
+	@mkdir -p bin
+	$(CC) $(CFLAGS) test_site_announcement.c -o $@ -lcurl
+test-announcement: bin/test_site_announcement
+	./bin/test_site_announcement
