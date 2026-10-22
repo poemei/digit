@@ -14,9 +14,17 @@ static size_t collect(char *p,size_t sz,size_t count,void *v){
 }
 static int get_config(char *user,size_t uc,char *pass,size_t pc){
  struct stat st;FILE *f;char line[1024];int u=0,p=0;
- if(lstat(AUTH,&st)||!S_ISREG(st.st_mode)||st.st_nlink!=1||
-   (st.st_uid!=geteuid()&&st.st_uid!=0)||(st.st_mode&077))return 0;
- f=fopen(AUTH,"r");if(!f)return 0;
+ if(lstat(AUTH,&st)){perror("credentials file stat");return 0;}
+ if(!S_ISREG(st.st_mode)||st.st_nlink!=1){
+  fprintf(stderr,"Credentials must be a regular, unlinked-once file.\n");return 0;
+ }
+ if(st.st_uid!=geteuid()&&st.st_uid!=0){
+  fprintf(stderr,"Credential file owner must be the test account or root.\n");return 0;
+ }
+ if(st.st_mode&077){
+  fprintf(stderr,"Credential file permissions expose group/other access; require 0600.\n");return 0;
+ }
+ f=fopen(AUTH,"r");if(!f){perror("credentials file open");return 0;}
  while(fgets(line,sizeof line,f)){
   char *eq=strchr(line,'='),*v;size_t n;
   if(!eq)continue;*eq++=0;v=eq;n=strcspn(v,"\r\n");v[n]=0;
