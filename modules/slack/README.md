@@ -1,4 +1,4 @@
-# Digit Slack v0.1.5 — ABI 1.5 transport candidate
+# Digit Slack v0.1.6 — ABI 1.5 transport candidate
 
 This is a **source candidate**, not a certified or connected Slack deployment.
 It is separate from Digit Core and uses the existing ABI 1.5 named service registry.
@@ -14,6 +14,17 @@ It is separate from Digit Core and uses the existing ABI 1.5 named service regis
 - `learn_operator_user_id` and `learn_authorization_key` are parsed as reserved configuration for future Lessons integration, but Lessons is not active or implemented here.
 - Historical STN-2 intelligence investigations, full briefs, persistent alert outbox, Slack login, and memory support are not ported.
 - S2 and module lifecycle producers are **not yet connected** to the new delivery endpoints.
+
+## IRC / Slack general-chat bridge
+
+The bridge uses two named ABI services without modifying Core:
+
+- `digit.slack.bridge.deliver`: IRC sends bounded, single-line public chat to the explicitly configured Slack `bridge_channel_id`.
+- `digit.irc.bridge.deliver`: Slack sends bounded general chat to the existing configured IRC channel.
+
+Only the selected Slack bridge channel participates. Never configure `bridge_channel_id` to equal `intel_channel_id` or `module_channel_id`; the module rejects this overlap. Slack DMs, other channels, and protected reporting destinations do not bridge. IRC DMs are excluded. Both sides suppress their own bot-origin messages to avoid re-relaying their bridge posts.
+
+Bridged messages carry an origin prefix (IRC or Slack) and may arrive after a transport delay. The bridge is best-effort, not an exactly-once durable queue; it does not change Digit's Conversation decision about which messages warrant responses. Set the public `bridge_channel_id` in the private Slack configuration, and ensure the Slack app receives channel message events. With that field absent, the bridge remains disabled.
 
 ## Build
 
