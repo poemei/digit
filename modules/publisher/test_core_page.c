@@ -9,7 +9,7 @@
 #define AUTH "/opt/digit/auth/sites/login.conf"
 typedef struct {char data[262144];size_t len;} page_t;
 static size_t collect(char *p,size_t sz,size_t count,void *v){
- page_t *b=v;size_t n=sz*count;if(sz&&n/sz!=count||n>=sizeof b->data-b->len)return 0;
+ page_t *b=v;size_t n=sz*count;if((sz&&n/sz!=count)||n>=sizeof b->data-b->len)return 0;
  memcpy(b->data+b->len,p,n);b->len+=n;b->data[b->len]=0;return n;
 }
 static int get_config(char *user,size_t uc,char *pass,size_t pc){
@@ -27,7 +27,11 @@ static int get_config(char *user,size_t uc,char *pass,size_t pc){
  f=fopen(AUTH,"r");if(!f){perror("credentials file open");return 0;}
  while(fgets(line,sizeof line,f)){
   char *eq=strchr(line,'='),*v;size_t n;
-  if(!eq)continue;*eq++=0;v=eq;n=strcspn(v,"\r\n");v[n]=0;
+  if(!eq)continue;
+  *eq++=0;
+  v=eq;
+  n=strcspn(v,"\r\n");
+  v[n]=0;
   if(!strcmp(line,"username")&&n>0&&n<uc){memcpy(user,v,n+1);u=1;}
   if(!strcmp(line,"password")&&n>0&&n<pc){memcpy(pass,v,n+1);p=1;}
  }
@@ -44,9 +48,9 @@ static CURLcode request(CURL *curl,const char *url,page_t *page,const char *form
  return rc;
 }
 static int extract_csrf(const page_t *page,char *token,size_t cap){
- const char *start=strstr(page->data,"name="csrf_token" value="");
+ const char *start=strstr(page->data,"name=\"csrf_token\" value=\"");
  if(!start)return 0;
- start+=strlen("name="csrf_token" value="");
+ start+=strlen("name=\"csrf_token\" value=\"");
  const char *end=strchr(start,'"');
  if(!end||end==start||(size_t)(end-start)>=cap)return 0;
  memcpy(token,start,(size_t)(end-start));token[end-start]=0;
@@ -146,13 +150,15 @@ cleanup:
  logout_verified=code==302||code==401||code==403||
   (code==200&&!strstr(page->data,"Management Suite"));
 done:
- printf("%s: authenticated=%s announcement=%s logout=%s\n",host,
+ printf("%s: authenticated=%s page=%s logout=%s\n",host,
   authenticated?"YES":"NO",
   created&&found?"CREATED_AND_LISTED":already_present&&found?"ALREADY_EXISTS":
   created?"POSTED_NOT_VERIFIED":"NOT_PUBLISHED",
   logout_verified?"VERIFIED":session_started?"NOT_VERIFIED":"NOT_STARTED");
  if(form){memset(form,0,strlen(form));free(form);}
- if(u)curl_free(u);if(p)curl_free(p);if(t)curl_free(t);
+ if(u)curl_free(u);
+ if(p)curl_free(p);
+ if(t)curl_free(t);
  if(title_encoded)curl_free(title_encoded);
  if(body_encoded)curl_free(body_encoded);
  memset(token,0,sizeof token);
