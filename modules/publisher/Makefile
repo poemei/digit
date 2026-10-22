@@ -4,7 +4,7 @@ CPPFLAGS += -I../../core/stnlabz_abi
 LDLIBS += -lcurl -ljson-c
 PREFIX ?= /opt/digit
 TARGET := bin/publisher.so
-.PHONY: all test clean install test-login test-announcement test-poemei-announcement
+.PHONY: all test clean install test-login test-announcement test-poemei-announcement test-poemei-post
 all: $(TARGET)
 $(TARGET): publisher.c ../../core/stnlabz_abi/module.h
 	@mkdir -p bin
@@ -40,3 +40,10 @@ bin/test_poemei_announcement: test_poemei_announcement.c
 	$(CC) $(CFLAGS) test_poemei_announcement.c -o $@ -lcurl
 test-poemei-announcement: bin/test_poemei_announcement
 	./bin/test_poemei_announcement
+
+# Live Core Posts acceptance test for poemei.com; submits one public post.
+bin/test_poemei_post: test_poemei_post.c
+	@mkdir -p bin
+	$(CC) $(CFLAGS) test_poemei_post.c -o $@ -lcurl
+test-poemei-post: bin/test_poemei_post
+	./bin/test_poemei_post
