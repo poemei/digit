@@ -1,0 +1,12 @@
+# Copy privately to /opt/digit/auth/slack/slack.conf, owner root or Digit, 0600
+enabled=false
+workspace_id=
+app_token=
+bot_token=
+# Private S2 intelligence destination (existing contract)
+intel_channel_id=
+# Separate private module lifecycle destination
+module_channel_id=
+# Reserved for future Lessons integration; currently ignored
+learn_operator_user_id=
+learn_authorization_key=
