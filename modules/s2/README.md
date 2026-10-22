@@ -1,4 +1,4 @@
-# Digit S2 v0.1.6 — Private Intelligence Reporting
+# Digit S2 v0.1.7 — Private Intelligence Reporting
 
 S2 uses the existing ABI 1.5 services and is hot-loadable without restarting Digit. This revision routes evidence-bounded, six-section assessment briefs and Rictus-linked observation updates through the **existing** `digit.slack.intel.deliver` service. Slack itself owns the configured private `intel_channel_id`. Neither Core nor Slack needs modification.
 
@@ -12,3 +12,11 @@ On observation updates, private Slack delivery is attempted before advancing the
 
 Use Digit's **existing hot-load lifecycle** after building/installing this module. No Digit restart, no Core change, no changes to the held public Intelligence/SRT modules. Offline qualification checks format and negative cases; it does not prove live private Slack delivery.
 
+
+## MEDIUM investigation trigger (v0.1.7)
+
+MEDIUM/MEDIUM or higher severity **and** relevance starts an investigation immediately, without waiting for HIGH. Every qualifying Sentinel source ID is stored in SQLite at `/opt/digit/state/s2_cases.sqlite3`, preserving its original ID, original timestamp (timezone not inferred), primary and details IP fields separately, domain, request URL, severity/relevance and last observation. Subsequent changed evidence updates the **same** case. Escalation is only labeled when recorded severity increases; merely expecting a future HIGH event does not promote it.
+
+The active case count and up to five case changes per polling interval are included in S2's private Slack six-section report. This is a bounded, persistent **source-record case register**, not yet a full analytical investigation engine or independent proof of malicious activity. Cases are keyed by source ID and are not automatically merged on shared IP. Repeated unchanged API snapshots do not increment case revisions. SQLite must be available, and the existing Digit process must be permitted to create the case database under `/opt/digit/state`. Failure is reported as a persistence warning rather than silently claiming success.
+
+Operational limitation: the existing brief retry buffer is in-memory only. A change committed to SQLite could lose its unsent Slack notification across a process exit; there is no durable Slack outbox yet. This patch does not change Core, Slack, IRC, the SRT module, or website publishing. Build/install using Digit's established hot-load lifecycle; no service restart is required.
