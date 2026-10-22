@@ -4,7 +4,7 @@ CPPFLAGS += -I../../core/stnlabz_abi
 LDLIBS += -lcurl -ljson-c
 PREFIX ?= /opt/digit
 TARGET := bin/publisher.so
-.PHONY: all test clean install test-login test-announcement test-poemei-announcement test-poemei-post test-poemei-followup test-other-sites-posts test-stnlabz-direct-image
+.PHONY: all test clean install test-login test-announcement test-poemei-announcement test-poemei-post test-poemei-followup test-other-sites-posts test-stnlabz-direct-image fix-stnlabz-existing-posts
 all: $(TARGET)
 $(TARGET): publisher.c ../../core/stnlabz_abi/module.h
 	@mkdir -p bin
@@ -68,3 +68,10 @@ bin/test_stnlabz_direct_image: test_stnlabz_direct_image.c
 	$(CC) $(CFLAGS) test_stnlabz_direct_image.c -o $@ -lcurl
 test-stnlabz-direct-image: bin/test_stnlabz_direct_image
 	./bin/test_stnlabz_direct_image
+
+# Edits only the two existing STN-LABZ posts to select digit.png (Media ID 1).
+bin/fix_stnlabz_existing_posts: fix_stnlabz_existing_posts.c
+	@mkdir -p bin
+	$(CC) $(CFLAGS) fix_stnlabz_existing_posts.c -o $@ -lcurl
+fix-stnlabz-existing-posts: bin/fix_stnlabz_existing_posts
+	./bin/fix_stnlabz_existing_posts
