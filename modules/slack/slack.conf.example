@@ -5,8 +5,7 @@ app_token=
 bot_token=
 # Private S2 intelligence destination (existing contract)
 intel_channel_id=
-# General-chat bridge destination only; never use intel or module private channels
-bridge_channel_id=
+# Retired: legacy bridge_channel_id is ignored if present in existing configuration.
 # Separate private module lifecycle destination
 module_channel_id=
 # Reserved for future Lessons integration; currently ignored
