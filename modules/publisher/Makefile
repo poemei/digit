@@ -96,3 +96,10 @@ bin/inspect_news_forms: inspect_news_forms.c
 	$(CC) $(CFLAGS) inspect_news_forms.c -o $@ -lcurl
 inspect-news: bin/inspect_news_forms
 	./bin/inspect_news_forms
+
+# Live News publish acceptance against all three sites (unique slugs, no duplicate posts).
+bin/test_news_publish: test_news_publish.c
+	@mkdir -p bin
+	$(CC) $(CFLAGS) test_news_publish.c -o $@ -lcurl
+test-news-publish: bin/test_news_publish
+	./bin/test_news_publish
