@@ -89,3 +89,10 @@ bin/test_other_sites_pages: test_other_sites_pages.c
 	$(CC) $(CFLAGS) test_other_sites_pages.c -o $@ -lcurl
 test-other-sites-pages: bin/test_other_sites_pages
 	./bin/test_other_sites_pages
+
+# Read-only News form discovery; never submits News content.
+bin/inspect_news_forms: inspect_news_forms.c
+	@mkdir -p bin
+	$(CC) $(CFLAGS) inspect_news_forms.c -o $@ -lcurl
+inspect-news: bin/inspect_news_forms
+	./bin/inspect_news_forms
