@@ -1,4 +1,4 @@
-# Digit S2 v0.1.9 — Private Intelligence Reporting
+# Digit S2 v0.2.0 — Private Intelligence Reporting
 
 S2 uses the existing ABI 1.5 services and is hot-loadable without restarting Digit. This revision routes evidence-bounded, six-section assessment briefs and Rictus-linked observation updates through the **existing** `digit.slack.intel.deliver` service. Slack itself owns the configured private `intel_channel_id`. Neither Core nor Slack needs modification.
 
@@ -26,3 +26,9 @@ Operational limitation: the existing brief retry buffer is in-memory only. A cha
 The title is now separated from its organizational masthead with a blank line and is rendered with Slack's single-asterisk bold syntax. The six section headings have explicit spacing. Sections 1 and 2 report the real persistent SQLite source-record count and current ingestion changes, rather than claiming that no case register exists. Section 3 consistently states the MEDIUM/MEDIUM investigation threshold. Initial bulk imports are identified as historical ingestion, not new attacks. Unknown case metrics are marked unavailable rather than invented.
 
 The source is committed but neither compilation nor live Slack formatting is independently verified by the repository update.
+
+## v0.2.0: S2-to-IRC intelligence snapshot
+
+For each successful private Slack S2 report delivery, S2 sends a bounded one-line executive snapshot via the already existing `digit.irc.deliver` service. The message ends with `Full intelligence brief: Slack -> #stn-labz`. The full six-section evidence report remains private in Slack. A failed Slack post is not advertised as successful. Failed IRC notice delivery is retried in process; no durable queue is claimed. Observation intelligence updates also advertise their completed private Slack report.
+
+This is **S2 report distribution**, not a restored IRC↔Slack general-chat bridge: no Slack chat is forwarded to IRC and no IRC chat is forwarded to Slack. Neither IRC nor Slack modules, Core, nor the Intelligence/SRT web modules are changed. Existing ABI 1.5 service names and hot-loading remain unchanged.
