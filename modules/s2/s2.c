@@ -99,9 +99,12 @@ static void public_page_review(int case_count,const char *brief,char *status,siz
  published_event=sqlite3_column_int64(st,2);
  sqlite3_finalize(st);st=NULL;
  time_t now=time(NULL);
- if(now==(time_t)-1|| (last_success>0&&last_event==published_event)||
-    (last_success>0&&now-last_success<S2_PUBLIC_INTERVAL)||
-    (last_attempt>0&&now-last_attempt<S2_PUBLIC_RETRY))goto finish;
+ /* Publish each newly generated intelligence report. Only throttle a
+ * failed attempt; a prior successful case-event ID is not report freshness. */
+ if(now==(time_t)-1||
+    (last_attempt>last_success&&now>=last_attempt&&
+     now-last_attempt<S2_PUBLIC_RETRY)||
+    (last_success>0&&now==last_success))goto finish;
  if(sqlite3_prepare_v2(db,
   "UPDATE s2_publication_state SET last_attempt=?1 WHERE id=1",
   -1,&st,NULL)!=SQLITE_OK)goto finish;
@@ -121,8 +124,8 @@ static void public_page_review(int case_count,const char *brief,char *status,siz
  int written=snprintf(q->markdown,sizeof q->markdown,
   "# SAI-DSA — Digit S2 Public Security Intelligence\n\n"
   "**Classification: UNCLASSIFIED — Approved for public release.**\n\n"
-  "Snapshot: S2-PUBLIC-SNAPSHOT-%lld\n\n%s\n",
-  last_event,brief);
+  "Snapshot: S2-PUBLIC-SNAPSHOT-%lld-%lld\n\n%s\n",
+  last_event,(long long)now,brief);
  if(written<0||(size_t)written>=sizeof q->markdown){
   fprintf(stderr,"s2: full investigation report exceeds page capacity; publication withheld\n");
   free(q);goto finish;
@@ -154,20 +157,15 @@ finish:
 /* Retry the public page independently of private-brief change detection. */
 static int public_retry_due(time_t now){
  sqlite3 *db=NULL;sqlite3_stmt *st=NULL;
- long long attempt=0,success=0,published_event=0,current_event=0;
+ long long attempt=0,success=0;
  int due=0;
  if(now==(time_t)-1||sqlite3_open_v2(CASE_DB,&db,SQLITE_OPEN_READONLY,NULL)!=SQLITE_OK)goto finish;
- if(sqlite3_prepare_v2(db,"SELECT last_attempt,last_success,last_event FROM s2_publication_state WHERE id=1",-1,&st,NULL)!=SQLITE_OK)goto finish;
+ if(sqlite3_prepare_v2(db,"SELECT last_attempt,last_success FROM s2_publication_state WHERE id=1",-1,&st,NULL)!=SQLITE_OK)goto finish;
  if(sqlite3_step(st)!=SQLITE_ROW)goto finish;
  attempt=sqlite3_column_int64(st,0);success=sqlite3_column_int64(st,1);
- published_event=sqlite3_column_int64(st,2);
- sqlite3_finalize(st);st=NULL;
- if(sqlite3_prepare_v2(db,"SELECT COALESCE(MAX(event_id),0) FROM s2_case_events",-1,&st,NULL)!=SQLITE_OK)goto finish;
- if(sqlite3_step(st)!=SQLITE_ROW)goto finish;
- current_event=sqlite3_column_int64(st,0);
- due=(!success||current_event!=published_event)&&
-   (!attempt||now<attempt||now-attempt>=S2_PUBLIC_RETRY)&&
-   (!success||now<success||now-success>=S2_PUBLIC_INTERVAL);
+ /* Retry an unacknowledged publication, even when case events are unchanged. */
+ due=(!success||attempt>success)&&
+   (!attempt||now<attempt||now-attempt>=S2_PUBLIC_RETRY);
 finish:
  if(st)sqlite3_finalize(st);
  if(db)sqlite3_close(db);
@@ -1227,7 +1225,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=4,.version_patch=5,
+ .version_major=0,.version_minor=4,.version_patch=6,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
