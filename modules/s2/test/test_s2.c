@@ -15,7 +15,7 @@ int main(int argc,char **argv){
  d=get_descriptor();
  if(!d||strcmp(d->id,"s2")||d->required_core_api_major!=1||
     d->required_core_api_minor!=5||
-    d->version_major!=0||d->version_minor!=4||d->version_patch!=6)return 4;
+    d->version_major!=0||d->version_minor!=4||d->version_patch!=7)return 4;
  if(d->qualify(&result)!=STNLABZ_MODULE_OK||result.tests_failed||
     result.tests_executed<20)return 5;
  printf("S2 qualification %u/%u PASS\n",
