@@ -62,10 +62,12 @@ typedef struct {
 typedef struct {
  int published;char publication_id[128],url[1024],error[160];
 } s2_publish_response_t;
-static void public_page_review(int case_count,const char *brief){
+static void public_page_review(int case_count,const char *brief,char *status,size_t cap){
+ if(status&&cap)snprintf(status,cap,"Not attempted: missing report or service.");
  if(!brief||!*brief)return;
  sqlite3 *db=NULL;sqlite3_stmt *st=NULL;
  if(case_count<0||!host||!host->invoke_service)return;
+ if(status&&cap)snprintf(status,cap,"Deferred: publication not due, or publication state unavailable.");
  if(sqlite3_open_v2(CASE_DB,&db,SQLITE_OPEN_READWRITE,NULL)!=SQLITE_OK){
   if(db)sqlite3_close(db);
   return;
@@ -139,14 +141,38 @@ static void public_page_review(int case_count,const char *brief){
    (void)sqlite3_step(st);
   }
   fprintf(stderr,"s2: sai-dsa published event=%lld cases=%d\n",last_event,case_count);
+  if(status&&cap)snprintf(status,cap,"Published: event=%lld, cases=%d.",last_event,case_count);
  }else{
   fprintf(stderr,"s2: sai-dsa publish failed result=%d used=%zu published=%d error=%.150s\n",(int)result,used,answer.published,answer.error);
+  if(status&&cap)snprintf(status,cap,"Failed: result=%d, response=%zu, published=%d, error=%.150s",(int)result,used,answer.published,answer.error[0]?answer.error:"not supplied");
  }
 finish:
  if(st)sqlite3_finalize(st);
  sqlite3_close(db);
 }
 
+/* Retry the public page independently of private-brief change detection. */
+static int public_retry_due(time_t now){
+ sqlite3 *db=NULL;sqlite3_stmt *st=NULL;
+ long long attempt=0,success=0,published_event=0,current_event=0;
+ int due=0;
+ if(now==(time_t)-1||sqlite3_open_v2(CASE_DB,&db,SQLITE_OPEN_READONLY,NULL)!=SQLITE_OK)goto finish;
+ if(sqlite3_prepare_v2(db,"SELECT last_attempt,last_success,last_event FROM s2_publication_state WHERE id=1",-1,&st,NULL)!=SQLITE_OK)goto finish;
+ if(sqlite3_step(st)!=SQLITE_ROW)goto finish;
+ attempt=sqlite3_column_int64(st,0);success=sqlite3_column_int64(st,1);
+ published_event=sqlite3_column_int64(st,2);
+ sqlite3_finalize(st);st=NULL;
+ if(sqlite3_prepare_v2(db,"SELECT COALESCE(MAX(event_id),0) FROM s2_case_events",-1,&st,NULL)!=SQLITE_OK)goto finish;
+ if(sqlite3_step(st)!=SQLITE_ROW)goto finish;
+ current_event=sqlite3_column_int64(st,0);
+ due=(!success||current_event!=published_event)&&
+   (!attempt||now<attempt||now-attempt>=S2_PUBLIC_RETRY)&&
+   (!success||now<success||now-success>=S2_PUBLIC_INTERVAL);
+finish:
+ if(st)sqlite3_finalize(st);
+ if(db)sqlite3_close(db);
+ return due;
+}
 static int deliver_intel(const char *);
 static void lock(void){while(__sync_lock_test_and_set(&busy,1)){}}
 static void unlock(void){__sync_lock_release(&busy);}
@@ -793,7 +819,8 @@ static stnlabz_module_result_t poll_service(
    * Log growth and an unchanged latest signature are routine polling. */
   int persistence_ok=case_updates>=0;
   int status_due=!last_status_report||now<last_status_report||now-last_status_report>=STATUS_REPORT_SECONDS;
-   int meaningful=status_due||!has_reported||case_updates>0||
+  int publish_due=public_retry_due(now);
+   int meaningful=status_due||publish_due||!has_reported||case_updates>0||
     source_state!=last_source_state||matched!=last_correlation||
     persistence_ok!=last_persistence_ok;
   if(!meaningful){
@@ -860,7 +887,12 @@ static stnlabz_module_result_t poll_service(
    size_t used=strlen(brief);
    snprintf(brief+used,sizeof brief-used,"\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*CASE PERSISTENCE WARNING*: local case database failed; do not treat this as a complete investigation history.");
   }
-  public_page_review(case_total,brief);
+  char publication_status[320]={0};
+  public_page_review(case_total,brief,publication_status,sizeof publication_status);
+  {size_t used=strlen(brief);
+   if(used+strlen(publication_status)+96<sizeof brief)
+    snprintf(brief+used,sizeof brief-used,"\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*PUBLIC PAGE / PUBLISHER*\n\n%s",publication_status);
+  }
   pthread_mutex_lock(&intel_mutex);
   /* Never overwrite an undelivered private brief. */
   if(!intel_pending[0])snprintf(intel_pending,sizeof intel_pending,"%s",brief);
