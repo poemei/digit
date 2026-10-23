@@ -1,4 +1,4 @@
-# Digit Conversation v1.2.2 — SQLite context integration
+# Digit Conversation v1.2.3 — SQLite context integration
 
 **AI** is Ignoring Company Version Policy
 
@@ -128,3 +128,7 @@ individual search). The qualification mock includes a direct Digit feline-
 capability question where an irrelevant early match must not displace a
 stronger later match. This is not a proof of full semantic understanding,
 pronoun resolution, or the actual deployed Corpus contents.
+
+## v1.2.3 — GRU generation handoff
+
+After the existing Interpretation, Corpus Search, Reasoning and deterministic View succeed, Conversation calls `digit.gru.generate` using a bounded prompt containing the evidence-backed View answer. The registered `gru_bridge` service posts to `http://127.0.0.1:8765/generate`. A missing bridge, rejected HTTP/model response, timeout or failed candidate validation retains the original View answer; an optional module never blocks the established reply. The candidate acceptance policy is intentionally narrow: the verified View statement must be preserved verbatim and only a small approved conversational introduction may precede it. This does not yet enable open-ended paraphrasing; a robust independent factual-equivalence validator would be needed before allowing freer generation. No inference, SQL changes or Core/IRC changes were introduced. The existing approved-pair learning path remains separate. Live acceptance needs the GRU API schema expected by `gru_bridge` (including `model=stn-labz-gru`, `text`, `generated_bytes`, and `experimental`).
