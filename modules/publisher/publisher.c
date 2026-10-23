@@ -155,7 +155,7 @@ static int load_config(void){
   if(!json_object_object_get_ex(entry,"kinds",&kinds)||
      !json_object_is_type(kinds,json_type_array))goto done;
   int kc=json_object_array_length(kinds);
-  if(kc<1||kc>5)goto done;
+  if(kc<1||kc>6)goto done;
   for(int j=0;j<kc;j++){
    struct json_object *v=json_object_array_get_idx(kinds,j);
    if(!json_object_is_type(v,json_type_string))goto done;
