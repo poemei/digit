@@ -105,7 +105,8 @@ static int rank_level(const char *s){
  return 0;
 }
 static int investigation_candidate(const char *severity,const char *relevance){
- return rank_level(severity)>=2&&rank_level(relevance)>=2;
+ (void)relevance;
+ return rank_level(severity)>=2;
 }
 static int case_db_open(sqlite3 **db){
  if(sqlite3_open_v2(CASE_DB,db,SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE,NULL)!=SQLITE_OK){
@@ -336,11 +337,11 @@ static stnlabz_module_result_t poll_service(
   snprintf(report,sizeof report,"[S2] Rictus log unavailable; Sentinel feed read. Correlation incomplete.");
  }else if(has_priority){
   snprintf(report,sizeof report,
-   "[S2] MEDIUM-or-higher severity AND relevance under investigation; Rictus indicator match=%s (not proof of compromise).",
+   "[S2] API severity MEDIUM/HIGH/CRITICAL under investigation; Rictus indicator match=%s (not proof of compromise).",
    matched?"yes":"not found");
  }else if(first_report){
   snprintf(report,sizeof report,
-   "[S2] Mission online: Rictus accessible; Sentinel accessible; no MEDIUM-or-higher paired findings in this snapshot. No all-clear implied.");
+   "[S2] Mission online: Rictus accessible; Sentinel accessible; no MEDIUM-or-higher severity findings in this snapshot. No all-clear implied.");
  }else if(count>previous_lines){
   snprintf(report,sizeof report,
    "[S2] Rictus has %ld new log records in current file; Sentinel available; unclassified observations require review.",
@@ -412,6 +413,11 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
 
  test(r,investigation_candidate("HIGH","MEDIUM"),0);
  test(r,!investigation_candidate("LOW","HIGH"),1);
+ test(r,investigation_candidate("MEDIUM","LOW"),0);
+ test(r,investigation_candidate("HIGH","LOW"),0);
+ test(r,investigation_candidate("CRITICAL",""),0);
+ test(r,!investigation_candidate("LOW","CRITICAL"),1);
+ test(r,!investigation_candidate("","HIGH"),1);
  test(r,rank_level("CRITICAL")>rank_level("HIGH"),0);
  test(r,!high("HIGH","LOW"),1);
  test(r,!high("LOW","HIGH"),1);
@@ -487,7 +493,7 @@ static void intelligence_brief(char *dst,size_t cap,const char *short_report,
   "Initial bulk ingestion is historical import, not newly occurring attacks.\n\n"
   "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
   "*3. THREAT INTELLIGENCE OVERVIEW*\n\n"
-  "Investigation threshold: MEDIUM severity AND MEDIUM relevance or higher.\n"
+  "Investigation threshold: API severity MEDIUM, HIGH or CRITICAL (relevance is context, not a gate).\n"
   "Qualifying source findings in this feed snapshot: %s.\n"
   "Rictus log records in current file: %ld.\n"
   "Higher severity requires explicit source evidence; historical "
@@ -675,7 +681,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=2,.version_patch=2,
+ .version_major=0,.version_minor=2,.version_patch=3,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
