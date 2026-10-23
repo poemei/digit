@@ -110,19 +110,39 @@ static int investigation_candidate(const char *severity,const char *relevance){
 static int case_db_open(sqlite3 **db){
  if(sqlite3_open_v2(CASE_DB,db,SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE,NULL)!=SQLITE_OK){
   if(*db)sqlite3_close(*db);
-  *db=NULL;
-  return 0;
+  *db=NULL;return 0;
  }
  sqlite3_busy_timeout(*db,1000);
- const char *ddl="CREATE TABLE IF NOT EXISTS s2_cases ("
+ const char *ddl=
+  "CREATE TABLE IF NOT EXISTS s2_cases ("
   "source_id TEXT PRIMARY KEY, severity TEXT NOT NULL, relevance TEXT NOT NULL,"
   "source_time TEXT NOT NULL, primary_ip TEXT NOT NULL, detail_ip TEXT NOT NULL,"
   "domain TEXT NOT NULL, request_url TEXT NOT NULL, first_seen INTEGER NOT NULL,"
-  "last_seen INTEGER NOT NULL, revisions INTEGER NOT NULL DEFAULT 1)";
+  "last_seen INTEGER NOT NULL, revisions INTEGER NOT NULL DEFAULT 1);"
+  "CREATE TABLE IF NOT EXISTS s2_case_events ("
+  "event_id INTEGER PRIMARY KEY AUTOINCREMENT,source_id TEXT NOT NULL,"
+  "event_type TEXT NOT NULL,recorded_at INTEGER NOT NULL,"
+  "source_time TEXT NOT NULL,severity TEXT NOT NULL,relevance TEXT NOT NULL,"
+  "primary_ip TEXT NOT NULL,detail_ip TEXT NOT NULL,"
+  "domain TEXT NOT NULL,request_url TEXT NOT NULL);"
+  "CREATE INDEX IF NOT EXISTS idx_s2_case_events_source "
+  "ON s2_case_events(source_id,event_id);";
  if(sqlite3_exec(*db,ddl,NULL,NULL,NULL)!=SQLITE_OK){
   sqlite3_close(*db);*db=NULL;return 0;
  }
  return 1;
+}
+static int case_changed(const char *const old[7],const char *const current[7]){
+ for(int i=0;i<7;i++)if(strcmp(old[i]?old[i]:"",current[i]?current[i]:""))return 1;
+ return 0;
+}
+static const char *case_transition(int prior_severity,int prior_relevance,
+ int severity,int relevance,int changed){
+ if(prior_severity<0)return "OPENED";
+ if(!changed)return NULL;
+ if(severity>prior_severity||relevance>prior_relevance)return "ESCALATED";
+ if(severity<prior_severity||relevance<prior_relevance)return "DECREASED";
+ return "EVIDENCE_UPDATED";
 }
 static int update_case(sqlite3 *db,json_object *entry,char *event,size_t cap){
  const char *id=field(entry,"id"),*severity=field(entry,"severity"),
@@ -134,24 +154,29 @@ static int update_case(sqlite3 *db,json_object *entry,char *event,size_t cap){
   *path=field(details,"request_url");
  if(!investigation_candidate(severity,relevance)||!id[0]||strlen(id)>120||
     !when[0]||strlen(when)>63)return 0;
- sqlite3_stmt *st=NULL;int prior=-1,previous_relevance=-1;
- const char *old_time="";
+ const char *values[]={severity,relevance,when,primary,other,domain,path};
+ int previous_severity=-1,previous_relevance=-1,changed=1,rc=-1;
+ sqlite3_stmt *st=NULL;
  if(sqlite3_prepare_v2(db,
-   "SELECT severity,relevance,source_time FROM s2_cases WHERE source_id=?1",
-   -1,&st,NULL)!=SQLITE_OK)return -1;
+   "SELECT severity,relevance,source_time,primary_ip,detail_ip,domain,request_url "
+   "FROM s2_cases WHERE source_id=?1",-1,&st,NULL)!=SQLITE_OK)return -1;
  sqlite3_bind_text(st,1,id,-1,SQLITE_TRANSIENT);
- int rc=sqlite3_step(st);
- if(rc==SQLITE_ROW){
-  prior=rank_level((const char*)sqlite3_column_text(st,0));
-  previous_relevance=rank_level((const char*)sqlite3_column_text(st,1));
-  old_time=(const char*)sqlite3_column_text(st,2);
-  if(!old_time)old_time="";
-  if(!strcmp(old_time,when)&&prior==rank_level(severity)&&
-     previous_relevance==rank_level(relevance)){
-   sqlite3_finalize(st);return 0;
+ int step=sqlite3_step(st);
+ if(step==SQLITE_ROW){
+  const char *old[7];
+  for(int i=0;i<7;i++){
+   old[i]=(const char*)sqlite3_column_text(st,i);
   }
- }else if(rc!=SQLITE_DONE){sqlite3_finalize(st);return -1;}
+  previous_severity=rank_level(old[0]?old[0]:"");
+  previous_relevance=rank_level(old[1]?old[1]:"");
+  changed=case_changed(old,values);
+ }else if(step!=SQLITE_DONE){sqlite3_finalize(st);return -1;}
  sqlite3_finalize(st);
+ const char *transition=case_transition(previous_severity,previous_relevance,
+  rank_level(severity),rank_level(relevance),changed);
+ if(!transition)return 0;
+ /* Both the case snapshot and its evidence history commit together. */
+ if(sqlite3_exec(db,"SAVEPOINT s2_case_write",NULL,NULL,NULL)!=SQLITE_OK)return -1;
  const char *sql="INSERT INTO s2_cases "
  "(source_id,severity,relevance,source_time,primary_ip,detail_ip,domain,"
  "request_url,first_seen,last_seen,revisions) VALUES "
@@ -162,16 +187,29 @@ static int update_case(sqlite3 *db,json_object *entry,char *event,size_t cap){
  "detail_ip=excluded.detail_ip,domain=excluded.domain,"
  "request_url=excluded.request_url,last_seen=excluded.last_seen,"
  "revisions=s2_cases.revisions+1";
- if(sqlite3_prepare_v2(db,sql,-1,&st,NULL)!=SQLITE_OK)return -1;
- const char *v[]={id,severity,relevance,when,primary,other,domain,path};
- for(int i=0;i<8;i++)sqlite3_bind_text(st,i+1,v[i],-1,SQLITE_TRANSIENT);
- rc=sqlite3_step(st);sqlite3_finalize(st);
- if(rc!=SQLITE_DONE)return -1;
+ if(sqlite3_prepare_v2(db,sql,-1,&st,NULL)!=SQLITE_OK)goto rollback;
+ sqlite3_bind_text(st,1,id,-1,SQLITE_TRANSIENT);
+ for(int i=0;i<7;i++)sqlite3_bind_text(st,i+2,values[i],-1,SQLITE_TRANSIENT);
+ step=sqlite3_step(st);sqlite3_finalize(st);st=NULL;
+ if(step!=SQLITE_DONE)goto rollback;
+ if(sqlite3_prepare_v2(db,
+   "INSERT INTO s2_case_events(source_id,event_type,recorded_at,source_time,"
+   "severity,relevance,primary_ip,detail_ip,domain,request_url) "
+   "VALUES(?1,?2,strftime('%s','now'),?3,?4,?5,?6,?7,?8,?9)",
+   -1,&st,NULL)!=SQLITE_OK)goto rollback;
+ const char *audit[]={id,transition,when,severity,relevance,primary,other,domain,path};
+ for(int i=0;i<9;i++)sqlite3_bind_text(st,i+1,audit[i],-1,SQLITE_TRANSIENT);
+ step=sqlite3_step(st);sqlite3_finalize(st);st=NULL;
+ if(step!=SQLITE_DONE)goto rollback;
+ if(sqlite3_exec(db,"RELEASE s2_case_write",NULL,NULL,NULL)!=SQLITE_OK)goto rollback;
  snprintf(event,cap,"%s id=%.90s severity=%s relevance=%s source_time=%.40s "
   "primary_ip=%.45s details_ip=%.45s domain=%.80s request=%.100s",
-  prior<0?"OPENED":rank_level(severity)>prior?"ESCALATED":"UPDATED",
-  id,severity,relevance,when,primary,other,domain,path);
+  transition,id,severity,relevance,when,primary,other,domain,path);
  return 1;
+rollback:
+ if(st)sqlite3_finalize(st);
+ rc=sqlite3_exec(db,"ROLLBACK TO s2_case_write; RELEASE s2_case_write",NULL,NULL,NULL);
+ (void)rc;return -1;
 }
 static int ingest_cases(json_object *records,char *summary,size_t cap,int *total){
  sqlite3 *db=NULL;
@@ -623,7 +661,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=2,.version_patch=1,
+ .version_major=0,.version_minor=2,.version_patch=2,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
