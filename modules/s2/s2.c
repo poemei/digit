@@ -94,6 +94,18 @@ static void public_page_review(int case_count){
  last_success=sqlite3_column_int64(st,1);
  published_event=sqlite3_column_int64(st,2);
  sqlite3_finalize(st);st=NULL;
+ long long medium=0,high=0,critical=0;
+ if(sqlite3_prepare_v2(db,
+  "SELECT "
+  "SUM(CASE WHEN severity='MEDIUM' THEN 1 ELSE 0 END),"
+  "SUM(CASE WHEN severity='HIGH' THEN 1 ELSE 0 END),"
+  "SUM(CASE WHEN severity='CRITICAL' THEN 1 ELSE 0 END) FROM s2_cases",
+  -1,&st,NULL)!=SQLITE_OK)goto finish;
+ if(sqlite3_step(st)!=SQLITE_ROW)goto finish;
+ medium=sqlite3_column_int64(st,0);
+ high=sqlite3_column_int64(st,1);
+ critical=sqlite3_column_int64(st,2);
+ sqlite3_finalize(st);st=NULL;
  time_t now=time(NULL);
  if(now==(time_t)-1|| (last_success>0&&last_event==published_event)||
     (last_success>0&&now-last_success<S2_PUBLIC_INTERVAL)||
@@ -120,6 +132,8 @@ static void public_page_review(int case_count){
   "Last substantive publication review: %s\n\n"
   "## Investigations\n\n"
   "Tracked qualifying API source records: %d.\n\n"
+  "API-supplied severity distribution: MEDIUM %lld, HIGH %lld, CRITICAL %lld. "
+  "These are source-record classifications, not confirmed incidents.\n\n"
   "Source-record event watermark: %lld. An evidence change is not by itself "
   "an incident, confirmed attack, or new intrusion.\n\n"
   "## Operational assessment\n\n"
@@ -132,7 +146,7 @@ static void public_page_review(int case_count){
   "This page is updated on material source-case changes during the "
   "approximately six-hour S2 review; routine polling and reputation "
   "lookups do not trigger publication.\n",
-  last_event,stamp,case_count,last_event);
+  last_event,stamp,case_count,medium,high,critical,last_event);
  s2_publish_response_t answer={0};size_t used=0;
  stnlabz_module_result_t result=host->invoke_service(S2_PUBLIC_SERVICE,
   q,sizeof *q,&answer,sizeof answer,&used);
