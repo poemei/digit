@@ -1,4 +1,4 @@
-# Digit Publisher v0.4.3 — ABI 1.5
+# Digit Publisher v0.4.4 — ABI 1.5
 
 The production service `digit.publisher.publish` now uses the tested ChAoS MVC browser-form contract, not an invented Bearer JSON API. It accepts a revised fixed-size request (`site`, `kind`, `category`, `title`, `markdown`, `subject`, `source_actor`, `evidence_ref`, `post_title`, `post_markdown`) and responds with confirmation/error in the original response shape. Configured sites: `chaos`, `stnlabz`, `poemei`. PoeMei publishing uses the existing IRC configuration and requires the caller to supply the authenticated IRC account-tag identity. Supported kinds: `announcements`, `news`, `page`, `posts`, and opt-in `intelligence` for STN-LABZ only. SRT remains disabled.
 
@@ -46,3 +46,9 @@ The uploaded `intelligence_digit_publish` ChAoS module exposes a level-7 CSRF-pr
 This kind remains **fail closed** until explicitly added to the deployed `/opt/digit/auth/sites/sites.json` `stnlabz` kinds list; the checked-in `sites.json.example` illustrates the opt-in. The existing `subject=stnlabz` and evidence_ref checks still apply. **Do not put private S2 Slack intelligence into the public Intelligence repository without a separate publication authorization.** Only intended public reports should enter this route.
 
 Review finding: the uploaded Intelligence controller's JSON write endpoints `report`, `observation`, and `assignment` do not show authentication or CSRF checks. This Publisher integration **does not use** those endpoints; their current external callers and authentication boundary must be reviewed before treating them as safe. This is source integration, not a successful live acceptance test.
+
+## v0.4.4 — Existing SAI-DSA Core Page update
+
+New opt-in `kind=page_update` is restricted to `site=stnlabz`, the already existing Core Page slug `sai-dsa`, and an authenticated `/admin/page?edit=sai-dsa` form. It uses the Core controller's `action=update` and `original_slug=sai-dsa` contract rather than creating a page or using the separate Intelligence module. The page's title and description are taken from the authenticated edit form; its published Markdown format must already be selected. The operation fails closed if those conditions are not met. It verifies the expected S2 snapshot marker on the public page after submission. The update is intentionally a *full-body replacement* of that Core Page, not a section-level merge. Preserve/back up any existing editorial content before opting in. A post-submit verification failure may leave the edited page in place; there is no atomic rollback.
+
+The deployed `/opt/digit/auth/sites/sites.json` must explicitly opt in `page_update` for `stnlabz`. Existing kinds remain available (capacity now six); `sites.json.example` shows the intended configuration. All other destinations are denied this operation. Module loader version is 0.4.4. No private S2 Slack message is forwarded via Publisher.
