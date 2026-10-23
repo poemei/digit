@@ -1,4 +1,4 @@
-# Digit SQLite3 persistence module
+# Digit SQLite3 persistence module — v1.5.0
 
 Standalone C ABI 1.5 module, independently built and qualified.
 SQLite3 owns only its persistence boundary; it does not modify Digit Core,
@@ -120,3 +120,7 @@ source before operational acceptance. Reasoning recognizes the `operator-verifie
 ## Operator authority update
 
 The Director confirms that material placed in the three designated source locations is already personally verified. The importer applies `operator-verified` to new, changed, and matching previously imported Corpus/lesson records; no duplicate records are inserted for matching content. Existing records outside those designated sources are not promoted indiscriminately. Restart SQLite3 to trigger the revised startup reconciliation. Observation rows do not have a Corpus verification status.
+
+## Authoritative release identity
+
+The module descriptor reports **1.5.0**, as directed under approved STN-LABZ Version Numbering Doctrine `20260906.0`. Historical version entries above remain as historical records; this change corrects release identity only, without modifying persistence behavior or database format.
