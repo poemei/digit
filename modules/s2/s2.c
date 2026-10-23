@@ -128,6 +128,10 @@ static void public_page_review(int case_count){
  if(gmtime_r(&now,&utc))strftime(stamp,sizeof stamp,"%Y-%m-%d %H:%M UTC",&utc);
  snprintf(q->markdown,sizeof q->markdown,
   "# SAI-DSA — Digit S2 Public Security Intelligence\n\n"
+  "**Classification: UNCLASSIFIED — Approved for public release.**\n\n"
+  "The current Digit S2 intelligence report is public information. "
+  "If future reporting includes proprietary, restricted, or classified material, "
+  "that material must be separately reviewed and withheld from public publication.\n\n"
   "Snapshot: S2-PUBLIC-SNAPSHOT-%lld\n\n"
   "Last substantive publication review: %s\n\n"
   "## Investigations\n\n"
@@ -142,7 +146,7 @@ static void public_page_review(int case_count){
   "## Intelligence limitations\n\n"
   "Individual attribution, IP field provenance, independent service "
   "health, and operational impact are not established here. "
-  "Private investigative details are not published.\n\n"
+  "Unverified attribution and operational effects are clearly identified.\n\n"
   "This page is updated on material source-case changes during the "
   "approximately six-hour S2 review; routine polling and reputation "
   "lookups do not trigger publication.\n",
@@ -1262,7 +1266,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=4,.version_patch=1,
+ .version_major=0,.version_minor=4,.version_patch=2,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
