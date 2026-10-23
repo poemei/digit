@@ -1,4 +1,4 @@
-# Digit S2 v0.4.1 — Evidence-Based IP Field Semantics and Operational Visibility
+# Digit S2 v0.4.2 — Evidence-Based IP Field Semantics and Operational Visibility
 
 S2 uses the existing ABI 1.5 services and is hot-loadable without restarting Digit. This revision routes evidence-bounded, six-section assessment briefs and Rictus-linked observation updates through the **existing** `digit.slack.intel.deliver` service. Slack itself owns the configured private `intel_channel_id`. Neither Core nor Slack needs modification.
 
@@ -132,3 +132,7 @@ Build and qualify S2 and Publisher independently. Neither source commit nor offl
 ## v0.4.1 — Publication review independence
 
 The public SAI-DSA review now runs on eligible source polls even when a private Slack intelligence brief is suppressed as unchanged. The publication watermark and six-hour successful-publication guard are retained. Publisher invocation outcomes are logged to stderr as either success or failure (without credentials or private brief material). A Slack report or Publisher module activation alone does not confirm a website update. Publisher still requires its private STN-LABZ `page_update` kind to be enabled at startup, and the existing Core Page must satisfy the edit-form contract.
+
+## v0.4.2 — SAI-DSA public classification
+
+The existing Core Page publication template explicitly marks the current S2 security intelligence report **UNCLASSIFIED — Approved for public release**. Current S2 intelligence is not withheld merely because it also appears on private Slack. If future content contains genuinely proprietary, restricted or classified information, that material requires separate review and must not automatically be published. The version increment is required for Digit's hash/version-qualified hotload.
