@@ -555,6 +555,22 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  check(r,image_id("<select name=\"featured_image_id\"><option value=\"1\"> digit.png </option></select>")==1,0);
  check(r,image_id("<select name=\"featured_image_id\"><option value=\"0\"> digit.png </option></select>")==0,0);
  check(r,image_id("<select name=\"featured_image_id\"><option value=\"\"> No Image </option></select>")==-1,1);
+ {
+  /* Full-size unclassified S2 body may expand threefold when URL-encoded. */
+  CURL *test_curl=curl_easy_init();
+  char *large_body=malloc(MAX_BODY);
+  char *encoded_form=calloc(1,65536);
+  size_t encoded_len=0;
+  int ok=test_curl&&large_body&&encoded_form;
+  if(ok){
+   memset(large_body,'&',MAX_BODY-1);large_body[MAX_BODY-1]=0;
+   ok=append(encoded_form,65536,&encoded_len,"content",test_curl,large_body)
+      &&encoded_len>MAX_BODY && encoded_len<65536;
+  }
+  check(r,ok,0);
+  if(test_curl)curl_easy_cleanup(test_curl);
+  free(large_body);free(encoded_form);
+ }
  check(r,!csrf("<input name=\"csrf_token\" value=\"\">",out,sizeof out),1);
  check(r,csrf("<input name=\"csrf_token\" value=\"abc\">",out,sizeof out)&&!strcmp(out,"abc"),0);
  copy(p.site,sizeof p.site,"chaos");copy(p.kind,sizeof p.kind,"news");
