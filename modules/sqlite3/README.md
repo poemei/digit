@@ -1,4 +1,4 @@
-# Digit SQLite3 persistence module — v1.5.0
+# Digit SQLite3 persistence module — v1.5.1
 
 Standalone C ABI 1.5 module, independently built and qualified.
 SQLite3 owns only its persistence boundary; it does not modify Digit Core,
@@ -124,3 +124,7 @@ The Director confirms that material placed in the three designated source locati
 ## Authoritative release identity
 
 The module descriptor reports **1.5.0**, as directed under approved STN-LABZ Version Numbering Doctrine `20260906.0`. Historical version entries above remain as historical records; this change corrects release identity only, without modifying persistence behavior or database format.
+
+## v1.5.1 — Operational sync reporting
+
+A source ingestion attempt emits only `SQLite Sync Started` through the existing IRC delivery service. The per-source start detail, records added/updated/skipped, and errors are sent solely to the configured Slack operations delivery service (`digit.slack.modules.deliver`, intended for `#digit-ops`) and syslog. No IRC↔Slack bridge is restored. Source and database processing remain unchanged. The bounded in-memory reporting queues remain non-durable.
