@@ -1,4 +1,4 @@
-# Digit Publisher v0.4.7 — ABI 1.5
+# Digit Publisher v0.4.8 — ABI 1.5
 
 The production service `digit.publisher.publish` now uses the tested ChAoS MVC browser-form contract, not an invented Bearer JSON API. It accepts a revised fixed-size request (`site`, `kind`, `category`, `title`, `markdown`, `subject`, `source_actor`, `evidence_ref`, `post_title`, `post_markdown`) and responds with confirmation/error in the original response shape. Configured sites: `chaos`, `stnlabz`, `poemei`. PoeMei publishing uses the existing IRC configuration and requires the caller to supply the authenticated IRC account-tag identity. Supported kinds: `announcements`, `news`, `page`, `posts`, and opt-in `intelligence` for STN-LABZ only. SRT remains disabled.
 
@@ -66,3 +66,7 @@ Digit S2's `page_update` operation on the fixed existing `sai-dsa` Core Page is 
 ## v0.4.7 — Core Page content-file compatibility
 
 Removed the former requirement that existing `/sai-dsa` must already use `main.md`. ChAoS MVC Core Pages `action=update` supports changing the content file from `main.html` or `main.txt` to `main.md`; the S2 Publisher always submits Markdown and preserves the existing slug, title, description, and `published` state. The update still requires authenticated Core administration, passes the S2 editorial gates, and verifies the expected snapshot marker on the public page before returning success. This is a full-body replacement, so the old content should be backed up before activating automated publication. Failure to verify the public marker returns a specific error. No deployment or live update is claimed from this commit.
+
+## v0.4.8 — SAI-DSA Core Page submission repair
+
+The S2 Core Page update previously used a 24,000-byte URL-encoded form buffer even though the S2 report body alone can be 16,383 bytes and form encoding can expand reserved characters threefold. It now reserves 65,536 bytes for the encoded request, and module qualification exercises a worst-case ampersand-filled body. The update remains bound to the authenticated ChAoS MVC Core `/admin/page` action, never the `/intelligence` module or any ChAoS MVC source modification. When a write fails, Publisher now returns distinct errors for login, existing-page edit form, form encoding, Core Page POST, public snapshot verification, and logout/session verification. Source compatibility is verified; actual site publication still requires successful live execution.
