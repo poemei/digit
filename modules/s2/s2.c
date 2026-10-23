@@ -205,6 +205,44 @@ static int httpbl_audit(const char *ip,int status,int resolver_rc,
  * Sentinel-MVC reports details.ip_address from the inspected request's
  * REMOTE_ADDR. This may be a trusted proxy/CDN peer, not an original client.
  * Other producer identities are not authenticated in historical feed rows. */
+/* Inspect source-provided HTTP result fields without treating suspicious
+ * requests, status codes, or reputation as demonstrated business damage. */
+static void operational_evidence(json_object *records,char *out,size_t cap){
+ unsigned long qualified=0,with_status=0,blocked=0,server_error=0,other=0;
+ unsigned long missing=0;size_t length=0;
+ if(!out||!cap)return;
+ if(!records||!json_object_is_type(records,json_type_array)){
+  snprintf(out,cap,"Source HTTP outcome evidence: feed unavailable; status unknown.");
+  return;
+ }
+ length=json_object_array_length(records);
+ if(length>5000)length=5000;
+ for(size_t i=0;i<length;i++){
+  json_object *entry=json_object_array_get_idx(records,(int)i),*details=NULL,*value=NULL;
+  if(!entry||!investigation_candidate(field(entry,"severity"),field(entry,"relevance")))continue;
+  qualified++;
+  json_object_object_get_ex(entry,"details",&details);
+  /* Only explicit numeric response_status fields from the source count.
+   * No assumption that a request path implies an HTTP result. */
+  if(!details||!json_object_is_type(details,json_type_object)||
+     !json_object_object_get_ex(details,"response_status",&value)||
+     !json_object_is_type(value,json_type_int)){missing++;continue;}
+  int status=json_object_get_int(value);
+  if(status<100||status>599){missing++;continue;}
+  with_status++;
+  if(status==403||status==429)blocked++;
+  else if(status>=500)server_error++;
+  else other++;
+ }
+ snprintf(out,cap,
+  "Source HTTP outcomes (qualifying records, max 5000 scanned): %lu; "
+  "explicit response_status supplied: %lu; absent/invalid: %lu.\\n\\n"
+  "Observed HTTP 403/429 responses: %lu; HTTP 5xx responses: %lu; "
+  "other valid responses: %lu.\\n\\n"
+  "Response codes, even when supplied, do not independently demonstrate "
+  "downtime, disclosure, exploitation, or financial impact.",
+  qualified,with_status,missing,blocked,server_error,other);
+}
 static void httpbl_audit_status(char *out,size_t cap){
  sqlite3 *db=NULL;sqlite3_stmt *st=NULL;
  if(!out||!cap)return;
@@ -689,6 +727,13 @@ static stnlabz_module_result_t poll_service(
     snprintf(brief+used,sizeof brief-used,
      "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*HTTP:BL / IP PROVENANCE* (reported remote peers; original-client and destination roles may remain unresolved)\n\n%s\n\n%s\n\nReputation is not proof of an attack, destination or compromise.",enrich,audit);
   }
+  {char outcomes[700]={0};
+   operational_evidence(records,outcomes,sizeof outcomes);
+   size_t used=strlen(brief);
+   if(used+strlen(outcomes)+110<sizeof brief)
+    snprintf(brief+used,sizeof brief-used,
+     "\\n\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n\\n*SOURCE RESPONSE EVIDENCE*\\n\\n%s",outcomes);
+  }
   /* Business effects require independent service or financial evidence.
    * Neither a matched request path nor an http:BL result provides it. */
   {
@@ -1079,7 +1124,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=3,.version_patch=8,
+ .version_major=0,.version_minor=3,.version_patch=9,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
