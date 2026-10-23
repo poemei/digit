@@ -48,6 +48,110 @@ static int64_t observation_cursor;
 static char intel_pending[INTEL_REPORT_CAP];
 static pthread_mutex_t intel_mutex=PTHREAD_MUTEX_INITIALIZER;
 static void intelligence_brief(char *,size_t,const char *,long,int,int,int,const char *,int,int,int);
+
+/* Exact Publisher ABI 0.4.x: no credentials or website form code in S2. */
+#define S2_PUBLIC_SERVICE "digit.publisher.publish"
+#define S2_PUBLIC_INTERVAL (6*60*60)
+#define S2_PUBLIC_RETRY (60*60)
+#define S2_PUBLIC_BODY_MAX 16384
+typedef struct {
+ char site[32],kind[32],category[64],title[256],markdown[S2_PUBLIC_BODY_MAX];
+ char subject[32],source_actor[128],evidence_ref[512],post_title[256];
+ char post_markdown[S2_PUBLIC_BODY_MAX];
+} s2_publish_request_t;
+typedef struct {
+ int published;char publication_id[128],url[1024],error[160];
+} s2_publish_response_t;
+static void public_page_review(int case_count){
+ sqlite3 *db=NULL;sqlite3_stmt *st=NULL;
+ if(case_count<0||!host||!host->invoke_service)return;
+ if(sqlite3_open_v2(CASE_DB,&db,SQLITE_OPEN_READWRITE,NULL)!=SQLITE_OK){
+  if(db)sqlite3_close(db);return;
+ }
+ sqlite3_busy_timeout(db,1000);
+ const char *ddl=
+  "CREATE TABLE IF NOT EXISTS s2_publication_state ("
+  "id INTEGER PRIMARY KEY CHECK(id=1),"
+  "last_attempt INTEGER NOT NULL DEFAULT 0,"
+  "last_success INTEGER NOT NULL DEFAULT 0,"
+  "last_event INTEGER NOT NULL DEFAULT 0)";
+ if(sqlite3_exec(db,ddl,NULL,NULL,NULL)!=SQLITE_OK)goto finish;
+ if(sqlite3_exec(db,
+  "INSERT OR IGNORE INTO s2_publication_state(id) VALUES(1)",
+  NULL,NULL,NULL)!=SQLITE_OK)goto finish;
+ long long last_event=0,published_event=0,last_attempt=0,last_success=0;
+ if(sqlite3_prepare_v2(db,
+  "SELECT COALESCE(MAX(event_id),0) FROM s2_case_events",
+  -1,&st,NULL)!=SQLITE_OK)goto finish;
+ if(sqlite3_step(st)!=SQLITE_ROW)goto finish;
+ last_event=sqlite3_column_int64(st,0);
+ sqlite3_finalize(st);st=NULL;
+ if(sqlite3_prepare_v2(db,
+  "SELECT last_attempt,last_success,last_event FROM s2_publication_state WHERE id=1",
+  -1,&st,NULL)!=SQLITE_OK)goto finish;
+ if(sqlite3_step(st)!=SQLITE_ROW)goto finish;
+ last_attempt=sqlite3_column_int64(st,0);
+ last_success=sqlite3_column_int64(st,1);
+ published_event=sqlite3_column_int64(st,2);
+ sqlite3_finalize(st);st=NULL;
+ time_t now=time(NULL);
+ if(now==(time_t)-1|| (last_success>0&&last_event==published_event)||
+    (last_success>0&&now-last_success<S2_PUBLIC_INTERVAL)||
+    (last_attempt>0&&now-last_attempt<S2_PUBLIC_RETRY))goto finish;
+ if(sqlite3_prepare_v2(db,
+  "UPDATE s2_publication_state SET last_attempt=?1 WHERE id=1",
+  -1,&st,NULL)!=SQLITE_OK)goto finish;
+ sqlite3_bind_int64(st,1,(sqlite3_int64)now);
+ if(sqlite3_step(st)!=SQLITE_DONE)goto finish;
+ sqlite3_finalize(st);st=NULL;
+ s2_publish_request_t *q=calloc(1,sizeof *q);
+ if(!q)goto finish;
+ snprintf(q->site,sizeof q->site,"stnlabz");
+ snprintf(q->kind,sizeof q->kind,"page_update");
+ snprintf(q->title,sizeof q->title,"sai-dsa");
+ snprintf(q->subject,sizeof q->subject,"stnlabz");
+ snprintf(q->source_actor,sizeof q->source_actor,"digit.s2");
+ snprintf(q->evidence_ref,sizeof q->evidence_ref,"Digit S2 persistent source-case event register");
+ char stamp[48]="unknown";struct tm utc;
+ if(gmtime_r(&now,&utc))strftime(stamp,sizeof stamp,"%Y-%m-%d %H:%M UTC",&utc);
+ snprintf(q->markdown,sizeof q->markdown,
+  "# SAI-DSA — Digit S2 Public Security Intelligence\n\n"
+  "Snapshot: S2-PUBLIC-SNAPSHOT-%lld\n\n"
+  "Last substantive publication review: %s\n\n"
+  "## Investigations\n\n"
+  "Tracked qualifying API source records: %d.\n\n"
+  "Source-record event watermark: %lld. An evidence change is not by itself "
+  "an incident, confirmed attack, or new intrusion.\n\n"
+  "## Operational assessment\n\n"
+  "Compromise, service interruption, data disclosure, customer effects "
+  "and financial losses: not established by this source feed.\n\n"
+  "## Intelligence limitations\n\n"
+  "Individual attribution, IP field provenance, independent service "
+  "health, and operational impact are not established here. "
+  "Private investigative details are not published.\n\n"
+  "This page is updated on material source-case changes during the "
+  "approximately six-hour S2 review; routine polling and reputation "
+  "lookups do not trigger publication.\n",
+  last_event,stamp,case_count,last_event);
+ s2_publish_response_t answer={0};size_t used=0;
+ stnlabz_module_result_t result=host->invoke_service(S2_PUBLIC_SERVICE,
+  q,sizeof *q,&answer,sizeof answer,&used);
+ free(q);
+ if(result==STNLABZ_MODULE_OK&&used==sizeof answer&&answer.published&&
+    !strcmp(answer.publication_id,"sai-dsa")){
+  if(sqlite3_prepare_v2(db,
+   "UPDATE s2_publication_state SET last_success=?1,last_event=?2 WHERE id=1",
+   -1,&st,NULL)==SQLITE_OK){
+   sqlite3_bind_int64(st,1,(sqlite3_int64)now);
+   sqlite3_bind_int64(st,2,(sqlite3_int64)last_event);
+   (void)sqlite3_step(st);
+  }
+ }
+finish:
+ if(st)sqlite3_finalize(st);
+ sqlite3_close(db);
+}
+
 static int deliver_intel(const char *);
 static void irc_notice(digit_s2_report_t *,const char *);
 static void lock(void){while(__sync_lock_test_and_set(&busy,1)){}}
@@ -759,6 +863,7 @@ static stnlabz_module_result_t poll_service(
    size_t used=strlen(brief);
    snprintf(brief+used,sizeof brief-used,"\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*CASE PERSISTENCE WARNING*: local case database failed; do not treat this as a complete investigation history.");
   }
+  public_page_review(case_total);
   pthread_mutex_lock(&intel_mutex);
   /* Never overwrite an undelivered private brief. */
   if(!intel_pending[0])snprintf(intel_pending,sizeof intel_pending,"%s",brief);
@@ -1138,7 +1243,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=3,.version_patch=9,
+ .version_major=0,.version_minor=4,.version_patch=0,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
