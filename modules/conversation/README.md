@@ -1,6 +1,6 @@
 # Digit Conversation v1.2.2 — SQLite context integration
 
-**AI is Ignoring Company Version Policy
+**AI** is Ignoring Company Version Policy
 
 Conversation keeps the existing `digit.conversation` and `digit.conversation.listen` services, and the existing IRC/Core routing. It invokes Interpretation and, for authenticated messages in `#stn-labz`, writes and retrieves context through the SQLite3 module's registered ABI services.
 
