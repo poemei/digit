@@ -234,50 +234,82 @@ static void httpbl_audit_status(char *out,size_t cap){
  if(st)sqlite3_finalize(st);
  sqlite3_close(db);
 }
+
+/* Deduplication is anchored to persistent audit, not a hotload-local cache. */
+static int httpbl_recent(const char *ip,time_t now){
+ sqlite3 *db=NULL,*unused=NULL;sqlite3_stmt *st=NULL;int result=-1;
+ (void)unused;
+ if(sqlite3_open_v2(CASE_DB,&db,SQLITE_OPEN_READONLY,NULL)!=SQLITE_OK){
+  if(db)sqlite3_close(db);return -1;
+ }
+ const char *sql="SELECT lookup_time,status FROM s2_httpbl_lookups "
+  "WHERE indicator=?1 AND source_field='details.ip_address' "
+  "ORDER BY lookup_time DESC,lookup_id DESC LIMIT 1";
+ if(sqlite3_prepare_v2(db,sql,-1,&st,NULL)==SQLITE_OK){
+  sqlite3_bind_text(st,1,ip,-1,SQLITE_TRANSIENT);
+  int rc=sqlite3_step(st);
+  if(rc==SQLITE_DONE)result=0;
+  else if(rc==SQLITE_ROW){
+   time_t last=(time_t)sqlite3_column_int64(st,0);
+   int status=sqlite3_column_int(st,1);
+   time_t ttl=status<0?3600:86400;
+   result=(now>=last && now-last<ttl)?1:0;
+  }
+ }
+ if(st)sqlite3_finalize(st);
+ sqlite3_close(db);
+ return result;
+}
 static void httpbl_enrichment(json_object *records,char *out,size_t cap){
- char seen[HTTPBL_LIMIT][INET_ADDRSTRLEN]={{0}};
- int nseen=0;size_t pos=0,eligible=0;
+ char attempted[HTTPBL_LIMIT][INET_ADDRSTRLEN]={{0}};
+ int n=0,skipped=0,unavailable=0;size_t pos=0;
  if(!out||!cap)return;
  out[0]=0;
- if(!records||!json_object_is_type(records,json_type_array))return;
+ if(!records||!json_object_is_type(records,json_type_array)){
+  snprintf(out,cap,"API candidate feed unavailable; no lookup attempted.");
+  return;
+ }
  size_t length=json_object_array_length(records);
  if(length>5000)length=5000;
- for(size_t i=0;i<length&&nseen<HTTPBL_LIMIT;i++){
+ for(size_t i=0;i<length&&n<HTTPBL_LIMIT;i++){
   json_object *entry=json_object_array_get_idx(records,(int)i),*details=NULL;
   if(!entry||!investigation_candidate(field(entry,"severity"),field(entry,"relevance")))continue;
   json_object_object_get_ex(entry,"details",&details);
   const char *ip=field(details,"ip_address");
-  struct in_addr candidate;
-  if(inet_pton(AF_INET,ip,&candidate)!=1)continue;
-  eligible++;
-  int repeated=0;
-  for(int j=0;j<nseen;j++)if(!strcmp(seen[j],ip))repeated=1;
-  if(repeated)continue;
-  snprintf(seen[nseen++],sizeof seen[0],"%s",ip);
+  struct in_addr addr;
+  if(inet_pton(AF_INET,ip,&addr)!=1)continue;
+  int duplicate=0;
+  for(int j=0;j<n;j++)if(!strcmp(attempted[j],ip))duplicate=1;
+  if(duplicate)continue;
+  int recent=httpbl_recent(ip,time(NULL));
+  if(recent==1){skipped++;continue;}
+  if(recent<0){unavailable++;continue;}
+  snprintf(attempted[n++],sizeof attempted[0],"%s",ip);
   int days=0,score=0,type=0,resolver_rc=0;
   int status=httpbl_response(ip,&days,&score,&type,&resolver_rc);
   int audited=httpbl_audit(ip,status,resolver_rc,days,score,type);
-  const char *state=status==1?"LISTED":status==0?"NO NAME (resolver EAI_NONAME)":
-    status==-3?"KEY UNAVAILABLE":"LOOKUP INCOMPLETE";
-  int n=snprintf(out+pos,cap-pos,
-   "%s — http:BL %s; resolver=%d; audit=%s\n",
+  const char *state=status==1?"LISTED":status==0?"NO NAME (EAI_NONAME)":
+   status==-3?"KEY UNAVAILABLE":"LOOKUP INCOMPLETE";
+  int wrote=snprintf(out+pos,cap-pos,
+   "%s — http:BL %s; resolver=%d; audit=%s\\n\\n",
    ip,state,resolver_rc,audited?"stored":"FAILED");
-  if(n<=0||(size_t)n>=cap-pos)break;pos+=(size_t)n;
+  if(wrote<0||(size_t)wrote>=cap-pos)break;
+  pos+=(size_t)wrote;
   if(status==1){
-   n=snprintf(out+pos,cap-pos,
-    "  Last activity age=%d days; threat score=%d; type bits=%d\n",
+   wrote=snprintf(out+pos,cap-pos,
+    "Last activity age=%d days; threat score=%d; type bits=%d\\n\\n",
     days,score,type);
-   if(n<=0||(size_t)n>=cap-pos)break;pos+=(size_t)n;
+   if(wrote<0||(size_t)wrote>=cap-pos)break;
+   pos+=(size_t)wrote;
   }
  }
- if(!nseen)snprintf(out,cap,"No qualifying reported peer IPv4 candidates in snapshot.\n");
+ if(n==0)snprintf(out,cap,"No fresh lookup attempted in this report.\\n\\n");
  size_t used=strlen(out);
- if(used+250<cap)snprintf(out+used,cap-used,
-  "\nCoverage: %d distinct IPv4 indicators enriched (max %d); "
-  "not all case records. Address roles reflect Sentinel-MVC producer "
-  "code, not independently verified per-record provenance or original "
-  "client identity.\n",nseen,HTTPBL_LIMIT);
- (void)eligible;
+ if(used+300<cap)snprintf(out+used,cap-used,
+  "Coverage: %d lookup attempts (max %d); %d recently audited and skipped; "
+  "%d skipped because audit unavailable. Recheck: 24h for completed "
+  "resolutions, 1h for failures. IP provenance remains provisional.",
+  n,HTTPBL_LIMIT,skipped,unavailable);
 }
 static int case_db_open(sqlite3 **db){
  if(sqlite3_open_v2(CASE_DB,db,SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE,NULL)!=SQLITE_OK){
@@ -654,7 +686,7 @@ static stnlabz_module_result_t poll_service(
    httpbl_enrichment(records,enrich,sizeof enrich);
    httpbl_audit_status(audit,sizeof audit);
    size_t used=strlen(brief);
-   if(used+strlen(enrich)+170<sizeof brief)
+   if(used+strlen(enrich)+strlen(audit)+260<sizeof brief)
     snprintf(brief+used,sizeof brief-used,
      "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*HTTP:BL / IP PROVENANCE* (reported remote peers; original-client and destination roles may remain unresolved)\n\n%s\n%s\nReputation is not proof of an attack, destination or compromise.",enrich,audit);
   }
@@ -979,7 +1011,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=3,.version_patch=5,
+ .version_major=0,.version_minor=3,.version_patch=6,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
