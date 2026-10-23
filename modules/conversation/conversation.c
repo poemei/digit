@@ -802,6 +802,10 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
     used = 8;
     rc = process(&mock, &msg, sizeof msg, response, sizeof response, &used);
     check(q, rc == STNLABZ_MODULE_OK && !used && mock_calls == 1, 0);
+    check(q, gru_candidate_safe("Verified fact.", "Verified fact."), 0);
+    check(q, gru_candidate_safe("Verified fact.", "In summary: Verified fact."), 0);
+    check(q, !gru_candidate_safe("Verified fact.", "Different assertion."), 1);
+    check(q, !gru_candidate_safe("Verified fact.", ""), 1);
     check(q, !strcmp(msg.message, "Database latency increased"), 0);
     check(q, !strcmp(msg.sender, "Alice"), 0);
     check(q, !strcmp(msg.account, "alice"), 0);
