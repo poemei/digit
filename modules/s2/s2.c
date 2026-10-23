@@ -375,7 +375,7 @@ static stnlabz_module_result_t poll_service(
  size_t response_size,size_t *response_used,void *context){
  digit_s2_report_t *out=response;buffer_t b={0};
  char lines[RICTUS_LINES][512];size_t stored=0;
- long count;int available,has_priority=0,matched=0,stale=0,source_state,first_report;
+ long count;int available,has_priority=0,matched=0,source_state,first_report;
  int case_updates=0,case_total=-1;char case_summary[3500]={0};
  json_object *root=NULL,*records=NULL,*entry;
  const char *severity,*relevance,*id,*first,*date,*best_date="";
@@ -445,8 +445,10 @@ static stnlabz_module_result_t poll_service(
   snprintf(report,sizeof report,
    "[S2] Rictus has %ld new log records in current file; Sentinel available; unclassified observations require review.",
    count-previous_lines);
- }else stale=1;
- if(!stale&&report[0]){
+ }else{
+  snprintf(report,sizeof report,"[S2] Sentinel accessible; no qualifying source findings in snapshot; Rictus accessible. No all-clear implied.");
+ }
+ if(report[0]){
   lock();
   /* Only meaningful case changes, source availability, correlation changes,
    * or persistence failures generate a private intelligence brief.
