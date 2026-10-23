@@ -262,6 +262,35 @@ static int selected_option(const char *html,const char *value){
  const char *selected=strstr(p,"selected");
  return selected&&selected<end;
 }
+/* Extract S2's Executive Summary as plain-text search description.
+ * Keep the report itself in the Core Page content field. */
+static int s2_executive_description(const char *markdown,char *out,size_t cap){
+ const char *start,*end;
+ size_t n=0;int spaced=0;
+ if(!markdown||!out||cap<2)return 0;
+ start=strstr(markdown,"*1. EXECUTIVE SUMMARY*");
+ if(!start)return 0;
+ start=strstr(start,"\n\n");
+ if(!start)return 0;
+ start+=2;
+ end=strstr(start,"━━━━━━━━");
+ if(!end)return 0;
+ while(start<end){
+  unsigned char c=(unsigned char)*start++;
+  if(c=='\n'||c=='\r'||c=='\t'||c==' ') {
+   if(n)spaced=1;
+   continue;
+  }
+  if(c=='*'||c=='#'||c=='`')continue;
+  if(c<32)return 0;
+  if(spaced&&n){if(n+1>=cap)break;out[n++]=' ';spaced=0;}
+  if(n+1>=cap)break;
+  out[n++]=(char)c;
+ }
+ while(n&&out[n-1]==' ')n--;
+ out[n]=0;
+ return n>0;
+}
 static int image_id(const char *html){
  const char *select=strstr(html,"name=\"featured_image_id\"");
  if(!select)return -1;
@@ -392,6 +421,10 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
      !html_value(page->data,"description",description,sizeof description)||
      !strstr(page->data,"name=\"content_file\"")||
      !selected_option(page->data,"published")){copy(answer.error,sizeof answer.error,"Existing page metadata/status check failed.");goto cleanup;}
+  if(!s2_executive_description(p->markdown,description,sizeof description)){
+   copy(answer.error,sizeof answer.error,"S2 Executive Summary missing; no page description generated.");
+   goto cleanup;
+  }
   /* Core Pages can update an existing main.html/main.txt page to main.md.
    * The S2 source is Markdown; a previous content-file format must not
    * silently block updates to the existing Core Page. */
@@ -571,6 +604,12 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
   if(test_curl)curl_easy_cleanup(test_curl);
   free(large_body);free(encoded_form);
  }
+ {
+  char desc[1024]={0};
+  const char *report="Snapshot: S2-PUBLIC-SNAPSHOT-10\\n\\n*1. EXECUTIVE SUMMARY*\\n\\nAPI severity HIGH under investigation.\\n\\nRictus: accessible | Sentinel: accessible\\n\\n━━━━━━━━\\n\\n*2. ACTIVE INVESTIGATIONS*";
+  check(r,s2_executive_description(report,desc,sizeof desc)&&strstr(desc,"Rictus: accessible")!=NULL,0);
+  check(r,!s2_executive_description("No executive section",desc,sizeof desc),1);
+ }
  check(r,!csrf("<input name=\"csrf_token\" value=\"\">",out,sizeof out),1);
  check(r,csrf("<input name=\"csrf_token\" value=\"abc\">",out,sizeof out)&&!strcmp(out,"abc"),0);
  copy(p.site,sizeof p.site,"chaos");copy(p.kind,sizeof p.kind,"news");
@@ -625,7 +664,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="publisher",.name="Digit Markdown Publisher",
- .version_major=0,.version_minor=4,.version_patch=8,
+ .version_major=0,.version_minor=4,.version_patch=9,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
