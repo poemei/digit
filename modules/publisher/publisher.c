@@ -255,6 +255,14 @@ static int html_value(const char *html,const char *name,char *out,size_t cap){
  }
  out[n]=0;return 1;
 }
+static int s2_target_edit_form(const char *html){
+ return html&&strstr(html,"name=\"original_slug\"")&&strstr(html,"value=\"sai-dsa\"");
+}
+static int s2_create_form(const char *html){
+ return html&&strstr(html,"name=\"action\"")&&strstr(html,"name=\"slug\"")&&
+  strstr(html,"name=\"title\"")&&strstr(html,"name=\"content_file\"")&&
+  strstr(html,"name=\"status\"")&&strstr(html,"name=\"content\"");
+}
 static int selected_option(const char *html,const char *value){
  char needle[96];snprintf(needle,sizeof needle,"value=\"%s\"",value);
  const char *p=strstr(html,needle);if(!p)return 0;
@@ -358,7 +366,7 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
  }
  CURL *c=curl_easy_init();page_t *page=calloc(1,sizeof *page);
  char url[512],form[65536]={0},token[128]={0},slug[256]={0},*html=NULL;
- long code=0;size_t flen=0;int session=0,verified=0,logout=0;
+ long code=0;size_t flen=0;int session=0,verified=0,logout=0,create_s2_page=0;
  if(!c||!page)goto done;
  curl_easy_setopt(c,CURLOPT_COOKIEFILE,"");
  curl_easy_setopt(c,CURLOPT_WRITEFUNCTION,collect);
@@ -390,11 +398,26 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
   if(strcmp(p->title,"sai-dsa")){copy(answer.error,sizeof answer.error,"Wrong page target.");goto cleanup;}
   char edit_url[512];
   snprintf(edit_url,sizeof edit_url,"%s/admin/page?edit=sai-dsa",site->base);
-  if(!http(c,edit_url,page,NULL,&code)||code!=200||
-     !strstr(page->data,"name=\"original_slug\"")||
-     !strstr(page->data,"value=\"sai-dsa\"")||
-     !csrf(page->data,token,sizeof token)){
-   copy(answer.error,sizeof answer.error,"Existing sai-dsa edit form/CSRF unavailable.");goto cleanup;
+  if(!http(c,edit_url,page,NULL,&code)||
+     (code!=200&&code!=302&&code!=404)){
+   copy(answer.error,sizeof answer.error,"S2 page lookup failed; creation withheld.");goto cleanup;
+  }
+  if(code==200&&s2_target_edit_form(page->data)){
+   if(!csrf(page->data,token,sizeof token)){
+    copy(answer.error,sizeof answer.error,"Existing S2 page CSRF missing; creation withheld.");goto cleanup;
+   }
+  }else{
+   /* Reuse the existing authenticated Core Pages creation interface.
+    * Never create a duplicate or proceed without a verified create form. */
+   snprintf(url,sizeof url,"%s/admin/page",site->base);
+   if(!http(c,url,page,NULL,&code)||code!=200||
+      !s2_create_form(page->data)||!csrf(page->data,token,sizeof token)){
+    copy(answer.error,sizeof answer.error,"S2 page missing; Core Pages create form unavailable.");goto cleanup;
+   }
+   if(strstr(page->data,"?edit=sai-dsa")){
+    copy(answer.error,sizeof answer.error,"S2 page present in listing; duplicate creation refused.");goto cleanup;
+   }
+   create_s2_page=1;
   }
  }else if(!strcmp(p->kind,"intelligence")){
   char create_url[512];
@@ -417,10 +440,14 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
  erase(form,sizeof form);flen=0;
  if(!strcmp(p->kind,"page_update")){
   char original_title[256]={0},description[1024]={0};
-  if(!html_value(page->data,"title",original_title,sizeof original_title)||
-     !html_value(page->data,"description",description,sizeof description)||
-     !strstr(page->data,"name=\"content_file\"")||
-     !selected_option(page->data,"published")){copy(answer.error,sizeof answer.error,"Existing page metadata/status check failed.");goto cleanup;}
+  if(!create_s2_page){
+   if(!html_value(page->data,"title",original_title,sizeof original_title)||
+      !html_value(page->data,"description",description,sizeof description)||
+      !strstr(page->data,"name=\"content_file\"")||
+      !selected_option(page->data,"published")){
+    copy(answer.error,sizeof answer.error,"Existing page metadata/status check failed.");goto cleanup;
+   }
+  }else copy(original_title,sizeof original_title,p->title);
   if(!s2_executive_description(p->markdown,description,sizeof description)){
    copy(answer.error,sizeof answer.error,"S2 Executive Summary missing; no page description generated.");
    goto cleanup;
@@ -429,15 +456,15 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
    * The S2 source is Markdown; a previous content-file format must not
    * silently block updates to the existing Core Page. */
   if(!append(form,sizeof form,&flen,"csrf_token",c,token)||
-     !append(form,sizeof form,&flen,"action",c,"update")||
-     !append(form,sizeof form,&flen,"original_slug",c,"sai-dsa")||
+     !append(form,sizeof form,&flen,"action",c,create_s2_page?"create":"update")||
+     (!create_s2_page&&!append(form,sizeof form,&flen,"original_slug",c,"sai-dsa"))||
      !append(form,sizeof form,&flen,"slug",c,"sai-dsa")||
      !append(form,sizeof form,&flen,"title",c,original_title)||
      !append(form,sizeof form,&flen,"description",c,description)||
      !append(form,sizeof form,&flen,"status",c,"published")||
      !append(form,sizeof form,&flen,"content_file",c,"main.md")||
      !append(form,sizeof form,&flen,"content",c,p->markdown)){
-   copy(answer.error,sizeof answer.error,"Core Page update form encoding failed.");goto cleanup;
+   copy(answer.error,sizeof answer.error,"Core Page create/update form encoding failed.");goto cleanup;
   }
  }else if(!append(form,sizeof form,&flen,"csrf_token",c,token)||
     !append(form,sizeof form,&flen,"title",c,p->title))goto cleanup;
@@ -474,7 +501,7 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
  }
  if(!http(c,url,page,form,&code)||code!=302){
   if(!strcmp(p->kind,"page_update"))
-   copy(answer.error,sizeof answer.error,"Core Page update POST failed or lacked redirect.");
+   copy(answer.error,sizeof answer.error,"Core Page create/update POST failed or lacked redirect.");
   goto cleanup;
  }
  erase(form,sizeof form);flen=0;
@@ -609,6 +636,15 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
   const char *report="Snapshot: S2-PUBLIC-SNAPSHOT-10\n\n*1. EXECUTIVE SUMMARY*\n\nAPI severity HIGH under investigation.\n\nRictus: accessible | Sentinel: accessible\n\n━━━━━━━━\n\n*2. ACTIVE INVESTIGATIONS*";
   check(r,s2_executive_description(report,desc,sizeof desc)&&strstr(desc,"Rictus: accessible")!=NULL,0);
   check(r,!s2_executive_description("No executive section",desc,sizeof desc),1);
+  {
+   const char *edit="<input name=\"original_slug\" value=\"sai-dsa\">";
+   const char *create="<input name=\"action\"><input name=\"slug\"><input name=\"title\"><input name=\"content_file\"><input name=\"status\"><textarea name=\"content\"></textarea>";
+   check(r,s2_target_edit_form(edit)!=0,0);
+   check(r,!s2_target_edit_form(create),1);
+   check(r,s2_create_form(create)!=0,0);
+   check(r,!s2_create_form("<input name=\"title\">"),1);
+   check(r,!s2_target_edit_form("<input name=\"original_slug\" value=\"other\">"),1);
+  }
  }
  check(r,!csrf("<input name=\"csrf_token\" value=\"\">",out,sizeof out),1);
  check(r,csrf("<input name=\"csrf_token\" value=\"abc\">",out,sizeof out)&&!strcmp(out,"abc"),0);
@@ -664,7 +700,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="publisher",.name="Digit Markdown Publisher",
- .version_major=0,.version_minor=4,.version_patch=9,
+ .version_major=0,.version_minor=4,.version_patch=10,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
