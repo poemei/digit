@@ -1,4 +1,4 @@
-# Digit S2 v0.3.1 — Consistent Intelligence Report Dividers
+# Digit S2 v0.3.2 — Auditable http:BL Lookup Outcomes
 
 S2 uses the existing ABI 1.5 services and is hot-loadable without restarting Digit. This revision routes evidence-bounded, six-section assessment briefs and Rictus-linked observation updates through the **existing** `digit.slack.intel.deliver` service. Slack itself owns the configured private `intel_channel_id`. Neither Core nor Slack needs modification.
 
@@ -78,3 +78,7 @@ S2 reads the 12-letter lowercase Project Honey Pot access key from `/opt/digit/a
 ## v0.3.1 — Slack report horizontal separators
 
 Every finding in the recent and historical case sections now begins after a full-width divider (`━━━━━━━━━━━━━━━━━━━━━━━━━━━━`). Matching dividers separate the six established intelligence sections, the investigation findings section, http:BL enrichment, and optional case-activity/persistence warnings. The http:BL heading and reputation results have explicit paragraph breaks. The threat-intelligence threshold statement no longer runs into the next field. This release changes private Slack presentation only; source investigation, credential lookup, persistence, IRC, publishing, and Core remain unchanged. Source code has been committed, but build, qualification, and visual verification in Slack remain to be performed.
+
+## v0.3.2 — Resolver evidence and durable audit
+
+For at most three distinct qualifying `details.ip_address` IPv4 values per meaningful brief, S2 now persists each http:BL lookup result in SQLite table `s2_httpbl_lookups` in the existing `/opt/digit/state/s2_cases.sqlite3` database. Audit rows record lookup time, queried IP, source field, status, `getaddrinfo` resolver return code, resolver API, and returned days, score and type bits only when a valid http:BL answer was received. Access keys and DNS query hostnames (which contain the access key) are never stored or published. Slack labels `EAI_NONAME` as **NO NAME**, explicitly *not* verified raw DNS NXDOMAIN, and other resolver errors as **LOOKUP INCOMPLETE**. An audit storage failure is shown as **audit=FAILED** and is not silently treated as durable evidence. This design audits what the libc resolver reported, **not** DNS packet bytes, authenticated negative answers or authoritative server responses. Enrichment remains bounded, private, and event-driven; the table does not make the initial three-lookups sample a census of all case IPs. No changes to Core, Publisher, website, or IRC. Build, qualification, credential access, and live resolver behavior have not been verified here.
