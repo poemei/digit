@@ -34,6 +34,7 @@ static int running(void){int v;pthread_mutex_lock(&lock);v=live;pthread_mutex_un
 #define REPORT_CAP 64
 static irc_report_t irc_pending[REPORT_CAP],slack_pending[REPORT_CAP];
 static unsigned irc_count,slack_count;
+static time_t last_irc_sync_notice;
 /* Track changes to operator-approved Lessons files independently of reports. */
 static file_state_t lesson_states[256];
 static unsigned lesson_count;
@@ -60,9 +61,13 @@ static void push_report(irc_report_t *queue,unsigned *count,const irc_report_t *
  queue[(*count)++]=*item;
 }
 static void sync_started(const char *name){
- irc_report_t irc={{0}};
- snprintf(irc.report,sizeof irc.report,"SQLite Sync Started");
- push_report(irc_pending,&irc_count,&irc,"IRC");
+ time_t now=time(NULL);
+ if(now!=(time_t)-1&&(!last_irc_sync_notice||now-last_irc_sync_notice>=300)){
+  irc_report_t irc={{0}};
+  snprintf(irc.report,sizeof irc.report,"SQLite Sync Started");
+  push_report(irc_pending,&irc_count,&irc,"IRC");
+  last_irc_sync_notice=now;
+ }
  /* Detailed per-source information goes to Slack digit-ops only. */
  irc_report_t slack={{0}};
  snprintf(slack.report,sizeof slack.report,
