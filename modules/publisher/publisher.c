@@ -244,7 +244,7 @@ static int html_value(const char *html,const char *name,char *out,size_t cap){
    size_t len=(size_t)(e-v);
    if(len==3&&!memcmp(v,"amp",3))c='&';
    else if(len==4&&!memcmp(v,"quot",4))c='"';
-   else if(len==4&&!memcmp(v,"#39",3))c='\'';
+   else if(len==3&&!memcmp(v,"#39",3))c='\'';
    else if(len==2&&!memcmp(v,"lt",2))c='<';
    else if(len==2&&!memcmp(v,"gt",2))c='>';
    else return 0;
