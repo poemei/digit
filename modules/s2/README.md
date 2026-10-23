@@ -1,4 +1,4 @@
-# Digit S2 v0.3.5 — Evidence-Based IP Field Semantics and Operational Visibility
+# Digit S2 v0.3.6 — Evidence-Based IP Field Semantics and Operational Visibility
 
 S2 uses the existing ABI 1.5 services and is hot-loadable without restarting Digit. This revision routes evidence-bounded, six-section assessment briefs and Rictus-linked observation updates through the **existing** `digit.slack.intel.deliver` service. Slack itself owns the configured private `intel_channel_id`. Neither Core nor Slack needs modification.
 
@@ -100,3 +100,9 @@ S2 now generates a private intelligence status brief at least every six hours wh
 The periodic report shows the actual unchanged-case count through existing reporting fields. An unchanged feed does not establish that either website is safe or that each site is directly represented by the upstream records. Digit S2 is distinct from Sentinel-MVC's optional http:BL Admin plugin. The audit is read-only for status reporting. This source edit has not been independently compiled or qualified on the Digit host.
 
 Runtime descriptor and qualification test now explicitly identify **0.3.5**. Rebuild the shared object and perform the normal hot-load procedure; editing the repository or copying source alone will not change the incumbent binary. Digit rejects a changed SHA-256 artifact that retains version 0.3.4, preserving the incumbent by design.
+
+## v0.3.6 — Audited lookup deduplication and reporting layout
+
+Before each candidate IPv4 http:BL query, S2 inspects its persisted SQLite lookup audit. Previously resolved attempts are skipped for 24 hours, while incomplete/key-unavailable outcomes may be retried after one hour. If the audit is unreadable, the candidate is skipped rather than silently querying without durable deduplication. The per-brief limit remains three *new lookup attempts* and the six-hour private operational brief remains enabled. It reports newly attempted versus recently skipped candidates and the cumulative audit summary. IP lookup lines now use explicit blank-line separators; prior investigations and raw source evidence are unchanged. The code retains no automatic block authority.
+
+Loader version is now 0.3.6 and qualification test requires that version. Source commit alone does not install the shared object; rebuild and hot-load using Digit's normal workflow. Runtime compile/Slack layout verification remains necessary.
