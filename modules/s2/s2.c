@@ -687,7 +687,7 @@ static stnlabz_module_result_t poll_service(
    size_t used=strlen(brief);
    if(used+strlen(enrich)+strlen(audit)+260<sizeof brief)
     snprintf(brief+used,sizeof brief-used,
-     "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*HTTP:BL / IP PROVENANCE* (reported remote peers; original-client and destination roles may remain unresolved)\n\n%s\n%s\nReputation is not proof of an attack, destination or compromise.",enrich,audit);
+     "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*HTTP:BL / IP PROVENANCE* (reported remote peers; original-client and destination roles may remain unresolved)\n\n%s\n\n%s\n\nReputation is not proof of an attack, destination or compromise.",enrich,audit);
   }
   if(case_updates>0){
    size_t used=strlen(brief);
@@ -851,12 +851,54 @@ static void intelligence_brief(char *dst,size_t cap,const char *short_report,
   correlated?"found":"not found in inspected records",
   signature&&*signature?signature:"none");
 }
+/* Slack display is more reliable with short, explicitly numbered parts.
+ * Advance to the next part only after the current send was acknowledged.
+ * A failed later part leaves a bounded duplicate risk on retry, never a
+ * fabricated full-delivery acknowledgement. */
+#define S2_SLACK_PART_MAX 3000
+#define S2_SLACK_PARTS_MAX 4
 static int deliver_intel(const char *brief){
- size_t used=0;
  if(!host||!host->invoke_service||!brief||!brief[0])return 0;
- size_t bytes=strlen(brief)+1;
- if(bytes>INTEL_REPORT_CAP)return 0;
- return host->invoke_service(INTEL_DELIVERY,brief,bytes,NULL,0,&used)==STNLABZ_MODULE_OK;
+ size_t len=strlen(brief);
+ if(len+1>INTEL_REPORT_CAP)return 0;
+ size_t start[S2_SLACK_PARTS_MAX]={0},end[S2_SLACK_PARTS_MAX]={0};
+ int count=0;
+ for(size_t pos=0;pos<len;){
+  if(count>=S2_SLACK_PARTS_MAX)return 0;
+  size_t limit=pos+S2_SLACK_PART_MAX;
+  if(limit>len)limit=len;
+  size_t cut=limit;
+  if(cut<len){
+   size_t p=cut;
+   /* Prefer a paragraph boundary, then line break. */
+   while(p>pos+S2_SLACK_PART_MAX/2){
+    if(brief[p-1]=='\n'&&brief[p]=='\n'){cut=p;break;}
+    p--;
+   }
+   if(cut==limit){
+    p=limit;
+    while(p>pos+S2_SLACK_PART_MAX/2){
+     if(brief[p-1]=='\n'){cut=p;break;}
+     p--;
+    }
+   }
+   /* Never bisect a UTF-8 sequence. */
+   while(cut>pos&&((unsigned char)brief[cut]&0xc0)==0x80)cut--;
+   if(cut==pos)return 0;
+  }
+  start[count]=pos;end[count]=cut;count++;pos=cut;
+ }
+ for(int i=0;i<count;i++){
+  char part[S2_SLACK_PART_MAX+96];
+  int n=snprintf(part,sizeof part,
+   "*S2 INTELLIGENCE BRIEF — PART %d/%d*\n\n%.*s",
+   i+1,count,(int)(end[i]-start[i]),brief+start[i]);
+  if(n<0||(size_t)n>=sizeof part)return 0;
+  size_t used=0;
+  if(host->invoke_service(INTEL_DELIVERY,part,(size_t)n+1,NULL,0,&used)
+      !=STNLABZ_MODULE_OK)return 0;
+ }
+ return 1;
 }
 static int observation_report(digit_s2_report_t *out,int64_t *selected){
  digit_s2_observations_query_t query={0};
@@ -1010,7 +1052,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=3,.version_patch=6,
+ .version_major=0,.version_minor=3,.version_patch=7,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
