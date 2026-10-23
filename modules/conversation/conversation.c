@@ -1,5 +1,5 @@
 /* Digit Conversation: ABI-only interpretation dispatch; no inference or
- * generated response. Conversation v1.2.2. The IRC module and Core are
+ * generated response. Conversation v1.2.3. The IRC module and Core are
  * unchanged; both registered conversation routes share this handler.
  */
 #include <stddef.h>
@@ -139,6 +139,45 @@ static int conversation_invitation(const digit_interpretation_result_t *r){
        if(!strcmp(term,openings[j]))return 1;
  }
  return 0;
+}
+/* GRU may improve wording but cannot replace evidence with new claims.
+ * Accept only a candidate that retains the complete verified View response.
+ * Other outputs fall back to the deterministic View verbatim. */
+static int gru_candidate_safe(const char *baseline,const char *candidate){
+ size_t n;
+ if(!baseline||!candidate||!(n=strlen(candidate))||n>480)return 0;
+ if(!strstr(candidate,baseline))return 0;
+ for(size_t i=0;i<n;i++){
+  unsigned char c=(unsigned char)candidate[i];
+  if(c<32&&c!='\n'&&c!='\t')return 0;
+ }
+ return 1;
+}
+static void gru_polish(const stnlabz_module_host_t *api,
+ char *response,size_t capacity,size_t *used){
+ digit_gru_generate_request_t request={0};
+ digit_gru_generate_result_t candidate={0};
+ size_t out_bytes=0;
+ char prompt[DIGIT_GRU_PROMPT_MAX];
+ int n;
+ stnlabz_module_result_t rc;
+ if(!api||!api->invoke_service||!response||!used||!*used||
+    *used>=capacity||*used>480||!memchr(response,0,capacity))return;
+ n=snprintf(prompt,sizeof prompt,
+  "Make this response readable English. Preserve this exact verified statement "
+  "without changing or omitting it. Do not add facts: %s",response);
+ if(n<0||(size_t)n>=sizeof prompt)return;
+ memcpy(request.prompt,prompt,(size_t)n+1);
+ request.length=256;
+ rc=api->invoke_service(DIGIT_GRU_GENERATE_SERVICE,
+   &request,sizeof request,&candidate,sizeof candidate,&out_bytes);
+ if(rc!=STNLABZ_MODULE_OK||out_bytes!=sizeof candidate||
+    !memchr(candidate.text,0,sizeof candidate.text)||
+    !gru_candidate_safe(response,candidate.text))return;
+ size_t len=strlen(candidate.text);
+ if(len>=capacity)return;
+ memcpy(response,candidate.text,len+1);
+ *used=len;
 }
 static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
     const void *request, size_t bytes, void *response, size_t capacity,
@@ -456,6 +495,13 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
 
             trace_stage(host,"process","response.view",status,
                 rendered?0:2,rendered?(unsigned)*used:0,__LINE__);
+            if(rendered && used && *used){
+                size_t original=*used;
+                gru_polish(host,response,capacity,used);
+                trace_stage(host,"process",DIGIT_GRU_GENERATE_SERVICE,
+                  *used!=original?"CANDIDATE_ACCEPTED":"FALLBACK_RETAINED",
+                  0,(unsigned)*used,__LINE__);
+            }
         }
     }else{
         /* A non-inquiry must never be sent through factual uncertainty
@@ -1053,7 +1099,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 2, .version_patch = 2,
+    .version_major = 1, .version_minor = 2, .version_patch = 3,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
