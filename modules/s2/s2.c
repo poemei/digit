@@ -242,55 +242,91 @@ static int ingest_cases(json_object *records,char *summary,size_t cap,int *total
 }
 /* Read stored evidence only; ordering is priority then recorded recency,
  * not a claim that historical cases are recent attacks. */
+/* Report stored case evidence, not inferred actor identities or attacks.
+ * Recent means source_time is within the last 24 hours only when the
+ * source timestamp can be parsed as UTC; ambiguous times are historical. */
 static void case_investigation_snapshot(char *dst,size_t cap){
- sqlite3 *db=NULL;
- sqlite3_stmt *st=NULL;
- size_t pos=0;
- if(!dst||!cap)return;
- dst[0]=0;
- if(!case_db_open(&db)){
-  snprintf(dst,cap,"Case evidence unavailable: local case register could not be read.");
-  return;
- }
+ sqlite3 *db=NULL;sqlite3_stmt *st=NULL;size_t pos=0;
  const char *sql=
   "SELECT c.source_id,c.severity,c.relevance,c.source_time,"
   "c.primary_ip,c.detail_ip,c.domain,c.request_url,c.revisions,"
   "COALESCE((SELECT e.event_type FROM s2_case_events e "
-  "WHERE e.source_id=c.source_id ORDER BY e.event_id DESC LIMIT 1),'HISTORICAL_BASELINE') "
-  "FROM s2_cases c ORDER BY "
-  "CASE c.severity WHEN 'CRITICAL' THEN 4 WHEN 'HIGH' THEN 3 "
-  "WHEN 'MEDIUM' THEN 2 ELSE 0 END DESC,c.last_seen DESC,c.source_id LIMIT 5";
- if(sqlite3_prepare_v2(db,sql,-1,&st,NULL)!=SQLITE_OK){
-  snprintf(dst,cap,"Case evidence query failed; no individual findings assessed.");
-  sqlite3_close(db);return;
+  "WHERE e.source_id=c.source_id ORDER BY e.event_id DESC LIMIT 1),'HISTORICAL_BASELINE'),"
+  "(SELECT count(*) FROM s2_cases p WHERE p.primary_ip=c.primary_ip "
+  "AND p.source_id<>c.source_id AND p.primary_ip<>''),"
+  "(SELECT count(*) FROM s2_cases p WHERE p.domain=c.domain "
+  "AND p.source_id<>c.source_id AND p.domain<>'') "
+  "FROM s2_cases c WHERE "
+  "((?1=1 AND c.source_time>=?2) OR (?1=0 AND c.source_time<?2)) "
+  "ORDER BY CASE c.severity WHEN 'CRITICAL' THEN 4 WHEN 'HIGH' THEN 3 "
+  "WHEN 'MEDIUM' THEN 2 ELSE 0 END DESC,c.source_time DESC,c.source_id LIMIT 3";
+ time_t now=time(NULL);struct tm utc={0};char cutoff[32]={0};
+ int has_cutoff=now!=(time_t)-1&&gmtime_r(&now,&utc)!=NULL;
+ if(has_cutoff){
+  time_t yesterday=now-86400;
+  has_cutoff=gmtime_r(&yesterday,&utc)!=NULL &&
+   strftime(cutoff,sizeof cutoff,"%Y-%m-%d %H:%M:%S",&utc)>0;
  }
- int ncases=0,rc;
- while((rc=sqlite3_step(st))==SQLITE_ROW){
-  char line[800];
-  const char *v[10];
-  for(int i=0;i<10;i++){
-   v[i]=(const char*)sqlite3_column_text(st,i);
-   if(!v[i])v[i]="not supplied";
+ if(!dst||!cap)return;
+ dst[0]=0;
+ if(!case_db_open(&db)){
+  snprintf(dst,cap,"Case review unavailable: local case database inaccessible.");return;
+ }
+ for(int recent=1;recent>=0;recent--){
+  const char *heading=recent?"*RECENT SOURCE RECORDS (24h UTC; if timestamp comparable)*\n":
+   "*HISTORICAL OR UNDATED RECORDS*\n";
+  int written=snprintf(dst+pos,cap-pos,"%s",heading);
+  if(written<0||(size_t)written>=cap-pos)break;
+  pos+=(size_t)written;
+  /* Unknown source timezone means this date grouping is provisional. */
+  if(!has_cutoff||sqlite3_prepare_v2(db,sql,-1,&st,NULL)!=SQLITE_OK){
+   written=snprintf(dst+pos,cap-pos,"Source time comparison unavailable.\n\n");
+   if(written<0||(size_t)written>=cap-pos)break;pos+=(size_t)written;continue;
   }
-  int revisions=sqlite3_column_int(st,8);
-  int n=snprintf(line,sizeof line,
-   "\n*Case %d | %.100s*\n"
-   "API severity: %.12s | relevance: %.12s | last source timestamp: %.40s\n"
-   "Primary IP: %.48s | detail IP: %.48s\n"
-   "Domain: %.100s | request: %.120s\n"
-   "Recorded changes: %d | last transition: %.28s\n"
-   "Assessment: source-reported suspicious finding; independent incident confirmation unavailable.\n"
-   "Next action: review source evidence, time alignment and independent Rictus corroboration.\n",
-   ++ncases,v[0],v[1],v[2],v[3],v[4],v[5],v[6],v[7],
-   revisions>0?revisions-1:0,v[9]);
-  if(n<=0||(size_t)n>=sizeof line||pos+(size_t)n>=cap)break;
-  memcpy(dst+pos,line,(size_t)n);
-  pos+=(size_t)n;dst[pos]=0;
+  sqlite3_bind_int(st,1,recent);
+  sqlite3_bind_text(st,2,cutoff,-1,SQLITE_TRANSIENT);
+  int rows=0,rc;
+  while((rc=sqlite3_step(st))==SQLITE_ROW){
+   const char *v[10];
+   for(int i=0;i<10;i++){
+    v[i]=(const char*)sqlite3_column_text(st,i);
+    if(!v[i]||!v[i][0])v[i]="not supplied";
+   }
+   int revisions=sqlite3_column_int(st,8);
+   int ip_peers=sqlite3_column_int(st,10),domain_peers=sqlite3_column_int(st,11);
+   const char *lead=strcmp(v[4],"not supplied")&&ip_peers?
+     "Compare other records sharing this primary IP; shared IP alone is not attribution.":
+     strcmp(v[6],"not supplied")&&domain_peers?
+     "Compare records sharing the domain; a shared domain alone is not one incident.":
+     "Validate original source fields and seek independent Rictus evidence.";
+   char line[920];
+   int n=snprintf(line,sizeof line,
+    "\n*%d. Case %.95s*\n"
+    "Severity: %.12s | Relevance: %.12s\n"
+    "Source timestamp (timezone unverified): %.32s\n"
+    "Primary IP: %.45s | Detail IP: %.45s\n"
+    "Domain: %.75s | Request: %.90s\n"
+    "History: %d changes | Last event: %.26s\n"
+    "Shared indicators in register: primary IP with %d other records; domain with %d others.\n"
+    "Assessment: API-reported finding; compromise and common actor unconfirmed.\n"
+    "Next: %s\n",
+    ++rows,v[0],v[1],v[2],v[3],v[4],v[5],v[6],v[7],
+    revisions>0?revisions-1:0,v[9],ip_peers,domain_peers,lead);
+   if(n<0||(size_t)n>=sizeof line||(size_t)n>=cap-pos)break;
+   memcpy(dst+pos,line,(size_t)n);pos+=(size_t)n;dst[pos]=0;
+  }
+  if(!rows){
+   written=snprintf(dst+pos,cap-pos,"No records selected.\n");
+   if(written>0&&(size_t)written<cap-pos)pos+=(size_t)written;
+  }
+  if(rc!=SQLITE_DONE&&rc!=SQLITE_ROW&&pos+50<cap){
+   written=snprintf(dst+pos,cap-pos,"Case query incomplete.\n");
+   if(written>0&&(size_t)written<cap-pos)pos+=(size_t)written;
+  }
+  sqlite3_finalize(st);st=NULL;
+  if(pos+3<cap){memcpy(dst+pos,"\n",2);pos++;dst[pos]=0;}
  }
- if(rc!=SQLITE_DONE&&rc!=SQLITE_ROW&&pos+80<cap)
-  snprintf(dst+pos,cap-pos,"\nCase listing incomplete: database read error.\n");
- if(!ncases)snprintf(dst,cap,"No qualifying case records in the local register.");
- sqlite3_finalize(st);sqlite3_close(db);
+ sqlite3_close(db);
 }
 static long local_tail(char lines[RICTUS_LINES][512],size_t *stored){
  FILE *f=fopen(RICTUS,"r");char line[512];long count=0;
@@ -413,12 +449,12 @@ static stnlabz_module_result_t poll_service(
   char brief[INTEL_REPORT_CAP]={0};
   intelligence_brief(brief,sizeof brief,report,count,available,has_priority,matched,
     signature,!first_report,case_total,case_updates);
-  {char findings[4800]={0};
+  {char findings[5800]={0};
    case_investigation_snapshot(findings,sizeof findings);
    size_t used=strlen(brief);
    if(used+strlen(findings)+160<sizeof brief)
     snprintf(brief+used,sizeof brief-used,
-     "\n\n*INVESTIGATION CASE REVIEW* (five highest-severity stored records; historical evidence, not new attacks)\n%s",findings);
+     "\n\n*INVESTIGATION CASE REVIEW* (stored API evidence; source timezone not verified)\n%s",findings);
   }
   if(case_updates>0){
    size_t used=strlen(brief);
@@ -740,7 +776,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=2,.version_patch=4,
+ .version_major=0,.version_minor=2,.version_patch=5,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
