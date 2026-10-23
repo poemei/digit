@@ -1,5 +1,5 @@
 /* Digit Conversation: ABI-only interpretation dispatch; no inference or
- * generated response. Conversation v1.2.4. The IRC module and Core are
+ * generated response. Conversation v1.2.5. The IRC module and Core are
  * unchanged; both registered conversation routes share this handler.
  */
 #include <stddef.h>
@@ -146,66 +146,41 @@ static int conversation_invitation(const digit_interpretation_result_t *r){
  }
  return 0;
 }
-/* Exact repetition is a deterministic text operation, not a factual
- * assertion, and must not be routed through Corpus or the GRU. */
-static int literal_repeat(const char *message,char *out,size_t cap,size_t *used){
- static const char prefix[]="repeat the following sentence exactly:";
- const char *p=message,*value;
- size_t n;
- if(!message||!out||!used||cap<2)return 0;
- while(*p&&isspace((unsigned char)*p))p++;
- if(!strncasecmp(p,"Digit, ",7))p+=7;
- else if(!strncasecmp(p,"Digit: ",7))p+=7;
- else if(!strncasecmp(p,"digicat, ",9))p+=9;
- if(strncasecmp(p,prefix,sizeof prefix-1))return 0;
- value=p+sizeof prefix-1;
- while(*value==' '||*value=='\t')value++;
- n=strlen(value);
- if(!n||n>=cap)return 0;
- memcpy(out,value,n+1);*used=n;return 1;
-}
-/* GRU may improve wording but cannot replace evidence with new claims.
- * Accept only a candidate that retains the complete verified View response.
- * Other outputs fall back to the deterministic View verbatim. */
-static int gru_candidate_safe(const char *baseline,const char *candidate){
- /* The model cannot independently establish new facts. Accept a bounded
-  * conversational lead-in only when the verified statement is unchanged. */
- static const char *const introductions[]={
-  "", "In short, ", "To clarify, ", "Based on the available evidence, "
- };
- if(!baseline||!candidate||!baseline[0])return 0;
- for(size_t i=0;i<sizeof introductions/sizeof introductions[0];i++){
-  size_t prefix=strlen(introductions[i]);
-  if(!strncmp(candidate,introductions[i],prefix)&&
-      !strcmp(candidate+prefix,baseline))return 1;
- }
- return 0;
-}
-static void gru_polish(const stnlabz_module_host_t *api,
- char *response,size_t capacity,size_t *used){
+/* Conversation sends interpreted requests to the registered GRU language
+ * generator. Model output is not evidence. For supported factual answers,
+ * the evidence-backed View remains the fallback, and generated wording must
+ * retain the verified quotation rather than silently replacing it. */
+static int gru_generate_response(const stnlabz_module_host_t *api,
+ const char *message,const char *verified,const char *source_quote,
+ char *output,size_t capacity,size_t *used){
  digit_gru_generate_request_t request={0};
- digit_gru_generate_result_t candidate={0};
- size_t out_bytes=0;
- char prompt[DIGIT_GRU_PROMPT_MAX];
+ digit_gru_generate_result_t result={0};
+ size_t received=0;stnlabz_module_result_t rc;
  int n;
- stnlabz_module_result_t rc;
- if(!api||!api->invoke_service||!response||!used||!*used||
-    *used>=capacity||*used>480||!memchr(response,0,capacity))return;
- n=snprintf(prompt,sizeof prompt,
-  "Make this response readable English. Preserve this exact verified statement "
-  "without changing or omitting it. Do not add facts: %s",response);
- if(n<0||(size_t)n>=sizeof prompt)return;
- memcpy(request.prompt,prompt,(size_t)n+1);
- request.length=256;
- rc=api->invoke_service(DIGIT_GRU_GENERATE_SERVICE,
-   &request,sizeof request,&candidate,sizeof candidate,&out_bytes);
- if(rc!=STNLABZ_MODULE_OK||out_bytes!=sizeof candidate||
-    !memchr(candidate.text,0,sizeof candidate.text)||
-    !gru_candidate_safe(response,candidate.text))return;
- size_t len=strlen(candidate.text);
- if(len>=capacity)return;
- memcpy(response,candidate.text,len+1);
- *used=len;
+ if(!api||!api->invoke_service||!message||!message[0]||
+    !output||capacity<2||!used)return 0;
+ n=snprintf(request.prompt,sizeof request.prompt,
+    "Respond naturally to the user's message. "
+    "Only assert factual claims supported by the verified evidence. "
+    "If the evidence does not establish an answer, express uncertainty. "
+    "Do not invent events, actions, knowledge, or sources. "
+    "User message: %s\nVerified evidence: %s",
+    message,verified&&*verified?verified:"(none)");
+ if(n<0||(size_t)n>=sizeof request.prompt)return 0;
+ request.length=96;
+ rc=api->invoke_service(DIGIT_GRU_GENERATE_SERVICE,&request,sizeof request,
+    &result,sizeof result,&received);
+ if(rc!=STNLABZ_MODULE_OK||received!=sizeof result||
+    !memchr(result.text,0,sizeof result.text))return 0;
+ size_t length=strlen(result.text);
+ if(!length||length>=capacity||length!=result.generated_bytes)return 0;
+ for(size_t i=0;i<length;i++)
+    if((unsigned char)result.text[i]<32||
+       (unsigned char)result.text[i]==127)return 0;
+ if(source_quote&&*source_quote&&!strstr(result.text,source_quote))return 0;
+ memcpy(output,result.text,length+1);
+ *used=length;
+ return 1;
 }
 static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
     const void *request, size_t bytes, void *response, size_t capacity,
@@ -261,12 +236,6 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
         have_history=1;
     }
     participate=!passive||conversation_invitation(&result);
-    if(participate&&response&&capacity&&
-       literal_repeat(msg->message,response,capacity,used)){
-        trace_stage(host,"process","conversation.repeat","LITERAL_REPEAT",0,
-            (unsigned)*used,__LINE__);
-        return STNLABZ_MODULE_OK;
-    }
     /* Social-specific interpretation and participation are delegated.
      * Missing optional service is not a factual query. */
     {
@@ -530,18 +499,36 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
             trace_stage(host,"process","response.view",status,
                 rendered?0:2,rendered?(unsigned)*used:0,__LINE__);
             if(rendered && used && *used){
-                size_t original=*used;
-                gru_polish(host,response,capacity,used);
+                size_t before=*used;
+                const char *quote=NULL;
+                char generated[512]={0};size_t generated_used=0;
+                int uncertain=decision.outcome==DIGIT_REASONING_OUTCOME_UNKNOWN||
+                    decision.outcome==DIGIT_REASONING_OUTCOME_CLARIFY;
+                if(!uncertain&&found.count&&
+                    (strcmp(found.hits[0].verification_status,"verified")==0||
+                     strcmp(found.hits[0].verification_status,"operator-verified")==0))
+                    quote=found.hits[0].excerpt;
+                if(gru_generate_response(host,msg->message,
+                     uncertain?NULL:response,quote,
+                     generated,sizeof generated,&generated_used)&&
+                     generated_used<capacity){
+                    memcpy(response,generated,generated_used+1);
+                    *used=generated_used;
+                }
                 trace_stage(host,"process",DIGIT_GRU_GENERATE_SERVICE,
-                  *used!=original?"CANDIDATE_ACCEPTED":"FALLBACK_RETAINED",
-                  0,(unsigned)*used,__LINE__);
+                    *used!=before?"CANDIDATE_ACCEPTED":"FALLBACK_RETAINED",
+                    0,(unsigned)*used,__LINE__);
             }
         }
     }else{
-        /* A non-inquiry must never be sent through factual uncertainty
-         * rendering. Context and diagnostic processing still follow. */
-        trace_stage(host,"process","response.view",
-            "NON_INQUIRY_ABSTENTION",2,0,__LINE__);
+        /* Interpretation did not classify an information inquiry. This
+         * is still a possible conversational instruction or social turn. */
+        int generated=participate&&response&&capacity&&
+            gru_generate_response(host,msg->message,NULL,NULL,
+                response,capacity,used);
+        trace_stage(host,"process",DIGIT_GRU_GENERATE_SERVICE,
+            generated?"CONVERSATIONAL_RESPONSE":"NO_GENERATED_RESPONSE",
+            generated?0:2,generated?(unsigned)*used:0,__LINE__);
     }
 
     /* Observation persistence and context creation are atomic in SQLite3.
@@ -823,21 +810,13 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
         strcpy(identity.terms[2],"you");strcpy(identity.terms[3],"today");
         check(q,!core_identity_field(&identity,&field,&creator),1);
         strcpy(identity.terms[1],"are");
+        identity.term_count=3;
+        identity.terms[3][0]=0;
         check(q,core_identity_field(&identity,&field,&creator)&&
             field==DIGIT_IDENTITY_LINEAGE,0);
     }
-    {
-        size_t repeated=0;char exact[128]={0};
-        check(q,literal_repeat("Digit, repeat the following sentence exactly: The purple cat wants cookies.",
-            exact,sizeof exact,&repeated)&&
-            !strcmp(exact,"The purple cat wants cookies."),0);
-        check(q,!literal_repeat("Tell me what you did today",exact,sizeof exact,&repeated),1);
-        check(q,!literal_repeat("repeat the following sentence exactly:",exact,sizeof exact,&repeated),1);
-    }
-    check(q, gru_candidate_safe("Verified fact.", "Verified fact."), 0);
-    check(q, gru_candidate_safe("Verified fact.", "In short, Verified fact."), 0);
-    check(q, !gru_candidate_safe("Verified fact.", "Different assertion."), 1);
-    check(q, !gru_candidate_safe("Verified fact.", ""), 1);
+    check(q,!gru_generate_response(&mock,"Hello",NULL,NULL,
+        response,sizeof response,&used),1);
     check(q, !strcmp(msg.message, "Database latency increased"), 0);
     check(q, !strcmp(msg.sender, "Alice"), 0);
     check(q, !strcmp(msg.account, "alice"), 0);
@@ -1135,7 +1114,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 2, .version_patch = 4,
+    .version_major = 1, .version_minor = 2, .version_patch = 5,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
