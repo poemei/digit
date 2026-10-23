@@ -1,4 +1,4 @@
-# Digit S2 v0.3.7 — Evidence-Based IP Field Semantics and Operational Visibility
+# Digit S2 v0.3.8 — Evidence-Based IP Field Semantics and Operational Visibility
 
 S2 uses the existing ABI 1.5 services and is hot-loadable without restarting Digit. This revision routes evidence-bounded, six-section assessment briefs and Rictus-linked observation updates through the **existing** `digit.slack.intel.deliver` service. Slack itself owns the configured private `intel_channel_id`. Neither Core nor Slack needs modification.
 
@@ -110,3 +110,9 @@ Loader version is now 0.3.6 and qualification test requires that version. Source
 ## v0.3.7 — Bounded Slack delivery
 
 S2 sends intelligence briefs as up to four numbered parts, each carrying no more than 3000 bytes of brief content, preferring paragraph/line boundaries and avoiding UTF-8 continuation-byte splits. The http:BL summary uses explicit paragraph breaks between coverage, audit statistics, and the final qualification. Each part requires a successful Slack service acknowledgement before S2 sends the next. Partial delivery followed by retry may duplicate earlier parts; the current ABI provides no durable Slack message IDs or transactional multi-part delivery. This revision does not claim exactly-once delivery. No Core, Slack, Sentinel, or business-impact attribution changes are introduced. Rebuild and qualify before hotloading.
+
+## v0.3.8 — Findings boundaries and evidence-bounded business effects
+
+Multipart private Slack delivery now prefers finding/section separator lines when selecting a chunk boundary, rather than treating every paragraph as an equally safe split. Extremely long sections can still require a fallback paragraph/line split within the four-part 3000-byte delivery limit. This does not provide transactional delivery or exactly-once semantics.
+
+The brief now includes a separately labeled **Business / Operational Effects** evidence checklist. It deliberately marks availability disruption, disclosure, successful exploitation, customer effects, incident response costs, and financial loss as **not established** until supporting service/incident/cost records are available. Suspicious HTTP paths, shared IPs and http:BL outcomes are not automatically translated into financial losses. This is an honest baseline and not a live business-impact measurement or integration with uptime/billing records. Qualification and live Slack rendering remain to be verified on the Digit host.
