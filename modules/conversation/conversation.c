@@ -1,5 +1,5 @@
 /* Digit Conversation: ABI-only interpretation dispatch; no inference or
- * generated response. Conversation v1.2.3. The IRC module and Core are
+ * generated response. Conversation v1.2.4. The IRC module and Core are
  * unchanged; both registered conversation routes share this handler.
  */
 #include <stddef.h>
@@ -117,7 +117,13 @@ static int core_identity_field(const digit_interpretation_result_t *r,
  }
  if(has_term(r,"mother")){*field=DIGIT_IDENTITY_MOTHER;return 1;}
  if(has_term(r,"organization")){*field=DIGIT_IDENTITY_ORGANIZATION;return 1;}
- if(has_term(r,"what")||has_term(r,"who")){
+ /* Broad what/who questions about work, knowledge or capabilities
+  * are not Core lineage questions. */
+ if((has_term(r,"what")||has_term(r,"who"))&&
+    (has_term(r,"is")||has_term(r,"are"))&&
+    !has_term(r,"do")&&!has_term(r,"did")&&!has_term(r,"doing")&&
+    !has_term(r,"working")&&!has_term(r,"today")&&
+    !has_term(r,"know")&&!has_term(r,"explain")){
   *field=DIGIT_IDENTITY_LINEAGE;return 1;
  }
  return 0;
@@ -139,6 +145,24 @@ static int conversation_invitation(const digit_interpretation_result_t *r){
        if(!strcmp(term,openings[j]))return 1;
  }
  return 0;
+}
+/* Exact repetition is a deterministic text operation, not a factual
+ * assertion, and must not be routed through Corpus or the GRU. */
+static int literal_repeat(const char *message,char *out,size_t cap,size_t *used){
+ static const char prefix[]="repeat the following sentence exactly:";
+ const char *p=message,*value;
+ size_t n;
+ if(!message||!out||!used||cap<2)return 0;
+ while(*p&&isspace((unsigned char)*p))p++;
+ if(!strncasecmp(p,"Digit, ",7))p+=7;
+ else if(!strncasecmp(p,"Digit: ",7))p+=7;
+ else if(!strncasecmp(p,"digicat, ",9))p+=9;
+ if(strncasecmp(p,prefix,sizeof prefix-1))return 0;
+ value=p+sizeof prefix-1;
+ while(*value==' '||*value=='\t')value++;
+ n=strlen(value);
+ if(!n||n>=cap)return 0;
+ memcpy(out,value,n+1);*used=n;return 1;
 }
 /* GRU may improve wording but cannot replace evidence with new claims.
  * Accept only a candidate that retains the complete verified View response.
@@ -237,6 +261,12 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
         have_history=1;
     }
     participate=!passive||conversation_invitation(&result);
+    if(participate&&response&&capacity&&
+       literal_repeat(msg->message,response,capacity,used)){
+        trace_stage(host,"process","conversation.repeat","LITERAL_REPEAT",0,
+            (unsigned)*used,__LINE__);
+        return STNLABZ_MODULE_OK;
+    }
     /* Social-specific interpretation and participation are delegated.
      * Missing optional service is not a factual query. */
     {
@@ -533,29 +563,8 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
             (void)code_diagnostic(msg, &visible, response, capacity, used);
         }
     }
-    /* [AI:GPT-6 | 2026-10-21 UTC]
-     * Keep GRU learning automatic and silent; Digit's response is delivered
-     * normally. No IRC diagnostics or delivery confirmations. */
-    if(participate && !passive && response && used && *used>0 &&
-       *used<512 && !strcmp(msg->target,"#stn-labz") &&
-       msg->message[0] && memchr(response,0,capacity) &&
-       strcmp(response,"Message sent -> GRU")){
-        digit_gru_learning_pair_request_t pair={0};
-        digit_gru_learn_result_t receipt={0};
-        size_t receipt_bytes=0;
-        stnlabz_module_result_t learned;
-        snprintf(pair.channel,sizeof pair.channel,"%s",msg->target);
-        snprintf(pair.input,sizeof pair.input,"%s",msg->message);
-        snprintf(pair.response,sizeof pair.response,"%s",response);
-        pair.approved=1;
-        learned=host->invoke_service(DIGIT_GRU_LEARNING_PAIR_SERVICE,
-            &pair,sizeof pair,&receipt,sizeof receipt,&receipt_bytes);
-        trace_stage(host,"process",DIGIT_GRU_LEARNING_PAIR_SERVICE,
-            learned==STNLABZ_MODULE_OK&&receipt_bytes==sizeof receipt&&
-            receipt.accepted==1?"PAIR_ACCEPTED":"PAIR_NOT_ACCEPTED",
-            learned==STNLABZ_MODULE_OK?0:2,0,__LINE__);
-    }
-    /* [End AI:GPT-6] */
+    /* Generated replies cannot self-authorize training.
+     * Reviewed learning remains the responsibility of gru_learning. */
     /* Addressed channel messages may return the View result. Passive
      * channel messages remain observations, not obligatory replies. */
     trace_stage(host,"process","participation",
@@ -806,6 +815,25 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
     used = 8;
     rc = process(&mock, &msg, sizeof msg, response, sizeof response, &used);
     check(q, rc == STNLABZ_MODULE_OK && !used && mock_calls == 1, 0);
+    {
+        digit_interpretation_result_t identity={0};
+        uint32_t field=0;int creator=0;
+        identity.term_count=4;
+        strcpy(identity.terms[0],"what");strcpy(identity.terms[1],"did");
+        strcpy(identity.terms[2],"you");strcpy(identity.terms[3],"today");
+        check(q,!core_identity_field(&identity,&field,&creator),1);
+        strcpy(identity.terms[1],"are");
+        check(q,core_identity_field(&identity,&field,&creator)&&
+            field==DIGIT_IDENTITY_LINEAGE,0);
+    }
+    {
+        size_t repeated=0;char exact[128]={0};
+        check(q,literal_repeat("Digit, repeat the following sentence exactly: The purple cat wants cookies.",
+            exact,sizeof exact,&repeated)&&
+            !strcmp(exact,"The purple cat wants cookies."),0);
+        check(q,!literal_repeat("Tell me what you did today",exact,sizeof exact,&repeated),1);
+        check(q,!literal_repeat("repeat the following sentence exactly:",exact,sizeof exact,&repeated),1);
+    }
     check(q, gru_candidate_safe("Verified fact.", "Verified fact."), 0);
     check(q, gru_candidate_safe("Verified fact.", "In short, Verified fact."), 0);
     check(q, !gru_candidate_safe("Verified fact.", "Different assertion."), 1);
@@ -1107,7 +1135,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 2, .version_patch = 3,
+    .version_major = 1, .version_minor = 2, .version_patch = 4,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
