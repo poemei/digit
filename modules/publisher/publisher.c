@@ -328,7 +328,7 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
   }
  }
  CURL *c=curl_easy_init();page_t *page=calloc(1,sizeof *page);
- char url[512],form[24000]={0},token[128]={0},slug[256]={0},*html=NULL;
+ char url[512],form[65536]={0},token[128]={0},slug[256]={0},*html=NULL;
  long code=0;size_t flen=0;int session=0,verified=0,logout=0;
  if(!c||!page)goto done;
  curl_easy_setopt(c,CURLOPT_COOKIEFILE,"");
@@ -340,12 +340,16 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
  curl_easy_setopt(c,CURLOPT_CONNECTTIMEOUT,8L);
  curl_easy_setopt(c,CURLOPT_NOSIGNAL,1L);
  snprintf(url,sizeof url,"%s/login",site->base);
- if(!http(c,url,page,NULL,&code)||code!=200||!csrf(page->data,token,sizeof token))goto done;
+ if(!http(c,url,page,NULL,&code)||code!=200||!csrf(page->data,token,sizeof token)){
+  copy(answer.error,sizeof answer.error,"Login page or CSRF form unavailable.");goto done;
+ }
  if(!append(form,sizeof form,&flen,"username",c,username)||
     !append(form,sizeof form,&flen,"password",c,password)||
     !append(form,sizeof form,&flen,"csrf_token",c,token))goto done;
  snprintf(url,sizeof url,"%s/auth/login",site->base);
- if(!http(c,url,page,form,&code)||code!=302)goto done;
+ if(!http(c,url,page,form,&code)||code!=302){
+  copy(answer.error,sizeof answer.error,"ChAoS login rejected or did not redirect.");goto done;
+ }
  session=1;erase(form,sizeof form);flen=0;
  const char *admin=!strcmp(p->kind,"announcements")?"/admin/announcements":
   !strcmp(p->kind,"news")?"/admin/news":
@@ -360,7 +364,9 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
   if(!http(c,edit_url,page,NULL,&code)||code!=200||
      !strstr(page->data,"name=\"original_slug\"")||
      !strstr(page->data,"value=\"sai-dsa\"")||
-     !csrf(page->data,token,sizeof token))goto cleanup;
+     !csrf(page->data,token,sizeof token)){
+   copy(answer.error,sizeof answer.error,"Existing sai-dsa edit form/CSRF unavailable.");goto cleanup;
+  }
  }else if(!strcmp(p->kind,"intelligence")){
   char create_url[512];
   snprintf(create_url,sizeof create_url,"%s/admin/intelligence?tab=intelligence&action=add",site->base);
@@ -397,7 +403,9 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
      !append(form,sizeof form,&flen,"description",c,description)||
      !append(form,sizeof form,&flen,"status",c,"published")||
      !append(form,sizeof form,&flen,"content_file",c,"main.md")||
-     !append(form,sizeof form,&flen,"content",c,p->markdown))goto cleanup;
+     !append(form,sizeof form,&flen,"content",c,p->markdown)){
+   copy(answer.error,sizeof answer.error,"Core Page update form encoding failed.");goto cleanup;
+  }
  }else if(!append(form,sizeof form,&flen,"csrf_token",c,token)||
     !append(form,sizeof form,&flen,"title",c,p->title))goto cleanup;
  if(!strcmp(p->kind,"page_update")){
@@ -431,7 +439,11 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
      !append(form,sizeof form,&flen,"body_markdown",c,p->markdown)||
      !append(form,sizeof form,&flen,"status",c,"published"))goto cleanup;
  }
- if(!http(c,url,page,form,&code)||code!=302)goto cleanup;
+ if(!http(c,url,page,form,&code)||code!=302){
+  if(!strcmp(p->kind,"page_update"))
+   copy(answer.error,sizeof answer.error,"Core Page update POST failed or lacked redirect.");
+  goto cleanup;
+ }
  erase(form,sizeof form);flen=0;
  if(!strcmp(p->kind,"page_update")){
   char public_url[512];
@@ -446,7 +458,7 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
      strstr(page->data,expected)!=NULL){
    verified=1;copy(answer.url,sizeof answer.url,public_url);
    copy(answer.publication_id,sizeof answer.publication_id,"sai-dsa");
-  }
+  }else copy(answer.error,sizeof answer.error,"Public sai-dsa page did not contain submitted snapshot.");
  }else if(!strcmp(p->kind,"announcements")){
   if(http(c,url,page,NULL,&code)&&code==200&&strstr(page->data,p->title))verified=1;
   if(verified)snprintf(answer.url,sizeof answer.url,"%s/announcements",site->base);
@@ -494,7 +506,10 @@ cleanup:
   }
  }
 done:
- if(!logout)answer.published=0;
+ if(!logout){
+  answer.published=0;
+  if(!answer.error[0])copy(answer.error,sizeof answer.error,"Logout/session verification failed.");
+ }
  if(!answer.published&&!answer.error[0])
   copy(answer.error,sizeof answer.error,"Submission, public verification, or logout failed.");
  if(res&&cap>=sizeof answer&&used){memcpy(res,&answer,sizeof answer);*used=sizeof answer;}
@@ -594,7 +609,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="publisher",.name="Digit Markdown Publisher",
- .version_major=0,.version_minor=4,.version_patch=7,
+ .version_major=0,.version_minor=4,.version_patch=8,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
