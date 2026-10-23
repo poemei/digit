@@ -51,7 +51,7 @@ static const char *json_string(struct json_object *o,const char *key){
 }
 static int kind_allowed(const char *kind){
  return kind&&(!strcmp(kind,"announcements")||!strcmp(kind,"news")||
-  !strcmp(kind,"page")||!strcmp(kind,"posts")||
+  !strcmp(kind,"page")||!strcmp(kind,"page_update")||!strcmp(kind,"posts")||
   !strcmp(kind,"intelligence"));
 }
 static int editorial_valid(const publish_request_t *p){
@@ -222,6 +222,37 @@ static int posts_slug(const char *title,char *out,size_t cap){
   }
  }
  while(n&&out[n-1]=='-')n--;if(!n)return 0;out[n]=0;return 1;
+}
+/* Decode common HTML entities in Core edit-form metadata. Any unknown
+ * entity fails closed rather than silently rewriting the page metadata. */
+static int html_value(const char *html,const char *name,char *out,size_t cap){
+ char needle[96];snprintf(needle,sizeof needle,"name=\\"%s\\"",name);
+ const char *p=strstr(html,needle),*v,*end;size_t n=0;
+ if(!p)return 0;
+ if(!strcmp(name,"description")){
+  v=strchr(p,'>');if(!v)return 0;v++;
+  end=strstr(v,"</textarea>");
+ }else{
+  v=strstr(p,"value=\\"");if(!v)return 0;v+=7;end=strchr(v,'"');
+ }
+ if(!end)return 0;
+ while(v<end){
+  char c=*v++;
+  if(c=='&'){
+   const char *e=memchr(v,';',(size_t)(end-v));
+   if(!e)return 0;
+   size_t len=(size_t)(e-v);
+   if(len==3&&!memcmp(v,"amp",3))c='&';
+   else if(len==4&&!memcmp(v,"quot",4))c='"';
+   else if(len==4&&!memcmp(v,"#39",3))c='\'';
+   else if(len==2&&!memcmp(v,"lt",2))c='<';
+   else if(len==2&&!memcmp(v,"gt",2))c='>';
+   else return 0;
+   v=e+1;
+  }
+  if(n+1>=cap)return 0;out[n++]=c;
+ }
+ out[n]=0;return 1;
 }
 static int image_id(const char *html){
  const char *select=strstr(html,"name=\"featured_image_id\"");
