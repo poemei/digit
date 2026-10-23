@@ -1,4 +1,4 @@
-# Digit S2 v0.3.8 — Evidence-Based IP Field Semantics and Operational Visibility
+# Digit S2 v0.3.9 — Evidence-Based IP Field Semantics and Operational Visibility
 
 S2 uses the existing ABI 1.5 services and is hot-loadable without restarting Digit. This revision routes evidence-bounded, six-section assessment briefs and Rictus-linked observation updates through the **existing** `digit.slack.intel.deliver` service. Slack itself owns the configured private `intel_channel_id`. Neither Core nor Slack needs modification.
 
@@ -116,3 +116,7 @@ S2 sends intelligence briefs as up to four numbered parts, each carrying no more
 Multipart private Slack delivery now prefers finding/section separator lines when selecting a chunk boundary, rather than treating every paragraph as an equally safe split. Extremely long sections can still require a fallback paragraph/line split within the four-part 3000-byte delivery limit. This does not provide transactional delivery or exactly-once semantics.
 
 The brief now includes a separately labeled **Business / Operational Effects** evidence checklist. It deliberately marks availability disruption, disclosure, successful exploitation, customer effects, incident response costs, and financial loss as **not established** until supporting service/incident/cost records are available. Suspicious HTTP paths, shared IPs and http:BL outcomes are not automatically translated into financial losses. This is an honest baseline and not a live business-impact measurement or integration with uptime/billing records. Qualification and live Slack rendering remain to be verified on the Digit host.
+
+## v0.3.9 — Source-backed operational effect inputs
+
+S2 now inspects explicitly provided integer `details.response_status` fields in up to 5,000 qualifying STN-LABZ API records. It separately reports the number of qualifying records, how many contain valid HTTP responses, how many omit them, 403/429 responses, 5xx responses, and other HTTP responses. These are observed source-field counts when available, not verified service uptime, incident confirmation, or business loss. Missing response codes remain unknown; 5xx does not independently prove an outage, and 403/429 does not prove prevention. The Business / Operational Effects section retains its evidence-limited classifications. No inference is made from URL paths, IP ownership, or reputation, and no changes are made to Sentinel enforcement or API contracts. Compilation and live delivery remain to be verified.
