@@ -395,7 +395,7 @@ static void case_investigation_snapshot(char *dst,size_t cap){
     "Compare request paths and source evidence for this domain.":
     "Establish the top-level IP field's role before correlating actors.";
    n=snprintf(dst+pos,cap-pos,
-    "*%s %d — %.22s: %.55s*\n\n"
+    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*%s %d — %.22s: %.55s*\n\n"
     "Records: %d | Highest severity: %s | Revised records: %d\n\n"
     "Same source-date window (timezone unverified): %.25s — %.25s\n\n"
     "Example IDs: %.48s%s%.48s\n\n"
@@ -561,22 +561,22 @@ static stnlabz_module_result_t poll_service(
    size_t used=strlen(brief);
    if(used+strlen(findings)+160<sizeof brief)
     snprintf(brief+used,sizeof brief-used,
-     "\n\n*INVESTIGATION FINDINGS* (individual versus shared-value groups; source timestamps provisional)\n%s",findings);
+     "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*INVESTIGATION FINDINGS* (individual versus shared-value groups; source timestamps provisional)\n\n%s",findings);
   }
   {char enrich[1400]={0};
    httpbl_enrichment(records,enrich,sizeof enrich);
    size_t used=strlen(brief);
    if(used+strlen(enrich)+170<sizeof brief)
     snprintf(brief+used,sizeof brief-used,
-     "\n\n*HTTP:BL ENRICHMENT* (first three unique details.ip_address IPv4 fields; role unverified)\n%sReputation is not proof of an attack, destination or compromise.",enrich);
+     "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*HTTP:BL ENRICHMENT* (first three unique details.ip_address IPv4 fields; role unverified)\n\n%s\nReputation is not proof of an attack, destination or compromise.",enrich);
   }
   if(case_updates>0){
    size_t used=strlen(brief);
-   snprintf(brief+used,sizeof brief-used,"\n\n*CASE ACTIVITY* (records opened/changed: %d; tracked cases: %d)\n%.3000s",
+   snprintf(brief+used,sizeof brief-used,"\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*CASE ACTIVITY* (records opened/changed: %d; tracked cases: %d)\n\n%.3000s",
      case_updates,case_total,case_summary);
   }else if(case_updates<0){
    size_t used=strlen(brief);
-   snprintf(brief+used,sizeof brief-used,"\n\n*CASE PERSISTENCE WARNING*: local case database failed; do not treat this as a complete investigation history.");
+   snprintf(brief+used,sizeof brief-used,"\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*CASE PERSISTENCE WARNING*: local case database failed; do not treat this as a complete investigation history.");
   }
   pthread_mutex_lock(&intel_mutex);
   /* Never overwrite an undelivered private brief. */
@@ -703,7 +703,7 @@ static void intelligence_brief(char *dst,size_t cap,const char *short_report,
   "Initial bulk ingestion is historical import, not newly occurring attacks.\n\n"
   "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
   "*3. THREAT INTELLIGENCE OVERVIEW*\n\n"
-  "Investigation threshold: API severity MEDIUM, HIGH or CRITICAL (relevance is context, not a gate).\n"
+  "Investigation threshold: API severity MEDIUM, HIGH or CRITICAL (relevance is context, not a gate).\n\n"
   "Qualifying source findings in this feed snapshot: %s.\n\n"
   "Rictus log records in current file: %ld.\n\n"
   "Higher severity requires explicit source evidence; historical "
@@ -891,7 +891,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=3,.version_patch=0,
+ .version_major=0,.version_minor=3,.version_patch=1,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
