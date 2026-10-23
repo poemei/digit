@@ -1,4 +1,4 @@
-# Digit S2 v0.2.4 — Evidence-Backed Case Reviews
+# Digit S2 v0.2.5 — Recent and Historical Case Correlation
 
 S2 uses the existing ABI 1.5 services and is hot-loadable without restarting Digit. This revision routes evidence-bounded, six-section assessment briefs and Rictus-linked observation updates through the **existing** `digit.slack.intel.deliver` service. Slack itself owns the configured private `intel_channel_id`. Neither Core nor Slack needs modification.
 
@@ -46,3 +46,7 @@ The STN-LABZ `/threats` API `severity` field opens or maintains investigation fo
 ## v0.2.4 — Investigation case reviews in private Slack
 
 S2 now appends a bounded review of up to five highest-severity stored investigations to generated private Slack intelligence briefs. For each review, the source record ID, API severity, relevance, source timestamp, primary/detail IPs, domain, requested URL, revisions and last recorded transition are read from the SQLite case register and its evidence history. Assessment and next-action language is explicitly qualified; this is a prioritized evidence review, **not** independent incident confirmation or proof the listed historical event just occurred. Line spacing in the core brief was improved. No automatic website publication, Core change, or IRC detail dump is introduced. Cases are displayed when S2 has generated a brief; this is not a new periodic reminder schedule. Live qualification and delivery remain to be verified.
+
+## v0.2.5 — Bounded correlation leads and chronology
+
+The private Slack review now selects up to three highest-severity source records in each of two sections: source timestamps comparable to the last 24 UTC hours and older source records. The date comparison is **provisional**: the API's source timestamp timezone is unverified; a date in the recent section is not confirmation of a recent attack. Reviews display all available case fields, the case change count and last event, and counts of other stored records sharing a primary IP or domain. Shared indicators are investigative leads only and do not establish the same actor, incident, or compromise. Missing evidence is labeled `not supplied`; specific next actions depend on whether an IP, domain, or neither can be compared. Source records are not automatically publicly published. The generic IRC summary and Core are unchanged.
