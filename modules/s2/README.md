@@ -1,4 +1,4 @@
-# Digit S2 v0.2.6 — Qualified Indicator Roles and Readable Case Reviews
+# Digit S2 v0.2.7 — Compact Investigation Leads
 
 S2 uses the existing ABI 1.5 services and is hot-loadable without restarting Digit. This revision routes evidence-bounded, six-section assessment briefs and Rictus-linked observation updates through the **existing** `digit.slack.intel.deliver` service. Slack itself owns the configured private `intel_channel_id`. Neither Core nor Slack needs modification.
 
@@ -54,3 +54,7 @@ The private Slack review now selects up to three highest-severity source records
 ## v0.2.6 — Indicator roles remain unknown until verified
 
 The case review distinguishes the API top-level `ip` from `details.ip_address`, explicitly preserving their source-field identity. It calculates separate case-register overlap counts for each field and for domains; none of those counts verifies what an address represents, a common actor, or compromise. When repeated details IPs exist, it calls for establishing that field's role; when the same top-level IP appears broadly, it asks for source semantics (server, proxy or client) before attribution. A shared domain similarly remains an investigative lead, not a confirmed incident. Slack formatting separates individual case evidence and assessments into legible paragraphs. No Core or IRC changes, no public publication. Live compilation and investigative validation are still required.
+
+## v0.2.7 — Consolidated investigative leads
+
+The private Slack case review no longer expands six nearly identical full case cards. It groups up to three leads in each provisional recent/historical source-time window, using `details.ip_address` if supplied, otherwise `domain`, otherwise the API's top-level `ip` (role unknown). Each lead lists the number of matching records, highest reported severity, number of revised case records, first/last source timestamps, example source IDs, and a field-specific next investigative action. Shared field values are not proof of a shared attacker, incident or compromise. Source timezone remains unverified; historical case baseline means no subsequently recorded transition, not necessarily an old attack. This change does not create automatic website publication, new log ingest, or independent verification of source field semantics. Core, IRC and Slack modules remain unchanged. Qualification and production behavior must be verified on Digit's host.
