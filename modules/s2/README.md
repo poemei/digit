@@ -1,4 +1,4 @@
-# Digit S2 v0.4.3 — Evidence-Based IP Field Semantics and Operational Visibility
+# Digit S2 v0.4.4 — Evidence-Based IP Field Semantics and Operational Visibility
 
 S2 uses the existing ABI 1.5 services and is hot-loadable without restarting Digit. This revision routes evidence-bounded, six-section assessment briefs and Rictus-linked observation updates through the **existing** `digit.slack.intel.deliver` service. Slack itself owns the configured private `intel_channel_id`. Neither Core nor Slack needs modification.
 
@@ -140,3 +140,7 @@ The existing Core Page publication template explicitly marks the current S2 secu
 ## v0.4.3 — IRC notice removal
 
 S2 no longer posts routine polling summaries or Slack handoff notices to IRC. Its source investigations, Slack brief deliveries and SAI-DSA review path remain enabled. Observation cursor advances only after successful Slack delivery. Other IRC-producing modules are unchanged.
+
+## v0.4.4 — Complete SAI-DSA report content
+
+The existing Core Page `/sai-dsa` receives the full generated S2 investigation brief in the `content` field, preceded by an UNCLASSIFIED designation and the publication snapshot marker. The preceding hard-coded short summary has been removed from the content submission. The report's Executive Summary is parsed by Publisher into plain text for the separate Core Page `description` metadata. Publication continues to use Publisher and its authenticated existing-page update contract; no ChAoS MVC changes. The source-event and retry gates remain in effect; a Slack brief does not itself prove a successful site update.
