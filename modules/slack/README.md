@@ -1,4 +1,4 @@
-# Digit Slack v0.1.11 — ABI 1.5 transport candidate
+# Digit Slack v0.2.0 — ABI 1.5 transport candidate
 
 This is a **source candidate**, not a certified or connected Slack deployment.
 It is separate from Digit Core and uses the existing ABI 1.5 named service registry.
@@ -49,3 +49,7 @@ In Slack app configuration, subscribe to bot events `message.channels` and `mess
 The offline qualification checks helper behavior, mention normalization, direct/passive classification (including missing `channel_type`), DSD command classification, descriptor compatibility and negative cases. These tests do not constitute a live DSD or Slack integration test. It **does not** prove live Slack delivery, correct all-frame WebSocket handling, event replay deduplication, outbound delivery reliability, authorization for restricted content, S2 full intelligence generation, or shutdown/restart recovery. Manual end-to-end acceptance remains pending.
 
 Current revision is intended for code review; do not equate publishing it with operator activation or security certification.
+
+## v0.2.0 — Loader audit visibility
+
+On activation the Slack module reads a bounded trailing 8 KiB of `/opt/digit/logs/modules.log`, skipping a partial first line, so the module's own hot-load event is not lost merely because the reader starts after that event. Subsequent events are read forward. This may replay a few recent events across Slack hot-loads; the module does not claim exact-once delivery. The source requires an explicit private `module_channel_id` representing the `#digit-ops` channel; no channel is discovered from its display name. The bot also requires posting permission in that channel. Changes do not touch Digit Core, IRC, S2, or SQLite ingestion.
