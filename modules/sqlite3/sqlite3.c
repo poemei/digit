@@ -586,6 +586,87 @@ static stnlabz_module_result_t gru_feed(const void *request,size_t bytes,
  *used=sizeof out;
  return STNLABZ_MODULE_OK;
 }
+/* Read-only full-text fragment service; the original feed ABI is unchanged.
+ * Each call returns an ordered UTF-8-safe chunk of the next source row. */
+static stnlabz_module_result_t gru_feed_chunk(const void *request,size_t bytes,
+ void *response,size_t capacity,size_t *used,void *context){
+ const digit_gru_feed_chunk_query_t *q=request;
+ digit_gru_feed_chunk_result_t out={0};
+ sqlite3_stmt *stmt=NULL;
+ const unsigned char *data=NULL;
+ const char *sql=NULL;
+ int code=0,n=0;uint32_t end=0;
+ uint64_t fingerprint=14695981039346656037ULL;
+ (void)context;
+ if(used)*used=0;
+ if(!database)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(!q||bytes!=sizeof *q||q->after_id<0||!response||
+    capacity<sizeof out||!used)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ switch(q->source_type){
+ case DIGIT_GRU_FEED_CORPUS:
+  sql="SELECT id,category,verification_status,"
+      "coalesce(source_record_id,source,''),text "
+      "FROM corpus WHERE id>?1 ORDER BY id LIMIT 1";break;
+ case DIGIT_GRU_FEED_OBSERVATIONS:
+  sql="SELECT id,'observation','unverified',"
+      "coalesce(event_id,source_record_id,''),text "
+      "FROM observations WHERE id>?1 ORDER BY id LIMIT 1";break;
+ case DIGIT_GRU_FEED_CONTEXT:
+  sql="SELECT id,coalesce(context_type,'context'),'unverified',"
+      "coalesce(source_id,''),value "
+      "FROM context WHERE id>?1 ORDER BY id LIMIT 1";break;
+ default:return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ }
+ if(sqlite3_prepare_v2(database,sql,-1,&stmt,NULL)!=SQLITE_OK)
+  return STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(sqlite3_bind_int64(stmt,1,q->after_id)!=SQLITE_OK){
+  sqlite3_finalize(stmt);return STNLABZ_MODULE_ERR_INVALID_STATE;
+ }
+ code=sqlite3_step(stmt);
+ if(code==SQLITE_DONE){
+  sqlite3_finalize(stmt);
+  if(q->offset)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+  memcpy(response,&out,sizeof out);*used=sizeof out;
+  return STNLABZ_MODULE_OK;
+ }
+ if(code!=SQLITE_ROW){
+  sqlite3_finalize(stmt);return STNLABZ_MODULE_ERR_INVALID_STATE;
+ }
+ out.id=sqlite3_column_int64(stmt,0);out.found=1;
+ copy_column(stmt,1,out.category,sizeof out.category);
+ copy_column(stmt,2,out.verification_status,sizeof out.verification_status);
+ copy_column(stmt,3,out.source_id,sizeof out.source_id);
+ data=sqlite3_column_text(stmt,4);
+ n=sqlite3_column_bytes(stmt,4);
+ if(n<0||(n&&!data)||out.id<=q->after_id||
+    q->offset>(uint32_t)n||(n&&q->offset==(uint32_t)n)){
+  sqlite3_finalize(stmt);return STNLABZ_MODULE_ERR_INVALID_STATE;
+ }
+ out.total_bytes=(uint32_t)n;
+ for(int i=0;i<n;i++){
+  fingerprint^=(uint64_t)data[i];
+  fingerprint*=1099511628211ULL;
+ }
+ out.fingerprint=fingerprint;out.offset=q->offset;
+ end=(uint32_t)n;
+ if(end-q->offset>DIGIT_GRU_FEED_CHUNK_BYTES)
+  end=q->offset+DIGIT_GRU_FEED_CHUNK_BYTES;
+ if(end<(uint32_t)n)
+  while(end>q->offset&&(data[end]&0xc0)==0x80)end--;
+ if((uint32_t)n>q->offset&&end==q->offset){
+  sqlite3_finalize(stmt);return STNLABZ_MODULE_ERR_INVALID_STATE;
+ }
+ out.length=end-q->offset;
+ if(out.length)memcpy(out.text,data+q->offset,out.length);
+ out.text[out.length]=0;
+ if(out.length&&memchr(out.text,0,out.length)){
+  sqlite3_finalize(stmt);return STNLABZ_MODULE_ERR_INVALID_STATE;
+ }
+ out.next_offset=end;out.more=end<(uint32_t)n;
+ if(sqlite3_finalize(stmt)!=SQLITE_OK)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ memcpy(response,&out,sizeof out);*used=sizeof out;
+ return STNLABZ_MODULE_OK;
+}
 /* [End AI:GPT-6] */
 static const char op_get[]="get",op_search[]="search";
 /* [AI:GPT-6 | 2026-10-18] Startup diagnostics go to the service journal.
@@ -683,8 +764,17 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api) {
         goto fail_registered;
     }
     /* [End AI:GPT-6] */
+    stage="register_gru_feed_chunk";
+    if(!host->register_service(DIGIT_SQLITE3_GRU_FEED_CHUNK_SERVICE,
+                                gru_feed_chunk,NULL)){
+        host->unregister_service(DIGIT_SQLITE3_GRU_FEED_SERVICE,NULL);
+        host->unregister_service(DIGIT_CONTEXT_RECENT_SERVICE,NULL);
+        host->unregister_service(DIGIT_CONTEXT_STORE_SERVICE,NULL);
+        goto fail_registered;
+    }
     if(!digit_ingest_start(host)){
         startup_log("ingest",SQLITE_ERROR,"watcher_start_failed");
+        host->unregister_service(DIGIT_SQLITE3_GRU_FEED_CHUNK_SERVICE,NULL);
         host->unregister_service(DIGIT_SQLITE3_GRU_FEED_SERVICE,NULL);
         host->unregister_service(DIGIT_CONTEXT_RECENT_SERVICE,NULL);
         host->unregister_service(DIGIT_CONTEXT_STORE_SERVICE,NULL);
@@ -708,6 +798,7 @@ fail:
 static stnlabz_module_result_t stop(void) {
     if(!database||!host)return STNLABZ_MODULE_ERR_INVALID_STATE;
     digit_ingest_stop();
+    host->unregister_service(DIGIT_SQLITE3_GRU_FEED_CHUNK_SERVICE,NULL);
     host->unregister_service(DIGIT_SQLITE3_GRU_FEED_SERVICE,NULL);
     host->unregister_service(DIGIT_CONTEXT_RECENT_SERVICE,NULL);
     host->unregister_service(DIGIT_CONTEXT_STORE_SERVICE,NULL);
@@ -836,6 +927,50 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
         NULL,NULL,NULL)==SQLITE_OK,0);
       database=db;observation_writer=db;
       {
+       /* Real in-memory SQL test: reassemble a 9.3KB lesson verbatim. */
+       char original[9301],assembled[9301]={0};
+       sqlite3_stmt *insert=NULL;
+       digit_gru_feed_chunk_query_t query={0};
+       digit_gru_feed_chunk_result_t chunk={0};
+       size_t count=0,total=0;
+       unsigned parts=0;int valid=1;
+       for(size_t i=0;i<9300;i++)original[i]=(char)('a'+i%26);
+       original[9300]=0;
+       test_check(result,sqlite3_prepare_v2(db,
+         "INSERT INTO corpus(category,text,verification_status) "
+         "VALUES('lesson',?1,'unverified')",-1,&insert,NULL)==SQLITE_OK,0);
+       if(insert){
+        sqlite3_bind_text(insert,1,original,-1,SQLITE_TRANSIENT);
+        test_check(result,sqlite3_step(insert)==SQLITE_DONE,0);
+        sqlite3_finalize(insert);
+       }
+       query.source_type=DIGIT_GRU_FEED_CORPUS;query.after_id=2;
+       do{
+        count=0;
+        if(gru_feed_chunk(&query,sizeof query,&chunk,sizeof chunk,
+           &count,NULL)!=STNLABZ_MODULE_OK||count!=sizeof chunk||
+           !chunk.found||chunk.id!=3||chunk.offset!=total||
+           chunk.length>DIGIT_GRU_FEED_CHUNK_BYTES||
+           chunk.next_offset!=total+chunk.length||
+           total+chunk.length>9300){valid=0;break;}
+        memcpy(assembled+total,chunk.text,chunk.length);
+        total+=chunk.length;
+        query.offset=chunk.next_offset;
+        parts++;
+       }while(chunk.more&&parts<20);
+       test_check(result,valid&&!chunk.more&&parts>1&&total==9300&&
+          !memcmp(original,assembled,9300),0);
+       query.offset=UINT32_MAX;
+       test_check(result,gru_feed_chunk(&query,sizeof query,&chunk,
+          sizeof chunk,&count,NULL)==STNLABZ_MODULE_ERR_INVALID_STATE,1);
+       query.offset=0;query.source_type=0;
+       test_check(result,gru_feed_chunk(&query,sizeof query,&chunk,
+          sizeof chunk,&count,NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT,1);
+       query.source_type=DIGIT_GRU_FEED_CORPUS;query.after_id=3;
+       test_check(result,gru_feed_chunk(&query,sizeof query,&chunk,
+          sizeof chunk,&count,NULL)==STNLABZ_MODULE_OK&&!chunk.found,0);
+      }
+      {
         digit_observation_record_t rec={0};
         sqlite3_stmt *verify=NULL;
         int rc;
@@ -942,7 +1077,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *re
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="sqlite3",.name="SQLite3 persistence",
-    .version_major=1,.version_minor=5,.version_patch=2,
+    .version_major=1,.version_minor=5,.version_patch=3,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
