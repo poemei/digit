@@ -417,9 +417,15 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
  erase(form,sizeof form);flen=0;
  if(!strcmp(p->kind,"page_update")){
   char public_url[512];
+  const char *marker=strstr(p->markdown,"S2-PUBLIC-SNAPSHOT-");
+  char expected[96]={0};
+  if(!marker)goto cleanup;
+  size_t marker_length=strcspn(marker," \r\n\t");
+  if(marker_length<22||marker_length>=sizeof expected)goto cleanup;
+  memcpy(expected,marker,marker_length);
   snprintf(public_url,sizeof public_url,"%s/sai-dsa",site->base);
   if(http(c,public_url,page,NULL,&code)&&code==200&&
-     strstr(page->data,"S2-PUBLIC-SNAPSHOT-")!=NULL){
+     strstr(page->data,expected)!=NULL){
    verified=1;copy(answer.url,sizeof answer.url,public_url);
    copy(answer.publication_id,sizeof answer.publication_id,"sai-dsa");
   }
@@ -552,7 +558,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="publisher",.name="Digit Markdown Publisher",
- .version_major=0,.version_minor=4,.version_patch=3,
+ .version_major=0,.version_minor=4,.version_patch=4,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
