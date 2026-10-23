@@ -253,6 +253,13 @@ static int html_value(const char *html,const char *name,char *out,size_t cap){
  }
  out[n]=0;return 1;
 }
+static int selected_option(const char *html,const char *value){
+ char needle[96];snprintf(needle,sizeof needle,"value=\"%s\"",value);
+ const char *p=strstr(html,needle);if(!p)return 0;
+ const char *end=strchr(p,'>');if(!end)return 0;
+ const char *selected=strstr(p,"selected");
+ return selected&&selected<end;
+}
 static int image_id(const char *html){
  const char *select=strstr(html,"name=\"featured_image_id\"");
  if(!select)return -1;
@@ -368,9 +375,9 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
   if(!html_value(page->data,"title",original_title,sizeof original_title)||
      !html_value(page->data,"description",description,sizeof description)||
      !strstr(page->data,"name=\"content_file\"")||
-     !strstr(page->data,"value=\"published\""))goto cleanup;
+     !selected_option(page->data,"published"))goto cleanup;
   /* Core edit page must already be published Markdown. */
-  if(!strstr(page->data,"value=\"main.md\""))goto cleanup;
+  if(!selected_option(page->data,"main.md"))goto cleanup;
   if(!append(form,sizeof form,&flen,"csrf_token",c,token)||
      !append(form,sizeof form,&flen,"action",c,"update")||
      !append(form,sizeof form,&flen,"original_slug",c,"sai-dsa")||
