@@ -247,91 +247,93 @@ static int ingest_cases(json_object *records,char *summary,size_t cap,int *total
  * source timestamp can be parsed as UTC; ambiguous times are historical. */
 /* Compact lead groups from stored API fields. A common field value is not
  * proof of a common actor. Source timestamps have unverified timezone. */
+/* Case reporting is descriptive, not attribution. Each record belongs to
+ * exactly one display group; repeated field values are not verified actors. */
 static void case_investigation_snapshot(char *dst,size_t cap){
  sqlite3 *db=NULL;sqlite3_stmt *st=NULL;
  char cutoff[32]={0};struct tm utc={0};time_t now=time(NULL);
  size_t pos=0;
  if(!dst||!cap)return;
  dst[0]=0;
- if(now==(time_t)-1||!gmtime_r(&now,&utc)||
-    !gmtime_r(&(time_t){now-86400},&utc)||
+ if(now==(time_t)-1||!gmtime_r(&(time_t){now-86400},&utc)||
     !strftime(cutoff,sizeof cutoff,"%Y-%m-%d %H:%M:%S",&utc)){
-  snprintf(dst,cap,"Source-time grouping unavailable.\n");return;
+  snprintf(dst,cap,"Source-time selection unavailable.\n");return;
  }
  if(!case_db_open(&db)){
-  snprintf(dst,cap,"Case register unavailable; no investigative grouping claimed.\n");
-  return;
+  snprintf(dst,cap,"Case evidence unavailable (database read failed).\n");return;
  }
  const char *sql=
-  "SELECT "
-  "CASE WHEN detail_ip<>'' THEN 'details.ip_address' "
-  "WHEN domain<>'' THEN 'domain' ELSE 'top-level ip (role unverified)' END AS field,"
-  "CASE WHEN detail_ip<>'' THEN detail_ip "
-  "WHEN domain<>'' THEN domain ELSE primary_ip END AS indicator,"
-  "COUNT(*) AS records,"
+  "SELECT CASE WHEN detail_ip<>'' THEN 'details.ip_address' "
+  "WHEN domain<>'' THEN 'domain' ELSE 'top-level ip' END AS field,"
+  "CASE WHEN detail_ip<>'' THEN detail_ip WHEN domain<>'' THEN domain "
+  "ELSE primary_ip END AS indicator,COUNT(*) AS records,"
   "MAX(CASE severity WHEN 'CRITICAL' THEN 4 WHEN 'HIGH' THEN 3 "
   "WHEN 'MEDIUM' THEN 2 ELSE 0 END) AS priority,"
-  "MIN(source_time),MAX(source_time),"
-  "MIN(source_id),MAX(source_id),"
-  "SUM(CASE WHEN revisions>1 THEN 1 ELSE 0 END) "
-  "FROM s2_cases WHERE source_time<>'' "
-  "AND ((?1=1 AND source_time>=?2) OR (?1=0 AND source_time<?2)) "
-  "GROUP BY field,indicator "
-  "ORDER BY priority DESC,records DESC,MAX(source_time) DESC LIMIT 3";
+  "MIN(source_time),MAX(source_time),MIN(source_id),MAX(source_id),"
+  "SUM(CASE WHEN revisions>1 THEN 1 ELSE 0 END),"
+  "MAX(CASE WHEN domain<>'' THEN domain ELSE '' END),"
+  "MAX(CASE WHEN request_url<>'' THEN request_url ELSE '' END) "
+  "FROM s2_cases WHERE source_time<>'' AND "
+  "((?1=1 AND source_time>=?2) OR (?1=0 AND source_time<?2)) "
+  "GROUP BY field,indicator ORDER BY "
+  "CASE WHEN COUNT(*)>=2 THEN 0 ELSE 1 END,"
+  "priority DESC,records DESC,MAX(source_time) DESC LIMIT 4";
  for(int recent=1;recent>=0;recent--){
-  int n=snprintf(dst+pos,cap-pos,"%s\n",
-    recent?"*RECENT SOURCE-TIME LEADS (provisional 24h)*":
-           "*HISTORICAL SOURCE-TIME LEADS*");
-  if(n<0||(size_t)n>=cap-pos)break;
+  int n=snprintf(dst+pos,cap-pos,"\n*%s*\n\n",
+    recent?"RECENT FINDINGS (source-time within provisional 24h)":
+           "HISTORICAL FINDINGS (source-time older than provisional 24h)");
+  if(n<=0||(size_t)n>=cap-pos)break;
   pos+=(size_t)n;
   if(sqlite3_prepare_v2(db,sql,-1,&st,NULL)!=SQLITE_OK){
-   n=snprintf(dst+pos,cap-pos,"Case grouping query unavailable.\n");
+   n=snprintf(dst+pos,cap-pos,"Case query unavailable.\n");
    if(n>0&&(size_t)n<cap-pos)pos+=(size_t)n;
    continue;
   }
   sqlite3_bind_int(st,1,recent);
   sqlite3_bind_text(st,2,cutoff,-1,SQLITE_TRANSIENT);
-  int rows=0,rc;
+  int rc,rows=0;
   while((rc=sqlite3_step(st))==SQLITE_ROW){
-   const char *field=(const char*)sqlite3_column_text(st,0);
-   const char *indicator=(const char*)sqlite3_column_text(st,1);
-   const char *first=(const char*)sqlite3_column_text(st,4);
-   const char *last=(const char*)sqlite3_column_text(st,5);
-   const char *sample=(const char*)sqlite3_column_text(st,6);
-   const char *other=(const char*)sqlite3_column_text(st,7);
-   int count=sqlite3_column_int(st,2),priority=sqlite3_column_int(st,3);
-   int changed=sqlite3_column_int(st,8);
-   const char *label=priority==4?"CRITICAL":priority==3?"HIGH":priority==2?"MEDIUM":"UNRATED";
-   const char *next=field&&strcmp(field,"details.ip_address")==0?
-    "Verify this details.ip_address role and compare independent log evidence.":
-    field&&strcmp(field,"domain")==0?
-    "Compare domain and request paths against source logs; avoid actor attribution.":
-    "Determine what API top-level ip represents before attributing activity.";
+   const char *v[11];
+   for(int k=0;k<11;k++){
+    v[k]=(const char*)sqlite3_column_text(st,k);
+    if(!v[k]||!v[k][0])v[k]="not supplied";
+   }
+   int count=sqlite3_column_int(st,2),rank=sqlite3_column_int(st,3);
+   int changes=sqlite3_column_int(st,8);
+   const char *sev=rank==4?"CRITICAL":rank==3?"HIGH":rank==2?"MEDIUM":"UNKNOWN";
+   const char *type=count>=2?"SHARED-VALUE GROUP (unverified)":"INDIVIDUAL FINDING";
+   const char *action=!strcmp(v[0],"details.ip_address")?
+    "Confirm details.ip_address role, then inspect source-specific logs.":
+    !strcmp(v[0],"domain")?
+    "Compare request paths and source evidence for this domain.":
+    "Establish the top-level IP field's role before correlating actors.";
    n=snprintf(dst+pos,cap-pos,
-    "\n*Lead %d | %.26s: %.75s*\n"
-    "Records: %d | Highest API severity: %s | Revised records: %d\n"
-    "Source-time range (timezone unverified): %.32s to %.32s\n"
-    "Example source IDs: %.75s%s%.75s\n"
-    "Assessment: shared field value only; actor and compromise unconfirmed.\n"
-    "Next: %s\n",
-    ++rows,field?field:"unknown",indicator&&*indicator?indicator:"not supplied",
-    count,label,changed,first?first:"unknown",last?last:"unknown",
-    sample?sample:"unknown",other&&sample&&strcmp(other,sample)?", ":"",
-    other&&sample&&strcmp(other,sample)?other:"",
-    next);
-   if(n<0||(size_t)n>=cap-pos)break;
+    "*%s %d — %.22s: %.55s*\n\n"
+    "Records: %d | Highest severity: %s | Revised records: %d\n\n"
+    "Source times (timezone unverified): %.25s — %.25s\n\n"
+    "Example IDs: %.48s%s%.48s\n\n"
+    "Domain example: %.65s | Request example: %.80s\n\n"
+    "Finding: %s\n\n"
+    "Next: %s\n\n",
+    type,++rows,v[0],v[1],count,sev,changes,
+    v[4],v[5],v[6],strcmp(v[6],v[7])?", ":"",
+    strcmp(v[6],v[7])?v[7]:"",
+    v[9],v[10],
+    count>=2?"Records share this source field value; field role, actor and compromise remain unverified.":
+             "One qualifying API record; no same-value group established.",
+    action);
+   if(n<=0||(size_t)n>=cap-pos)break;
    pos+=(size_t)n;
   }
   if(!rows){
-   n=snprintf(dst+pos,cap-pos,"No records selected.\n");
+   n=snprintf(dst+pos,cap-pos,"No source records selected.\n\n");
    if(n>0&&(size_t)n<cap-pos)pos+=(size_t)n;
   }
-  if(rc!=SQLITE_DONE&&rc!=SQLITE_ROW){
-   n=snprintf(dst+pos,cap-pos,"Source grouping incomplete.\n");
+  if(rc!=SQLITE_DONE&&rc!=SQLITE_ROW&&pos+50<cap){
+   n=snprintf(dst+pos,cap-pos,"Evidence query incomplete.\n");
    if(n>0&&(size_t)n<cap-pos)pos+=(size_t)n;
   }
   sqlite3_finalize(st);st=NULL;
-  if(pos+2<cap){dst[pos++]='\n';dst[pos]=0;}
  }
  sqlite3_close(db);
 }
@@ -461,7 +463,7 @@ static stnlabz_module_result_t poll_service(
    size_t used=strlen(brief);
    if(used+strlen(findings)+160<sizeof brief)
     snprintf(brief+used,sizeof brief-used,
-     "\n\n*INVESTIGATION LEADS* (grouped stored API field values; timestamps provisional)\n%s",findings);
+     "\n\n*INVESTIGATION FINDINGS* (individual versus shared-value groups; source timestamps provisional)\n%s",findings);
   }
   if(case_updates>0){
    size_t used=strlen(brief);
@@ -784,7 +786,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=2,.version_patch=7,
+ .version_major=0,.version_minor=2,.version_patch=8,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
