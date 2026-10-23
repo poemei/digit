@@ -130,8 +130,11 @@ static int httpbl_key(char key[13]){
  memcpy(key,buf,13);
  return 1;
 }
-static int httpbl_response(const char *ip,int *days,int *score,int *type){
+/* Resolver outcome is not a raw DNS packet or authenticated NXDOMAIN.
+ * Record EAI_NONAME explicitly, never silently equate it to NXDOMAIN. */
+static int httpbl_response(const char *ip,int *days,int *score,int *type,int *resolver_rc){
  struct in_addr addr;unsigned char *octets=(unsigned char*)&addr.s_addr;
+ *resolver_rc=0;
  if(inet_pton(AF_INET,ip,&addr)!=1)return -2;
  char key[13]={0};
  if(!httpbl_key(key))return -3;
@@ -143,19 +146,55 @@ static int httpbl_response(const char *ip,int *days,int *score,int *type){
  hints.ai_family=AF_INET;hints.ai_socktype=SOCK_STREAM;
  int rc=getaddrinfo(host_name,NULL,&hints,&res);
  memset(host_name,0,sizeof host_name);
- if(rc==EAI_NONAME)return 0; /* no listing; not a clean verdict */
- if(rc)return -1; /* DNS failure, do not claim NXDOMAIN */
+ *resolver_rc=rc;
+ if(rc==EAI_NONAME)return 0;
+ if(rc)return -1;
  int result=-1;
  for(struct addrinfo *a=res;a;a=a->ai_next){
   if(!a->ai_addr||a->ai_addrlen<sizeof(struct sockaddr_in))continue;
   const unsigned char *v=(const unsigned char*)&
    ((struct sockaddr_in*)a->ai_addr)->sin_addr.s_addr;
-  if(v[0]==127 && v[3]<=7){
+  if(v[0]==127&&v[3]<=7){
    *days=v[1];*score=v[2];*type=v[3];result=1;break;
   }
  }
  freeaddrinfo(res);
  return result;
+}
+static int httpbl_audit(const char *ip,int status,int resolver_rc,
+ int days,int score,int type){
+ sqlite3 *db=NULL;sqlite3_stmt *st=NULL;
+ if(sqlite3_open_v2(CASE_DB,&db,SQLITE_OPEN_READWRITE,NULL)!=SQLITE_OK){
+  if(db)sqlite3_close(db);return 0;
+ }
+ sqlite3_busy_timeout(db,1000);
+ const char *ddl=
+  "CREATE TABLE IF NOT EXISTS s2_httpbl_lookups ("
+  "lookup_id INTEGER PRIMARY KEY AUTOINCREMENT,"
+  "lookup_time INTEGER NOT NULL, indicator TEXT NOT NULL,"
+  "source_field TEXT NOT NULL, status INTEGER NOT NULL,"
+  "resolver_code INTEGER NOT NULL, days INTEGER, score INTEGER,"
+  "type_bits INTEGER, resolver_api TEXT NOT NULL);";
+ int ok=sqlite3_exec(db,ddl,NULL,NULL,NULL)==SQLITE_OK;
+ if(ok)ok=sqlite3_prepare_v2(db,
+  "INSERT INTO s2_httpbl_lookups "
+  "(lookup_time,indicator,source_field,status,resolver_code,days,score,type_bits,resolver_api) "
+  "VALUES(strftime('%s','now'),?1,'details.ip_address',?2,?3,?4,?5,?6,'getaddrinfo')",
+  -1,&st,NULL)==SQLITE_OK;
+ if(ok){
+  sqlite3_bind_text(st,1,ip,-1,SQLITE_TRANSIENT);
+  sqlite3_bind_int(st,2,status);
+  sqlite3_bind_int(st,3,resolver_rc);
+  if(status==1){
+   sqlite3_bind_int(st,4,days);
+   sqlite3_bind_int(st,5,score);
+   sqlite3_bind_int(st,6,type);
+  }else for(int i=4;i<=6;i++)sqlite3_bind_null(st,i);
+  ok=sqlite3_step(st)==SQLITE_DONE;
+ }
+ if(st)sqlite3_finalize(st);
+ sqlite3_close(db);
+ return ok;
 }
 static void httpbl_enrichment(json_object *records,char *out,size_t cap){
  char seen[HTTPBL_LIMIT][INET_ADDRSTRLEN]={{0}};
@@ -176,13 +215,14 @@ static void httpbl_enrichment(json_object *records,char *out,size_t cap){
   for(int j=0;j<nseen;j++)if(!strcmp(seen[j],ip))repeated=1;
   if(repeated)continue;
   snprintf(seen[nseen++],sizeof seen[0],"%s",ip);
-  int days=0,score=0,type=0;
-  int status=httpbl_response(ip,&days,&score,&type);
-  const char *state=status==1?"LISTED":status==0?"NOT LISTED":
+  int days=0,score=0,type=0,resolver_rc=0;
+  int status=httpbl_response(ip,&days,&score,&type,&resolver_rc);
+  int audited=httpbl_audit(ip,status,resolver_rc,days,score,type);
+  const char *state=status==1?"LISTED":status==0?"NO NAME (resolver EAI_NONAME)":
     status==-3?"KEY UNAVAILABLE":"LOOKUP INCOMPLETE";
   int n=snprintf(out+pos,cap-pos,
-   "%s — http:BL %s%s",ip,state,
-   status==1?" (Project Honey Pot network evidence)":"");
+   "%s — http:BL %s; resolver=%d; audit=%s",
+   ip,state,resolver_rc,audited?"stored":"FAILED");
   if(n<0||(size_t)n>=cap-pos)break;pos+=(size_t)n;
   if(status==1){
    n=snprintf(out+pos,cap-pos,
@@ -891,7 +931,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=3,.version_patch=1,
+ .version_major=0,.version_minor=3,.version_patch=2,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
