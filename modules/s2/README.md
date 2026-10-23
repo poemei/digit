@@ -1,4 +1,4 @@
-# Digit S2 v0.2.7 — Compact Investigation Leads
+# Digit S2 v0.2.8 — Individual Findings and Shared-Value Groups
 
 S2 uses the existing ABI 1.5 services and is hot-loadable without restarting Digit. This revision routes evidence-bounded, six-section assessment briefs and Rictus-linked observation updates through the **existing** `digit.slack.intel.deliver` service. Slack itself owns the configured private `intel_channel_id`. Neither Core nor Slack needs modification.
 
@@ -58,3 +58,7 @@ The case review distinguishes the API top-level `ip` from `details.ip_address`, 
 ## v0.2.7 — Consolidated investigative leads
 
 The private Slack case review no longer expands six nearly identical full case cards. It groups up to three leads in each provisional recent/historical source-time window, using `details.ip_address` if supplied, otherwise `domain`, otherwise the API's top-level `ip` (role unknown). Each lead lists the number of matching records, highest reported severity, number of revised case records, first/last source timestamps, example source IDs, and a field-specific next investigative action. Shared field values are not proof of a shared attacker, incident or compromise. Source timezone remains unverified; historical case baseline means no subsequently recorded transition, not necessarily an old attack. This change does not create automatic website publication, new log ingest, or independent verification of source field semantics. Core, IRC and Slack modules remain unchanged. Qualification and production behavior must be verified on Digit's host.
+
+## v0.2.8 — Distinguish findings from indicator groups
+
+Private Slack reports now explicitly mark a single source record as **INDIVIDUAL FINDING** and two or more records sharing the chosen source-field value as **SHARED-VALUE GROUP (unverified)**. Grouping is descriptive, never proof of a verified indicator, shared actor or incident. Each bounded result includes a source domain and request-path example when available, severity, source time span, revisions, representative source IDs, and a field-specific investigative next step. Blank fields are marked 'not supplied'. Reports use stronger paragraph spacing and limit display to four findings per provisional source-time window. The source timezone remains unverified; the case database, private Slack transport, IRC behavior and Core remain unchanged. Live qualification is still required.
