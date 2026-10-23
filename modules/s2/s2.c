@@ -199,34 +199,54 @@ static int httpbl_audit(const char *ip,int status,int resolver_rc,
 /* No role is inferred from the existing API ip and details.ip_address
  * fields. Enrichment must fail closed until the feed explicitly identifies
  * source and affected IP semantics and that contract is validated. */
+/* Threat API top-level ip is PHP REMOTE_ADDR of the telemetry submitter.
+ * Sentinel-MVC reports details.ip_address from the inspected request's
+ * REMOTE_ADDR. This may be a trusted proxy/CDN peer, not an original client.
+ * Other producer identities are not authenticated in historical feed rows. */
 static void httpbl_enrichment(json_object *records,char *out,size_t cap){
- size_t qualifying=0,has_top=0,has_detail=0,has_domain=0;
+ char seen[HTTPBL_LIMIT][INET_ADDRSTRLEN]={{0}};
+ int nseen=0;size_t pos=0,eligible=0;
  if(!out||!cap)return;
  out[0]=0;
- if(!records||!json_object_is_type(records,json_type_array)){
-  snprintf(out,cap,"Source feed unavailable; enrichment withheld.\n");
-  return;
- }
+ if(!records||!json_object_is_type(records,json_type_array))return;
  size_t length=json_object_array_length(records);
  if(length>5000)length=5000;
- for(size_t i=0;i<length;i++){
+ for(size_t i=0;i<length&&nseen<HTTPBL_LIMIT;i++){
   json_object *entry=json_object_array_get_idx(records,(int)i),*details=NULL;
   if(!entry||!investigation_candidate(field(entry,"severity"),field(entry,"relevance")))continue;
-  qualifying++;
   json_object_object_get_ex(entry,"details",&details);
-  if(field(entry,"ip")[0])has_top++;
-  if(field(details,"ip_address")[0])has_detail++;
-  if(field(details,"domain")[0])has_domain++;
+  const char *ip=field(details,"ip_address");
+  struct in_addr candidate;
+  if(inet_pton(AF_INET,ip,&candidate)!=1)continue;
+  eligible++;
+  int repeated=0;
+  for(int j=0;j<nseen;j++)if(!strcmp(seen[j],ip))repeated=1;
+  if(repeated)continue;
+  snprintf(seen[nseen++],sizeof seen[0],"%s",ip);
+  int days=0,score=0,type=0,resolver_rc=0;
+  int status=httpbl_response(ip,&days,&score,&type,&resolver_rc);
+  int audited=httpbl_audit(ip,status,resolver_rc,days,score,type);
+  const char *state=status==1?"LISTED":status==0?"NO NAME (resolver EAI_NONAME)":
+    status==-3?"KEY UNAVAILABLE":"LOOKUP INCOMPLETE";
+  int n=snprintf(out+pos,cap-pos,
+   "%s — http:BL %s; resolver=%d; audit=%s\n",
+   ip,state,resolver_rc,audited?"stored":"FAILED");
+  if(n<=0||(size_t)n>=cap-pos)break;pos+=(size_t)n;
+  if(status==1){
+   n=snprintf(out+pos,cap-pos,
+    "  Last activity age=%d days; threat score=%d; type bits=%d\n",
+    days,score,type);
+   if(n<=0||(size_t)n>=cap-pos)break;pos+=(size_t)n;
+  }
  }
- snprintf(out,cap,
-  "Source-role assessment: %zu qualifying records inspected; "
-  "API top-level ip present in %zu, details.ip_address present in %zu, "
-  "domain present in %zu.\n"
-  "Source/client IP: NOT VERIFIED. Affected/destination IP: NOT VERIFIED.\n"
-  "http:BL lookups withheld: neither IP field has a documented and "
-  "validated network role. Previous reputation lookups remain historical "
-  "resolver observations, not source-IP intelligence.\n",
-  qualifying,has_top,has_detail,has_domain);
+ if(!nseen)snprintf(out,cap,"No qualifying reported peer IPv4 candidates in snapshot.\n");
+ size_t used=strlen(out);
+ if(used+250<cap)snprintf(out+used,cap-used,
+  "\nCoverage: %d distinct IPv4 indicators enriched (max %d); "
+  "not all case records. Address roles reflect Sentinel-MVC producer "
+  "code, not independently verified per-record provenance or original "
+  "client identity.\n",nseen,HTTPBL_LIMIT);
+ (void)eligible;
 }
 static int case_db_open(sqlite3 **db){
  if(sqlite3_open_v2(CASE_DB,db,SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE,NULL)!=SQLITE_OK){
@@ -601,7 +621,7 @@ static stnlabz_module_result_t poll_service(
    size_t used=strlen(brief);
    if(used+strlen(enrich)+170<sizeof brief)
     snprintf(brief+used,sizeof brief-used,
-     "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*IP ROLE VALIDATION / HTTP:BL* (source and destination must be verified before enrichment)\n\n%s\nReputation is not proof of an attack, destination or compromise.",enrich);
+     "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*HTTP:BL / IP PROVENANCE* (reported remote peers; original-client and destination roles may remain unresolved)\n\n%s\nReputation is not proof of an attack, destination or compromise.",enrich);
   }
   if(case_updates>0){
    size_t used=strlen(brief);
@@ -924,7 +944,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=3,.version_patch=3,
+ .version_major=0,.version_minor=3,.version_patch=4,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
