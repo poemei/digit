@@ -1,4 +1,4 @@
-# Digit S2 v0.2.9 — Source-Date-Bounded Investigation Groups
+# Digit S2 v0.2.10 — Change-Driven Private Intelligence
 
 S2 uses the existing ABI 1.5 services and is hot-loadable without restarting Digit. This revision routes evidence-bounded, six-section assessment briefs and Rictus-linked observation updates through the **existing** `digit.slack.intel.deliver` service. Slack itself owns the configured private `intel_channel_id`. Neither Core nor Slack needs modification.
 
@@ -66,3 +66,7 @@ Private Slack reports now explicitly mark a single source record as **INDIVIDUAL
 ## v0.2.9 — Time-bounded shared-value groups
 
 S2 now groups records by **source field, identical indicator value, and the same source calendar date** (first 10 characters of the source timestamp) instead of grouping all historical records across months. This conservatively prevents distant dates from being presented as one shared-value group. Cases on opposite sides of midnight remain separate even when close in time; this is a date-window safeguard rather than complete event-time correlation. The API timezone remains unverified, so do not infer UTC incident windows, confirmed relationships, or independent attribution. Individual MEDIUM/HIGH/CRITICAL source findings remain eligible for reporting. No case data is deleted or merged; SQLite history and private Slack/IRC transport remain unchanged. Compilation and live qualification remain to be verified.
+
+## v0.2.10 — Change-driven reporting
+
+S2 continues polling and keeping its SQLite source/case history, but suppresses repetitive full Slack briefs when case state, source accessibility, exact Rictus correlation status, and persistence health remain unchanged. A full brief is still generated on first activation, new/changed qualifying source cases, API or Rictus availability transitions, correlation state changes, and case persistence failures or recovery. Changes to the raw log-record count and repetition of an unchanged latest source signature no longer trigger a full report. Observation reporting uses its existing independent pipeline. This is an in-memory delivery gate: a hotload/restart will produce a new initial baseline, and failed private Slack delivery still follows existing pending-message behavior; the change does not implement a durable outbound notification queue or a scheduled status digest. No Core, IRC transport, or public publishing changes. Production qualification is still required.
