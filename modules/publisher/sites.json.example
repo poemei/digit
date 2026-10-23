@@ -19,7 +19,8 @@
         "news",
         "page",
         "posts",
-        "intelligence"
+        "intelligence",
+        "page_update"
       ],
       "voice": "professional"
     },
