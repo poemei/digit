@@ -72,7 +72,7 @@ int main(int argc,char **argv){
                    sizeof response,&used,generation_context);
  if(result!=STNLABZ_MODULE_OK||used!=sizeof response||
     !memchr(response.text,0,sizeof response.text)||
-    !response.experimental||response.generated_bytes>256){
+    !response.experimental||response.generated_bytes!=strlen(response.text)){
   fprintf(stderr,"Generation failed: result=%d, bytes=%zu\n",(int)result,used);
  }else{
   printf("GRU bridge generation succeeded; %u bytes, experimental=%u\n",
