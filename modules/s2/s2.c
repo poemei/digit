@@ -28,6 +28,7 @@
 #define CASE_DB "/opt/digit/state/s2_cases.sqlite3"
 #define HTTPBL_KEY_FILE "/opt/digit/auth/httpbl.key"
 #define HTTPBL_LIMIT 3
+#define STATUS_REPORT_SECONDS (6*60*60)
 typedef struct {char *data;size_t length;} buffer_t;
 static const stnlabz_module_host_t *host;
 static volatile int busy;
@@ -36,6 +37,7 @@ static pthread_mutex_t scheduler_mutex=PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t scheduler_cond=PTHREAD_COND_INITIALIZER;
 static int scheduler_stop,scheduler_started;
 static time_t previous_poll;
+static time_t last_status_report;
 static char previous_signature[192];
 static long previous_lines;
 static int has_reported;
@@ -203,6 +205,35 @@ static int httpbl_audit(const char *ip,int status,int resolver_rc,
  * Sentinel-MVC reports details.ip_address from the inspected request's
  * REMOTE_ADDR. This may be a trusted proxy/CDN peer, not an original client.
  * Other producer identities are not authenticated in historical feed rows. */
+static void httpbl_audit_status(char *out,size_t cap){
+ sqlite3 *db=NULL;sqlite3_stmt *st=NULL;
+ if(!out||!cap)return;
+ out[0]=0;
+ if(sqlite3_open_v2(CASE_DB,&db,SQLITE_OPEN_READONLY,NULL)!=SQLITE_OK){
+  if(db)sqlite3_close(db);
+  snprintf(out,cap,"http:BL audit unavailable (database read failed).");return;
+ }
+ const char *sql=
+  "SELECT COUNT(*),MAX(lookup_time),"
+  "SUM(CASE WHEN status=1 THEN 1 ELSE 0 END),"
+  "SUM(CASE WHEN status=0 THEN 1 ELSE 0 END),"
+  "SUM(CASE WHEN status<0 THEN 1 ELSE 0 END) FROM s2_httpbl_lookups";
+ if(sqlite3_prepare_v2(db,sql,-1,&st,NULL)!=SQLITE_OK){
+  snprintf(out,cap,"http:BL audit unavailable (no readable lookup history).");
+ }else if(sqlite3_step(st)==SQLITE_ROW){
+  long long total=sqlite3_column_int64(st,0),last=sqlite3_column_int64(st,1);
+  long long listed=sqlite3_column_int64(st,2),no_name=sqlite3_column_int64(st,3);
+  long long incomplete=sqlite3_column_int64(st,4);
+  if(total){
+   char stamp[40]="unknown";time_t when=(time_t)last;struct tm utc;
+   if(gmtime_r(&when,&utc))strftime(stamp,sizeof stamp,"%Y-%m-%d %H:%M UTC",&utc);
+   snprintf(out,cap,"Audit total=%lld; last=%s; listed=%lld; resolver no-name=%lld; incomplete/key unavailable=%lld. No-name is not a clean verdict.",
+    total,stamp,listed,no_name,incomplete);
+  }else snprintf(out,cap,"Audit has zero recorded lookups.");
+ }else snprintf(out,cap,"http:BL audit query failed.");
+ if(st)sqlite3_finalize(st);
+ sqlite3_close(db);
+}
 static void httpbl_enrichment(json_object *records,char *out,size_t cap){
  char seen[HTTPBL_LIMIT][INET_ADDRSTRLEN]={{0}};
  int nseen=0;size_t pos=0,eligible=0;
@@ -592,7 +623,8 @@ static stnlabz_module_result_t poll_service(
    * or persistence failures generate a private intelligence brief.
    * Log growth and an unchanged latest signature are routine polling. */
   int persistence_ok=case_updates>=0;
-  int meaningful=!has_reported||case_updates>0||
+  int status_due=!last_status_report||now<last_status_report||now-last_status_report>=STATUS_REPORT_SECONDS;
+   int meaningful=status_due||!has_reported||case_updates>0||
     source_state!=last_source_state||matched!=last_correlation||
     persistence_ok!=last_persistence_ok;
   if(!meaningful){
@@ -602,6 +634,7 @@ static stnlabz_module_result_t poll_service(
   snprintf(previous_signature,sizeof previous_signature,"%s",signature);
   previous_lines=count;
   has_reported=1;
+  last_status_report=now;
   last_source_state=source_state;
   last_correlation=matched;
   last_persistence_ok=persistence_ok;
@@ -617,11 +650,13 @@ static stnlabz_module_result_t poll_service(
      "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*INVESTIGATION FINDINGS* (individual versus shared-value groups; source timestamps provisional)\n\n%s",findings);
   }
   {char enrich[1400]={0};
+   char audit[400]={0};
    httpbl_enrichment(records,enrich,sizeof enrich);
+   httpbl_audit_status(audit,sizeof audit);
    size_t used=strlen(brief);
    if(used+strlen(enrich)+170<sizeof brief)
     snprintf(brief+used,sizeof brief-used,
-     "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*HTTP:BL / IP PROVENANCE* (reported remote peers; original-client and destination roles may remain unresolved)\n\n%s\nReputation is not proof of an attack, destination or compromise.",enrich);
+     "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*HTTP:BL / IP PROVENANCE* (reported remote peers; original-client and destination roles may remain unresolved)\n\n%s\n%s\nReputation is not proof of an attack, destination or compromise.",enrich,audit);
   }
   if(case_updates>0){
    size_t used=strlen(brief);
