@@ -1,4 +1,4 @@
-# Digit S2 v0.2.0 — Private Intelligence Reporting
+# Digit S2 v0.2.2 — Persistent Investigation History
 
 S2 uses the existing ABI 1.5 services and is hot-loadable without restarting Digit. This revision routes evidence-bounded, six-section assessment briefs and Rictus-linked observation updates through the **existing** `digit.slack.intel.deliver` service. Slack itself owns the configured private `intel_channel_id`. Neither Core nor Slack needs modification.
 
@@ -32,3 +32,9 @@ The source is committed but neither compilation nor live Slack formatting is ind
 For each successful private Slack S2 report delivery, S2 sends a bounded one-line executive snapshot via the already existing `digit.irc.deliver` service. The message ends with `Full intelligence brief: Slack -> #stn-labz`. The full six-section evidence report remains private in Slack. A failed Slack post is not advertised as successful. Failed IRC notice delivery is retried in process; no durable queue is claimed. Observation intelligence updates also advertise their completed private Slack report.
 
 This is **S2 report distribution**, not a restored IRC↔Slack general-chat bridge: no Slack chat is forwarded to IRC and no IRC chat is forwarded to Slack. Neither IRC nor Slack modules, Core, nor the Intelligence/SRT web modules are changed. Existing ABI 1.5 service names and hot-loading remain unchanged.
+
+## v0.2.2 — Evidence-backed case changes
+
+The existing per-source `s2_cases` snapshot now has an append-only `s2_case_events` history recording `OPENED`, `ESCALATED`, `DECREASED`, and `EVIDENCE_UPDATED` transitions. Every transition is tied to the source ID, source-supplied timestamp, both IP fields, domain, request URL and the observed severity/relevance. The snapshot and history insert use one SQLite savepoint, so a partial history write does not silently update the case. Identical repeated feed snapshots do not create events. Changes to fields other than severity/relevance are now detected, including revised IPs, domain and request URL.
+
+The MEDIUM/MEDIUM investigation threshold remains. A decrease in source-provided scores is recorded only while both remain at least MEDIUM; falling below the threshold, case closure, confirmed incident status, temporal Rictus correlation, and independent attribution are **not yet implemented**. The initial import reflects historic source records, not newly occurring attacks. No automatic public publishing or new Core/Slack/IRC dependencies are introduced. Run `make -C modules/s2 clean all test` before operator-controlled installation/hotload. This source change has not been live-qualified.
