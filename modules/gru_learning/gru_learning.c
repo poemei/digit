@@ -445,8 +445,16 @@ static int feed_one(unsigned index){
   }
   parts++;
   if(!chunk.more){
+   /* A failed durable cursor write must not advance the in-memory cursor:
+    * otherwise this worker can silently skip an accepted-but-uncheckpointed
+    * lesson until the process restarts. Retry uses at-least-once delivery. */
+   int64_t previous=sync_cursor[index];
    sync_cursor[index]=chunk.id;
-   return checkpoint_save()?1:-1;
+   if(!checkpoint_save()){
+    sync_cursor[index]=previous;
+    return -1;
+   }
+   return 1;
   }
   if(chunk.next_offset<=query.offset)return -1;
   query.offset=chunk.next_offset;
@@ -662,7 +670,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="gru_learning",.name="GRU Learning and SQLite3 Continuous Sync",
- .version_major=0,.version_minor=7,.version_patch=1,
+ .version_major=0,.version_minor=7,.version_patch=2,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
