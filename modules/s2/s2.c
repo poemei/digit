@@ -275,13 +275,13 @@ static void case_investigation_snapshot(char *dst,size_t cap){
   "MAX(CASE WHEN request_url<>'' THEN request_url ELSE '' END) "
   "FROM s2_cases WHERE source_time<>'' AND "
   "((?1=1 AND source_time>=?2) OR (?1=0 AND source_time<?2)) "
-  "GROUP BY field,indicator ORDER BY "
+  "GROUP BY field,indicator,substr(source_time,1,10) ORDER BY "
   "CASE WHEN COUNT(*)>=2 THEN 0 ELSE 1 END,"
   "priority DESC,records DESC,MAX(source_time) DESC LIMIT 4";
  for(int recent=1;recent>=0;recent--){
   int n=snprintf(dst+pos,cap-pos,"\n*%s*\n\n",
-    recent?"RECENT FINDINGS (source-time within provisional 24h)":
-           "HISTORICAL FINDINGS (source-time older than provisional 24h)");
+    recent?"RECENT FINDINGS (provisional 24h; same-date grouping)":
+           "HISTORICAL FINDINGS (same-date grouping)");
   if(n<=0||(size_t)n>=cap-pos)break;
   pos+=(size_t)n;
   if(sqlite3_prepare_v2(db,sql,-1,&st,NULL)!=SQLITE_OK){
@@ -310,7 +310,7 @@ static void case_investigation_snapshot(char *dst,size_t cap){
    n=snprintf(dst+pos,cap-pos,
     "*%s %d — %.22s: %.55s*\n\n"
     "Records: %d | Highest severity: %s | Revised records: %d\n\n"
-    "Source times (timezone unverified): %.25s — %.25s\n\n"
+    "Same source-date window (timezone unverified): %.25s — %.25s\n\n"
     "Example IDs: %.48s%s%.48s\n\n"
     "Domain example: %.65s | Request example: %.80s\n\n"
     "Finding: %s\n\n"
@@ -319,8 +319,8 @@ static void case_investigation_snapshot(char *dst,size_t cap){
     v[4],v[5],v[6],strcmp(v[6],v[7])?", ":"",
     strcmp(v[6],v[7])?v[7]:"",
     v[9],v[10],
-    count>=2?"Records share this source field value; field role, actor and compromise remain unverified.":
-             "One qualifying API record; no same-value group established.",
+    count>=2?"Records share a field value on one source date; roles, actor and compromise remain unverified.":
+             "One qualifying API record in this source-date window; no group established.",
     action);
    if(n<=0||(size_t)n>=cap-pos)break;
    pos+=(size_t)n;
@@ -786,7 +786,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=2,.version_patch=8,
+ .version_major=0,.version_minor=2,.version_patch=9,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
