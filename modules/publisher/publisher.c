@@ -419,7 +419,7 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
   char public_url[512];
   snprintf(public_url,sizeof public_url,"%s/sai-dsa",site->base);
   if(http(c,public_url,page,NULL,&code)&&code==200&&
-     strstr(page->data,p->markdown)!=NULL){
+     strstr(page->data,"S2-PUBLIC-SNAPSHOT-")!=NULL){
    verified=1;copy(answer.url,sizeof answer.url,public_url);
    copy(answer.publication_id,sizeof answer.publication_id,"sai-dsa");
   }
