@@ -51,8 +51,6 @@ static void intelligence_brief(char *,size_t,const char *,long,int,int,int,const
 
 /* Exact Publisher ABI 0.4.x: no credentials or website form code in S2. */
 #define S2_PUBLIC_SERVICE "digit.publisher.publish"
-#define S2_PUBLIC_INTERVAL (6*60*60)
-#define S2_PUBLIC_RETRY (60*60)
 #define S2_PUBLIC_BODY_MAX 16384
 typedef struct {
  char site[32],kind[32],category[64],title[256],markdown[S2_PUBLIC_BODY_MAX];
@@ -101,10 +99,7 @@ static void public_page_review(int case_count,const char *brief,char *status,siz
  time_t now=time(NULL);
  /* Publish each newly generated intelligence report. Only throttle a
  * failed attempt; a prior successful case-event ID is not report freshness. */
- if(now==(time_t)-1||
-    (last_attempt>last_success&&now>=last_attempt&&
-     now-last_attempt<S2_PUBLIC_RETRY)||
-    (last_success>0&&now==last_success))goto finish;
+ if(now==(time_t)-1)goto finish;
  if(sqlite3_prepare_v2(db,
   "UPDATE s2_publication_state SET last_attempt=?1 WHERE id=1",
   -1,&st,NULL)!=SQLITE_OK)goto finish;
@@ -154,18 +149,25 @@ finish:
  sqlite3_close(db);
 }
 
-/* Retry the public page independently of private-brief change detection. */
+/* Publication is submitted for every generated brief and retried at
+ * the next ordinary poll after an unacknowledged attempt. No extra
+ * publication interval or retry throttle is imposed. */
+static int publication_unacknowledged(long long attempt,long long success){
+ return !success||attempt>success;
+}
 static int public_retry_due(time_t now){
  sqlite3 *db=NULL;sqlite3_stmt *st=NULL;
  long long attempt=0,success=0;
- int due=0;
- if(now==(time_t)-1||sqlite3_open_v2(CASE_DB,&db,SQLITE_OPEN_READONLY,NULL)!=SQLITE_OK)goto finish;
- if(sqlite3_prepare_v2(db,"SELECT last_attempt,last_success FROM s2_publication_state WHERE id=1",-1,&st,NULL)!=SQLITE_OK)goto finish;
+ int due=1;
+ if(now==(time_t)-1)return 1;
+ if(sqlite3_open_v2(CASE_DB,&db,SQLITE_OPEN_READONLY,NULL)!=SQLITE_OK)goto finish;
+ if(sqlite3_prepare_v2(db,
+   "SELECT last_attempt,last_success FROM s2_publication_state WHERE id=1",
+   -1,&st,NULL)!=SQLITE_OK)goto finish;
  if(sqlite3_step(st)!=SQLITE_ROW)goto finish;
- attempt=sqlite3_column_int64(st,0);success=sqlite3_column_int64(st,1);
- /* Retry an unacknowledged publication, even when case events are unchanged. */
- due=(!success||attempt>success)&&
-   (!attempt||now<attempt||now-attempt>=S2_PUBLIC_RETRY);
+ attempt=sqlite3_column_int64(st,0);
+ success=sqlite3_column_int64(st,1);
+ due=publication_unacknowledged(attempt,success);
 finish:
  if(st)sqlite3_finalize(st);
  if(db)sqlite3_close(db);
@@ -921,6 +923,13 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  size_t i;char lines[RICTUS_LINES][512]={{0}};
  if(!r)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(r,0,sizeof *r);
+ /* Success stops retries; failed or never-attempted publications retry
+  * without an additional timer, regardless of case-event changes. */
+ test(r,publication_unacknowledged(0,0),0);
+ test(r,publication_unacknowledged(10,0),0);
+ test(r,publication_unacknowledged(11,10),0);
+ test(r,!publication_unacknowledged(10,10),1);
+ test(r,!publication_unacknowledged(9,10),1);
  test(r,high("HIGH","HIGH"),0);
  test(r,high("CRITICAL","HIGH"),0);
  test(r,high("HIGH","CRITICAL"),0);
@@ -1232,7 +1241,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=4,.version_patch=7,
+ .version_major=0,.version_minor=4,.version_patch=8,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
