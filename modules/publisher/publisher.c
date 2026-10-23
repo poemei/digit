@@ -63,6 +63,7 @@ static int editorial_valid(const publish_request_t *p){
     !p->evidence_ref[0])return 0;
  /* Never classify content by searching keywords; the trusted selection
   * pipeline must supply provenance and an explicit, matching subject. */
+ if(!strcmp(p->kind,"page_update") && strcmp(p->site,"stnlabz"))return 0;
  if(!strcmp(p->site,"chaos")){
   if(strcmp(p->subject,"chaos_mvc"))return 0;
  }else if(!strcmp(p->site,"stnlabz")){
@@ -331,20 +332,30 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
  session=1;erase(form,sizeof form);flen=0;
  const char *admin=!strcmp(p->kind,"announcements")?"/admin/announcements":
   !strcmp(p->kind,"news")?"/admin/news":
-  !strcmp(p->kind,"page")?"/admin/page":
+  (!strcmp(p->kind,"page")||!strcmp(p->kind,"page_update"))?"/admin/page":
   !strcmp(p->kind,"intelligence")?"/admin/intelligence":"/admin/posts";
  snprintf(url,sizeof url,"%s%s",site->base,admin);
- if(!strcmp(p->kind,"intelligence")){
+ if(!strcmp(p->kind,"page_update")){
+  /* Explicitly locked to the existing S2 public page. Never create it. */
+  if(strcmp(p->title,"sai-dsa"))goto cleanup;
+  char edit_url[512];
+  snprintf(edit_url,sizeof edit_url,"%s/admin/page?edit=sai-dsa",site->base);
+  if(!http(c,edit_url,page,NULL,&code)||code!=200||
+     !strstr(page->data,"name=\"original_slug\"")||
+     !strstr(page->data,"value=\"sai-dsa\"")||
+     !csrf(page->data,token,sizeof token))goto cleanup;
+ }else if(!strcmp(p->kind,"intelligence")){
   char create_url[512];
   snprintf(create_url,sizeof create_url,"%s/admin/intelligence?tab=intelligence&action=add",site->base);
   if(!http(c,create_url,page,NULL,&code)||code!=200||!csrf(page->data,token,sizeof token))goto cleanup;
  }else if(!http(c,url,page,NULL,&code)||code!=200||!csrf(page->data,token,sizeof token))goto cleanup;
  int img=-1;
  if(!strcmp(p->kind,"posts")){img=image_id(page->data);if(img<0)goto cleanup;}
- if(!slugify(p->title,slug,sizeof slug))goto cleanup;
+ if(!strcmp(p->kind,"page_update"))snprintf(slug,sizeof slug,"sai-dsa");
+ else if(!slugify(p->title,slug,sizeof slug))goto cleanup;
  if(!strcmp(p->kind,"posts")&&!posts_slug(p->title,slug,sizeof slug))goto cleanup;
  /* Fail closed: publishing an identical title twice is never deliberate. */
- if(strstr(page->data,p->title)||strstr(page->data,slug)){
+ if(strcmp(p->kind,"page_update")&&(strstr(page->data,p->title)||strstr(page->data,slug))){
   copy(answer.error,sizeof answer.error,"Existing title or slug; publication refused.");
   goto cleanup;
  }
@@ -352,9 +363,28 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
   if(!strstr(page->data,"name=\"action\" value=\"create\""))goto cleanup;
  }else if(!strstr(page->data,"name=\"title\""))goto cleanup;
  erase(form,sizeof form);flen=0;
- if(!append(form,sizeof form,&flen,"csrf_token",c,token)||
+ if(!strcmp(p->kind,"page_update")){
+  char original_title[256]={0},description[1024]={0};
+  if(!html_value(page->data,"title",original_title,sizeof original_title)||
+     !html_value(page->data,"description",description,sizeof description)||
+     !strstr(page->data,"name=\"content_file\"")||
+     !strstr(page->data,"value=\"published\""))goto cleanup;
+  /* Core edit page must already be published Markdown. */
+  if(!strstr(page->data,"value=\"main.md\""))goto cleanup;
+  if(!append(form,sizeof form,&flen,"csrf_token",c,token)||
+     !append(form,sizeof form,&flen,"action",c,"update")||
+     !append(form,sizeof form,&flen,"original_slug",c,"sai-dsa")||
+     !append(form,sizeof form,&flen,"slug",c,"sai-dsa")||
+     !append(form,sizeof form,&flen,"title",c,original_title)||
+     !append(form,sizeof form,&flen,"description",c,description)||
+     !append(form,sizeof form,&flen,"status",c,"published")||
+     !append(form,sizeof form,&flen,"content_file",c,"main.md")||
+     !append(form,sizeof form,&flen,"content",c,p->markdown))goto cleanup;
+ }else if(!append(form,sizeof form,&flen,"csrf_token",c,token)||
     !append(form,sizeof form,&flen,"title",c,p->title))goto cleanup;
- if(!strcmp(p->kind,"announcements")){
+ if(!strcmp(p->kind,"page_update")){
+  /* Exact update form has already been constructed. */
+ }else if(!strcmp(p->kind,"announcements")){
   if(!append(form,sizeof form,&flen,"action",c,"create")||
      !append(form,sizeof form,&flen,"body",c,p->markdown)||
      !append(form,sizeof form,&flen,"published",c,"1"))goto cleanup;
@@ -385,7 +415,15 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
  }
  if(!http(c,url,page,form,&code)||code!=302)goto cleanup;
  erase(form,sizeof form);flen=0;
- if(!strcmp(p->kind,"announcements")){
+ if(!strcmp(p->kind,"page_update")){
+  char public_url[512];
+  snprintf(public_url,sizeof public_url,"%s/sai-dsa",site->base);
+  if(http(c,public_url,page,NULL,&code)&&code==200&&
+     strstr(page->data,p->markdown)!=NULL){
+   verified=1;copy(answer.url,sizeof answer.url,public_url);
+   copy(answer.publication_id,sizeof answer.publication_id,"sai-dsa");
+  }
+ }else if(!strcmp(p->kind,"announcements")){
   if(http(c,url,page,NULL,&code)&&code==200&&strstr(page->data,p->title))verified=1;
   if(verified)snprintf(answer.url,sizeof answer.url,"%s/announcements",site->base);
  }else if(!strcmp(p->kind,"intelligence")){
