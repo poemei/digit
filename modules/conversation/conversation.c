@@ -144,14 +144,18 @@ static int conversation_invitation(const digit_interpretation_result_t *r){
  * Accept only a candidate that retains the complete verified View response.
  * Other outputs fall back to the deterministic View verbatim. */
 static int gru_candidate_safe(const char *baseline,const char *candidate){
- size_t n;
- if(!baseline||!candidate||!(n=strlen(candidate))||n>480)return 0;
- if(!strstr(candidate,baseline))return 0;
- for(size_t i=0;i<n;i++){
-  unsigned char c=(unsigned char)candidate[i];
-  if(c<32&&c!='\n'&&c!='\t')return 0;
+ /* The model cannot independently establish new facts. Accept a bounded
+  * conversational lead-in only when the verified statement is unchanged. */
+ static const char *const introductions[]={
+  "", "In short, ", "To clarify, ", "Based on the available evidence, "
+ };
+ if(!baseline||!candidate||!baseline[0])return 0;
+ for(size_t i=0;i<sizeof introductions/sizeof introductions[0];i++){
+  size_t prefix=strlen(introductions[i]);
+  if(!strncmp(candidate,introductions[i],prefix)&&
+      !strcmp(candidate+prefix,baseline))return 1;
  }
- return 1;
+ return 0;
 }
 static void gru_polish(const stnlabz_module_host_t *api,
  char *response,size_t capacity,size_t *used){
@@ -803,7 +807,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
     rc = process(&mock, &msg, sizeof msg, response, sizeof response, &used);
     check(q, rc == STNLABZ_MODULE_OK && !used && mock_calls == 1, 0);
     check(q, gru_candidate_safe("Verified fact.", "Verified fact."), 0);
-    check(q, gru_candidate_safe("Verified fact.", "In summary: Verified fact."), 0);
+    check(q, gru_candidate_safe("Verified fact.", "In short, Verified fact."), 0);
     check(q, !gru_candidate_safe("Verified fact.", "Different assertion."), 1);
     check(q, !gru_candidate_safe("Verified fact.", ""), 1);
     check(q, !strcmp(msg.message, "Database latency increased"), 0);
