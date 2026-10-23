@@ -35,6 +35,8 @@ static char previous_signature[192];
 static long previous_lines;
 static int has_reported;
 static int last_source_state=-1;
+static int last_correlation=-1;
+static int last_persistence_ok=-1;
 static int64_t observation_cursor;
 static char intel_pending[INTEL_REPORT_CAP];
 static pthread_mutex_t intel_mutex=PTHREAD_MUTEX_INITIALIZER;
@@ -446,14 +448,23 @@ static stnlabz_module_result_t poll_service(
  }else stale=1;
  if(!stale&&report[0]){
   lock();
-  if(case_updates==0 && has_reported && source_state==last_source_state &&
-     !strcmp(signature,previous_signature)&&count==previous_lines){
+  /* Only meaningful case changes, source availability, correlation changes,
+   * or persistence failures generate a private intelligence brief.
+   * Log growth and an unchanged latest signature are routine polling. */
+  int persistence_ok=case_updates>=0;
+  int meaningful=!has_reported||case_updates>0||
+    source_state!=last_source_state||matched!=last_correlation||
+    persistence_ok!=last_persistence_ok;
+  if(!meaningful){
+   previous_lines=count;
    unlock();goto done;
   }
   snprintf(previous_signature,sizeof previous_signature,"%s",signature);
   previous_lines=count;
   has_reported=1;
   last_source_state=source_state;
+  last_correlation=matched;
+  last_persistence_ok=persistence_ok;
   unlock();
   char brief[INTEL_REPORT_CAP]={0};
   intelligence_brief(brief,sizeof brief,report,count,available,has_priority,matched,
@@ -786,7 +797,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=2,.version_patch=9,
+ .version_major=0,.version_minor=2,.version_patch=10,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
