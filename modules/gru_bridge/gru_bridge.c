@@ -107,14 +107,16 @@ static stnlabz_module_result_t generate(const void *req,size_t bytes,
  if(!send_json(GENERATE_URL,payload,NULL,&body,&code)||code!=200)goto fail;
  parsed=json_tokener_parse(body.data);if(!parsed)goto fail;
  text=string_field(parsed,"text");model=string_field(parsed,"model");
- if(!text||strlen(text)>=sizeof out->text||!model||
-    strcmp(model,"stn-labz-gru")||
-    !json_object_object_get_ex(parsed,"generated_bytes",&v)||
+ /* The deployed word_gru.stn API reports a word budget, not byte count.
+  * Preserve the ABI byte-count field as the actual UTF-8 text length. */
+ if(!text||!text[0]||strlen(text)>=sizeof out->text||!model||
+    strcmp(model,"stn-labz-word-gru")||
+    !json_object_object_get_ex(parsed,"generated_words_max",&v)||
     !json_object_is_type(v,json_type_int)||
     !bool_field(parsed,"experimental",&experimental))goto fail;
- if(json_object_get_int(v)<0||json_object_get_int(v)>256)goto fail;
+ if(json_object_get_int(v)<1||json_object_get_int(v)>256)goto fail;
  snprintf(out->text,sizeof out->text,"%s",text);
- out->generated_bytes=(uint32_t)json_object_get_int(v);
+ out->generated_bytes=(uint32_t)strlen(text);
  out->experimental=(uint32_t)experimental;
  *used=sizeof *out;
  json_object_put(parsed);json_object_put(payload);return STNLABZ_MODULE_OK;
@@ -223,7 +225,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="gru_bridge",.name="Experimental STN GRU Bridge",
- .version_major=0,.version_minor=5,.version_patch=0,
+ .version_major=0,.version_minor=5,.version_patch=1,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
