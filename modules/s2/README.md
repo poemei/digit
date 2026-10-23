@@ -1,4 +1,4 @@
-# Digit S2 v0.4.0 — Evidence-Based IP Field Semantics and Operational Visibility
+# Digit S2 v0.4.1 — Evidence-Based IP Field Semantics and Operational Visibility
 
 S2 uses the existing ABI 1.5 services and is hot-loadable without restarting Digit. This revision routes evidence-bounded, six-section assessment briefs and Rictus-linked observation updates through the **existing** `digit.slack.intel.deliver` service. Slack itself owns the configured private `intel_channel_id`. Neither Core nor Slack needs modification.
 
@@ -128,3 +128,7 @@ S2 evaluates publication during its existing roughly six-hour operational review
 The public Markdown body is deliberately bounded and source-derived: case count, persistent case-event watermark, review timestamp and explicitly unknown operational impacts. It does not transmit the private Slack brief, source IDs, IP addresses, credentials, raw logs, or suspect identities. Publisher must be upgraded to v0.4.4, and `page_update` must be explicitly enabled in the private STN-LABZ site kinds configuration. If not enabled, S2 cannot alter the page. The page must preexist as published Markdown; updates replace its entire body, so back it up and check whether existing editorial material must be retained. Publication is acknowledged only when Publisher reports the expected existing page identity following public-page verification. Backend metadata and unrelated pages are not intentionally modified. No emergency override is implemented until independent critical-incident evidence and editorial authorization exist.
 
 Build and qualify S2 and Publisher independently. Neither source commit nor offline qualification demonstrates live delivery or page integrity; a test against the current deployed Core Page remains required.
+
+## v0.4.1 — Publication review independence
+
+The public SAI-DSA review now runs on eligible source polls even when a private Slack intelligence brief is suppressed as unchanged. The publication watermark and six-hour successful-publication guard are retained. Publisher invocation outcomes are logged to stderr as either success or failure (without credentials or private brief material). A Slack report or Publisher module activation alone does not confirm a website update. Publisher still requires its private STN-LABZ `page_update` kind to be enabled at startup, and the existing Core Page must satisfy the edit-form contract.
