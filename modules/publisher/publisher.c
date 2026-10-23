@@ -33,6 +33,7 @@ typedef struct {char name[32],base[128],kinds[6][32];int kind_count;} destinatio
 static destination_t destinations[3];
 static char username[256],password[512],poemei_account[128];
 static const stnlabz_module_host_t *host_api;
+static int credentials_ready;
 static void erase(void *p,size_t n){volatile unsigned char *b=p;while(n--)*b++=0;}
 static int bounded(const char *s,size_t max){return s&&memchr(s,0,max)!=NULL;}
 static int secure_config(const char *path){
@@ -290,7 +291,7 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  destination_t *site=NULL;
  for(int i=0;i<3;i++)if(!strcmp(destinations[i].name,p->site))site=&destinations[i];
- if(!site||!editorial_valid(p))return STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
+ if(!credentials_ready||!site||!editorial_valid(p))return STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
  int permitted=0;for(int k=0;k<site->kind_count;k++)
   if(!strcmp(site->kinds[k],p->kind))permitted=1;
  if(!permitted)return STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
@@ -565,8 +566,14 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
 static stnlabz_module_result_t start(const stnlabz_module_host_t *host){
  if(host_api||!host||!host->register_service||!host->unregister_service||
    !host->invoke_service)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
- if(!load_config())return STNLABZ_MODULE_ERR_START_FAILED;
+ /* Configuration affects permission to publish, not module activation.
+  * Missing or malformed config fails closed in publish(), while still
+  * allowing the module to activate and expose a service. */
+ credentials_ready=load_config();
+ if(!credentials_ready)
+  fprintf(stderr,"publisher: publication disabled; site configuration or credentials unavailable\n");
  if(!host->register_service(SERVICE,publish,NULL)){
+  fprintf(stderr,"publisher: service registration failed for %s\n",SERVICE);
   erase(destinations,sizeof destinations);erase(username,sizeof username);erase(password,sizeof password);erase(poemei_account,sizeof poemei_account);return STNLABZ_MODULE_ERR_START_FAILED;
  }
  host_api=host;return STNLABZ_MODULE_OK;
@@ -574,11 +581,11 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *host){
 static stnlabz_module_result_t stop(void){
  if(!host_api)return STNLABZ_MODULE_ERR_INVALID_STATE;
  if(!host_api->unregister_service(SERVICE,NULL))return STNLABZ_MODULE_ERR_STOP_FAILED;
- host_api=NULL;erase(destinations,sizeof destinations);erase(username,sizeof username);erase(password,sizeof password);erase(poemei_account,sizeof poemei_account);return STNLABZ_MODULE_OK;
+ host_api=NULL;credentials_ready=0;erase(destinations,sizeof destinations);erase(username,sizeof username);erase(password,sizeof password);erase(poemei_account,sizeof poemei_account);return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="publisher",.name="Digit Markdown Publisher",
- .version_major=0,.version_minor=4,.version_patch=4,
+ .version_major=0,.version_minor=4,.version_patch=5,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
