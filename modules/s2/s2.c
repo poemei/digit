@@ -801,6 +801,20 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
   test(r,case_transition(2,2,2,2,0)==NULL,1);
  }
 
+ {
+  json_object *sample=json_tokener_parse(
+   "[{\"severity\":\"MEDIUM\",\"details\":{\"response_status\":403}},"
+   "{\"severity\":\"HIGH\",\"details\":{\"response_status\":503}},"
+   "{\"severity\":\"MEDIUM\",\"details\":{}},"
+   "{\"severity\":\"LOW\",\"details\":{\"response_status\":200}}]");
+  char evidence[700]={0};
+  operational_evidence(sample,evidence,sizeof evidence);
+  test(r,strstr(evidence,"qualifying records, max 5000 scanned): 3")!=NULL,0);
+  test(r,strstr(evidence,"HTTP 403/429 responses: 1")!=NULL,0);
+  test(r,strstr(evidence,"HTTP 5xx responses: 1")!=NULL,0);
+  test(r,strstr(evidence,"absent/invalid: 1")!=NULL,1);
+  if(sample)json_object_put(sample);
+ }
  test(r,investigation_candidate("HIGH","MEDIUM"),0);
  test(r,!investigation_candidate("LOW","HIGH"),1);
  test(r,investigation_candidate("MEDIUM","LOW"),0);
