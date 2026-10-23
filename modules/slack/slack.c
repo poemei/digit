@@ -208,7 +208,7 @@ static int audit_notice(const char *line,char *report,size_t cap){
   const char *marker=strstr(line,"HOTLOAD_DENIED");
   if(!marker)marker=strstr(line,"HOTLOAD_FAILED");
   if(!marker)return 0;
-  size_t n=strcspn(marker," \\t\\r\\n");
+  size_t n=strcspn(marker," \t\r\n");
   if(!n||n>=sizeof event)return 0;
   memcpy(event,marker,n);event[n]=0;
   detail=line;
@@ -223,7 +223,7 @@ static int audit_notice(const char *line,char *report,size_t cap){
  /* Do not claim an active module for a rejected or failed candidate. */
  const int success=!strcmp(event,"HOTLOAD_REPLACED")||!strcmp(event,"HOTLOAD_ADMITTED");
  int n=snprintf(report,cap,
-   "*MODULE LOADER | %s*\\nModule: %s\\nCandidate: %s | Incumbent: %s\\nReason: %s\\nRecovery: %s",
+   "*MODULE LOADER | %s*\nModule: %s\nCandidate: %s | Incumbent: %s\nReason: %s\nRecovery: %s",
    success?"ACTIVE":!strcmp(event,"HOTLOAD_DENIED")?"DENIED":"FAILED",
    id[0]?id:"unspecified",
    candidate[0]?candidate:"not provided",
@@ -251,8 +251,8 @@ static void poll_module_audit(void){
  while(count++<16){
   long offset=ftell(module_audit);
   if(!fgets(line,sizeof line,module_audit))break;
-  if(!strchr(line,'\\n')){
-   int c;while((c=fgetc(module_audit))!='\\n'&&c!=EOF){}
+  if(!strchr(line,'\n')){
+   int c;while((c=fgetc(module_audit))!='\n'&&c!=EOF){}
    continue;
   }
   if(!audit_notice(line,report,sizeof report))continue;
