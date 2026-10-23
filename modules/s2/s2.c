@@ -689,6 +689,23 @@ static stnlabz_module_result_t poll_service(
     snprintf(brief+used,sizeof brief-used,
      "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*HTTP:BL / IP PROVENANCE* (reported remote peers; original-client and destination roles may remain unresolved)\n\n%s\n\n%s\n\nReputation is not proof of an attack, destination or compromise.",enrich,audit);
   }
+  /* Business effects require independent service or financial evidence.
+   * Neither a matched request path nor an http:BL result provides it. */
+  {
+   const char *effects=
+    "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    "*BUSINESS / OPERATIONAL EFFECTS*\n\n"
+    "Service availability or downtime: not established by these inputs.\n\n"
+    "Data access or disclosure: not established.\n\n"
+    "Successful exploitation or service interruption: not established.\n\n"
+    "Financial loss, response cost, and customer impact: not established.\n\n"
+    "Evidence required: response status and application logs, uptime monitoring, "
+    "confirmed incident records, service-owner assessment, and documented costs. "
+    "Suspicious paths and reputation lookups are investigative leads, not measured losses.";
+   size_t used=strlen(brief);
+   if(used+strlen(effects)+1<sizeof brief)
+    snprintf(brief+used,sizeof brief-used,"%s",effects);
+  }
   if(case_updates>0){
    size_t used=strlen(brief);
    snprintf(brief+used,sizeof brief-used,"\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*CASE ACTIVITY* (records opened/changed: %d; tracked cases: %d)\n\n%.3000s",
@@ -870,10 +887,20 @@ static int deliver_intel(const char *brief){
   size_t cut=limit;
   if(cut<len){
    size_t p=cut;
-   /* Prefer a paragraph boundary, then line break. */
+   /* Prefer a complete section/finding delimiter to avoid splitting
+    * evidence fields from their corresponding assessment. */
    while(p>pos+S2_SLACK_PART_MAX/2){
-    if(brief[p-1]=='\n'&&brief[p]=='\n'){cut=p;break;}
+    if(brief[p-1]=='\n'&&!strncmp(brief+p,"━━━━━━━━",strlen("━━━━━━━━"))){
+     cut=p;break;
+    }
     p--;
+   }
+   if(cut==limit){
+    p=limit;
+    while(p>pos+S2_SLACK_PART_MAX/2){
+     if(brief[p-1]=='\n'&&brief[p]=='\n'){cut=p;break;}
+     p--;
+    }
    }
    if(cut==limit){
     p=limit;
@@ -1052,7 +1079,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=3,.version_patch=7,
+ .version_major=0,.version_minor=3,.version_patch=8,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
