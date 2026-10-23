@@ -81,24 +81,15 @@ static void public_page_review(int case_count,const char *brief,char *status,siz
  if(sqlite3_exec(db,
   "INSERT OR IGNORE INTO s2_publication_state(id) VALUES(1)",
   NULL,NULL,NULL)!=SQLITE_OK)goto finish;
- long long last_event=0,last_attempt=0,last_success=0;
+ long long last_event=0;
  if(sqlite3_prepare_v2(db,
   "SELECT COALESCE(MAX(event_id),0) FROM s2_case_events",
   -1,&st,NULL)!=SQLITE_OK)goto finish;
  if(sqlite3_step(st)!=SQLITE_ROW)goto finish;
  last_event=sqlite3_column_int64(st,0);
  sqlite3_finalize(st);st=NULL;
- if(sqlite3_prepare_v2(db,
-  "SELECT last_attempt,last_success FROM s2_publication_state WHERE id=1",
-  -1,&st,NULL)!=SQLITE_OK)goto finish;
- if(sqlite3_step(st)!=SQLITE_ROW)goto finish;
- last_attempt=sqlite3_column_int64(st,0);
- last_success=sqlite3_column_int64(st,1);
-
- sqlite3_finalize(st);st=NULL;
  time_t now=time(NULL);
- /* Publish each newly generated intelligence report. Only throttle a
- * failed attempt; a prior successful case-event ID is not report freshness. */
+ /* Every report is submitted without a publication throttle. */
  if(now==(time_t)-1)goto finish;
  if(sqlite3_prepare_v2(db,
   "UPDATE s2_publication_state SET last_attempt=?1 WHERE id=1",
@@ -799,7 +790,6 @@ static stnlabz_module_result_t poll_service(
   last_status_report=now;
   last_source_state=source_state;
   last_correlation=matched;
-  last_persistence_ok=persistence_ok;
   unlock();
   char brief[INTEL_REPORT_CAP]={0};
   intelligence_brief(brief,sizeof brief,report,count,available,has_priority,matched,
@@ -875,7 +865,6 @@ static stnlabz_module_result_t poll_service(
  }else if(count>=0){
   lock();previous_lines=count;unlock();
  }
-done:
  if(root)json_object_put(root);
  free(b.data);
  return STNLABZ_MODULE_OK;
@@ -1199,7 +1188,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=4,.version_patch=9,
+ .version_major=0,.version_minor=4,.version_patch=10,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
