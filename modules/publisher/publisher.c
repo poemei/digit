@@ -606,7 +606,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  }
  {
   char desc[1024]={0};
-  const char *report="Snapshot: S2-PUBLIC-SNAPSHOT-10\\n\\n*1. EXECUTIVE SUMMARY*\\n\\nAPI severity HIGH under investigation.\\n\\nRictus: accessible | Sentinel: accessible\\n\\n━━━━━━━━\\n\\n*2. ACTIVE INVESTIGATIONS*";
+  const char *report="Snapshot: S2-PUBLIC-SNAPSHOT-10\n\n*1. EXECUTIVE SUMMARY*\n\nAPI severity HIGH under investigation.\n\nRictus: accessible | Sentinel: accessible\n\n━━━━━━━━\n\n*2. ACTIVE INVESTIGATIONS*";
   check(r,s2_executive_description(report,desc,sizeof desc)&&strstr(desc,"Rictus: accessible")!=NULL,0);
   check(r,!s2_executive_description("No executive section",desc,sizeof desc),1);
  }
