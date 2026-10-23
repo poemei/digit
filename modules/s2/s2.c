@@ -243,10 +243,9 @@ static int ingest_cases(json_object *records,char *summary,size_t cap,int *total
 /* Read stored evidence only; ordering is priority then recorded recency,
  * not a claim that historical cases are recent attacks. */
 static void case_investigation_snapshot(char *dst,size_t cap){
- sqlite3 *db=NULL,*unused=NULL;
+ sqlite3 *db=NULL;
  sqlite3_stmt *st=NULL;
  size_t pos=0;
- (void)unused;
  if(!dst||!cap)return;
  dst[0]=0;
  if(!case_db_open(&db)){
@@ -419,7 +418,7 @@ static stnlabz_module_result_t poll_service(
    size_t used=strlen(brief);
    if(used+strlen(findings)+160<sizeof brief)
     snprintf(brief+used,sizeof brief-used,
-     "\\n\\n*INVESTIGATION CASE REVIEW* (five highest-severity stored records; historical evidence, not new attacks)\\n%s",findings);
+     "\n\n*INVESTIGATION CASE REVIEW* (five highest-severity stored records; historical evidence, not new attacks)\n%s",findings);
   }
   if(case_updates>0){
    size_t used=strlen(brief);
