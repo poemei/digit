@@ -236,7 +236,11 @@ static void poll_module_audit(void){
  struct stat st;
  char line[2048],report[512];
  int count=0;
- if(!config.module_channel[0]||!atomic_load(&running))return;
+ if(!atomic_load(&running))return;
+ if(!config.module_channel[0]){
+  /* Never invent a destination from a channel name. */
+  return;
+ }
  if(lstat(MODULE_AUDIT,&st)||!S_ISREG(st.st_mode))return;
  if(module_audit&&audit_inode!=st.st_ino){
   fclose(module_audit);module_audit=NULL;
@@ -245,8 +249,17 @@ static void poll_module_audit(void){
   module_audit=fopen(MODULE_AUDIT,"r");
   if(!module_audit)return;
   audit_inode=st.st_ino;
-  /* First activation begins at EOF rather than flooding digit-ops. */
+  /* Revisit a bounded recent window so Slack can report its own hotload.
+   * Skip any partial leading line; never replay the entire audit history. */
   if(fseek(module_audit,0,SEEK_END))return;
+  long end=ftell(module_audit);
+  if(end<0)return;
+  long start=end>8192?end-8192:0;
+  if(fseek(module_audit,start,SEEK_SET))return;
+  if(start){
+   int ch;
+   while((ch=fgetc(module_audit))!=EOF&&ch!='\n'){}
+  }
  }
  while(count++<16){
   long offset=ftell(module_audit);
@@ -645,7 +658,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="slack",.name="Slack ABI Transport",
- .version_major=0,.version_minor=1,.version_patch=11,
+ .version_major=0,.version_minor=2,.version_patch=0,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
