@@ -397,6 +397,19 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  test(r,high("CRITICAL","CRITICAL"),0);
  test(r,!high("MEDIUM","MEDIUM"),1);
  test(r,investigation_candidate("MEDIUM","MEDIUM"),0);
+ {
+  const char *old_fields[]={"MEDIUM","MEDIUM","2026-10-22 10:00:00","1.2.3.4","5.6.7.8","example.org","/login"};
+  const char *same_fields[]={"MEDIUM","MEDIUM","2026-10-22 10:00:00","1.2.3.4","5.6.7.8","example.org","/login"};
+  const char *new_path[]={"MEDIUM","MEDIUM","2026-10-22 10:00:00","1.2.3.4","5.6.7.8","example.org","/admin"};
+  test(r,!case_changed(old_fields,same_fields),1);
+  test(r,case_changed(old_fields,new_path),0);
+  test(r,!strcmp(case_transition(-1,-1,2,2,1),"OPENED"),0);
+  test(r,!strcmp(case_transition(2,2,3,2,1),"ESCALATED"),0);
+  test(r,!strcmp(case_transition(3,3,2,3,1),"DECREASED"),0);
+  test(r,!strcmp(case_transition(2,2,2,2,1),"EVIDENCE_UPDATED"),0);
+  test(r,case_transition(2,2,2,2,0)==NULL,1);
+ }
+
  test(r,investigation_candidate("HIGH","MEDIUM"),0);
  test(r,!investigation_candidate("LOW","HIGH"),1);
  test(r,rank_level("CRITICAL")>rank_level("HIGH"),0);
