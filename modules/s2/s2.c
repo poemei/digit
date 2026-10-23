@@ -484,7 +484,7 @@ static void intelligence_brief(char *dst,size_t cap,const char *short_report,
   "Cases are keyed by Sentinel source ID. Evidence changes are recorded "
   "in a durable case-event history; severity/relevance changes never "
   "prove an incident or close an investigation. "
-  "Initial bulk ingestion is historical import, not newly occurring attacks.\\n\\n"
+  "Initial bulk ingestion is historical import, not newly occurring attacks.\n\n"
   "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
   "*3. THREAT INTELLIGENCE OVERVIEW*\n\n"
   "Investigation threshold: MEDIUM severity AND MEDIUM relevance or higher.\n"
