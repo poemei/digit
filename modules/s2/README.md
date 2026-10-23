@@ -1,4 +1,4 @@
-# Digit S2 v0.3.9 — Evidence-Based IP Field Semantics and Operational Visibility
+# Digit S2 v0.4.0 — Evidence-Based IP Field Semantics and Operational Visibility
 
 S2 uses the existing ABI 1.5 services and is hot-loadable without restarting Digit. This revision routes evidence-bounded, six-section assessment briefs and Rictus-linked observation updates through the **existing** `digit.slack.intel.deliver` service. Slack itself owns the configured private `intel_channel_id`. Neither Core nor Slack needs modification.
 
@@ -120,3 +120,11 @@ The brief now includes a separately labeled **Business / Operational Effects** e
 ## v0.3.9 — Source-backed operational effect inputs
 
 S2 now inspects explicitly provided integer `details.response_status` fields in up to 5,000 qualifying STN-LABZ API records. It separately reports the number of qualifying records, how many contain valid HTTP responses, how many omit them, 403/429 responses, 5xx responses, and other HTTP responses. These are observed source-field counts when available, not verified service uptime, incident confirmation, or business loss. Missing response codes remain unknown; 5xx does not independently prove an outage, and 403/429 does not prove prevention. The Business / Operational Effects section retains its evidence-limited classifications. No inference is made from URL paths, IP ownership, or reputation, and no changes are made to Sentinel enforcement or API contracts. Compilation and live delivery remain to be verified.
+
+## v0.4.0 — One existing SAI-DSA public Core Page
+
+S2 evaluates publication during its existing roughly six-hour operational review. It reads the durable SQLite source-case event watermark and the last successfully published watermark; a steady snapshot does not cause repeat writes. It persists the last attempt and verified publication in `s2_publication_state`, limits unsuccessful retries to at most hourly, and waits six hours after a successful publication before reviewing another update. First successful publication establishes the baseline. Publication happens through the existing `digit.publisher.publish` service and `kind=page_update`, not the separate `/intelligence` module or a new page. The fixed target is STN-LABZ `/sai-dsa`.
+
+The public Markdown body is deliberately bounded and source-derived: case count, persistent case-event watermark, review timestamp and explicitly unknown operational impacts. It does not transmit the private Slack brief, source IDs, IP addresses, credentials, raw logs, or suspect identities. Publisher must be upgraded to v0.4.4, and `page_update` must be explicitly enabled in the private STN-LABZ site kinds configuration. If not enabled, S2 cannot alter the page. The page must preexist as published Markdown; updates replace its entire body, so back it up and check whether existing editorial material must be retained. Publication is acknowledged only when Publisher reports the expected existing page identity following public-page verification. Backend metadata and unrelated pages are not intentionally modified. No emergency override is implemented until independent critical-incident evidence and editorial authorization exist.
+
+Build and qualify S2 and Publisher independently. Neither source commit nor offline qualification demonstrates live delivery or page integrity; a test against the current deployed Core Page remains required.
