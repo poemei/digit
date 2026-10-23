@@ -305,7 +305,11 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
   !strcmp(p->kind,"page")?"/admin/page":
   !strcmp(p->kind,"intelligence")?"/admin/intelligence":"/admin/posts";
  snprintf(url,sizeof url,"%s%s",site->base,admin);
- if(!http(c,url,page,NULL,&code)||code!=200||!csrf(page->data,token,sizeof token))goto cleanup;
+ if(!strcmp(p->kind,"intelligence")){
+  char create_url[512];
+  snprintf(create_url,sizeof create_url,"%s/admin/intelligence?tab=intelligence&action=add",site->base);
+  if(!http(c,create_url,page,NULL,&code)||code!=200||!csrf(page->data,token,sizeof token))goto cleanup;
+ }else if(!http(c,url,page,NULL,&code)||code!=200||!csrf(page->data,token,sizeof token))goto cleanup;
  int img=-1;
  if(!strcmp(p->kind,"posts")){img=image_id(page->data);if(img<0)goto cleanup;}
  if(!slugify(p->title,slug,sizeof slug))goto cleanup;
