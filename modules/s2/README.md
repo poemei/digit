@@ -1,4 +1,4 @@
-# Digit S2 v0.2.2 — Persistent Investigation History
+# Digit S2 v0.2.3 — API Severity Investigation Gate
 
 S2 uses the existing ABI 1.5 services and is hot-loadable without restarting Digit. This revision routes evidence-bounded, six-section assessment briefs and Rictus-linked observation updates through the **existing** `digit.slack.intel.deliver` service. Slack itself owns the configured private `intel_channel_id`. Neither Core nor Slack needs modification.
 
@@ -37,4 +37,8 @@ This is **S2 report distribution**, not a restored IRC↔Slack general-chat brid
 
 The existing per-source `s2_cases` snapshot now has an append-only `s2_case_events` history recording `OPENED`, `ESCALATED`, `DECREASED`, and `EVIDENCE_UPDATED` transitions. Every transition is tied to the source ID, source-supplied timestamp, both IP fields, domain, request URL and the observed severity/relevance. The snapshot and history insert use one SQLite savepoint, so a partial history write does not silently update the case. Identical repeated feed snapshots do not create events. Changes to fields other than severity/relevance are now detected, including revised IPs, domain and request URL.
 
-The MEDIUM/MEDIUM investigation threshold remains. A decrease in source-provided scores is recorded only while both remain at least MEDIUM; falling below the threshold, case closure, confirmed incident status, temporal Rictus correlation, and independent attribution are **not yet implemented**. The initial import reflects historic source records, not newly occurring attacks. No automatic public publishing or new Core/Slack/IRC dependencies are introduced. Run `make -C modules/s2 clean all test` before operator-controlled installation/hotload. This source change has not been live-qualified.
+The previous MEDIUM/MEDIUM combined investigation threshold applied through v0.2.2. A decrease in source-provided scores is recorded only while both remain at least MEDIUM; falling below the threshold, case closure, confirmed incident status, temporal Rictus correlation, and independent attribution are **not yet implemented**. The initial import reflects historic source records, not newly occurring attacks. No automatic public publishing or new Core/Slack/IRC dependencies are introduced. Run `make -C modules/s2 clean all test` before operator-controlled installation/hotload. This source change has not been live-qualified.
+
+## v0.2.3 — Source severity controls investigation
+
+The STN-LABZ `/threats` API `severity` field opens or maintains investigation for **MEDIUM, HIGH, or CRITICAL** without requiring the separately supplied `relevance` field to be MEDIUM. Relevance is preserved as evidence/context and never vetoes those severities. Missing/LOW severity does not qualify merely because relevance is high. S2 qualification tests each boundary; unchanged snapshots remain deduplicated, and correlation is never reported as proof of compromise. This revised threshold may admit previously excluded source records as historical imports, not newly occurring attacks.
