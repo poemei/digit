@@ -114,13 +114,15 @@ static int public_format_brief(const char *brief,char *out,size_t cap){
   }else if(line[0]=='*'&&
    (!strncmp(line+1,"INDIVIDUAL FINDING ",19)||
     !strncmp(line+1,"SHARED-VALUE GROUP ",19))){
-   char *dash=strstr(line," — "),*sep=dash?strstr(dash+4,": "):NULL;
+   char *dash=strstr(line," — "),*sep=dash?strstr(dash+strlen(" — "),": "):NULL;
    if(!dash||!sep)goto fail;
    *dash=0;*sep=0;
-   char *name=line+1,*indicator=dash+4,*value=sep+2;
+   char *name=line+1,*indicator=dash+strlen(" — "),*value=sep+2;
+   size_t valuelen=strlen(value);
+   if(valuelen&&value[valuelen-1]=='*')value[valuelen-1]=0;
    size_t namelen=strlen(name);
    if(namelen&&name[namelen-1]=='*')name[namelen-1]=0;
-   if(!public_add(out,cap,&used,"### %s\n\n**Indicator:** \`%s\`\n\n**IP Address:** {color:red}%s{/color}\n\n| Attribute | Value |\n|---|---|\n",name,indicator,value))goto fail;
+   if(!public_add(out,cap,&used,"### %s\n\n**Indicator:** `%s`\n\n**IP Address:** {color:red}%s{/color}\n\n| Attribute | Value |\n|---|---|\n",name,indicator,value))goto fail;
    finding=1;
   }else if(finding&&!strncmp(line,"Records: ",9)){
    int records=0,revised=0;char severity[32]={0};
@@ -129,15 +131,15 @@ static int public_format_brief(const char *brief,char *out,size_t cap){
    if(!public_add(out,cap,&used,
     "| Records | %d |\n| Highest Severity | {color:red}%s{/color} |\n| Revised Records | %d |\n",
     records,severity,revised))goto fail;
-  }else if(finding&&!strncmp(line,"Same source-date window (timezone unverified): ",48)){
-   if(!public_add(out,cap,&used,"| Source Window | %s |\n",line+48))goto fail;
+  }else if(finding&&!strncmp(line,"Same source-date window (timezone unverified): ",47)){
+   if(!public_add(out,cap,&used,"| Source Window | %s |\n",line+47))goto fail;
   }else if(finding&&!strncmp(line,"Example IDs: ",13)){
-   if(!public_add(out,cap,&used,"| Example IDs | \`%s\` |\n",line+13))goto fail;
+   if(!public_add(out,cap,&used,"| Example IDs | `%s` |\n",line+13))goto fail;
   }else if(finding&&!strncmp(line,"Domain example: ",16)){
    char *sep=strstr(line+16," | Request example: ");
    if(!sep)goto fail;
    *sep=0;
-   if(!public_add(out,cap,&used,"| Domain | %s |\n| Request | \`%s\` |\n\n",
+   if(!public_add(out,cap,&used,"| Domain | %s |\n| Request | `%s` |\n\n",
      line+16,sep+20))goto fail;
   }else if(finding&&!strncmp(line,"Finding: ",9)){
    if(!public_add(out,cap,&used,"**Finding:** %s\n\n",line+9))goto fail;
@@ -167,12 +169,12 @@ static int public_format_brief(const char *brief,char *out,size_t cap){
   }else if(!strncmp(line,"Investigation threshold: ",25)){
    if(!public_add(out,cap,&used,
     "**Investigation Threshold:** {color:red}MEDIUM / HIGH / CRITICAL{/color}\n\nRelevance is context, not an investigation gate.\n\n"))goto fail;
-  }else if(!strncmp(line,"Qualifying source findings in this feed snapshot: ",49)){
-   if(!public_add(out,cap,&used,"- **Qualifying Source Findings:** %s\n",line+49))goto fail;
+  }else if(!strncmp(line,"Qualifying source findings in this feed snapshot: ",50)){
+   if(!public_add(out,cap,&used,"- **Qualifying Source Findings:** %s\n",line+50))goto fail;
   }else if(!strncmp(line,"Rictus log records in current file: ",36)){
    if(!public_add(out,cap,&used,"- **Rictus Log Records:** %s\n\n",line+36))goto fail;
-  }else if(!strncmp(line,"Exact IPv4 overlap with the last 128 Rictus log records: ",56)){
-   if(!public_add(out,cap,&used,"**IPv4 Correlation:** %s\n\n",line+56))goto fail;
+  }else if(!strncmp(line,"Exact IPv4 overlap with the last 128 Rictus log records: ",57)){
+   if(!public_add(out,cap,&used,"**IPv4 Correlation:** %s\n\n",line+57))goto fail;
   }else if(!strncmp(line,"Source record signature: ",25)){
    if(!public_add(out,cap,&used,
     "**Source Record Signature:**\n\n{color:red}%s{/color}\n\n",line+25))goto fail;
@@ -1035,8 +1037,10 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
   test(r,public_format_brief(sample,markdown,sizeof markdown),0);
   test(r,strstr(markdown,"# STN-LABZ | SECURITY INTELLIGENCE")!=NULL,0);
   test(r,strstr(markdown,"| Highest Severity | {color:red}MEDIUM{/color} |")!=NULL,0);
+  test(r,strstr(markdown,"| Source Window | 2026-10-22 19:35:51")!=NULL,0);
+  test(r,strstr(markdown,"**IP Address:** {color:red}18.237.245.62{/color}")!=NULL,0);
   test(r,strstr(markdown,"**Latest Poll:** 0 source records opened or changed.")!=NULL,0);
-  test(r,strstr(markdown,"| Request | \`/phpinfo.php\` |")!=NULL,0);
+  test(r,strstr(markdown,"| Request | `/phpinfo.php` |")!=NULL,0);
   test(r,!public_format_brief(sample,markdown,80),1);
  }
 
@@ -1351,7 +1355,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=4,.version_patch=11,
+ .version_major=0,.version_minor=4,.version_patch=12,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
