@@ -59,16 +59,23 @@ static void push_report(irc_report_t *queue,unsigned *count,const irc_report_t *
  }
  queue[(*count)++]=*item;
 }
+static void sync_started(const char *name){
+ irc_report_t irc={{0}};
+ snprintf(irc.report,sizeof irc.report,"SQLite Sync Started");
+ push_report(irc_pending,&irc_count,&irc,"IRC");
+ /* Detailed per-source information goes to Slack digit-ops only. */
+ irc_report_t slack={{0}};
+ snprintf(slack.report,sizeof slack.report,
+   "[SQLITE MEMORY] Sync started: %.220s",name?name:"unknown source");
+ push_report(slack_pending,&slack_count,&slack,"Slack");
+ flush_reports();
+}
 static void report(const char *name,unsigned add,unsigned change,unsigned skip,int error){
- irc_report_t irc={{0}},slack={{0}};
- snprintf(irc.report,sizeof irc.report,
-   "[SQLite sync] %.100s: added=%u updated=%u skipped=%u %s",
-   name,add,change,skip,error?"FAILED":"OK");
+ irc_report_t slack={{0}};
  snprintf(slack.report,sizeof slack.report,
    "[SQLITE MEMORY] %.100s: added=%u updated=%u skipped=%u %s",
    name,add,change,skip,error?"FAILED":"OK");
  syslog(error?LOG_ERR:LOG_INFO,"%s",slack.report);
- push_report(irc_pending,&irc_count,&irc,"IRC");
  push_report(slack_pending,&slack_count,&slack,"Slack");
  flush_reports();
 }
@@ -170,6 +177,7 @@ static int observation_upsert(sqlite3 *db,const char *line,unsigned *add,unsigne
  ++*add;return 1;
 }
 static int ingest(sqlite3 *db,const char *path,int type){
+ sync_started(path);
  FILE *fp=fopen(path,"rb");char *line=NULL;size_t cap=0;ssize_t n;
  if(!fp){syslog(LOG_ERR,"digit.sqlite3 ingest: cannot open %s",path);report(path,0,0,0,1);return 0;}
  unsigned add=0,change=0,skip=0,batch=0;int transaction_open=0,ok=1;unsigned long line_number=0;const char *reason="unknown";const char *name=strrchr(path,'/');
