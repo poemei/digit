@@ -1,4 +1,4 @@
-# Digit S2 v0.4.2 — Evidence-Based IP Field Semantics and Operational Visibility
+# Digit S2 v0.4.3 — Evidence-Based IP Field Semantics and Operational Visibility
 
 S2 uses the existing ABI 1.5 services and is hot-loadable without restarting Digit. This revision routes evidence-bounded, six-section assessment briefs and Rictus-linked observation updates through the **existing** `digit.slack.intel.deliver` service. Slack itself owns the configured private `intel_channel_id`. Neither Core nor Slack needs modification.
 
@@ -136,3 +136,7 @@ The public SAI-DSA review now runs on eligible source polls even when a private 
 ## v0.4.2 — SAI-DSA public classification
 
 The existing Core Page publication template explicitly marks the current S2 security intelligence report **UNCLASSIFIED — Approved for public release**. Current S2 intelligence is not withheld merely because it also appears on private Slack. If future content contains genuinely proprietary, restricted or classified information, that material requires separate review and must not automatically be published. The version increment is required for Digit's hash/version-qualified hotload.
+
+## v0.4.3 — IRC notice removal
+
+S2 no longer posts routine polling summaries or Slack handoff notices to IRC. Its source investigations, Slack brief deliveries and SAI-DSA review path remain enabled. Observation cursor advances only after successful Slack delivery. Other IRC-producing modules are unchanged.
