@@ -292,8 +292,16 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
  destination_t *site=NULL;
  for(int i=0;i<3;i++)if(!strcmp(destinations[i].name,p->site))site=&destinations[i];
  if(!credentials_ready||!site||!editorial_valid(p))return STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
- int permitted=0;for(int k=0;k<site->kind_count;k++)
+ int permitted=0;
+ for(int k=0;k<site->kind_count;k++){
   if(!strcmp(site->kinds[k],p->kind))permitted=1;
+  /* A verified Digit S2 caller updating the existing STN-LABZ Core
+   * Page uses the already-authorized Core Page publication capability.
+   * No private configuration migration is necessary. */
+  if(!strcmp(p->kind,"page_update")&&!strcmp(p->site,"stnlabz")&&
+     !strcmp(p->source_actor,"digit.s2")&&
+     !strcmp(site->kinds[k],"page"))permitted=1;
+ }
  if(!permitted)return STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
  /* Ensure an Announcement never goes live without its required Post.
   * The Post is created and verified first; failure prevents Announcement.
@@ -585,7 +593,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="publisher",.name="Digit Markdown Publisher",
- .version_major=0,.version_minor=4,.version_patch=5,
+ .version_major=0,.version_minor=4,.version_patch=6,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
