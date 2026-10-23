@@ -265,17 +265,17 @@ static int html_value(const char *html,const char *name,char *out,size_t cap){
 static int s2_target_edit_form(const char *html){
  return html&&strstr(html,"name=\"original_slug\"")&&strstr(html,"value=\"sai-dsa\"");
 }
+/* Update the existing Page using its editable Core Pages form. Previous
+ * draft/published state is not an authorization or save gate. */
+static int s2_edit_form(const char *html){
+ return s2_target_edit_form(html)&&strstr(html,"name=\"title\"")&&
+  strstr(html,"name=\"description\"")&&strstr(html,"name=\"status\"")&&
+  strstr(html,"name=\"content_file\"")&&strstr(html,"name=\"content\"");
+}
 static int s2_create_form(const char *html){
  return html&&strstr(html,"name=\"action\"")&&strstr(html,"name=\"slug\"")&&
   strstr(html,"name=\"title\"")&&strstr(html,"name=\"content_file\"")&&
   strstr(html,"name=\"status\"")&&strstr(html,"name=\"content\"");
-}
-static int selected_option(const char *html,const char *value){
- char needle[96];snprintf(needle,sizeof needle,"value=\"%s\"",value);
- const char *p=strstr(html,needle);if(!p)return 0;
- const char *end=strchr(p,'>');if(!end)return 0;
- const char *selected=strstr(p,"selected");
- return selected&&selected<end;
 }
 /* Extract S2's Executive Summary as plain-text search description.
  * Keep the report itself in the Core Page content field. */
@@ -446,7 +446,7 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
      (code!=200&&code!=302&&code!=404)){
    copy(answer.error,sizeof answer.error,"S2 page lookup failed; creation withheld.");goto cleanup;
   }
-  if(code==200&&s2_target_edit_form(page->data)){
+  if(code==200&&s2_edit_form(page->data)){
    if(!csrf(page->data,token,sizeof token)){
     copy(answer.error,sizeof answer.error,"Existing S2 page CSRF missing; creation withheld.");goto cleanup;
    }
@@ -487,10 +487,8 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
   char original_title[256]={0},description[1024]={0};
   if(!create_s2_page){
    if(!html_value(page->data,"title",original_title,sizeof original_title)||
-      !html_value(page->data,"description",description,sizeof description)||
-      !strstr(page->data,"name=\"content_file\"")||
-      !selected_option(page->data,"published")){
-    copy(answer.error,sizeof answer.error,"Existing page metadata/status check failed.");goto cleanup;
+      !original_title[0]){
+    copy(answer.error,sizeof answer.error,"Existing S2 Page title could not be read from edit form.");goto cleanup;
    }
   }else copy(original_title,sizeof original_title,p->title);
   if(!s2_executive_description(p->markdown,description,sizeof description)){
@@ -691,6 +689,14 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
    const char *edit="<input name=\"original_slug\" value=\"sai-dsa\">";
    const char *create="<input name=\"action\"><input name=\"slug\"><input name=\"title\"><input name=\"content_file\"><input name=\"status\"><textarea name=\"content\"></textarea>";
    check(r,s2_target_edit_form(edit)!=0,0);
+   check(r,!s2_edit_form(edit),1);
+   check(r,s2_edit_form(
+    "<input name=\"original_slug\" value=\"sai-dsa\">"
+    "<input name=\"title\" value=\"SAI-DSA\">"
+    "<textarea name=\"description\"></textarea>"
+    "<select name=\"status\"><option value=\"draft\" selected>Draft</option></select>"
+    "<select name=\"content_file\"><option value=\"main.md\">main.md</option></select>"
+    "<textarea name=\"content\"></textarea>"),0);
    check(r,!s2_target_edit_form(create),1);
    check(r,s2_create_form(create)!=0,0);
    check(r,!s2_create_form("<input name=\"title\">"),1);
@@ -751,7 +757,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="publisher",.name="Digit Markdown Publisher",
- .version_major=0,.version_minor=4,.version_patch=14,
+ .version_major=0,.version_minor=4,.version_patch=15,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
