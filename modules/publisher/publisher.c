@@ -502,6 +502,17 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  const char *valid[]={"announcements","news","page","posts","intelligence"};
  for(int i=0;i<5;i++)check(r,kind_allowed(valid[i]),0);
  check(r,kind_allowed("intelligence"),0);
+ check(r,kind_allowed("page_update"),0);
+ {publish_request_t gate={0};
+  copy(gate.site,sizeof gate.site,"poemei");
+  copy(gate.kind,sizeof gate.kind,"page_update");
+  copy(gate.subject,sizeof gate.subject,"poemei_quote");
+  copy(gate.evidence_ref,sizeof gate.evidence_ref,"source");
+  check(r,!editorial_valid(&gate),1);
+  copy(gate.site,sizeof gate.site,"stnlabz");
+  copy(gate.subject,sizeof gate.subject,"stnlabz");
+  check(r,editorial_valid(&gate),0);
+ }
  check(r,!kind_allowed("srt"),1);
  check(r,!kind_allowed("admin"),1);
  check(r,!kind_allowed(NULL),1);
