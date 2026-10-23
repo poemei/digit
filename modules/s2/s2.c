@@ -11,6 +11,9 @@
 #include <pthread.h>
 #include <errno.h>
 #include <sqlite3.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <unistd.h>
 #include "module.h"
 #include "s2.h"
 #include "s2_observations.h"
@@ -23,6 +26,8 @@
 #define INTEL_DELIVERY "digit.slack.intel.deliver"
 #define INTEL_REPORT_CAP 8192
 #define CASE_DB "/opt/digit/state/s2_cases.sqlite3"
+#define HTTPBL_KEY_FILE "/opt/digit/auth/httpbl.key"
+#define HTTPBL_LIMIT 3
 typedef struct {char *data;size_t length;} buffer_t;
 static const stnlabz_module_host_t *host;
 static volatile int busy;
@@ -109,6 +114,86 @@ static int rank_level(const char *s){
 static int investigation_candidate(const char *severity,const char *relevance){
  (void)relevance;
  return rank_level(severity)>=2;
+}
+/* http:BL is IPv4 reputation context only. Never interpret a lookup
+ * as proof of source/destination role or compromise. */
+static int httpbl_key(char key[13]){
+ FILE *f=fopen(HTTPBL_KEY_FILE,"r");
+ if(!f)return 0;
+ char buf[16]={0};
+ size_t n=fread(buf,1,sizeof buf-1,f);
+ int more=fgetc(f);
+ fclose(f);
+ while(n&&(buf[n-1]=='\n'||buf[n-1]=='\r'))buf[--n]=0;
+ if(more!=EOF||n!=12)return 0;
+ for(size_t i=0;i<n;i++)if(buf[i]<'a'||buf[i]>'z')return 0;
+ memcpy(key,buf,13);
+ return 1;
+}
+static int httpbl_response(const char *ip,int *days,int *score,int *type){
+ struct in_addr addr;unsigned char *octets=(unsigned char*)&addr.s_addr;
+ if(inet_pton(AF_INET,ip,&addr)!=1)return -2;
+ char key[13]={0};
+ if(!httpbl_key(key))return -3;
+ char host_name[120];
+ snprintf(host_name,sizeof host_name,"%s.%u.%u.%u.%u.dnsbl.httpbl.org",
+  key,octets[3],octets[2],octets[1],octets[0]);
+ memset(key,0,sizeof key);
+ struct addrinfo hints={0},*res=NULL;
+ hints.ai_family=AF_INET;hints.ai_socktype=SOCK_STREAM;
+ int rc=getaddrinfo(host_name,NULL,&hints,&res);
+ memset(host_name,0,sizeof host_name);
+ if(rc==EAI_NONAME)return 0; /* no listing; not a clean verdict */
+ if(rc)return -1; /* DNS failure, do not claim NXDOMAIN */
+ int result=-1;
+ for(struct addrinfo *a=res;a;a=a->ai_next){
+  if(!a->ai_addr||a->ai_addrlen<sizeof(struct sockaddr_in))continue;
+  const unsigned char *v=(const unsigned char*)&
+   ((struct sockaddr_in*)a->ai_addr)->sin_addr.s_addr;
+  if(v[0]==127 && v[3]<=7){
+   *days=v[1];*score=v[2];*type=v[3];result=1;break;
+  }
+ }
+ freeaddrinfo(res);
+ return result;
+}
+static void httpbl_enrichment(json_object *records,char *out,size_t cap){
+ char seen[HTTPBL_LIMIT][INET_ADDRSTRLEN]={{0}};
+ int nseen=0;size_t pos=0;
+ if(!out||!cap)return;
+ out[0]=0;
+ if(!records||!json_object_is_type(records,json_type_array))return;
+ size_t length=json_object_array_length(records);
+ if(length>5000)length=5000;
+ for(size_t i=0;i<length&&nseen<HTTPBL_LIMIT;i++){
+  json_object *entry=json_object_array_get_idx(records,(int)i),*details=NULL;
+  if(!entry||!investigation_candidate(field(entry,"severity"),field(entry,"relevance")))continue;
+  json_object_object_get_ex(entry,"details",&details);
+  const char *ip=field(details,"ip_address");
+  struct in_addr candidate;
+  if(inet_pton(AF_INET,ip,&candidate)!=1)continue;
+  int repeated=0;
+  for(int j=0;j<nseen;j++)if(!strcmp(seen[j],ip))repeated=1;
+  if(repeated)continue;
+  snprintf(seen[nseen++],sizeof seen[0],"%s",ip);
+  int days=0,score=0,type=0;
+  int status=httpbl_response(ip,&days,&score,&type);
+  const char *state=status==1?"LISTED":status==0?"NOT LISTED":
+    status==-3?"KEY UNAVAILABLE":"LOOKUP INCOMPLETE";
+  int n=snprintf(out+pos,cap-pos,
+   "%s — http:BL %s%s",ip,state,
+   status==1?" (Project Honey Pot network evidence)":"");
+  if(n<0||(size_t)n>=cap-pos)break;pos+=(size_t)n;
+  if(status==1){
+   n=snprintf(out+pos,cap-pos,
+    "; days since last activity=%d; threat score=%d; type bits=%d",
+    days,score,type);
+   if(n<0||(size_t)n>=cap-pos)break;pos+=(size_t)n;
+  }
+  n=snprintf(out+pos,cap-pos,"\n");
+  if(n<0||(size_t)n>=cap-pos)break;pos+=(size_t)n;
+ }
+ if(!nseen)snprintf(out,cap,"No qualifying details.ip_address IPv4 candidates in snapshot.\n");
 }
 static int case_db_open(sqlite3 **db){
  if(sqlite3_open_v2(CASE_DB,db,SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE,NULL)!=SQLITE_OK){
@@ -478,6 +563,13 @@ static stnlabz_module_result_t poll_service(
     snprintf(brief+used,sizeof brief-used,
      "\n\n*INVESTIGATION FINDINGS* (individual versus shared-value groups; source timestamps provisional)\n%s",findings);
   }
+  {char enrich[1400]={0};
+   httpbl_enrichment(records,enrich,sizeof enrich);
+   size_t used=strlen(brief);
+   if(used+strlen(enrich)+170<sizeof brief)
+    snprintf(brief+used,sizeof brief-used,
+     "\n\n*HTTP:BL ENRICHMENT* (first three unique details.ip_address IPv4 fields; role unverified)\n%sReputation is not proof of an attack, destination or compromise.",enrich);
+  }
   if(case_updates>0){
    size_t used=strlen(brief);
    snprintf(brief+used,sizeof brief-used,"\n\n*CASE ACTIVITY* (records opened/changed: %d; tracked cases: %d)\n%.3000s",
@@ -799,7 +891,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=2,.version_patch=10,
+ .version_major=0,.version_minor=3,.version_patch=0,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
