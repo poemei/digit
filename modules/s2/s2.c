@@ -149,30 +149,6 @@ finish:
  sqlite3_close(db);
 }
 
-/* Publication is submitted for every generated brief and retried at
- * the next ordinary poll after an unacknowledged attempt. No extra
- * publication interval or retry throttle is imposed. */
-static int publication_unacknowledged(long long attempt,long long success){
- return !success||attempt>success;
-}
-static int public_retry_due(time_t now){
- sqlite3 *db=NULL;sqlite3_stmt *st=NULL;
- long long attempt=0,success=0;
- int due=1;
- if(now==(time_t)-1)return 1;
- if(sqlite3_open_v2(CASE_DB,&db,SQLITE_OPEN_READONLY,NULL)!=SQLITE_OK)goto finish;
- if(sqlite3_prepare_v2(db,
-   "SELECT last_attempt,last_success FROM s2_publication_state WHERE id=1",
-   -1,&st,NULL)!=SQLITE_OK)goto finish;
- if(sqlite3_step(st)!=SQLITE_ROW)goto finish;
- attempt=sqlite3_column_int64(st,0);
- success=sqlite3_column_int64(st,1);
- due=publication_unacknowledged(attempt,success);
-finish:
- if(st)sqlite3_finalize(st);
- if(db)sqlite3_close(db);
- return due;
-}
 static int deliver_intel(const char *);
 static void lock(void){while(__sync_lock_test_and_set(&busy,1)){}}
 static void unlock(void){__sync_lock_release(&busy);}
@@ -814,20 +790,9 @@ static stnlabz_module_result_t poll_service(
  }
  if(report[0]){
   lock();
-  /* Only meaningful case changes, source availability, correlation changes,
-   * or persistence failures generate a private intelligence brief.
-   * Log growth and an unchanged latest signature are routine polling. */
-  int persistence_ok=case_updates>=0;
-  int status_due=!last_status_report||now<last_status_report||now-last_status_report>=STATUS_REPORT_SECONDS;
-  int publish_due=public_retry_due(now);
-   int meaningful=status_due||publish_due||!has_reported||case_updates>0||
-    source_state!=last_source_state||matched!=last_correlation||
-    persistence_ok!=last_persistence_ok;
-  if(!meaningful){
-   previous_lines=count;
-   unlock();
-   goto done;
-  }
+  /* Every completed S2 poll submits its report. Publisher alone handles
+   * website permissions, page existence, creation, update and verification.
+   * Previous report success and case-event state never suppress publication. */
   snprintf(previous_signature,sizeof previous_signature,"%s",signature);
   previous_lines=count;
   has_reported=1;
@@ -923,13 +888,6 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  size_t i;char lines[RICTUS_LINES][512]={{0}};
  if(!r)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(r,0,sizeof *r);
- /* Success stops retries; failed or never-attempted publications retry
-  * without an additional timer, regardless of case-event changes. */
- test(r,publication_unacknowledged(0,0),0);
- test(r,publication_unacknowledged(10,0),0);
- test(r,publication_unacknowledged(11,10),0);
- test(r,!publication_unacknowledged(10,10),1);
- test(r,!publication_unacknowledged(9,10),1);
  test(r,high("HIGH","HIGH"),0);
  test(r,high("CRITICAL","HIGH"),0);
  test(r,high("HIGH","CRITICAL"),0);
@@ -1241,7 +1199,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=4,.version_patch=8,
+ .version_major=0,.version_minor=4,.version_patch=9,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
