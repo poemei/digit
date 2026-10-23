@@ -226,21 +226,19 @@ static int posts_slug(const char *title,char *out,size_t cap){
 /* Decode common HTML entities in Core edit-form metadata. Any unknown
  * entity fails closed rather than silently rewriting the page metadata. */
 static int html_value(const char *html,const char *name,char *out,size_t cap){
- char needle[96];snprintf(needle,sizeof needle,"name=\\"%s\\"",name);
+ char needle[96];snprintf(needle,sizeof needle,"name=\"%s\"",name);
  const char *p=strstr(html,needle),*v,*end;size_t n=0;
  if(!p)return 0;
  if(!strcmp(name,"description")){
-  v=strchr(p,'>');if(!v)return 0;v++;
-  end=strstr(v,"</textarea>");
+  v=strchr(p,'>');if(!v)return 0;v++;end=strstr(v,"</textarea>");
  }else{
-  v=strstr(p,"value=\\"");if(!v)return 0;v+=7;end=strchr(v,'"');
+  v=strstr(p,"value=\"");if(!v)return 0;v+=7;end=strchr(v,'"');
  }
  if(!end)return 0;
  while(v<end){
   char c=*v++;
   if(c=='&'){
-   const char *e=memchr(v,';',(size_t)(end-v));
-   if(!e)return 0;
+   const char *e=memchr(v,';',(size_t)(end-v));if(!e)return 0;
    size_t len=(size_t)(e-v);
    if(len==3&&!memcmp(v,"amp",3))c='&';
    else if(len==4&&!memcmp(v,"quot",4))c='"';
