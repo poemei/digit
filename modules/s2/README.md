@@ -1,4 +1,4 @@
-# Digit S2 v0.2.5 — Recent and Historical Case Correlation
+# Digit S2 v0.2.6 — Qualified Indicator Roles and Readable Case Reviews
 
 S2 uses the existing ABI 1.5 services and is hot-loadable without restarting Digit. This revision routes evidence-bounded, six-section assessment briefs and Rictus-linked observation updates through the **existing** `digit.slack.intel.deliver` service. Slack itself owns the configured private `intel_channel_id`. Neither Core nor Slack needs modification.
 
@@ -50,3 +50,7 @@ S2 now appends a bounded review of up to five highest-severity stored investigat
 ## v0.2.5 — Bounded correlation leads and chronology
 
 The private Slack review now selects up to three highest-severity source records in each of two sections: source timestamps comparable to the last 24 UTC hours and older source records. The date comparison is **provisional**: the API's source timestamp timezone is unverified; a date in the recent section is not confirmation of a recent attack. Reviews display all available case fields, the case change count and last event, and counts of other stored records sharing a primary IP or domain. Shared indicators are investigative leads only and do not establish the same actor, incident, or compromise. Missing evidence is labeled `not supplied`; specific next actions depend on whether an IP, domain, or neither can be compared. Source records are not automatically publicly published. The generic IRC summary and Core are unchanged.
+
+## v0.2.6 — Indicator roles remain unknown until verified
+
+The case review distinguishes the API top-level `ip` from `details.ip_address`, explicitly preserving their source-field identity. It calculates separate case-register overlap counts for each field and for domains; none of those counts verifies what an address represents, a common actor, or compromise. When repeated details IPs exist, it calls for establishing that field's role; when the same top-level IP appears broadly, it asks for source semantics (server, proxy or client) before attribution. A shared domain similarly remains an investigative lead, not a confirmed incident. Slack formatting separates individual case evidence and assessments into legible paragraphs. No Core or IRC changes, no public publication. Live compilation and investigative validation are still required.
