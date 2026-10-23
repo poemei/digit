@@ -1,6 +1,6 @@
-# Digit Publisher v0.4.2 — ABI 1.5
+# Digit Publisher v0.4.3 — ABI 1.5
 
-The production service `digit.publisher.publish` now uses the tested ChAoS MVC browser-form contract, not an invented Bearer JSON API. It accepts a revised fixed-size request (`site`, `kind`, `category`, `title`, `markdown`, `subject`, `source_actor`, `evidence_ref`, `post_title`, `post_markdown`) and responds with confirmation/error in the original response shape. Configured sites: `chaos`, `stnlabz`, `poemei`. PoeMei publishing uses the existing IRC configuration and requires the caller to supply the authenticated IRC account-tag identity. Supported kinds: `announcements`, `news`, `page`, `posts`. SRT and Intelligence are not enabled.
+The production service `digit.publisher.publish` now uses the tested ChAoS MVC browser-form contract, not an invented Bearer JSON API. It accepts a revised fixed-size request (`site`, `kind`, `category`, `title`, `markdown`, `subject`, `source_actor`, `evidence_ref`, `post_title`, `post_markdown`) and responds with confirmation/error in the original response shape. Configured sites: `chaos`, `stnlabz`, `poemei`. PoeMei publishing uses the existing IRC configuration and requires the caller to supply the authenticated IRC account-tag identity. Supported kinds: `announcements`, `news`, `page`, `posts`, and opt-in `intelligence` for STN-LABZ only. SRT remains disabled.
 
 ## Credentials and permissions
 
@@ -38,3 +38,11 @@ Run offline qualification with `make -C modules/publisher clean all test` before
 **v0.4.1 deployment:** `git pull`, then `make -C modules/publisher clean all test`. Confirm file permissions for `/opt/digit/state/auth/irc.env` and restart/reload the module using Digit’s existing module lifecycle. A passed qualification does not prove live content attribution or site publication.
 
 **v0.4.2 regression fix:** IRC identity lookup is no longer a mandatory module startup dependency. Missing/unreadable IRC identity configuration blocks only PoeMei-attributed publishing; it does not break the existing ChAoS MVC or STN-LABZ Publisher startup. This preserves the other authorization gates.
+
+## STN-LABZ Intelligence publishing (v0.4.3)
+
+The uploaded `intelligence_digit_publish` ChAoS module exposes a level-7 CSRF-protected `/admin/intelligence` form using `action=create_intelligence`, `title`, `content`, `source`, `status=ACTIVE`. Publisher now supports `kind=intelligence` through the existing browser-login workflow and verifies the title on the authenticated administrator page and public `/intelligence` index before returning success. This is not a direct JSON API and doesn't change Core or IRC. The module allocates its own `INT-...` record identifier. Publisher currently returns the verified index URL, not an individual record permalink; it uses `verified-index` as a verification token rather than inventing an INT ID.
+
+This kind remains **fail closed** until explicitly added to the deployed `/opt/digit/auth/sites/sites.json` `stnlabz` kinds list; the checked-in `sites.json.example` illustrates the opt-in. The existing `subject=stnlabz` and evidence_ref checks still apply. **Do not put private S2 Slack intelligence into the public Intelligence repository without a separate publication authorization.** Only intended public reports should enter this route.
+
+Review finding: the uploaded Intelligence controller's JSON write endpoints `report`, `observation`, and `assignment` do not show authentication or CSRF checks. This Publisher integration **does not use** those endpoints; their current external callers and authentication boundary must be reviewed before treating them as safe. This is source integration, not a successful live acceptance test.
