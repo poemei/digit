@@ -29,7 +29,7 @@ typedef struct {
  int published;char publication_id[128],url[1024],error[160];
 } publish_response_t;
 
-typedef struct {char name[32],base[128],kinds[5][32];int kind_count;} destination_t;
+typedef struct {char name[32],base[128],kinds[6][32];int kind_count;} destination_t;
 static destination_t destinations[3];
 static char username[256],password[512],poemei_account[128];
 static const stnlabz_module_host_t *host_api;
