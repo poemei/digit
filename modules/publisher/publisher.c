@@ -63,7 +63,8 @@ static int editorial_valid(const publish_request_t *p){
     !p->evidence_ref[0])return 0;
  /* Never classify content by searching keywords; the trusted selection
   * pipeline must supply provenance and an explicit, matching subject. */
- if(!strcmp(p->kind,"page_update") && strcmp(p->site,"stnlabz"))return 0;
+ if(!strcmp(p->kind,"page_update") &&
+    (strcmp(p->site,"stnlabz")||strcmp(p->source_actor,"digit.s2")))return 0;
  if(!strcmp(p->site,"chaos")){
   if(strcmp(p->subject,"chaos_mvc"))return 0;
  }else if(!strcmp(p->site,"stnlabz")){
@@ -511,6 +512,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
   check(r,!editorial_valid(&gate),1);
   copy(gate.site,sizeof gate.site,"stnlabz");
   copy(gate.subject,sizeof gate.subject,"stnlabz");
+  copy(gate.source_actor,sizeof gate.source_actor,"digit.s2");
   check(r,editorial_valid(&gate),0);
  }
  check(r,!kind_allowed("srt"),1);
