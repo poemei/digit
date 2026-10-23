@@ -5,6 +5,7 @@
 #include <ctype.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -60,6 +61,140 @@ typedef struct {
 typedef struct {
  int published;char publication_id[128],url[1024],error[160];
 } s2_publish_response_t;
+/* Public S2 report presentation. Preserve the observed report data and
+ * only transform its established private-brief field labels into Markdown.
+ * The Slack report remains unchanged. No website authority lives here. */
+static int public_add(char *out,size_t cap,size_t *used,const char *fmt,...){
+ va_list args;int n;
+ if(!out||!used||*used>=cap)return 0;
+ va_start(args,fmt);
+ n=vsnprintf(out+*used,cap-*used,fmt,args);
+ va_end(args);
+ if(n<0||(size_t)n>=cap-*used)return 0;
+ *used+=(size_t)n;return 1;
+}
+static int public_format_brief(const char *brief,char *out,size_t cap){
+ char *work=NULL,*line,*save=NULL;
+ size_t used=0;int finding=0;
+ if(!brief||!out||cap<2)return 0;
+ out[0]=0;
+ work=strdup(brief);if(!work)return 0;
+ if(!public_add(out,cap,&used,"# STN-LABZ | SECURITY INTELLIGENCE\n\n"))goto fail;
+ for(line=strtok_r(work,"\n",&save);line;line=strtok_r(NULL,"\n",&save)){
+  size_t n=strlen(line);
+  while(n&&(line[n-1]=='\r'||line[n-1]==' '))line[--n]=0;
+  if(!n)continue;
+  if(!strncmp(line,"━━━━━━━━",strlen("━━━━━━━━"))){
+   if(!public_add(out,cap,&used,"\n---\n\n"))goto fail;
+   continue;
+  }
+  if(!strncmp(line,"STN-LABZ | SECURITY INTELLIGENCE",strlen("STN-LABZ | SECURITY INTELLIGENCE")))continue;
+  if(!strncmp(line,"*S2 INTELLIGENCE ",strlen("*S2 INTELLIGENCE "))){
+   if(!public_add(out,cap,&used,"## S2 INTELLIGENCE BRIEF\n\n"))goto fail;
+  }else if(!strncmp(line,"Report generated: ",18)){
+   if(!public_add(out,cap,&used,"**Report Generated:** %s\n\n",line+18))goto fail;
+  }else if(!strcmp(line,"*1. EXECUTIVE SUMMARY*")){
+   if(!public_add(out,cap,&used,"## 1. EXECUTIVE SUMMARY\n\n**Status:** {color:red}MEDIUM / HIGH / CRITICAL{/color} — Under Investigation\n\n"))goto fail;
+  }else if(!strcmp(line,"*2. ACTIVE INVESTIGATIONS*")){
+   if(!public_add(out,cap,&used,"## 2. ACTIVE INVESTIGATIONS\n\n"))goto fail;
+  }else if(!strcmp(line,"*3. THREAT INTELLIGENCE OVERVIEW*")){
+   if(!public_add(out,cap,&used,"## 3. THREAT INTELLIGENCE OVERVIEW\n\n"))goto fail;
+  }else if(!strcmp(line,"*4. CROSS-SOURCE INTELLIGENCE*")){
+   if(!public_add(out,cap,&used,"## 4. CROSS-SOURCE INTELLIGENCE\n\n"))goto fail;
+  }else if(!strcmp(line,"*5. INTELLIGENCE GAPS*")){
+   if(!public_add(out,cap,&used,"## 5. INTELLIGENCE GAPS\n\n"))goto fail;
+  }else if(!strcmp(line,"*6. FINAL ASSESSMENT*")){
+   if(!public_add(out,cap,&used,"## 6. FINAL ASSESSMENT\n\n"))goto fail;
+  }else if(!strncmp(line,"*INVESTIGATION FINDINGS*",24)){
+   if(!public_add(out,cap,&used,"# INVESTIGATION FINDINGS\n\n*Individual findings and shared-value groups are distinguished below. Source timestamps remain provisional.*\n\n"))goto fail;
+  }else if(!strncmp(line,"*RECENT FINDINGS",16)){
+   if(!public_add(out,cap,&used,"## 7. RECENT FINDINGS\n\n**Reporting Window:** Provisional 24 hours, grouped by source date.\n\n"))goto fail;
+  }else if(!strncmp(line,"*HISTORICAL FINDINGS",20)){
+   if(!public_add(out,cap,&used,"## 8. HISTORICAL FINDINGS\n\n*Historical findings are grouped by source date. Shared values do not establish shared actors.*\n\n"))goto fail;
+  }else if(line[0]=='*'&&
+   (!strncmp(line+1,"INDIVIDUAL FINDING ",19)||
+    !strncmp(line+1,"SHARED-VALUE GROUP ",19))){
+   char *dash=strstr(line," — "),*sep=dash?strstr(dash+4,": "):NULL;
+   if(!dash||!sep)goto fail;
+   *dash=0;*sep=0;
+   char *name=line+1,*indicator=dash+4,*value=sep+2;
+   size_t namelen=strlen(name);
+   if(namelen&&name[namelen-1]=='*')name[namelen-1]=0;
+   if(!public_add(out,cap,&used,"### %s\n\n**Indicator:** \`%s\`\n\n**IP Address:** {color:red}%s{/color}\n\n| Attribute | Value |\n|---|---|\n",name,indicator,value))goto fail;
+   finding=1;
+  }else if(finding&&!strncmp(line,"Records: ",9)){
+   int records=0,revised=0;char severity[32]={0};
+   if(sscanf(line,"Records: %d | Highest severity: %31s | Revised records: %d",
+     &records,severity,&revised)!=3)goto fail;
+   if(!public_add(out,cap,&used,
+    "| Records | %d |\n| Highest Severity | {color:red}%s{/color} |\n| Revised Records | %d |\n",
+    records,severity,revised))goto fail;
+  }else if(finding&&!strncmp(line,"Same source-date window (timezone unverified): ",48)){
+   if(!public_add(out,cap,&used,"| Source Window | %s |\n",line+48))goto fail;
+  }else if(finding&&!strncmp(line,"Example IDs: ",13)){
+   if(!public_add(out,cap,&used,"| Example IDs | \`%s\` |\n",line+13))goto fail;
+  }else if(finding&&!strncmp(line,"Domain example: ",16)){
+   char *sep=strstr(line+16," | Request example: ");
+   if(!sep)goto fail;
+   *sep=0;
+   if(!public_add(out,cap,&used,"| Domain | %s |\n| Request | \`%s\` |\n\n",
+     line+16,sep+20))goto fail;
+  }else if(finding&&!strncmp(line,"Finding: ",9)){
+   if(!public_add(out,cap,&used,"**Finding:** %s\n\n",line+9))goto fail;
+  }else if(finding&&!strncmp(line,"Next: ",6)){
+   if(!public_add(out,cap,&used,"**Next Action:** %s\n\n",line+6))goto fail;
+   finding=0;
+  }else if(!strncmp(line,"Rictus: ",8)){
+   char *sep=strstr(line," | Sentinel: ");
+   if(sep){
+    *sep=0;
+    if(!public_add(out,cap,&used,
+      "**System Availability**\n\n- **Rictus:** %s\n- **Sentinel:** %s\n\n",
+      line+8,sep+13))goto fail;
+   }else if(!public_add(out,cap,&used,"%s\n\n",line))goto fail;
+  }else if(!strncmp(line,"Case register: ",15)){
+   char *sep=strstr(line+15,". This poll: ");
+   if(sep){
+    *sep=0;
+    if(!public_add(out,cap,&used,
+     "- **Case Register:** %s\n- **Latest Poll:** %s\n\n",
+     line+15,sep+13))goto fail;
+   }else if(!public_add(out,cap,&used,"%s\n\n",line))goto fail;
+  }else if(!strncmp(line,"Tracked: ",9)){
+   if(!public_add(out,cap,&used,"**Tracked Cases:** %s\n\n",line+9))goto fail;
+  }else if(!strncmp(line,"Latest ingestion: ",18)){
+   if(!public_add(out,cap,&used,"**Latest Ingestion:** %s\n\n",line+18))goto fail;
+  }else if(!strncmp(line,"Investigation threshold: ",25)){
+   if(!public_add(out,cap,&used,
+    "**Investigation Threshold:** {color:red}MEDIUM / HIGH / CRITICAL{/color}\n\nRelevance is context, not an investigation gate.\n\n"))goto fail;
+  }else if(!strncmp(line,"Qualifying source findings in this feed snapshot: ",49)){
+   if(!public_add(out,cap,&used,"- **Qualifying Source Findings:** %s\n",line+49))goto fail;
+  }else if(!strncmp(line,"Rictus log records in current file: ",36)){
+   if(!public_add(out,cap,&used,"- **Rictus Log Records:** %s\n\n",line+36))goto fail;
+  }else if(!strncmp(line,"Exact IPv4 overlap with the last 128 Rictus log records: ",56)){
+   if(!public_add(out,cap,&used,"**IPv4 Correlation:** %s\n\n",line+56))goto fail;
+  }else if(!strncmp(line,"Source record signature: ",25)){
+   if(!public_add(out,cap,&used,
+    "**Source Record Signature:**\n\n{color:red}%s{/color}\n\n",line+25))goto fail;
+  }else if(!strncmp(line,"*HTTP:BL / IP PROVENANCE*",24)){
+   if(!public_add(out,cap,&used,"## HTTP:BL / IP PROVENANCE\n\n"))goto fail;
+  }else if(!strcmp(line,"*SOURCE RESPONSE EVIDENCE*")){
+   if(!public_add(out,cap,&used,"## SOURCE RESPONSE EVIDENCE\n\n"))goto fail;
+  }else if(!strcmp(line,"*BUSINESS / OPERATIONAL EFFECTS*")){
+   if(!public_add(out,cap,&used,"## BUSINESS / OPERATIONAL EFFECTS\n\n"))goto fail;
+  }else if(!public_add(out,cap,&used,"%s\n\n",line))goto fail;
+ }
+ if(!public_add(out,cap,&used,
+   "\n---\n\n## 9. REPORT CONCLUSION\n\n"
+   "**Overall Assessment:** Active investigation; compromise unconfirmed.\n\n"
+   "Continue evidence preservation, source-field verification, and correlation across Sentinel and Rictus.\n\n"
+   "**STN-LABZ — S2 Security Intelligence**\n\n"
+   "*Evidence before attribution. Investigation before conclusion.*\n"))goto fail;
+ free(work);return 1;
+fail:
+ free(work);out[0]=0;return 0;
+}
+
 static void public_page_review(int case_count,const char *brief,char *status,size_t cap){
  if(status&&cap)snprintf(status,cap,"Not attempted: missing report or service.");
  if(!brief||!*brief)return;
@@ -107,11 +242,14 @@ static void public_page_review(int case_count,const char *brief,char *status,siz
  snprintf(q->evidence_ref,sizeof q->evidence_ref,"Digit S2 persistent source-case event register");
  /* The generated investigation brief is the page content, not metadata.
   * Keep the explicit snapshot marker for Publisher public verification. */
+ char formatted[S2_PUBLIC_BODY_MAX]={0};
+ if(!public_format_brief(brief,formatted,sizeof formatted)){
+  fprintf(stderr,"s2: public report formatting failed or exceeded page capacity\n");
+  free(q);goto finish;
+ }
  int written=snprintf(q->markdown,sizeof q->markdown,
-  "# SAI-DSA — Digit S2 Public Security Intelligence\n\n"
-  "**Classification: UNCLASSIFIED — Approved for public release.**\n\n"
-  "Snapshot: S2-PUBLIC-SNAPSHOT-%lld-%lld\n\n%s\n",
-  last_event,(long long)now,brief);
+  "%s\n\nSnapshot: S2-PUBLIC-SNAPSHOT-%lld-%lld\n",
+  formatted,last_event,(long long)now);
  if(written<0||(size_t)written>=sizeof q->markdown){
   fprintf(stderr,"s2: full investigation report exceeds page capacity; publication withheld\n");
   free(q);goto finish;
@@ -877,6 +1015,31 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  size_t i;char lines[RICTUS_LINES][512]={{0}};
  if(!r)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(r,0,sizeof *r);
+ {
+  char markdown[4096]={0};
+  const char *sample=
+   "STN-LABZ | SECURITY INTELLIGENCE\n\n"
+   "*S2 INTELLIGENCE BRIEF*\n\n"
+   "Report generated: 2026-10-23 03:40 UTC\n\n"
+   "*1. EXECUTIVE SUMMARY*\n\n"
+   "Rictus: accessible | Sentinel: accessible\n\n"
+   "Case register: 557 source-record cases. This poll: 0 source records opened or changed.\n\n"
+   "*RECENT FINDINGS (provisional 24h; same-date grouping)*\n\n"
+   "*INDIVIDUAL FINDING 1 — details.ip_address: 18.237.245.62*\n\n"
+   "Records: 1 | Highest severity: MEDIUM | Revised records: 0\n\n"
+   "Same source-date window (timezone unverified): 2026-10-22 19:35:51 — 2026-10-22 19:35:51\n\n"
+   "Example IDs: t_6ada6597cbdbb\n\n"
+   "Domain example: chaos-foundation.org | Request example: /phpinfo.php\n\n"
+   "Finding: One qualifying API record in this source-date window; no group established.\n\n"
+   "Next: Confirm details.ip_address role, then inspect source-specific logs.\n\n";
+  test(r,public_format_brief(sample,markdown,sizeof markdown),0);
+  test(r,strstr(markdown,"# STN-LABZ | SECURITY INTELLIGENCE")!=NULL,0);
+  test(r,strstr(markdown,"| Highest Severity | {color:red}MEDIUM{/color} |")!=NULL,0);
+  test(r,strstr(markdown,"**Latest Poll:** 0 source records opened or changed.")!=NULL,0);
+  test(r,strstr(markdown,"| Request | \`/phpinfo.php\` |")!=NULL,0);
+  test(r,!public_format_brief(sample,markdown,80),1);
+ }
+
  test(r,high("HIGH","HIGH"),0);
  test(r,high("CRITICAL","HIGH"),0);
  test(r,high("HIGH","CRITICAL"),0);
@@ -1188,7 +1351,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=4,.version_patch=10,
+ .version_major=0,.version_minor=4,.version_patch=11,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
