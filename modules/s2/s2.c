@@ -196,44 +196,37 @@ static int httpbl_audit(const char *ip,int status,int resolver_rc,
  sqlite3_close(db);
  return ok;
 }
+/* No role is inferred from the existing API ip and details.ip_address
+ * fields. Enrichment must fail closed until the feed explicitly identifies
+ * source and affected IP semantics and that contract is validated. */
 static void httpbl_enrichment(json_object *records,char *out,size_t cap){
- char seen[HTTPBL_LIMIT][INET_ADDRSTRLEN]={{0}};
- int nseen=0;size_t pos=0;
+ size_t qualifying=0,has_top=0,has_detail=0,has_domain=0;
  if(!out||!cap)return;
  out[0]=0;
- if(!records||!json_object_is_type(records,json_type_array))return;
+ if(!records||!json_object_is_type(records,json_type_array)){
+  snprintf(out,cap,"Source feed unavailable; enrichment withheld.\n");
+  return;
+ }
  size_t length=json_object_array_length(records);
  if(length>5000)length=5000;
- for(size_t i=0;i<length&&nseen<HTTPBL_LIMIT;i++){
+ for(size_t i=0;i<length;i++){
   json_object *entry=json_object_array_get_idx(records,(int)i),*details=NULL;
   if(!entry||!investigation_candidate(field(entry,"severity"),field(entry,"relevance")))continue;
+  qualifying++;
   json_object_object_get_ex(entry,"details",&details);
-  const char *ip=field(details,"ip_address");
-  struct in_addr candidate;
-  if(inet_pton(AF_INET,ip,&candidate)!=1)continue;
-  int repeated=0;
-  for(int j=0;j<nseen;j++)if(!strcmp(seen[j],ip))repeated=1;
-  if(repeated)continue;
-  snprintf(seen[nseen++],sizeof seen[0],"%s",ip);
-  int days=0,score=0,type=0,resolver_rc=0;
-  int status=httpbl_response(ip,&days,&score,&type,&resolver_rc);
-  int audited=httpbl_audit(ip,status,resolver_rc,days,score,type);
-  const char *state=status==1?"LISTED":status==0?"NO NAME (resolver EAI_NONAME)":
-    status==-3?"KEY UNAVAILABLE":"LOOKUP INCOMPLETE";
-  int n=snprintf(out+pos,cap-pos,
-   "%s — http:BL %s; resolver=%d; audit=%s",
-   ip,state,resolver_rc,audited?"stored":"FAILED");
-  if(n<0||(size_t)n>=cap-pos)break;pos+=(size_t)n;
-  if(status==1){
-   n=snprintf(out+pos,cap-pos,
-    "; days since last activity=%d; threat score=%d; type bits=%d",
-    days,score,type);
-   if(n<0||(size_t)n>=cap-pos)break;pos+=(size_t)n;
-  }
-  n=snprintf(out+pos,cap-pos,"\n");
-  if(n<0||(size_t)n>=cap-pos)break;pos+=(size_t)n;
+  if(field(entry,"ip")[0])has_top++;
+  if(field(details,"ip_address")[0])has_detail++;
+  if(field(details,"domain")[0])has_domain++;
  }
- if(!nseen)snprintf(out,cap,"No qualifying details.ip_address IPv4 candidates in snapshot.\n");
+ snprintf(out,cap,
+  "Source-role assessment: %zu qualifying records inspected; "
+  "API top-level ip present in %zu, details.ip_address present in %zu, "
+  "domain present in %zu.\n"
+  "Source/client IP: NOT VERIFIED. Affected/destination IP: NOT VERIFIED.\n"
+  "http:BL lookups withheld: neither IP field has a documented and "
+  "validated network role. Previous reputation lookups remain historical "
+  "resolver observations, not source-IP intelligence.\n",
+  qualifying,has_top,has_detail,has_domain);
 }
 static int case_db_open(sqlite3 **db){
  if(sqlite3_open_v2(CASE_DB,db,SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE,NULL)!=SQLITE_OK){
@@ -608,7 +601,7 @@ static stnlabz_module_result_t poll_service(
    size_t used=strlen(brief);
    if(used+strlen(enrich)+170<sizeof brief)
     snprintf(brief+used,sizeof brief-used,
-     "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*HTTP:BL ENRICHMENT* (first three unique details.ip_address IPv4 fields; role unverified)\n\n%s\nReputation is not proof of an attack, destination or compromise.",enrich);
+     "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*IP ROLE VALIDATION / HTTP:BL* (source and destination must be verified before enrichment)\n\n%s\nReputation is not proof of an attack, destination or compromise.",enrich);
   }
   if(case_updates>0){
    size_t used=strlen(brief);
@@ -931,7 +924,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=3,.version_patch=2,
+ .version_major=0,.version_minor=3,.version_patch=3,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
