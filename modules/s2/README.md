@@ -1,4 +1,4 @@
-# Digit S2 v0.3.6 — Evidence-Based IP Field Semantics and Operational Visibility
+# Digit S2 v0.3.7 — Evidence-Based IP Field Semantics and Operational Visibility
 
 S2 uses the existing ABI 1.5 services and is hot-loadable without restarting Digit. This revision routes evidence-bounded, six-section assessment briefs and Rictus-linked observation updates through the **existing** `digit.slack.intel.deliver` service. Slack itself owns the configured private `intel_channel_id`. Neither Core nor Slack needs modification.
 
@@ -106,3 +106,7 @@ Runtime descriptor and qualification test now explicitly identify **0.3.5**. Reb
 Before each candidate IPv4 http:BL query, S2 inspects its persisted SQLite lookup audit. Previously resolved attempts are skipped for 24 hours, while incomplete/key-unavailable outcomes may be retried after one hour. If the audit is unreadable, the candidate is skipped rather than silently querying without durable deduplication. The per-brief limit remains three *new lookup attempts* and the six-hour private operational brief remains enabled. It reports newly attempted versus recently skipped candidates and the cumulative audit summary. IP lookup lines now use explicit blank-line separators; prior investigations and raw source evidence are unchanged. The code retains no automatic block authority.
 
 Loader version is now 0.3.6 and qualification test requires that version. Source commit alone does not install the shared object; rebuild and hot-load using Digit's normal workflow. Runtime compile/Slack layout verification remains necessary.
+
+## v0.3.7 — Bounded Slack delivery
+
+S2 sends intelligence briefs as up to four numbered parts, each carrying no more than 3000 bytes of brief content, preferring paragraph/line boundaries and avoiding UTF-8 continuation-byte splits. The http:BL summary uses explicit paragraph breaks between coverage, audit statistics, and the final qualification. Each part requires a successful Slack service acknowledgement before S2 sends the next. Partial delivery followed by retry may duplicate earlier parts; the current ABI provides no durable Slack message IDs or transactional multi-part delivery. This revision does not claim exactly-once delivery. No Core, Slack, Sentinel, or business-impact attribution changes are introduced. Rebuild and qualify before hotloading.
