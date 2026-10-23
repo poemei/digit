@@ -10,6 +10,7 @@
 #include <strings.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <pthread.h>
 #include <curl/curl.h>
 #include <json-c/json.h>
 #include "module.h"
@@ -34,6 +35,7 @@ static destination_t destinations[3];
 static char username[256],password[512],poemei_account[128];
 static const stnlabz_module_host_t *host_api;
 static int credentials_ready;
+static pthread_mutex_t credentials_mutex=PTHREAD_MUTEX_INITIALIZER;
 static void erase(void *p,size_t n){volatile unsigned char *b=p;while(n--)*b++=0;}
 static int bounded(const char *s,size_t max){return s&&memchr(s,0,max)!=NULL;}
 static int secure_config(const char *path){
@@ -320,6 +322,16 @@ static int image_id(const char *html){
  }
  return -1;
 }
+/* Startup configuration failures are recoverable. Never permanently cache
+ * a failed load while the module remains active. Validation stays unchanged. */
+static int publication_credentials_ready(void){
+ int ready;
+ pthread_mutex_lock(&credentials_mutex);
+ if(!credentials_ready)credentials_ready=load_config();
+ ready=credentials_ready;
+ pthread_mutex_unlock(&credentials_mutex);
+ return ready;
+}
 static stnlabz_module_result_t publish(const void *req,size_t bytes,
  void *res,size_t cap,size_t *used,void *ctx){
  const publish_request_t *p=req;publish_response_t answer={0};
@@ -333,8 +345,12 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
  }
  destination_t *site=NULL;
  for(int i=0;i<3;i++)if(!strcmp(destinations[i].name,p->site))site=&destinations[i];
- if(!credentials_ready||!site||!editorial_valid(p)){
-  const char *reason=!credentials_ready?"Publisher site configuration or credentials unavailable.":
+ int auth_ready=publication_credentials_ready();
+ /* The refreshed configuration may populate the destination table. */
+ site=NULL;
+ for(int i=0;i<3;i++)if(!strcmp(destinations[i].name,p->site))site=&destinations[i];
+ if(!auth_ready||!site||!editorial_valid(p)){
+  const char *reason=!auth_ready?"Publisher site configuration or credentials unavailable after reload.":
     !site?"Publisher destination not configured.":"Publisher editorial or caller authorization rejected.";
   copy(answer.error,sizeof answer.error,reason);
   memcpy(res,&answer,sizeof answer);*used=sizeof answer;
@@ -716,7 +732,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="publisher",.name="Digit Markdown Publisher",
- .version_major=0,.version_minor=4,.version_patch=11,
+ .version_major=0,.version_minor=4,.version_patch=12,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
