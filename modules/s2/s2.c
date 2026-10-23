@@ -887,9 +887,16 @@ static stnlabz_module_result_t poll_service(
   }
   char publication_status[320]={0};
   public_page_review(case_total,brief,publication_status,sizeof publication_status);
-  {size_t used=strlen(brief);
-   if(used+strlen(publication_status)+96<sizeof brief)
-    snprintf(brief+used,sizeof brief-used,"\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*PUBLIC PAGE / PUBLISHER*\n\n%s",publication_status);
+  {
+   /* Surface the publisher outcome first, independently of report length.
+    * A missing outcome must never be concealed by the findings buffer. */
+   char with_status[INTEL_REPORT_CAP]={0};
+   int written=snprintf(with_status,sizeof with_status,
+     "*PUBLIC PAGE / PUBLISHER*\n\n%s\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n%s",
+     publication_status[0]?publication_status:"No publisher outcome recorded.",brief);
+   if(written>=0){
+    snprintf(brief,sizeof brief,"%s",with_status);
+   }
   }
   pthread_mutex_lock(&intel_mutex);
   /* Never overwrite an undelivered private brief. */
@@ -1225,7 +1232,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=4,.version_patch=6,
+ .version_major=0,.version_minor=4,.version_patch=7,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
