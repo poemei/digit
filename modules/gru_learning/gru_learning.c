@@ -370,52 +370,87 @@ static int checkpoint_load(void){
  sync_cursor[0]=a;sync_cursor[1]=b;sync_cursor[2]=c;
  return 1;
 }
+/* A row is one delivery transaction at the cursor level: commit only
+ * after every UTF-8-safe fragment has been acknowledged by /learn.
+ * If interrupted, retry from the start; at-least-once queue writes can
+ * duplicate fragments, but never silently omit the rest of a lesson. */
+static int chunk_valid(const digit_gru_feed_chunk_query_t *query,
+ const digit_gru_feed_chunk_result_t *chunk,
+ const digit_gru_feed_chunk_result_t *first){
+ if(!query||!chunk||!chunk->found||
+    chunk->id<=query->after_id||chunk->offset!=query->offset||
+    chunk->length>DIGIT_GRU_FEED_CHUNK_BYTES||
+    chunk->next_offset!=chunk->offset+chunk->length||
+    chunk->next_offset>chunk->total_bytes||
+    chunk->more!=(chunk->next_offset<chunk->total_bytes)||
+    (!chunk->length&&chunk->total_bytes)||
+    !terminated(chunk->text,sizeof chunk->text)||
+    strlen(chunk->text)!=chunk->length||
+    !terminated(chunk->category,sizeof chunk->category)||
+    !terminated(chunk->verification_status,sizeof chunk->verification_status)||
+    !terminated(chunk->source_id,sizeof chunk->source_id))
+    return 0;
+ if(first&&(chunk->id!=first->id||
+    chunk->total_bytes!=first->total_bytes||
+    chunk->fingerprint!=first->fingerprint||
+    strcmp(chunk->category,first->category)||
+    strcmp(chunk->verification_status,first->verification_status)||
+    strcmp(chunk->source_id,first->source_id)))return 0;
+ return 1;
+}
 static int feed_one(unsigned index){
- digit_gru_feed_query_t query={0};
- digit_gru_feed_result_t page={0};
+ digit_gru_feed_chunk_query_t query={0};
+ digit_gru_feed_chunk_result_t chunk={0},first={0};
  digit_gru_learn_request_t learn={0};
  digit_gru_learn_result_t receipt={0};
  stnlabz_module_result_t rc;
  size_t used=0;
- const digit_gru_feed_item_t *row;
  const char *kind;
  int written;
+ unsigned parts=0;
  query.source_type=index+1;
  query.after_id=sync_cursor[index];
- rc=host->invoke_service(DIGIT_SQLITE3_GRU_FEED_SERVICE,
-      &query,sizeof query,&page,sizeof page,&used);
- if(rc!=STNLABZ_MODULE_OK||used!=sizeof page||
-    page.count>DIGIT_GRU_FEED_PAGE_SIZE)return -1;
- if(!page.count)return 0;
- row=&page.items[0];
- if(row->id<=query.after_id||
-    !terminated(row->text,sizeof row->text)||
-    !terminated(row->category,sizeof row->category)||
-    !terminated(row->verification_status,sizeof row->verification_status))
-    return -1;
  kind=index==0?"Corpus":index==1?"Observation":"Context";
- /* The question is metadata, not a fabricated user question. The response
-  * is a byte-for-byte copy of the SQLite feed's sanitized text. */
- written=snprintf(learn.input,sizeof learn.input,
-     "Digit %s record %lld, category %.60s, verification %.44s:",
-     kind,(long long)row->id,row->category,row->verification_status);
- if(written<=0||(size_t)written>=sizeof learn.input)return -1;
- if(!row->text[0]){
-  sync_cursor[index]=row->id;
-  return checkpoint_save()?1:-1;
+ for(;;){
+  if(!atomic_load(&sync_running))return -1;
+  used=0;
+  rc=host->invoke_service(DIGIT_SQLITE3_GRU_FEED_CHUNK_SERVICE,
+      &query,sizeof query,&chunk,sizeof chunk,&used);
+  if(rc!=STNLABZ_MODULE_OK||used!=sizeof chunk)return -1;
+  if(!chunk.found)return parts?-1:0;
+  if(!chunk_valid(&query,&chunk,parts?&first:NULL))return -1;
+  if(!parts)first=chunk;
+  /* An empty row is not a learnable pair. Still advance it safely. */
+  if(chunk.total_bytes){
+   memset(&learn,0,sizeof learn);
+   written=snprintf(learn.input,sizeof learn.input,
+     "Digit %s record %lld, source %.70s, category %.60s, "
+     "verification %.44s, part %u, byte range %u-%u of %u, "
+     "fingerprint %016llx:",
+     kind,(long long)chunk.id,chunk.source_id,chunk.category,
+     chunk.verification_status,parts+1,chunk.offset,
+     chunk.next_offset,chunk.total_bytes,
+     (unsigned long long)chunk.fingerprint);
+   if(written<=0||(size_t)written>=sizeof learn.input)return -1;
+   memcpy(learn.response,chunk.text,chunk.length+1);
+   memcpy(learn.source,"digit",6);
+   learn.approved=1;
+   used=0;memset(&receipt,0,sizeof receipt);
+   rc=host->invoke_service(DIGIT_GRU_LEARN_SERVICE,
+       &learn,sizeof learn,&receipt,sizeof receipt,&used);
+   if(rc!=STNLABZ_MODULE_OK||used!=sizeof receipt||
+      receipt.accepted!=1||receipt.trained!=0||
+      !terminated(receipt.status,sizeof receipt.status)||
+      strcmp(receipt.status,"queued_for_review"))return -1;
+  }
+  parts++;
+  if(!chunk.more){
+   sync_cursor[index]=chunk.id;
+   return checkpoint_save()?1:-1;
+  }
+  if(chunk.next_offset<=query.offset)return -1;
+  query.offset=chunk.next_offset;
  }
- memcpy(learn.response,row->text,sizeof row->text);
- snprintf(learn.source,sizeof learn.source,"digit");
- learn.approved=1;
- used=0;
- rc=host->invoke_service(DIGIT_GRU_LEARN_SERVICE,
-      &learn,sizeof learn,&receipt,sizeof receipt,&used);
- if(rc!=STNLABZ_MODULE_OK||used!=sizeof receipt||
-    receipt.accepted!=1||receipt.trained!=0||
-    !terminated(receipt.status,sizeof receipt.status)||
-    strcmp(receipt.status,"queued_for_review"))return -1;
- sync_cursor[index]=row->id;
- return checkpoint_save()?1:-1;
 }
 static void *sync_loop(void *arg){
  unsigned source=0;
@@ -442,6 +477,30 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  size_t i;
  if(!r)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(r,0,sizeof *r);
+ {
+  digit_gru_feed_chunk_query_t query={0};
+  digit_gru_feed_chunk_result_t part={0},prior={0};
+  query.source_type=DIGIT_GRU_FEED_CORPUS;query.after_id=17;
+  part.found=1;part.id=18;part.offset=0;part.length=1024;
+  part.total_bytes=2048;part.next_offset=1024;part.more=1;
+  memset(part.text,'x',part.length);
+  part.text[part.length]=0;
+  strcpy(part.category,"lesson");strcpy(part.source_id,"lesson-18");
+  strcpy(part.verification_status,"unverified");
+  part.fingerprint=1234567;
+  check(r,chunk_valid(&query,&part,NULL),0);
+  prior=part;
+  query.offset=1024;part.offset=1024;part.next_offset=2048;part.more=0;
+  check(r,chunk_valid(&query,&part,&prior),0);
+  part.fingerprint++;
+  check(r,!chunk_valid(&query,&part,&prior),1);
+  part.fingerprint--;
+  part.length=1023;
+  check(r,!chunk_valid(&query,&part,&prior),1);
+  part.length=1024;part.text[50]=0;
+  check(r,!chunk_valid(&query,&part,&prior),1);
+ }
+
  check(r,!validate(&request),1);
  check(r,!validate(NULL),1);
  strcpy(request.channel,"#digit");
@@ -603,7 +662,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="gru_learning",.name="GRU Learning and SQLite3 Continuous Sync",
- .version_major=0,.version_minor=7,.version_patch=0,
+ .version_major=0,.version_minor=7,.version_patch=1,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
