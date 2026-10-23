@@ -236,9 +236,9 @@ static void operational_evidence(json_object *records,char *out,size_t cap){
  }
  snprintf(out,cap,
   "Source HTTP outcomes (qualifying records, max 5000 scanned): %lu; "
-  "explicit response_status supplied: %lu; absent/invalid: %lu.\\n\\n"
+  "explicit response_status supplied: %lu; absent/invalid: %lu.\n\n"
   "Observed HTTP 403/429 responses: %lu; HTTP 5xx responses: %lu; "
-  "other valid responses: %lu.\\n\\n"
+  "other valid responses: %lu.\n\n"
   "Response codes, even when supplied, do not independently demonstrate "
   "downtime, disclosure, exploitation, or financial impact.",
   qualified,with_status,missing,blocked,server_error,other);
@@ -732,7 +732,7 @@ static stnlabz_module_result_t poll_service(
    size_t used=strlen(brief);
    if(used+strlen(outcomes)+110<sizeof brief)
     snprintf(brief+used,sizeof brief-used,
-     "\\n\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n\\n*SOURCE RESPONSE EVIDENCE*\\n\\n%s",outcomes);
+     "\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*SOURCE RESPONSE EVIDENCE*\n\n%s",outcomes);
   }
   /* Business effects require independent service or financial evidence.
    * Neither a matched request path nor an http:BL result provides it. */
