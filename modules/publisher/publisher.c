@@ -283,12 +283,20 @@ static int s2_executive_description(const char *markdown,char *out,size_t cap){
  const char *start,*end;
  size_t n=0;int spaced=0;
  if(!markdown||!out||cap<2)return 0;
- start=strstr(markdown,"*1. EXECUTIVE SUMMARY*");
- if(!start)return 0;
- start=strstr(start,"\n\n");
- if(!start)return 0;
- start+=2;
- end=strstr(start,"━━━━━━━━");
+ start=strstr(markdown,"## 1. EXECUTIVE SUMMARY");
+ if(start){
+  start=strstr(start,"\n\n");
+  if(!start)return 0;
+  start+=2;
+  end=strstr(start,"\n---\n");
+ }else{
+  start=strstr(markdown,"*1. EXECUTIVE SUMMARY*");
+  if(!start)return 0;
+  start=strstr(start,"\n\n");
+  if(!start)return 0;
+  start+=2;
+  end=strstr(start,"━━━━━━━━");
+ }
  if(!end)return 0;
  while(start<end){
   unsigned char c=(unsigned char)*start++;
@@ -674,6 +682,10 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
   char desc[1024]={0};
   const char *report="Snapshot: S2-PUBLIC-SNAPSHOT-10\n\n*1. EXECUTIVE SUMMARY*\n\nAPI severity HIGH under investigation.\n\nRictus: accessible | Sentinel: accessible\n\n━━━━━━━━\n\n*2. ACTIVE INVESTIGATIONS*";
   check(r,s2_executive_description(report,desc,sizeof desc)&&strstr(desc,"Rictus: accessible")!=NULL,0);
+  check(r,s2_executive_description(
+   "## 1. EXECUTIVE SUMMARY\n\n**Status:** Under Investigation\n\n"
+   "Rictus: accessible\n\n---\n\n## 2. ACTIVE INVESTIGATIONS",
+   desc,sizeof desc)&&strstr(desc,"Under Investigation")!=NULL,0);
   check(r,!s2_executive_description("No executive section",desc,sizeof desc),1);
   {
    const char *edit="<input name=\"original_slug\" value=\"sai-dsa\">";
@@ -739,7 +751,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="publisher",.name="Digit Markdown Publisher",
- .version_major=0,.version_minor=4,.version_patch=13,
+ .version_major=0,.version_minor=4,.version_patch=14,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
