@@ -1,4 +1,4 @@
-# Digit Publisher v0.4.5 — ABI 1.5
+# Digit Publisher v0.4.6 — ABI 1.5
 
 The production service `digit.publisher.publish` now uses the tested ChAoS MVC browser-form contract, not an invented Bearer JSON API. It accepts a revised fixed-size request (`site`, `kind`, `category`, `title`, `markdown`, `subject`, `source_actor`, `evidence_ref`, `post_title`, `post_markdown`) and responds with confirmation/error in the original response shape. Configured sites: `chaos`, `stnlabz`, `poemei`. PoeMei publishing uses the existing IRC configuration and requires the caller to supply the authenticated IRC account-tag identity. Supported kinds: `announcements`, `news`, `page`, `posts`, and opt-in `intelligence` for STN-LABZ only. SRT remains disabled.
 
@@ -58,3 +58,7 @@ The deployed `/opt/digit/auth/sites/sites.json` must explicitly opt in `page_upd
 Publisher activation no longer depends on the private site configuration or login credential files being readable and valid at module startup. A missing/invalid configuration instead leaves publishing disabled while the service itself can register, allowing module activation. Any attempted publication in that state is denied by `credentials_ready`; this change does not bypass the existing destination, subject, kind or identity gates. Startup writes a non-secret diagnostic to stderr for configuration failure or service registration failure. If service registration itself fails, module activation still fails.
 
 A successful loader activation confirms module lifecycle only: `/sai-dsa` publication remains blocked until configuration and credentials pass their usual checks. Deploy the configuration before activation; the module reads it at startup and does not silently enable publishing later. No Core or production secret changes.
+
+## v0.4.6 — Existing STN-LABZ Core Page authorization
+
+Digit S2's `page_update` operation on the fixed existing `sai-dsa` Core Page is now authorized by STN-LABZ's existing `page` publication kind. The caller must still pass the `site=stnlabz`, `source_actor=digit.s2`, and `subject=stnlabz` editorial checks; the target remains fixed and authenticated Core Page update verification is still required. This avoids a private sites.json configuration migration when Core Page publishing was already authorized. Explicit `page_update` remains supported. The module version changes to 0.4.6, required for hotload qualification. This does not establish live website publication or override invalid credentials.
