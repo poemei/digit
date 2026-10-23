@@ -1,4 +1,4 @@
-# Digit Slack v0.1.10 — ABI 1.5 transport candidate
+# Digit Slack v0.1.11 — ABI 1.5 transport candidate
 
 This is a **source candidate**, not a certified or connected Slack deployment.
 It is separate from Digit Core and uses the existing ABI 1.5 named service registry.
@@ -12,7 +12,7 @@ It is separate from Digit Core and uses the existing ABI 1.5 named service regis
 - DM-only DSD `show dsd`, `show trace`, and `diagnose my last request` commands now invoke the existing DSD ABI service. The transport stores each Slack user's previous DM trace separately. Unscoped trace/module commands remain denied. General channels cannot invoke DSD.
 - Channel event classification falls back to Slack channel IDs when `channel_type` is absent; it continues to reject bot and subtype events.
 - Two registered outgoing delivery endpoints: `digit.slack.intel.deliver` and `digit.slack.modules.deliver`, each restricted to its configured private-channel destination.
-- Operational announcements: Slack reads **new** authoritative module hotload notices from `/opt/digit/logs/modules.log` and posts `[MODULE] HOTLOAD_ACTIVE ...` to the configured `module_channel_id` after successful admission/replacement. It does not manufacture success events or replay the historical log on activation.
+- Operational feedback: Slack reads **new** authoritative loader audit events from `/opt/digit/logs/modules.log` and forwards admitted/replaced, denied, and failed hot-load outcomes to the configured private `module_channel_id` (intended for `#digit-ops`). Failure reports never claim a candidate was activated. The module does not replay the historical log when first activated, and retries unsuccessful Slack posts from their original file offset while running.
 - SQLite3 ingestion sends `[SQLITE MEMORY] ...` sync reports to the existing `digit.slack.modules.deliver` endpoint with an independent bounded retry queue. The current SQLite ingestion text reports per-source added, updated, skipped counts rather than the historical aggregate example.
 - `learn_operator_user_id` and `learn_authorization_key` are parsed as reserved configuration for future Lessons integration, but Lessons is not active or implemented here.
 - Historical STN-2 intelligence investigations, full briefs, persistent alert outbox, Slack login, and memory support are not ported.
