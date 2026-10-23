@@ -83,7 +83,7 @@ static void public_page_review(int case_count,const char *brief,char *status,siz
  if(sqlite3_exec(db,
   "INSERT OR IGNORE INTO s2_publication_state(id) VALUES(1)",
   NULL,NULL,NULL)!=SQLITE_OK)goto finish;
- long long last_event=0,published_event=0,last_attempt=0,last_success=0;
+ long long last_event=0,last_attempt=0,last_success=0;
  if(sqlite3_prepare_v2(db,
   "SELECT COALESCE(MAX(event_id),0) FROM s2_case_events",
   -1,&st,NULL)!=SQLITE_OK)goto finish;
@@ -91,12 +91,12 @@ static void public_page_review(int case_count,const char *brief,char *status,siz
  last_event=sqlite3_column_int64(st,0);
  sqlite3_finalize(st);st=NULL;
  if(sqlite3_prepare_v2(db,
-  "SELECT last_attempt,last_success,last_event FROM s2_publication_state WHERE id=1",
+  "SELECT last_attempt,last_success FROM s2_publication_state WHERE id=1",
   -1,&st,NULL)!=SQLITE_OK)goto finish;
  if(sqlite3_step(st)!=SQLITE_ROW)goto finish;
  last_attempt=sqlite3_column_int64(st,0);
  last_success=sqlite3_column_int64(st,1);
- published_event=sqlite3_column_int64(st,2);
+
  sqlite3_finalize(st);st=NULL;
  time_t now=time(NULL);
  /* Publish each newly generated intelligence report. Only throttle a
