@@ -1,4 +1,4 @@
-# Digit S2 v0.3.0 — Project Honey Pot http:BL Enrichment
+# Digit S2 v0.3.1 — Consistent Intelligence Report Dividers
 
 S2 uses the existing ABI 1.5 services and is hot-loadable without restarting Digit. This revision routes evidence-bounded, six-section assessment briefs and Rictus-linked observation updates through the **existing** `digit.slack.intel.deliver` service. Slack itself owns the configured private `intel_channel_id`. Neither Core nor Slack needs modification.
 
@@ -74,3 +74,7 @@ S2 continues polling and keeping its SQLite source/case history, but suppresses 
 ## v0.3.0 — Protected http:BL lookup (IPv4 only)
 
 S2 reads the 12-letter lowercase Project Honey Pot access key from `/opt/digit/auth/httpbl.key` as the Digit runtime account (expected `digit:digit`, file `0600`, directory `0700`). The key is not committed, printed, or included in reports. On a meaningful S2 private-intelligence update, the module performs at most three DNS-based reputation lookups for distinct qualifying `details.ip_address` IPv4 values; no IPv6 lookups are attempted. The result is appended privately to the Slack brief as `HTTP:BL ENRICHMENT`, reporting listed, not listed, key unavailable, or lookup incomplete. A listed response reports age in days, threat score, and type bitmask. A non-listing is **not an all-clear**, and every lookup is external reputation evidence, not proof that the field is the client, source, attacker or destination IP or that a compromise occurred. `getaddrinfo` uses the host's normal DNS resolution; no extra HTTP authentication header or public release is involved. Live DNS, credentials, build, hotload and report delivery are **not yet verified**. No Core, Publisher, website or IRC modifications were made. Version follows STN-LABZ rollover 0.2.10 → 0.3.0.
+
+## v0.3.1 — Slack report horizontal separators
+
+Every finding in the recent and historical case sections now begins after a full-width divider (`━━━━━━━━━━━━━━━━━━━━━━━━━━━━`). Matching dividers separate the six established intelligence sections, the investigation findings section, http:BL enrichment, and optional case-activity/persistence warnings. The http:BL heading and reputation results have explicit paragraph breaks. The threat-intelligence threshold statement no longer runs into the next field. This release changes private Slack presentation only; source investigation, credential lookup, persistence, IRC, publishing, and Core remain unchanged. Source code has been committed, but build, qualification, and visual verification in Slack remain to be performed.
