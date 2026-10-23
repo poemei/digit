@@ -240,6 +240,59 @@ static int ingest_cases(json_object *records,char *summary,size_t cap,int *total
  sqlite3_close(db);
  return errors?-1:updates;
 }
+/* Read stored evidence only; ordering is priority then recorded recency,
+ * not a claim that historical cases are recent attacks. */
+static void case_investigation_snapshot(char *dst,size_t cap){
+ sqlite3 *db=NULL,*unused=NULL;
+ sqlite3_stmt *st=NULL;
+ size_t pos=0;
+ (void)unused;
+ if(!dst||!cap)return;
+ dst[0]=0;
+ if(!case_db_open(&db)){
+  snprintf(dst,cap,"Case evidence unavailable: local case register could not be read.");
+  return;
+ }
+ const char *sql=
+  "SELECT c.source_id,c.severity,c.relevance,c.source_time,"
+  "c.primary_ip,c.detail_ip,c.domain,c.request_url,c.revisions,"
+  "COALESCE((SELECT e.event_type FROM s2_case_events e "
+  "WHERE e.source_id=c.source_id ORDER BY e.event_id DESC LIMIT 1),'HISTORICAL_BASELINE') "
+  "FROM s2_cases c ORDER BY "
+  "CASE c.severity WHEN 'CRITICAL' THEN 4 WHEN 'HIGH' THEN 3 "
+  "WHEN 'MEDIUM' THEN 2 ELSE 0 END DESC,c.last_seen DESC,c.source_id LIMIT 5";
+ if(sqlite3_prepare_v2(db,sql,-1,&st,NULL)!=SQLITE_OK){
+  snprintf(dst,cap,"Case evidence query failed; no individual findings assessed.");
+  sqlite3_close(db);return;
+ }
+ int ncases=0,rc;
+ while((rc=sqlite3_step(st))==SQLITE_ROW){
+  char line[800];
+  const char *v[10];
+  for(int i=0;i<10;i++){
+   v[i]=(const char*)sqlite3_column_text(st,i);
+   if(!v[i])v[i]="not supplied";
+  }
+  int revisions=sqlite3_column_int(st,8);
+  int n=snprintf(line,sizeof line,
+   "\n*Case %d | %.100s*\n"
+   "API severity: %.12s | relevance: %.12s | last source timestamp: %.40s\n"
+   "Primary IP: %.48s | detail IP: %.48s\n"
+   "Domain: %.100s | request: %.120s\n"
+   "Recorded changes: %d | last transition: %.28s\n"
+   "Assessment: source-reported suspicious finding; independent incident confirmation unavailable.\n"
+   "Next action: review source evidence, time alignment and independent Rictus corroboration.\n",
+   ++ncases,v[0],v[1],v[2],v[3],v[4],v[5],v[6],v[7],
+   revisions>0?revisions-1:0,v[9]);
+  if(n<=0||(size_t)n>=sizeof line||pos+(size_t)n>=cap)break;
+  memcpy(dst+pos,line,(size_t)n);
+  pos+=(size_t)n;dst[pos]=0;
+ }
+ if(rc!=SQLITE_DONE&&rc!=SQLITE_ROW&&pos+80<cap)
+  snprintf(dst+pos,cap-pos,"\nCase listing incomplete: database read error.\n");
+ if(!ncases)snprintf(dst,cap,"No qualifying case records in the local register.");
+ sqlite3_finalize(st);sqlite3_close(db);
+}
 static long local_tail(char lines[RICTUS_LINES][512],size_t *stored){
  FILE *f=fopen(RICTUS,"r");char line[512];long count=0;
  *stored=0;
@@ -361,6 +414,13 @@ static stnlabz_module_result_t poll_service(
   char brief[INTEL_REPORT_CAP]={0};
   intelligence_brief(brief,sizeof brief,report,count,available,has_priority,matched,
     signature,!first_report,case_total,case_updates);
+  {char findings[4800]={0};
+   case_investigation_snapshot(findings,sizeof findings);
+   size_t used=strlen(brief);
+   if(used+strlen(findings)+160<sizeof brief)
+    snprintf(brief+used,sizeof brief-used,
+     "\\n\\n*INVESTIGATION CASE REVIEW* (five highest-severity stored records; historical evidence, not new attacks)\\n%s",findings);
+  }
   if(case_updates>0){
    size_t used=strlen(brief);
    snprintf(brief+used,sizeof brief-used,"\n\n*CASE ACTIVITY* (records opened/changed: %d; tracked cases: %d)\n%.3000s",
@@ -481,12 +541,12 @@ static void intelligence_brief(char *dst,size_t cap,const char *short_report,
   "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
   "*1. EXECUTIVE SUMMARY*\n\n"
   "%s\n\n"
-  "Rictus: %s | Sentinel: %s\n"
+  "Rictus: %s | Sentinel: %s\n\n"
   "Case register: %s. This poll: %s.\n\n"
   "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
   "*2. ACTIVE INVESTIGATIONS*\n\n"
-  "Tracked: %s.\n"
-  "Latest ingestion: %s.\n"
+  "Tracked: %s.\n\n"
+  "Latest ingestion: %s.\n\n"
   "Cases are keyed by Sentinel source ID. Evidence changes are recorded "
   "in a durable case-event history; severity/relevance changes never "
   "prove an incident or close an investigation. "
@@ -494,14 +554,14 @@ static void intelligence_brief(char *dst,size_t cap,const char *short_report,
   "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
   "*3. THREAT INTELLIGENCE OVERVIEW*\n\n"
   "Investigation threshold: API severity MEDIUM, HIGH or CRITICAL (relevance is context, not a gate).\n"
-  "Qualifying source findings in this feed snapshot: %s.\n"
-  "Rictus log records in current file: %ld.\n"
+  "Qualifying source findings in this feed snapshot: %s.\n\n"
+  "Rictus log records in current file: %ld.\n\n"
   "Higher severity requires explicit source evidence; historical "
   "24-hour rates and incident counts are not yet established.\n\n"
   "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
   "*4. CROSS-SOURCE INTELLIGENCE*\n\n"
-  "Exact IPv4 overlap with the last 128 Rictus log records: %s.\n"
-  "Source record signature: %.180s.\n"
+  "Exact IPv4 overlap with the last 128 Rictus log records: %s.\n\n"
+  "Source record signature: %.180s.\n\n"
   "An indicator match does not independently prove compromise; "
   "primary and details IPs retain separate roles.\n\n"
   "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -681,7 +741,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=2,.version_patch=3,
+ .version_major=0,.version_minor=2,.version_patch=4,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
