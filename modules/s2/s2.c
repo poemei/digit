@@ -160,6 +160,9 @@ static void public_page_review(int case_count){
    sqlite3_bind_int64(st,2,(sqlite3_int64)last_event);
    (void)sqlite3_step(st);
   }
+  fprintf(stderr,"s2: sai-dsa published event=%lld cases=%d\n",last_event,case_count);
+ }else{
+  fprintf(stderr,"s2: sai-dsa publish failed result=%d used=%zu published=%d error=%.150s\n",(int)result,used,answer.published,answer.error);
  }
 finish:
  if(st)sqlite3_finalize(st);
@@ -816,7 +819,9 @@ static stnlabz_module_result_t poll_service(
     persistence_ok!=last_persistence_ok;
   if(!meaningful){
    previous_lines=count;
-   unlock();goto done;
+   unlock();
+   public_page_review(case_total);
+   goto done;
   }
   snprintf(previous_signature,sizeof previous_signature,"%s",signature);
   previous_lines=count;
@@ -1257,7 +1262,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=4,.version_patch=0,
+ .version_major=0,.version_minor=4,.version_patch=1,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
