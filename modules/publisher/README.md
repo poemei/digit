@@ -1,4 +1,4 @@
-# Digit Publisher v0.4.6 — ABI 1.5
+# Digit Publisher v0.4.7 — ABI 1.5
 
 The production service `digit.publisher.publish` now uses the tested ChAoS MVC browser-form contract, not an invented Bearer JSON API. It accepts a revised fixed-size request (`site`, `kind`, `category`, `title`, `markdown`, `subject`, `source_actor`, `evidence_ref`, `post_title`, `post_markdown`) and responds with confirmation/error in the original response shape. Configured sites: `chaos`, `stnlabz`, `poemei`. PoeMei publishing uses the existing IRC configuration and requires the caller to supply the authenticated IRC account-tag identity. Supported kinds: `announcements`, `news`, `page`, `posts`, and opt-in `intelligence` for STN-LABZ only. SRT remains disabled.
 
@@ -62,3 +62,7 @@ A successful loader activation confirms module lifecycle only: `/sai-dsa` public
 ## v0.4.6 — Existing STN-LABZ Core Page authorization
 
 Digit S2's `page_update` operation on the fixed existing `sai-dsa` Core Page is now authorized by STN-LABZ's existing `page` publication kind. The caller must still pass the `site=stnlabz`, `source_actor=digit.s2`, and `subject=stnlabz` editorial checks; the target remains fixed and authenticated Core Page update verification is still required. This avoids a private sites.json configuration migration when Core Page publishing was already authorized. Explicit `page_update` remains supported. The module version changes to 0.4.6, required for hotload qualification. This does not establish live website publication or override invalid credentials.
+
+## v0.4.7 — Core Page content-file compatibility
+
+Removed the former requirement that existing `/sai-dsa` must already use `main.md`. ChAoS MVC Core Pages `action=update` supports changing the content file from `main.html` or `main.txt` to `main.md`; the S2 Publisher always submits Markdown and preserves the existing slug, title, description, and `published` state. The update still requires authenticated Core administration, passes the S2 editorial gates, and verifies the expected snapshot marker on the public page before returning success. This is a full-body replacement, so the old content should be backed up before activating automated publication. Failure to verify the public marker returns a specific error. No deployment or live update is claimed from this commit.
