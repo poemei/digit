@@ -237,8 +237,7 @@ static void httpbl_audit_status(char *out,size_t cap){
 
 /* Deduplication is anchored to persistent audit, not a hotload-local cache. */
 static int httpbl_recent(const char *ip,time_t now){
- sqlite3 *db=NULL,*unused=NULL;sqlite3_stmt *st=NULL;int result=-1;
- (void)unused;
+ sqlite3 *db=NULL;sqlite3_stmt *st=NULL;int result=-1;
  if(sqlite3_open_v2(CASE_DB,&db,SQLITE_OPEN_READONLY,NULL)!=SQLITE_OK){
   if(db)sqlite3_close(db);return -1;
  }
@@ -291,19 +290,19 @@ static void httpbl_enrichment(json_object *records,char *out,size_t cap){
   const char *state=status==1?"LISTED":status==0?"NO NAME (EAI_NONAME)":
    status==-3?"KEY UNAVAILABLE":"LOOKUP INCOMPLETE";
   int wrote=snprintf(out+pos,cap-pos,
-   "%s — http:BL %s; resolver=%d; audit=%s\\n\\n",
+   "%s — http:BL %s; resolver=%d; audit=%s\n\n",
    ip,state,resolver_rc,audited?"stored":"FAILED");
   if(wrote<0||(size_t)wrote>=cap-pos)break;
   pos+=(size_t)wrote;
   if(status==1){
    wrote=snprintf(out+pos,cap-pos,
-    "Last activity age=%d days; threat score=%d; type bits=%d\\n\\n",
+    "Last activity age=%d days; threat score=%d; type bits=%d\n\n",
     days,score,type);
    if(wrote<0||(size_t)wrote>=cap-pos)break;
    pos+=(size_t)wrote;
   }
  }
- if(n==0)snprintf(out,cap,"No fresh lookup attempted in this report.\\n\\n");
+ if(n==0)snprintf(out,cap,"No fresh lookup attempted in this report.\n\n");
  size_t used=strlen(out);
  if(used+300<cap)snprintf(out+used,cap-used,
   "Coverage: %d lookup attempts (max %d); %d recently audited and skipped; "
