@@ -254,6 +254,8 @@ static void case_investigation_snapshot(char *dst,size_t cap){
   "WHERE e.source_id=c.source_id ORDER BY e.event_id DESC LIMIT 1),'HISTORICAL_BASELINE'),"
   "(SELECT count(*) FROM s2_cases p WHERE p.primary_ip=c.primary_ip "
   "AND p.source_id<>c.source_id AND p.primary_ip<>''),"
+  "(SELECT count(*) FROM s2_cases p WHERE p.detail_ip=c.detail_ip "
+  "AND p.source_id<>c.source_id AND p.detail_ip<>'' AND p.detail_ip IS NOT NULL),"
   "(SELECT count(*) FROM s2_cases p WHERE p.domain=c.domain "
   "AND p.source_id<>c.source_id AND p.domain<>'') "
   "FROM s2_cases c WHERE "
@@ -293,25 +295,31 @@ static void case_investigation_snapshot(char *dst,size_t cap){
     if(!v[i]||!v[i][0])v[i]="not supplied";
    }
    int revisions=sqlite3_column_int(st,8);
-   int ip_peers=sqlite3_column_int(st,10),domain_peers=sqlite3_column_int(st,11);
-   const char *lead=strcmp(v[4],"not supplied")&&ip_peers?
-     "Compare other records sharing this primary IP; shared IP alone is not attribution.":
+   int ip_peers=sqlite3_column_int(st,10);
+   int detail_peers=sqlite3_column_int(st,11);
+   int domain_peers=sqlite3_column_int(st,12);
+   const char *lead=strcmp(v[5],"not supplied")&&detail_peers?
+     "Compare repeated details.ip_address values; first establish whether they identify clients.":
+     strcmp(v[4],"not supplied")&&ip_peers?
+     "Determine whether the widespread top-level ip denotes a server, proxy or client before attributing it.":
      strcmp(v[6],"not supplied")&&domain_peers?
-     "Compare records sharing the domain; a shared domain alone is not one incident.":
-     "Validate original source fields and seek independent Rictus evidence.";
-   char line[920];
+     "Compare shared domains and source times; matching domains do not prove common actors.":
+     "Check API field definitions and corroborate with independent Rictus evidence.";
+   char line[1200];
    int n=snprintf(line,sizeof line,
-    "\n*%d. Case %.95s*\n"
-    "Severity: %.12s | Relevance: %.12s\n"
-    "Source timestamp (timezone unverified): %.32s\n"
-    "Primary IP: %.45s | Detail IP: %.45s\n"
-    "Domain: %.75s | Request: %.90s\n"
-    "History: %d changes | Last event: %.26s\n"
-    "Shared indicators in register: primary IP with %d other records; domain with %d others.\n"
-    "Assessment: API-reported finding; compromise and common actor unconfirmed.\n"
-    "Next: %s\n",
+    "\n*%d. Case %.95s*\n\n"
+    "*Severity:* %.12s | *Relevance:* %.12s\n\n"
+    "*Source time* (timezone unverified): %.32s\n\n"
+    "*API top-level ip:* %.45s | *details.ip_address:* %.45s\n\n"
+    "*Domain:* %.75s | *Request:* %.90s\n\n"
+    "*History:* %d changes | *Last event:* %.26s\n\n"
+    "*Shared values in case register:* top-level ip: %d others; "
+    "details.ip_address: %d others; domain: %d others.\n\n"
+    "*Assessment:* Shared field values are correlation leads only; "
+    "field roles, compromise and common actor are unverified.\n\n"
+    "*Next:* %s\n\n",
     ++rows,v[0],v[1],v[2],v[3],v[4],v[5],v[6],v[7],
-    revisions>0?revisions-1:0,v[9],ip_peers,domain_peers,lead);
+    revisions>0?revisions-1:0,v[9],ip_peers,detail_peers,domain_peers,lead);
    if(n<0||(size_t)n>=sizeof line||(size_t)n>=cap-pos)break;
    memcpy(dst+pos,line,(size_t)n);pos+=(size_t)n;dst[pos]=0;
   }
@@ -519,6 +527,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  test(r,!high("","HIGH"),1);
  test(r,exact_ip("108.178.43.142"),0);
  test(r,exact_ip("34.66.92.201"),0);
+ test(r,strcmp("ip","ip_address")!=0,0);
  test(r,!exact_ip("999.1.1.1"),1);
  test(r,!exact_ip("1.1.1.1x"),1);
  test(r,!exact_ip(""),1);
@@ -776,7 +785,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=2,.version_patch=5,
+ .version_major=0,.version_minor=2,.version_patch=6,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
