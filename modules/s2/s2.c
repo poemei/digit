@@ -174,7 +174,6 @@ finish:
 }
 
 static int deliver_intel(const char *);
-static void irc_notice(digit_s2_report_t *,const char *);
 static void lock(void){while(__sync_lock_test_and_set(&busy,1)){}}
 static void unlock(void){__sync_lock_release(&busy);}
 static size_t collect(char *input,size_t size,size_t count,void *userdata){
@@ -969,13 +968,6 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
   test(r,strstr(brief,"Rictus: unavailable")!=NULL,0);
   test(r,strstr(brief,"12 source-record cases")!=NULL,0);
   test(r,strstr(brief,"3 source records opened or changed")!=NULL,0);
-  {
-   digit_s2_report_t notice={0};
-   irc_notice(&notice,"MEDIUM investigation opened");
-   test(r,strstr(notice.report,"MEDIUM investigation opened")!=NULL,0);
-   test(r,strstr(notice.report,"Slack -> #stn-labz")!=NULL,0);
-   test(r,strlen(notice.report)<sizeof notice.report,0);
-  }
  }
  strcpy(lines[0],"connection from 108.178.43.142");
  strcpy(lines[1],"other 34.66.92.201");
@@ -1152,55 +1144,27 @@ static int observation_report(digit_s2_report_t *out,int64_t *selected){
 }
 /* Dedicated scheduler: never invokes an ABI service from another service
  * handler, avoiding Core's non-recursive registry lock. */
-static void irc_notice(digit_s2_report_t *dst,const char *summary){
- if(!dst)return;
- memset(dst,0,sizeof *dst);
- snprintf(dst->report,sizeof dst->report,
-  "[S2] %.255s | Full intelligence brief: Slack -> #stn-labz",
-  summary&&*summary?summary:"Intelligence report published");
-}
+/* Slack is S2's reporting transport; no routine IRC notifications. */
 static void *scheduler_main(void *unused){
- digit_s2_report_t result={0},pending={0},poll_snapshot={0};size_t used=0;
- int64_t pending_observation=0;
- int drain_observations=0;
- int poll_ready=0;
+ digit_s2_report_t result={0},observation={0};size_t used=0;
+ int64_t candidate_observation=0;
  struct timespec until;
  (void)unused;
  for(;;){
-  int stopping_now;
   pthread_mutex_lock(&scheduler_mutex);
-  stopping_now=scheduler_stop;
+  int stopping_now=scheduler_stop;
   pthread_mutex_unlock(&scheduler_mutex);
   if(stopping_now)break;
-  if(!pending.report[0]&&poll_ready){
-   pending=poll_snapshot;
-   memset(&poll_snapshot,0,sizeof poll_snapshot);
-   poll_ready=0;
-  }
-  if(!pending.report[0]&&observation_report(&pending,&pending_observation)){
-   /* Send the selected Rictus-linked observation as an investigative
-    * update to private Slack. Do not advance its cursor on failure. */
+  if(observation_report(&observation,&candidate_observation)){
    char update[INTEL_REPORT_CAP]={0};
-   intelligence_brief(update,sizeof update,pending.report,-1,0,0,0,
+   intelligence_brief(update,sizeof update,observation.report,-1,0,0,0,
      "S2 observation ID in summary",1,-1,-1);
-   if(!deliver_intel(update)){
-    memset(&pending,0,sizeof pending);
-    pending_observation=0;
-   }else{
-    digit_s2_report_t notice={0};
-    irc_notice(&notice,pending.report);
-    pending=notice;
-   }
+   if(deliver_intel(update))observation_cursor=candidate_observation;
   }
-  if(!pending.report[0]){
-   memset(&result,0,sizeof result);used=0;
-   if(!poll_snapshot.report[0]&&
-      poll_service(NULL,0,&result,sizeof result,&used,NULL)==STNLABZ_MODULE_OK&&
-      used==sizeof result&&memchr(result.report,0,sizeof result.report))
-    irc_notice(&poll_snapshot,result.report);
-  }
-  /* Deliver the full source-backed assessment only to the configured private
-   * Slack intelligence channel, never to an IRC bridge or public website. */
+  memset(&observation,0,sizeof observation);
+  candidate_observation=0;
+  memset(&result,0,sizeof result);used=0;
+  (void)poll_service(NULL,0,&result,sizeof result,&used,NULL);
   {
    char brief[INTEL_REPORT_CAP]={0};
    pthread_mutex_lock(&intel_mutex);
@@ -1210,20 +1174,10 @@ static void *scheduler_main(void *unused){
     pthread_mutex_lock(&intel_mutex);
     if(!strcmp(intel_pending,brief))intel_pending[0]=0;
     pthread_mutex_unlock(&intel_mutex);
-    if(poll_snapshot.report[0])poll_ready=1;
-   }
-  }
-  if(pending.report[0]&&host&&host->invoke_service){
-   size_t delivered=0;
-   if(host->invoke_service(DELIVER_SERVICE,&pending,sizeof pending,
-      NULL,0,&delivered)==STNLABZ_MODULE_OK){
-    if(pending_observation){observation_cursor=pending_observation;pending_observation=0;drain_observations=1;}
-    memset(&pending,0,sizeof pending);
    }
   }
   if(clock_gettime(CLOCK_REALTIME,&until)!=0)break;
-  until.tv_sec+=pending.report[0]||drain_observations?5:POLL_SECONDS;
-  drain_observations=0;
+  until.tv_sec+=POLL_SECONDS;
   pthread_mutex_lock(&scheduler_mutex);
   while(!scheduler_stop){
    int rc=pthread_cond_timedwait(&scheduler_cond,&scheduler_mutex,&until);
@@ -1266,7 +1220,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=4,.version_patch=2,
+ .version_major=0,.version_minor=4,.version_patch=3,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
