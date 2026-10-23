@@ -1,4 +1,4 @@
-# Digit S2 v0.2.3 — API Severity Investigation Gate
+# Digit S2 v0.2.4 — Evidence-Backed Case Reviews
 
 S2 uses the existing ABI 1.5 services and is hot-loadable without restarting Digit. This revision routes evidence-bounded, six-section assessment briefs and Rictus-linked observation updates through the **existing** `digit.slack.intel.deliver` service. Slack itself owns the configured private `intel_channel_id`. Neither Core nor Slack needs modification.
 
@@ -42,3 +42,7 @@ The previous MEDIUM/MEDIUM combined investigation threshold applied through v0.2
 ## v0.2.3 — Source severity controls investigation
 
 The STN-LABZ `/threats` API `severity` field opens or maintains investigation for **MEDIUM, HIGH, or CRITICAL** without requiring the separately supplied `relevance` field to be MEDIUM. Relevance is preserved as evidence/context and never vetoes those severities. Missing/LOW severity does not qualify merely because relevance is high. S2 qualification tests each boundary; unchanged snapshots remain deduplicated, and correlation is never reported as proof of compromise. This revised threshold may admit previously excluded source records as historical imports, not newly occurring attacks.
+
+## v0.2.4 — Investigation case reviews in private Slack
+
+S2 now appends a bounded review of up to five highest-severity stored investigations to generated private Slack intelligence briefs. For each review, the source record ID, API severity, relevance, source timestamp, primary/detail IPs, domain, requested URL, revisions and last recorded transition are read from the SQLite case register and its evidence history. Assessment and next-action language is explicitly qualified; this is a prioritized evidence review, **not** independent incident confirmation or proof the listed historical event just occurred. Line spacing in the core brief was improved. No automatic website publication, Core change, or IRC detail dump is introduced. Cases are displayed when S2 has generated a brief; this is not a new periodic reminder schedule. Live qualification and delivery remain to be verified.
