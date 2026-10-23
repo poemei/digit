@@ -197,9 +197,44 @@ static void audit_token(const char *line,const char *key,char *out,size_t cap){
  if(!n||n>=cap)return;
  memcpy(out,p,n);out[n]=0;
 }
+static int audit_notice(const char *line,char *report,size_t cap){
+ char event[64],id[96],prior[48],candidate[48],reason[128],recovery[128];
+ const char *detail=strstr(line,"detail=reported_event=");
+ if(detail){
+  detail+=strlen("detail=");
+  audit_token(detail,"reported_event=",event,sizeof event);
+ }else{
+  /* Core also writes standalone HOTLOAD_DENIED/HOTLOAD_FAILED events. */
+  const char *marker=strstr(line,"HOTLOAD_DENIED");
+  if(!marker)marker=strstr(line,"HOTLOAD_FAILED");
+  if(!marker)return 0;
+  size_t n=strcspn(marker," \\t\\r\\n");
+  if(!n||n>=sizeof event)return 0;
+  memcpy(event,marker,n);event[n]=0;
+  detail=line;
+ }
+ if(strcmp(event,"HOTLOAD_REPLACED")&&strcmp(event,"HOTLOAD_ADMITTED")&&
+    strcmp(event,"HOTLOAD_DENIED")&&strcmp(event,"HOTLOAD_FAILED"))return 0;
+ audit_token(detail,"module=",id,sizeof id);
+ audit_token(detail,"incumbent_version=",prior,sizeof prior);
+ audit_token(detail,"candidate_version=",candidate,sizeof candidate);
+ audit_token(detail,"reason=",reason,sizeof reason);
+ audit_token(detail,"recovery=",recovery,sizeof recovery);
+ /* Do not claim an active module for a rejected or failed candidate. */
+ const int success=!strcmp(event,"HOTLOAD_REPLACED")||!strcmp(event,"HOTLOAD_ADMITTED");
+ int n=snprintf(report,cap,
+   "*MODULE LOADER | %s*\\nModule: %s\\nCandidate: %s | Incumbent: %s\\nReason: %s\\nRecovery: %s",
+   success?"ACTIVE":!strcmp(event,"HOTLOAD_DENIED")?"DENIED":"FAILED",
+   id[0]?id:"unspecified",
+   candidate[0]?candidate:"not provided",
+   prior[0]?prior:"not provided",
+   reason[0]?reason:"not provided",
+   recovery[0]?recovery:"not provided");
+ return n>0&&(size_t)n<cap;
+}
 static void poll_module_audit(void){
  struct stat st;
- char line[2048],event[64],id[96],prior[48],candidate[48],reason[128],recovery[128];
+ char line[2048],report[512];
  int count=0;
  if(!config.module_channel[0]||!atomic_load(&running))return;
  if(lstat(MODULE_AUDIT,&st)||!S_ISREG(st.st_mode))return;
@@ -210,30 +245,20 @@ static void poll_module_audit(void){
   module_audit=fopen(MODULE_AUDIT,"r");
   if(!module_audit)return;
   audit_inode=st.st_ino;
-  /* On first open, do not replay old notices into an operations flood. */
+  /* First activation begins at EOF rather than flooding digit-ops. */
   if(fseek(module_audit,0,SEEK_END))return;
  }
- while(count++<16&&fgets(line,sizeof line,module_audit)){
-  char report[384];
-  const char *detail=strstr(line,"detail=reported_event=");
-  if(!strchr(line,'\n')){int c;while((c=fgetc(module_audit))!='\n'&&c!=EOF){}continue;}
-  if(!detail)continue;
-  detail+=strlen("detail=");
-  audit_token(detail,"reported_event=",event,sizeof event);
-  if(strcmp(event,"HOTLOAD_REPLACED")&&strcmp(event,"HOTLOAD_ADMITTED"))continue;
-  audit_token(detail,"module=",id,sizeof id);
-  audit_token(detail,"incumbent_version=",prior,sizeof prior);
-  audit_token(detail,"candidate_version=",candidate,sizeof candidate);
-  audit_token(detail,"reason=",reason,sizeof reason);
-  audit_token(detail,"recovery=",recovery,sizeof recovery);
-  if(!id[0]||!candidate[0])continue;
-  if(snprintf(report,sizeof report,
-    "[MODULE] HOTLOAD_ACTIVE id=%s active=%s incumbent=%s candidate=%s reason=%s recovery=%s",
-    id,candidate,prior[0]?prior:"unknown",candidate,
-    reason[0]?reason:"unknown",recovery[0]?recovery:"unknown")>=(int)sizeof report)continue;
+ while(count++<16){
+  long offset=ftell(module_audit);
+  if(!fgets(line,sizeof line,module_audit))break;
+  if(!strchr(line,'\\n')){
+   int c;while((c=fgetc(module_audit))!='\\n'&&c!=EOF){}
+   continue;
+  }
+  if(!audit_notice(line,report,sizeof report))continue;
   if(!posted(config.module_channel,report,NULL)){
-   /* Retry the complete event instead of silently losing it on HTTP failure. */
-   (void)fseek(module_audit,-(long)strlen(line),SEEK_CUR);
+   /* Retry the same event on next poll; do not claim Slack delivery. */
+   if(offset>=0)(void)fseek(module_audit,offset,SEEK_SET);
    break;
   }
  }
@@ -529,6 +554,15 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
   check(r,!strcmp(token,"qualification_and_activation_passed"),0);
   audit_token("other=foo","module=",token,sizeof token);
   check(r,!token[0],1);
+  {char report[512]={0};
+   check(r,audit_notice("detail=reported_event=HOTLOAD_REPLACED module=s2 candidate_version=0.2.1 reason=qualification_and_activation_passed recovery=replacement_active",report,sizeof report),0);
+   check(r,strstr(report,"LOADER | ACTIVE")!=NULL,0);
+   check(r,audit_notice("detail=reported_event=HOTLOAD_DENIED module=s2 reason=candidate_qualification_failed recovery=incumbent_retained",report,sizeof report),0);
+   check(r,strstr(report,"LOADER | DENIED")!=NULL,0);
+   check(r,audit_notice("event=HOTLOAD_FAILED detail=module=s2 reason=activation_failed",report,sizeof report),0);
+   check(r,strstr(report,"LOADER | FAILED")!=NULL,0);
+   check(r,!audit_notice("event=HOTLOAD_WATCH detail=module=s2",report,sizeof report),1);
+  }
  }
 
  check(r,strcmp(INTEL_DELIVERY,MODULE_DELIVERY)!=0,0);
@@ -611,7 +645,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="slack",.name="Slack ABI Transport",
- .version_major=0,.version_minor=1,.version_patch=10,
+ .version_major=0,.version_minor=1,.version_patch=11,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
