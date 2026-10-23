@@ -1,4 +1,4 @@
-# Digit S2 v0.3.4 — Evidence-Based IP Field Semantics
+# Digit S2 v0.3.5 — Evidence-Based IP Field Semantics and Operational Visibility
 
 S2 uses the existing ABI 1.5 services and is hot-loadable without restarting Digit. This revision routes evidence-bounded, six-section assessment briefs and Rictus-linked observation updates through the **existing** `digit.slack.intel.deliver` service. Slack itself owns the configured private `intel_channel_id`. Neither Core nor Slack needs modification.
 
@@ -98,3 +98,5 @@ On this evidence, S2 resumes bounded (maximum three unique qualifying IPv4 value
 S2 now generates a private intelligence status brief at least every six hours while polling is operational, even when the STN-LABZ `/threats` feed and Rictus have no new qualifying case changes. Existing meaningful-event reports remain immediate. The normal five-minute source poll and the three-IPv4 lookup bound are unchanged. On each generated brief, S2 records attempted lookups through the existing SQLite audit and appends a persisted audit summary: total recorded lookups, latest lookup timestamp (UTC), listed responses, resolver no-name outcomes, incomplete/key-unavailable outcomes, or explicit audit-unavailable status. These are cumulative *lookup* counts, not unique IPs, threat incidents, or source updates. No-name is not proof of safety. 
 
 The periodic report shows the actual unchanged-case count through existing reporting fields. An unchanged feed does not establish that either website is safe or that each site is directly represented by the upstream records. Digit S2 is distinct from Sentinel-MVC's optional http:BL Admin plugin. The audit is read-only for status reporting. This source edit has not been independently compiled or qualified on the Digit host.
+
+Runtime descriptor and qualification test now explicitly identify **0.3.5**. Rebuild the shared object and perform the normal hot-load procedure; editing the repository or copying source alone will not change the incumbent binary. Digit rejects a changed SHA-256 artifact that retains version 0.3.4, preserving the incumbent by design.
