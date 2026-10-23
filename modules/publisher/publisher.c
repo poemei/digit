@@ -57,6 +57,11 @@ static int kind_allowed(const char *kind){
   !strcmp(kind,"page")||!strcmp(kind,"page_update")||!strcmp(kind,"posts")||
   !strcmp(kind,"intelligence"));
 }
+/* SRT is a known site configuration category, not an authorized
+ * publishing request kind in this service. */
+static int config_kind_allowed(const char *kind){
+ return kind_allowed(kind)||(kind&&!strcmp(kind,"srt"));
+}
 static int editorial_valid(const publish_request_t *p){
  if(!bounded(p->subject,sizeof p->subject)||
     !bounded(p->source_actor,sizeof p->source_actor)||
@@ -164,7 +169,7 @@ static int load_config(void){
    struct json_object *v=json_object_array_get_idx(kinds,j);
    if(!json_object_is_type(v,json_type_string))goto done;
    const char *k=json_object_get_string(v);
-   if(!kind_allowed(k)||!copy(local[idx].kinds[j],sizeof local[idx].kinds[j],k))goto done;
+   if(!config_kind_allowed(k)||!copy(local[idx].kinds[j],sizeof local[idx].kinds[j],k))goto done;
   }
   local[idx].kind_count=kc;
  }
@@ -632,7 +637,9 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
   copy(gate.source_actor,sizeof gate.source_actor,"digit.s2");
   check(r,editorial_valid(&gate),0);
  }
+ check(r,config_kind_allowed("srt"),0);
  check(r,!kind_allowed("srt"),1);
+ check(r,!config_kind_allowed("unrecognized"),1);
  check(r,!kind_allowed("admin"),1);
  check(r,!kind_allowed(NULL),1);
  check(r,copy(out,sizeof out,"hello"),0);
@@ -732,7 +739,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="publisher",.name="Digit Markdown Publisher",
- .version_major=0,.version_minor=4,.version_patch=12,
+ .version_major=0,.version_minor=4,.version_patch=13,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
