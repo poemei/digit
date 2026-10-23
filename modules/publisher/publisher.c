@@ -354,7 +354,7 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
  snprintf(url,sizeof url,"%s%s",site->base,admin);
  if(!strcmp(p->kind,"page_update")){
   /* Explicitly locked to the existing S2 public page. Never create it. */
-  if(strcmp(p->title,"sai-dsa"))goto cleanup;
+  if(strcmp(p->title,"sai-dsa")){copy(answer.error,sizeof answer.error,"Wrong page target.");goto cleanup;}
   char edit_url[512];
   snprintf(edit_url,sizeof edit_url,"%s/admin/page?edit=sai-dsa",site->base);
   if(!http(c,edit_url,page,NULL,&code)||code!=200||
@@ -385,9 +385,10 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
   if(!html_value(page->data,"title",original_title,sizeof original_title)||
      !html_value(page->data,"description",description,sizeof description)||
      !strstr(page->data,"name=\"content_file\"")||
-     !selected_option(page->data,"published"))goto cleanup;
-  /* Core edit page must already be published Markdown. */
-  if(!selected_option(page->data,"main.md"))goto cleanup;
+     !selected_option(page->data,"published")){copy(answer.error,sizeof answer.error,"Existing page metadata/status check failed.");goto cleanup;}
+  /* Core Pages can update an existing main.html/main.txt page to main.md.
+   * The S2 source is Markdown; a previous content-file format must not
+   * silently block updates to the existing Core Page. */
   if(!append(form,sizeof form,&flen,"csrf_token",c,token)||
      !append(form,sizeof form,&flen,"action",c,"update")||
      !append(form,sizeof form,&flen,"original_slug",c,"sai-dsa")||
@@ -593,7 +594,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="publisher",.name="Digit Markdown Publisher",
- .version_major=0,.version_minor=4,.version_patch=6,
+ .version_major=0,.version_minor=4,.version_patch=7,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
