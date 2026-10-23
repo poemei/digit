@@ -29,7 +29,7 @@ typedef struct {
  int published;char publication_id[128],url[1024],error[160];
 } publish_response_t;
 
-typedef struct {char name[32],base[128],kinds[4][32];int kind_count;} destination_t;
+typedef struct {char name[32],base[128],kinds[5][32];int kind_count;} destination_t;
 static destination_t destinations[3];
 static char username[256],password[512],poemei_account[128];
 static const stnlabz_module_host_t *host_api;
@@ -51,7 +51,8 @@ static const char *json_string(struct json_object *o,const char *key){
 }
 static int kind_allowed(const char *kind){
  return kind&&(!strcmp(kind,"announcements")||!strcmp(kind,"news")||
-  !strcmp(kind,"page")||!strcmp(kind,"posts"));
+  !strcmp(kind,"page")||!strcmp(kind,"posts")||
+  !strcmp(kind,"intelligence"));
 }
 static int editorial_valid(const publish_request_t *p){
  if(!bounded(p->subject,sizeof p->subject)||
@@ -153,7 +154,7 @@ static int load_config(void){
   if(!json_object_object_get_ex(entry,"kinds",&kinds)||
      !json_object_is_type(kinds,json_type_array))goto done;
   int kc=json_object_array_length(kinds);
-  if(kc<1||kc>4)goto done;
+  if(kc<1||kc>5)goto done;
   for(int j=0;j<kc;j++){
    struct json_object *v=json_object_array_get_idx(kinds,j);
    if(!json_object_is_type(v,json_type_string))goto done;
@@ -301,7 +302,8 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
  session=1;erase(form,sizeof form);flen=0;
  const char *admin=!strcmp(p->kind,"announcements")?"/admin/announcements":
   !strcmp(p->kind,"news")?"/admin/news":
-  !strcmp(p->kind,"page")?"/admin/page":"/admin/posts";
+  !strcmp(p->kind,"page")?"/admin/page":
+  !strcmp(p->kind,"intelligence")?"/admin/intelligence":"/admin/posts";
  snprintf(url,sizeof url,"%s%s",site->base,admin);
  if(!http(c,url,page,NULL,&code)||code!=200||!csrf(page->data,token,sizeof token))goto cleanup;
  int img=-1;
@@ -328,6 +330,11 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
   if(!append(form,sizeof form,&flen,"body",c,p->markdown)||
      !append(form,sizeof form,&flen,"featured_image_id",c,id)||
      !append(form,sizeof form,&flen,"published",c,"on"))goto cleanup;
+ }else if(!strcmp(p->kind,"intelligence")){
+  if(!append(form,sizeof form,&flen,"action",c,"create_intelligence")||
+     !append(form,sizeof form,&flen,"content",c,p->markdown)||
+     !append(form,sizeof form,&flen,"source",c,p->evidence_ref)||
+     !append(form,sizeof form,&flen,"status",c,"ACTIVE"))goto cleanup;
  }else if(!strcmp(p->kind,"page")){
   if(!append(form,sizeof form,&flen,"action",c,"create")||
      !append(form,sizeof form,&flen,"slug",c,slug)||
@@ -348,6 +355,18 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
  if(!strcmp(p->kind,"announcements")){
   if(http(c,url,page,NULL,&code)&&code==200&&strstr(page->data,p->title))verified=1;
   if(verified)snprintf(answer.url,sizeof answer.url,"%s/announcements",site->base);
+ }else if(!strcmp(p->kind,"intelligence")){
+  /* The module assigns its own INT identifier, not a title-based slug.
+   * Verify the new entry in the authenticated admin listing and public index. */
+  if(http(c,url,page,NULL,&code)&&code==200&&strstr(page->data,p->title)){
+   char public_url[512];
+   snprintf(public_url,sizeof public_url,"%s/intelligence",site->base);
+   if(http(c,public_url,page,NULL,&code)&&code==200&&strstr(page->data,p->title)){
+    verified=1;
+    copy(answer.url,sizeof answer.url,public_url);
+    copy(answer.publication_id,sizeof answer.publication_id,"verified-index");
+   }
+  }
  }else{
   const char *route=!strcmp(p->kind,"posts")?"posts/":
    !strcmp(p->kind,"news")?"news/":"";
@@ -359,7 +378,9 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
   }
   if(verified)copy(answer.url,sizeof answer.url,url);
  }
- if(verified){answer.published=1;copy(answer.publication_id,sizeof answer.publication_id,slug);}
+ if(verified){answer.published=1;
+  if(strcmp(p->kind,"intelligence"))copy(answer.publication_id,sizeof answer.publication_id,slug);
+ }
 cleanup:
  /* Logout is required even when publishing or verification fails. */
  if(session){
@@ -394,9 +415,9 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  publish_request_t p={0};char out[32]={0},slug[256]={0};
  if(!r)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(r,0,sizeof *r);
- const char *valid[]={"announcements","news","page","posts"};
- for(int i=0;i<4;i++)check(r,kind_allowed(valid[i]),0);
- check(r,!kind_allowed("intelligence"),1);
+ const char *valid[]={"announcements","news","page","posts","intelligence"};
+ for(int i=0;i<5;i++)check(r,kind_allowed(valid[i]),0);
+ check(r,kind_allowed("intelligence"),0);
  check(r,!kind_allowed("srt"),1);
  check(r,!kind_allowed("admin"),1);
  check(r,!kind_allowed(NULL),1);
@@ -460,7 +481,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="publisher",.name="Digit Markdown Publisher",
- .version_major=0,.version_minor=4,.version_patch=2,
+ .version_major=0,.version_minor=4,.version_patch=3,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
