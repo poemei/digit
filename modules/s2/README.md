@@ -1,4 +1,4 @@
-# Digit S2 v0.2.8 — Individual Findings and Shared-Value Groups
+# Digit S2 v0.2.9 — Source-Date-Bounded Investigation Groups
 
 S2 uses the existing ABI 1.5 services and is hot-loadable without restarting Digit. This revision routes evidence-bounded, six-section assessment briefs and Rictus-linked observation updates through the **existing** `digit.slack.intel.deliver` service. Slack itself owns the configured private `intel_channel_id`. Neither Core nor Slack needs modification.
 
@@ -62,3 +62,7 @@ The private Slack case review no longer expands six nearly identical full case c
 ## v0.2.8 — Distinguish findings from indicator groups
 
 Private Slack reports now explicitly mark a single source record as **INDIVIDUAL FINDING** and two or more records sharing the chosen source-field value as **SHARED-VALUE GROUP (unverified)**. Grouping is descriptive, never proof of a verified indicator, shared actor or incident. Each bounded result includes a source domain and request-path example when available, severity, source time span, revisions, representative source IDs, and a field-specific investigative next step. Blank fields are marked 'not supplied'. Reports use stronger paragraph spacing and limit display to four findings per provisional source-time window. The source timezone remains unverified; the case database, private Slack transport, IRC behavior and Core remain unchanged. Live qualification is still required.
+
+## v0.2.9 — Time-bounded shared-value groups
+
+S2 now groups records by **source field, identical indicator value, and the same source calendar date** (first 10 characters of the source timestamp) instead of grouping all historical records across months. This conservatively prevents distant dates from being presented as one shared-value group. Cases on opposite sides of midnight remain separate even when close in time; this is a date-window safeguard rather than complete event-time correlation. The API timezone remains unverified, so do not infer UTC incident windows, confirmed relationships, or independent attribution. Individual MEDIUM/HIGH/CRITICAL source findings remain eligible for reporting. No case data is deleted or merged; SQLite history and private Slack/IRC transport remain unchanged. Compilation and live qualification remain to be verified.
