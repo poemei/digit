@@ -67,7 +67,8 @@ static void public_page_review(int case_count,const char *brief){
  sqlite3 *db=NULL;sqlite3_stmt *st=NULL;
  if(case_count<0||!host||!host->invoke_service)return;
  if(sqlite3_open_v2(CASE_DB,&db,SQLITE_OPEN_READWRITE,NULL)!=SQLITE_OK){
-  if(db)sqlite3_close(db);return;
+  if(db)sqlite3_close(db);
+  return;
  }
  sqlite3_busy_timeout(db,1000);
  const char *ddl=
@@ -264,7 +265,8 @@ static int httpbl_audit(const char *ip,int status,int resolver_rc,
  int days,int score,int type){
  sqlite3 *db=NULL;sqlite3_stmt *st=NULL;
  if(sqlite3_open_v2(CASE_DB,&db,SQLITE_OPEN_READWRITE,NULL)!=SQLITE_OK){
-  if(db)sqlite3_close(db);return 0;
+  if(db)sqlite3_close(db);
+  return 0;
  }
  sqlite3_busy_timeout(db,1000);
  const char *ddl=
@@ -374,7 +376,8 @@ static void httpbl_audit_status(char *out,size_t cap){
 static int httpbl_recent(const char *ip,time_t now){
  sqlite3 *db=NULL;sqlite3_stmt *st=NULL;int result=-1;
  if(sqlite3_open_v2(CASE_DB,&db,SQLITE_OPEN_READONLY,NULL)!=SQLITE_OK){
-  if(db)sqlite3_close(db);return -1;
+  if(db)sqlite3_close(db);
+  return -1;
  }
  const char *sql="SELECT lookup_time,status FROM s2_httpbl_lookups "
   "WHERE indicator=?1 AND source_field='details.ip_address' "
@@ -796,7 +799,6 @@ static stnlabz_module_result_t poll_service(
   if(!meaningful){
    previous_lines=count;
    unlock();
-   public_page_review(case_total);
    goto done;
   }
   snprintf(previous_signature,sizeof previous_signature,"%s",signature);
@@ -858,7 +860,7 @@ static stnlabz_module_result_t poll_service(
    size_t used=strlen(brief);
    snprintf(brief+used,sizeof brief-used,"\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*CASE PERSISTENCE WARNING*: local case database failed; do not treat this as a complete investigation history.");
   }
-  public_page_review(case_total);
+  public_page_review(case_total,brief);
   pthread_mutex_lock(&intel_mutex);
   /* Never overwrite an undelivered private brief. */
   if(!intel_pending[0])snprintf(intel_pending,sizeof intel_pending,"%s",brief);
