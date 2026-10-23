@@ -324,11 +324,22 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
  void *res,size_t cap,size_t *used,void *ctx){
  const publish_request_t *p=req;publish_response_t answer={0};
  (void)ctx;if(used)*used=0;
- if(!req||bytes!=sizeof *p||!res||cap<sizeof answer||!used||!input_valid(p))
+ if(!req||bytes!=sizeof *p||!res||cap<sizeof answer||!used)
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ if(!input_valid(p)){
+  copy(answer.error,sizeof answer.error,"Publisher rejected invalid request fields.");
+  memcpy(res,&answer,sizeof answer);*used=sizeof answer;
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ }
  destination_t *site=NULL;
  for(int i=0;i<3;i++)if(!strcmp(destinations[i].name,p->site))site=&destinations[i];
- if(!credentials_ready||!site||!editorial_valid(p))return STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
+ if(!credentials_ready||!site||!editorial_valid(p)){
+  const char *reason=!credentials_ready?"Publisher site configuration or credentials unavailable.":
+    !site?"Publisher destination not configured.":"Publisher editorial or caller authorization rejected.";
+  copy(answer.error,sizeof answer.error,reason);
+  memcpy(res,&answer,sizeof answer);*used=sizeof answer;
+  return STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
+ }
  int permitted=0;
  for(int k=0;k<site->kind_count;k++){
   if(!strcmp(site->kinds[k],p->kind))permitted=1;
@@ -339,7 +350,11 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
      !strcmp(p->source_actor,"digit.s2")&&
      !strcmp(site->kinds[k],"page"))permitted=1;
  }
- if(!permitted)return STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
+ if(!permitted){
+  copy(answer.error,sizeof answer.error,"Publisher destination does not permit this content kind.");
+  memcpy(res,&answer,sizeof answer);*used=sizeof answer;
+  return STNLABZ_MODULE_ERR_NOT_AUTHORIZED;
+ }
  /* Ensure an Announcement never goes live without its required Post.
   * The Post is created and verified first; failure prevents Announcement.
   * A previously created Post is not retried automatically. */
@@ -414,8 +429,9 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
       !s2_create_form(page->data)||!csrf(page->data,token,sizeof token)){
     copy(answer.error,sizeof answer.error,"S2 page missing; Core Pages create form unavailable.");goto cleanup;
    }
-   if(strstr(page->data,"?edit=sai-dsa")){
-    copy(answer.error,sizeof answer.error,"S2 page present in listing; duplicate creation refused.");goto cleanup;
+   if(strstr(page->data,"?edit=sai-dsa")||
+      strstr(page->data,"/sai-dsa")){
+    copy(answer.error,sizeof answer.error,"S2 page appears in Pages listing; duplicate creation refused.");goto cleanup;
    }
    create_s2_page=1;
   }
@@ -700,7 +716,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="publisher",.name="Digit Markdown Publisher",
- .version_major=0,.version_minor=4,.version_patch=10,
+ .version_major=0,.version_minor=4,.version_patch=11,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
