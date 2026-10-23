@@ -394,7 +394,7 @@ static stnlabz_module_result_t publish(const void *req,size_t bytes,
   !strcmp(p->kind,"intelligence")?"/admin/intelligence":"/admin/posts";
  snprintf(url,sizeof url,"%s%s",site->base,admin);
  if(!strcmp(p->kind,"page_update")){
-  /* Explicitly locked to the existing S2 public page. Never create it. */
+  /* Only the dedicated S2 public page may be created or updated. */
   if(strcmp(p->title,"sai-dsa")){copy(answer.error,sizeof answer.error,"Wrong page target.");goto cleanup;}
   char edit_url[512];
   snprintf(edit_url,sizeof edit_url,"%s/admin/page?edit=sai-dsa",site->base);
