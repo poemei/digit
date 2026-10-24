@@ -171,7 +171,13 @@ static void evaluate(const digit_reasoning_request_t *q,
   out->outcome=DIGIT_REASONING_OUTCOME_CLARIFY;
   out->requires_clarification=1;return;
  }
- if(!q->retrieval_attempted||!q->retrieval_succeeded){
+ /* No search candidate is not a failed service. A selected retrieval
+  * that fails remains a technical failure; a skipped search is an
+  * evidence-free abstention, with GRU conversation handled separately. */
+ if(!q->retrieval_attempted){
+  out->outcome=DIGIT_REASONING_OUTCOME_ABSTAIN;return;
+ }
+ if(!q->retrieval_succeeded){
   out->outcome=DIGIT_REASONING_OUTCOME_FAILURE;return;
  }
  if(!q->corpus.count){out->outcome=DIGIT_REASONING_OUTCOME_UNKNOWN;return;}
@@ -332,6 +338,8 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  mutated=request;mutated.interpretation.kind=DIGIT_UTTERANCE_UNRESOLVED;
  check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_CLARIFY,0);
  mutated=request;mutated.retrieval_attempted=0;mutated.retrieval_succeeded=0;mutated.corpus.count=0;
+ check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_ABSTAIN,0);
+ mutated=request;mutated.retrieval_attempted=1;mutated.retrieval_succeeded=0;mutated.corpus.count=0;
  check(q,service(&mutated,sizeof mutated,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK&&response.outcome==DIGIT_REASONING_OUTCOME_FAILURE,0);
  for(i=0;i<3;i++){
   mutated=request;
