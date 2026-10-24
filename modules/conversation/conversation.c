@@ -1,5 +1,5 @@
 /* Digit Conversation: ABI-only interpretation dispatch; no inference or
- * generated response. Conversation v1.2.6. The IRC module and Core are
+ * generated response. Conversation v1.2.7. The IRC module and Core are
  * unchanged; both registered conversation routes share this handler.
  */
 #include <stddef.h>
@@ -164,6 +164,7 @@ static int gru_generate_response(const stnlabz_module_host_t *api,
     "Only assert factual claims supported by the verified evidence. "
     "If the evidence does not establish an answer, express uncertainty. "
     "Do not invent events, actions, knowledge, or sources. "
+    "Do not expose internal Corpus IDs, retrieval labels, or diagnostic metadata. "
     "User message: %s\nVerified evidence: %s",
     message,verified&&*verified?verified:"(none)");
  if(n<0||(size_t)n>=sizeof request.prompt)return 0;
@@ -178,6 +179,9 @@ static int gru_generate_response(const stnlabz_module_host_t *api,
     if((unsigned char)result.text[i]<32||
        (unsigned char)result.text[i]==127)return 0;
  if(source_quote&&*source_quote&&!strstr(result.text,source_quote))return 0;
+ if(strstr(result.text,"Corpus #")||strstr(result.text,"corpus #")||
+    strstr(result.text,"source_record_id")||
+    strstr(result.text,"verification_status"))return 0;
  memcpy(output,result.text,length+1);
  *used=length;
  return 1;
@@ -357,7 +361,14 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
                 "she","he","they","them","her","him","it","this","that",
                 "you","your","my","our","who","what","where","when",
                 "why","how","can","could","would","should","will",
-                "about","of","to","and","or","in","on"
+                "about","of","to","and","or","in","on",
+                "me","myself","yourself","ourselves","themselves",
+                "tell","explain","describe","please","know","think",
+                "say","said","mean","means","talk","answer","question",
+                "long","much","many","take","takes","taking","time",
+                "today","tomorrow","now","then","before","after",
+                "here","there","doing","done","just","really",
+                "digit","digicat"
             };
             unsigned best_score=0;
             for(i=0;i<result.term_count;i++){
@@ -387,7 +398,11 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
                     for(k=0;k<result.term_count;k++){
                         const char *word=result.terms[k];
                         size_t n=strlen(word),pos;
+                        unsigned stop=0,m;
                         if(n<3)continue;
+                        for(m=0;m<sizeof grammatical/sizeof grammatical[0];m++)
+                            if(!strcmp(word,grammatical[m])){stop=1;break;}
+                        if(stop)continue;
                         for(pos=0;hit->excerpt[pos];pos++){
                             size_t m=0;
                             if(pos&&isalnum((unsigned char)hit->excerpt[pos-1]))
@@ -414,7 +429,8 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
          * This does not equate any pronoun to an individual: previous
          * utterances remain provenance-bound observations, not facts. */
         if(!found.count&&have_history&&
-           (result.features&DIGIT_FEATURE_REFERENCE)){
+           (result.features&DIGIT_FEATURE_REFERENCE)&&
+           result.unresolved_references>0){
             unsigned h;
             for(h=history.count;h>0&&!found.count;h--){
                 digit_interpretation_request_t prior={0};
@@ -451,7 +467,20 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
                        candidate.count<=DIGIT_CORPUS_RESULTS_MAX){
                         reasoning.retrieval_succeeded=1;
                         if(candidate.count){
-                            found=candidate;reasoning.corpus=found;break;
+                            /* Recency is not verification. Require that
+                             * history hits themselves are verified. */
+                            unsigned hidx;
+                            for(hidx=0;hidx<candidate.count;hidx++){
+                                const digit_corpus_hit_t *hit=&candidate.hits[hidx];
+                                if((!strcmp(hit->verification_status,"verified")||
+                                    !strcmp(hit->verification_status,"operator-verified"))&&
+                                   memchr(hit->excerpt,0,sizeof hit->excerpt)&&
+                                   hit->excerpt[0]){
+                                    found.count=1;found.hits[0]=*hit;
+                                    reasoning.corpus=found;break;
+                                }
+                            }
+                            if(found.count)break;
                         }
                     }
                 }
@@ -954,7 +983,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
         strcpy(channel.message,"does digit understand cat speak?");emitted=99;
         check(q,process_route(&mock,&channel,sizeof channel,response,
             sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&emitted>0&&
-            strstr(response,"Corpus #8")!=NULL,0);
+            strstr(response,"Corpus #")==NULL,0);
         mock_mode=0;
         strcpy(channel.message,"good to see you");emitted=99;
         check(q,process_route(&mock,&channel,sizeof channel,response,
@@ -1066,14 +1095,15 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
         strcpy(data.hits[0].excerpt,"KItten and Furry speak are their own languages.");
         check(q,digit_response_render(&decision,&data,&question,
             "or is it KItten?",render,sizeof render,&length)&&
-            strstr(render,"writes it as \"KItten\"")!=NULL,0);
+            strstr(render,"written as \"KItten\"")!=NULL,0);
         check(q,digit_response_render(&decision,&data,&question,
             "or is it kitten?",render,sizeof render,&length)&&
-            strstr(render,"writes it as \"KItten\"")!=NULL,0);
+            strstr(render,"written as \"KItten\"")!=NULL,0);
         strcpy(data.hits[0].excerpt,"PHP is a server-side language. Additional text.");
 
         check(q,digit_response_render(&decision,&data,&question,"What is PHP?",render,sizeof render,&length)
-           &&length>0&&strstr(render,"Corpus #42 excerpt: \"PHP is a server-side language.")!=NULL,0);
+           &&length>0&&strstr(render,"PHP is a server-side language.")!=NULL&&
+           strstr(render,"Corpus #")==NULL,0);
         decision.requires_verification=1;length=9;
         check(q,!digit_response_render(&decision,&data,&question,"What is PHP?",render,sizeof render,&length)
            &&length==0,1);
@@ -1147,7 +1177,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 2, .version_patch = 6,
+    .version_major = 1, .version_minor = 2, .version_patch = 7,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
