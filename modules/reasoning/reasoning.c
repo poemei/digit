@@ -29,6 +29,7 @@ static void trace_decision(const digit_reasoning_result_t *decision,
   case DIGIT_REASONING_OUTCOME_UNKNOWN:status="KNOWLEDGE_UNKNOWN";break;
   case DIGIT_REASONING_OUTCOME_CLARIFY:status="CLARIFICATION_REQUIRED";break;
   case DIGIT_REASONING_OUTCOME_FAILURE:status="RETRIEVAL_FAILED";break;
+  case DIGIT_REASONING_OUTCOME_ABSTAIN:status="REASONING_ABSTAIN";break;
   case DIGIT_REASONING_OUTCOME_CONFLICT:status="EVIDENCE_CONFLICT";break;
   default:status="EVIDENCE_INSUFFICIENT";break;
  }
