@@ -257,6 +257,11 @@ static int evidence_rank(const digit_dsd_event_t *e){
   * declined a request. A later successful response outweighs the probe,
   * while an actual missing Core registration remains a real failure. */
  if(!strcmp(v,"HANDLER_NOT_FOUND"))return 15;
+ if(!strcmp(e->operation,"gru.debug")){
+  if(!strcmp(v,"ACCEPTED_UNVERIFIED"))return 40;
+  if(!strcmp(v,"PROMPT_SENT"))return 1;
+  return e->result?105:5;
+ }
  if(!strcmp(v,"RETRIEVAL_SKIPPED")||!strcmp(v,"NO_SEARCH_CANDIDATE")||
     !strcmp(v,"REASONING_ABSTAIN"))return 5;
  if(!strcmp(v,"SERVICE_ERROR")||!strcmp(v,"SERVICE_NOT_FOUND")||
@@ -294,6 +299,10 @@ static const char *evidence_assessment(const digit_dsd_event_t *e){
   return "No eligible factual search subject was selected; Corpus retrieval was not attempted, so a retrieval failure is not established.";
  if(!strcmp(v,"REASONING_ABSTAIN"))
   return "Reasoning abstained; the trace does not establish a retrieval failure.";
+ if(!strcmp(v,"ACCEPTED_UNVERIFIED"))
+  return "GRU text passed structural checks only; relevance, meaning and factual accuracy were not verified.";
+ if(!strcmp(e->operation,"gru.debug"))
+  return "GRU generation or structural acceptance failed at the named stage; the status identifies the observed rejection.";
  if(!strcmp(v,"QUERY_NO_MATCH"))
   return "SQLite3 returned no matching records; retrieval completed without a match.";
  if(!strcmp(v,"RETRIEVAL_FAILED")||!strcmp(v,"RETRIEVAL_FAILURE_STATED")||
@@ -320,6 +329,7 @@ static stnlabz_module_result_t report_service(
  digit_dsd_result_t d={0};
  unsigned i,sql=0,conversation=0,no_reply=0,failure=0,interpreted=0,no_generator=0;
  const digit_dsd_event_t *last=NULL,*responsible=NULL;
+ const digit_dsd_event_t *gru_prompt=NULL,*gru_final=NULL;
  int best_rank=0;
  size_t n;
  (void)ctx;
@@ -350,6 +360,10 @@ static stnlabz_module_result_t report_service(
    if(!strcmp(e->status,"NO_RESPONSE"))no_reply++;
    if(!strcmp(e->module,"conversation")&&!strcmp(e->status,"NO_GENERATOR"))no_generator++;
    if(e->result)failure++;
+   if(!strcmp(e->operation,"gru.debug")){
+    if(!strcmp(e->status,"PROMPT_SENT"))gru_prompt=e;
+    else gru_final=e;
+   }
    if(strcmp(e->status,"TRACE_BOUND"))last=e;
    if(evidence_rank(e)>best_rank){best_rank=evidence_rank(e);responsible=e;}
  }
@@ -394,6 +408,23 @@ static stnlabz_module_result_t report_service(
  snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
    "Assessment: %s",responsible?evidence_assessment(responsible):
    "Upstream cause was not recorded; no module attribution is justified.");
+ /* Explicit GRU diagnostics answer *why* a generated reply was accepted.
+  * No prompt text, output text, credentials or private corpus are stored. */
+ if(gru_prompt||gru_final){
+  if(gru_prompt&&gru_final)
+   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
+    "GRU Debug: prompt_bytes=%u, word_budget=%u, output_bytes=%u, gate=%s, semantic_check=NOT_PERFORMED",
+    gru_prompt->records,gru_prompt->selected,gru_final->records,
+    gru_final->status);
+  else if(gru_final)
+   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
+    "GRU Debug: gate=%s, value=%u, semantic_check=NOT_PERFORMED",
+    gru_final->status,gru_final->records);
+  else
+   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
+    "GRU Debug: prompt_bytes=%u, word_budget=%u, generator_result=NOT_RECORDED",
+    gru_prompt->records,gru_prompt->selected);
+ }
  if(d.dropped)
    snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
      "Evidence incomplete: %u trace event(s) dropped.",d.dropped);
