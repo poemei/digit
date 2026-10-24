@@ -887,7 +887,9 @@ static void session(const irc_config_t *cfg) {
         }
         pthread_mutex_unlock(&outbound_mutex);
         if(have){
-            char wire[512];int k=snprintf(wire,sizeof wire,"PRIVMSG %s :%s\r\n",cfg->channel,pending.report);
+            char wire[512];/* S2 is scoped to the established operations channel; the
+              * configurable JOIN list is never an S2 recipient list. */
+             int k=snprintf(wire,sizeof wire,"PRIVMSG %s :%s\r\n","#stn-labz",pending.report);
             if(k<=0||(size_t)k>=sizeof wire||!write_line(ssl,wire))break;
             pthread_mutex_lock(&outbound_mutex);
             outbound_head=(outbound_head+1)%S2_QUEUE_CAP;outbound_count--;
@@ -949,7 +951,13 @@ static void session(const irc_config_t *cfg) {
                   strstr(line," 474 ")||strstr(line," 475 ")) {
             
         } else if(authed&&joined&&strstr(line," JOIN ")&&strstr(line,cfg->nick)) {
-            pthread_mutex_lock(&outbound_mutex);irc_ready=1;pthread_mutex_unlock(&outbound_mutex);
+            /* Report delivery must wait for confirmed presence in the
+             * operations channel, not a JOIN to a personal channel. */
+            if(strstr(line,"#stn-labz")){
+                pthread_mutex_lock(&outbound_mutex);
+                irc_ready=1;
+                pthread_mutex_unlock(&outbound_mutex);
+            }
             if(!join_greeting(ssl,cfg,line,tags_enabled,joined))break;
         } else if(authed&&joined&&strstr(line," JOIN ")) {
             if(!join_greeting(ssl,cfg,line,tags_enabled,joined))break;
