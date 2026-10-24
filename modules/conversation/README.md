@@ -149,3 +149,9 @@ Qualification's deterministic GRU stub now verifies that the prompt equals the u
 Conversation records `RETRIEVAL_SKIPPED` when the interpretation yields no eligible substantive Corpus search terms; it no longer reports `RETRIEVAL_UNAVAILABLE` without attempting a query. Distinct `NO_CORPUS_MATCH` and `RETRIEVAL_UNAVAILABLE` results remain for successful-but-empty and attempted-but-unsuccessful retrievals. When Reasoning abstains after no search subject was selected, Conversation records `NO_SEARCH_CANDIDATE` rather than falsely describing the Reasoning/View path as failed evidence retrieval.
 
 The correction does not send grammatical/discourse words to Corpus, does not alter Core identity authority, and does not make probabilistic GRU text into verified evidence. See `docs/CORE_DSD.md` for the complete trace diagnosis and evidence boundaries. Operator validation remains required.
+
+## v1.2.11 — auditable GRU generation gates (2026-10-24)
+
+The Conversation → GRU service now emits request-correlated, bounded Core DSD events for prompt bytes, requested word budget (32), generator service failure, malformed result, output length mismatch, control characters, missing required verified quotation, metadata leakage, and structurally accepted **unverified** text. It never logs raw messages or model output, and does not modify sampling, learning, approved data, language qualification, or factual verification policy.
+
+The purpose is to expose exactly how an irrelevant reply such as `The same group.` can be accepted: the existing checks establish valid byte format and optional source-quotation fidelity, **not semantic relevance**. Core DSD exposes `semantic_check=NOT_PERFORMED` in its report. This is diagnostic instrumentation only; a human must judge substantive quality and accept any later model correction. Module descriptor increments from v1.2.10 to **v1.2.11** to meet Core's existing hotload version gate.
