@@ -143,3 +143,9 @@ The change is deliberately confined to `modules/conversation/conversation.c`. It
 Qualification's deterministic GRU stub now verifies that the prompt equals the user's original message, the requested word budget is 32, a response missing a required verified source quotation is rejected, and one containing that quotation is accepted. These tests establish request formatting and guard behavior only, not live GRU fluency or factual correctness.
 
 **Operator gate:** Build and run module qualification, then compare matched prompts on Windows and IRC under the same checkpoint, executable revision, seed, temperature and word limit. Checkpoint equality alone does not prove executable equality. This revision does not install, hotload or activate the module.
+
+## v1.2.10 — retrieval non-attempt versus failure (2026-10-24)
+
+Conversation records `RETRIEVAL_SKIPPED` when the interpretation yields no eligible substantive Corpus search terms; it no longer reports `RETRIEVAL_UNAVAILABLE` without attempting a query. Distinct `NO_CORPUS_MATCH` and `RETRIEVAL_UNAVAILABLE` results remain for successful-but-empty and attempted-but-unsuccessful retrievals. When Reasoning abstains after no search subject was selected, Conversation records `NO_SEARCH_CANDIDATE` rather than falsely describing the Reasoning/View path as failed evidence retrieval.
+
+The correction does not send grammatical/discourse words to Corpus, does not alter Core identity authority, and does not make probabilistic GRU text into verified evidence. See `docs/CORE_DSD.md` for the complete trace diagnosis and evidence boundaries. Operator validation remains required.
