@@ -376,6 +376,9 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
                 digit_corpus_result_t candidate={0};
                 size_t candidate_used=0;
                 if(strlen(term)<3)continue;
+                /* Leading vocative is an addressee, not a query subject. */
+                if(!strcmp(term,"digit")&&
+                   !strncasecmp(msg->message,"digit ",6))continue;
                 for(j=0;j<sizeof grammatical/sizeof grammatical[0];j++)
                     if(!strcmp(term,grammatical[j])){skip=1;break;}
                 if(skip)continue;
