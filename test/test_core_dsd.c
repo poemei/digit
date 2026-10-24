@@ -81,6 +81,19 @@ int main(void){
  assert(strstr(report.lines[3],"service=digit.absent")!=NULL);
  assert(strstr(report.lines[3],"SERVICE_NOT_FOUND")!=NULL);
  assert(strstr(report.lines[5],"registry lookup found no handler")!=NULL);
+ id=995;
+ /* IRC probes Socials family, which may decline unrelated conversation.
+  * Its NOT_FOUND is a normal fall-through when subsequent GRU succeeds. */
+ assert(core_dsd_dispatch(DIGIT_DSD_BIND_SERVICE,&id,sizeof id,NULL,0,&used)==STNLABZ_MODULE_OK);
+ core_dsd_service_begin("digit.socials.family",__LINE__);
+ core_dsd_service_result("digit.socials.family",STNLABZ_MODULE_ERR_NOT_FOUND,0,__LINE__);
+ core_dsd_service_begin("digit.gru.generate",__LINE__);
+ core_dsd_service_result("digit.gru.generate",STNLABZ_MODULE_OK,30,__LINE__);
+ query.trace_id=id;
+ assert(core_dsd_dispatch(DIGIT_DSD_REPORT_SERVICE,&query,sizeof query,&report,sizeof report,&used)==STNLABZ_MODULE_OK);
+ assert(strstr(report.lines[3],"service=digit.gru.generate")!=NULL);
+ assert(strstr(report.lines[3],"RESPONSE_RETURNED")!=NULL);
+ assert(strstr(report.lines[5],"response was produced")!=NULL);
  id=991;
  trace_query.trace_id=id;used=0;
  assert(core_dsd_dispatch(DIGIT_DSD_DIAGNOSE_SERVICE,&trace_query,sizeof trace_query,&trace,sizeof trace,&used)==STNLABZ_MODULE_OK);
