@@ -245,9 +245,40 @@ static int assign(char *out,size_t cap,const char *in) {
     if(!n||n>=cap)return 0;
     memcpy(out,in,n);out[n]=0;return 1;
 }
+/* A comma-separated IRC JOIN list, bounded by the existing configuration
+ * buffer. No whitespace, empty elements, duplicates or channel keys. */
+#define IRC_MAX_CHANNELS 8
+static int channel_each(const char *list,char names[][128],unsigned *count){
+ const char *p=list,*start;unsigned n=0,i;size_t len;
+ if(!list||!*list||!names||!count)return 0;
+ while(*p){
+  start=p;
+  while(*p&&*p!=',')p++;
+  len=(size_t)(p-start);
+  if(len<2||len>=128||n>=IRC_MAX_CHANNELS||start[0]!='#')return 0;
+  for(i=0;i<len;i++){
+   unsigned char c=(unsigned char)start[i];
+   if(c<=32||c==127||c==','||c==':'||c==7)return 0;
+  }
+  memcpy(names[n],start,len);names[n][len]=0;
+  for(i=0;i<n;i++)if(!strcasecmp(names[i],names[n]))return 0;
+  n++;
+  if(*p==','){p++;if(!*p)return 0;}
+ }
+ *count=n;return n>0;
+}
+static int channel_allowed(const irc_config_t *cfg,const char *channel){
+ char names[IRC_MAX_CHANNELS][128]={{0}};unsigned n=0,i;
+ if(!cfg||!channel||!channel_each(cfg->channel,names,&n))return 0;
+ for(i=0;i<n;i++)if(!strcasecmp(channel,names[i]))return 1;
+ return 0;
+}
 static int config_valid(const irc_config_t *c) {
-    return c && !strcmp(c->server,"irc.libera.chat") &&
-        !strcmp(c->port,"6697") && !strcmp(c->channel,"#stn-labz") &&
+ char names[IRC_MAX_CHANNELS][128]={{0}};unsigned count=0;
+ return c && !strcmp(c->server,"irc.libera.chat") &&
+        !strcmp(c->port,"6697") &&
+        channel_each(c->channel,names,&count) &&
+        channel_allowed(c,"#stn-labz") &&
         c->nick[0] && c->account[0] && c->password[0] &&
         !strpbrk(c->nick," \r\n") && !strpbrk(c->account,"\r\n");
 }
@@ -540,11 +571,11 @@ static void observe_channel(const irc_config_t *cfg,const char *raw,int tags_ena
  if(strcmp(cmd,"PRIVMSG"))return;
  target=end;end=strchr(target,' ');if(!end)return;
  *end++=0;
- if(strcasecmp(target,cfg->channel)||*end!=':')return;
+ if(!channel_allowed(cfg,target)||*end!=':')return;
  message=end+1;
  if(!*message||strlen(message)>=sizeof rec.text)return;
  snprintf(rec.transport,sizeof rec.transport,"irc");
- snprintf(rec.channel,sizeof rec.channel,"%s",cfg->channel);
+ snprintf(rec.channel,sizeof rec.channel,"%s",target);
  snprintf(rec.sender,sizeof rec.sender,"%s",prefix);
  snprintf(rec.text,sizeof rec.text,"%s",message);
  observation_status(submit_observation(host_api,&rec));
@@ -598,7 +629,7 @@ static int incoming(SSL *ssl,const irc_config_t *cfg,char *line,int tags_enabled
     private_message=!strcasecmp(target,cfg->nick);
     if(private_message) target=sender;
     else {
-        if(strcasecmp(target,cfg->channel))return 1;
+        if(!channel_allowed(cfg,target))return 1;
         {
             size_t prefix=address_prefix(body,cfg->nick);
             if(prefix){
@@ -807,7 +838,7 @@ static int join_greeting(SSL *ssl,const irc_config_t *cfg,char *line,
  if(strncmp(command,"JOIN ",5))return 1;
  channel=command+5;
  space=strchr(channel,' ');if(space)*space=0;
- if(strcasecmp(channel,cfg->channel)||!strcasecmp(nick,cfg->nick))return 1;
+ if(!channel_allowed(cfg,channel)||!strcasecmp(nick,cfg->nick))return 1;
  kind=greeting_kind(cfg,account,nick);
  if(!kind||!host_api||!host_api->invoke_service)return 1;
  now=time(NULL);
@@ -819,10 +850,16 @@ static int join_greeting(SSL *ssl,const irc_config_t *cfg,char *line,
     used!=sizeof reply)return 1;
  n=(int)strnlen(reply.text,sizeof reply.text);
  if(n<=0||n>350||!reply_valid(reply.text,(size_t)n))return 1;
- n=snprintf(wire,sizeof wire,"PRIVMSG %s :%s\r\n",cfg->channel,reply.text);
+ n=snprintf(wire,sizeof wire,"PRIVMSG %s :%s\r\n",channel,reply.text);
  if(n<=0||(size_t)n>=sizeof wire)return 1;
  if(!write_line(ssl,wire))return 0;
  last_greeting=now;
+ return 1;
+}
+static int join_channels(SSL *ssl,const irc_config_t *cfg){
+ char names[IRC_MAX_CHANNELS][128]={{0}};unsigned count=0,i;
+ if(!channel_each(cfg->channel,names,&count))return 0;
+ for(i=0;i<count;i++)if(!command(ssl,"JOIN",names[i]))return 0;
  return 1;
 }
 static void session(const irc_config_t *cfg) {
@@ -900,12 +937,12 @@ static void session(const irc_config_t *cfg) {
         } else if(strstr(line," 903 ")) {
             
             authed=1;if(!write_line(ssl,"CAP END\r\n")){break;}
-            if(welcomed&&!joined){if(!command(ssl,"JOIN",cfg->channel)){break;}joined=1;}
+            if(welcomed&&!joined){if(!join_channels(ssl,cfg)){break;}joined=1;}
         } else if(strstr(line," 904 ")||strstr(line," 905 ")||strstr(line," 906 ")||strstr(line," 907 ")) {
             break;
         } else if(strstr(line," 001 ")) {
             welcomed=1;
-            if(authed&&!joined){if(!command(ssl,"JOIN",cfg->channel)){break;}joined=1;}
+            if(authed&&!joined){if(!join_channels(ssl,cfg)){break;}joined=1;}
         } else if(strstr(line," 433 ")) {
             
         } else if(strstr(line," 471 ")||strstr(line," 473 ")||
@@ -1140,7 +1177,7 @@ static stnlabz_module_result_t stop(void) {
 }
 static const stnlabz_module_descriptor_t descriptor={
     .id="irc",.name="Libera.Chat IRC",
-    .version_major=0,.version_minor=3,.version_patch=17,
+    .version_major=0,.version_minor=3,.version_patch=18,
     .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
     .qualify=qualify,.start=start,.stop=stop
