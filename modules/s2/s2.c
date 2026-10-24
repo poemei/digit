@@ -44,7 +44,6 @@ static long previous_lines;
 static int has_reported;
 static int last_source_state=-1;
 static int last_correlation=-1;
-static int last_persistence_ok=-1;
 static char intel_pending[INTEL_REPORT_CAP];
 static pthread_mutex_t intel_mutex=PTHREAD_MUTEX_INITIALIZER;
 static void intelligence_brief(char *,size_t,const char *,long,int,int,int,const char *,int,int,int);
