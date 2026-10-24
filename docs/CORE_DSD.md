@@ -56,3 +56,15 @@ The recorded lack of a SQLite operation therefore represents a non-attempt, **no
 ### Reasoning hotload version correction (2026-10-24)
 
 Reasoning's `retrieval_attempted=0` abstention fix and `REASONING_ABSTAIN` DSD event were committed earlier, but the Reasoning module descriptor was left at v0.1.8. Core's `core_hotload.c` denies a changed candidate unless the candidate descriptor version is greater than the active incumbent. Reasoning has now been incremented to **v0.1.9**, with no ABI changes, so the operator can build and install a properly versioned candidate for qualification and hotload. Source synchronization (`git pull`) alone cannot activate a revised `.so`; module compilation and deployment remain operator-controlled. Confirm the actual installed Reasoning incumbent before assuming automatic replacement; do not bypass version gates.
+
+## GRU response debug evidence (2026-10-24)
+
+Core DSD now reports the GRU generation gate in the existing authenticated `diagnose my last request` report whenever a corresponding Conversation trace is retained. Conversation v1.2.11 records bounded `gru.debug` events without storing the prompt or generated text:
+
+- `PROMPT_SENT`: `records` is prompt length in bytes, `selected` is requested word budget.
+- `ACCEPTED_UNVERIFIED`: `records` is accepted response length in bytes, `selected` indicates whether an exact verified-quotation guard was required and passed (0/1).
+- Explicit rejection statuses: `PROMPT_TOO_LONG`, `GENERATOR_SERVICE_ERROR`, `INVALID_GENERATOR_RESULT`, `INVALID_OUTPUT_LENGTH`, `OUTPUT_CONTROL_CHAR`, `VERIFIED_QUOTE_MISSING`, and `OUTPUT_METADATA_REJECTED`. A service-error `records` value is the returned service result code, **not** an output byte count.
+
+Core appends a `GRU Debug:` line with prompt length, word budget, output length, and the final gate when evidence is present, explicitly labeling `semantic_check=NOT_PERFORMED`. An accepted candidate has passed structural/security guards only. It has **not** passed a relevance test, meaningful conversation test, semantic quality test, or truth verification. No automatic training, model qualification, external inference, persistence, repair, or release occurs.
+
+DSD selects the actual GRU acceptance gate rather than a benign Reasoning abstention for a completed generation. A genuine GRU rejection takes precedence. Trace event storage remains bounded (32 events per trace); if events are dropped or overwritten, the report must not invent their absence as proof of execution failure. Core changes require operator-controlled build and restart; module changes require operator-controlled qualification and activation.
