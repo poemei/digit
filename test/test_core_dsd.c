@@ -122,6 +122,46 @@ int main(void){
  assert(strstr(report.lines[3],"service=digit.gru.generate")!=NULL);
  assert(strstr(report.lines[3],"RESPONSE_RETURNED")!=NULL);
  assert(strstr(report.lines[5],"response was produced")!=NULL);
+ id=997;
+ /* A structurally accepted answer is not a semantically checked answer.
+  * The Core report exposes both the exact gate and the missing check. */
+ assert(core_dsd_dispatch(DIGIT_DSD_BIND_SERVICE,&id,sizeof id,NULL,0,&used)==STNLABZ_MODULE_OK);
+ record.trace_id=record.event.trace_id=id;
+ record.event.result=0;
+ strcpy(record.event.module,"conversation");
+ strcpy(record.event.method,"gru_generate_response");
+ strcpy(record.event.file,"modules/conversation/conversation.c");
+ strcpy(record.event.operation,"gru.debug");
+ strcpy(record.event.status,"PROMPT_SENT");
+ record.event.records=16;record.event.selected=32;
+ assert(core_dsd_dispatch(DIGIT_DSD_RECORD_SERVICE,&record,sizeof record,NULL,0,&used)==STNLABZ_MODULE_OK);
+ strcpy(record.event.status,"ACCEPTED_UNVERIFIED");
+ record.event.records=15;record.event.selected=0;
+ assert(core_dsd_dispatch(DIGIT_DSD_RECORD_SERVICE,&record,sizeof record,NULL,0,&used)==STNLABZ_MODULE_OK);
+ query.trace_id=id;
+ assert(core_dsd_dispatch(DIGIT_DSD_REPORT_SERVICE,&query,sizeof query,&report,sizeof report,&used)==STNLABZ_MODULE_OK);
+ assert(report.count==7);
+ assert(strstr(report.lines[3],"ACCEPTED_UNVERIFIED")!=NULL);
+ assert(strstr(report.lines[5],"relevance, meaning")!=NULL);
+ assert(strstr(report.lines[6],"prompt_bytes=16")!=NULL);
+ assert(strstr(report.lines[6],"word_budget=32")!=NULL);
+ assert(strstr(report.lines[6],"output_bytes=15")!=NULL);
+ assert(strstr(report.lines[6],"semantic_check=NOT_PERFORMED")!=NULL);
+ id=998;
+ /* A structural rejection is recorded as a failed gate, never as an
+  * invented diagnosis of model understanding or training. */
+ assert(core_dsd_dispatch(DIGIT_DSD_BIND_SERVICE,&id,sizeof id,NULL,0,&used)==STNLABZ_MODULE_OK);
+ record.trace_id=record.event.trace_id=id;
+ strcpy(record.event.status,"PROMPT_SENT");
+ record.event.records=16;record.event.selected=32;
+ assert(core_dsd_dispatch(DIGIT_DSD_RECORD_SERVICE,&record,sizeof record,NULL,0,&used)==STNLABZ_MODULE_OK);
+ strcpy(record.event.status,"INVALID_OUTPUT_LENGTH");
+ record.event.result=1;record.event.records=0;record.event.selected=0;
+ assert(core_dsd_dispatch(DIGIT_DSD_RECORD_SERVICE,&record,sizeof record,NULL,0,&used)==STNLABZ_MODULE_OK);
+ query.trace_id=id;
+ assert(core_dsd_dispatch(DIGIT_DSD_REPORT_SERVICE,&query,sizeof query,&report,sizeof report,&used)==STNLABZ_MODULE_OK);
+ assert(strstr(report.lines[3],"INVALID_OUTPUT_LENGTH")!=NULL);
+ assert(strstr(report.lines[6],"gate=INVALID_OUTPUT_LENGTH")!=NULL);
  id=991;
  trace_query.trace_id=id;used=0;
  assert(core_dsd_dispatch(DIGIT_DSD_DIAGNOSE_SERVICE,&trace_query,sizeof trace_query,&trace,sizeof trace,&used)==STNLABZ_MODULE_OK);
