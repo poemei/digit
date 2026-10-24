@@ -22,14 +22,16 @@
 #define SENTINEL "https://api.stn-labz.com/threats"
 #define FETCH_MAX (1024u*1024u)
 #define RICTUS_LINES 128u
-#define POLL_SECONDS 300
+#define POLL_SECONDS (3*60*60)
 #define DELIVER_SERVICE "digit.irc.deliver"
 #define INTEL_DELIVERY "digit.slack.intel.deliver"
 #define INTEL_REPORT_CAP 8192
 #define CASE_DB "/opt/digit/state/s2_cases.sqlite3"
 #define HTTPBL_KEY_FILE "/opt/digit/auth/httpbl.key"
 #define HTTPBL_LIMIT 3
-#define STATUS_REPORT_SECONDS (6*60*60)
+#define STATUS_REPORT_SECONDS (4*60*60)
+#define PUBLIC_REPORT_SECONDS (6*60*60)
+#define SCHEDULER_TICK_SECONDS 60
 typedef struct {char *data;size_t length;} buffer_t;
 static const stnlabz_module_host_t *host;
 static volatile int busy;
@@ -197,6 +199,9 @@ fail:
  free(work);out[0]=0;return 0;
 }
 
+static int interval_due(time_t now,time_t last,time_t period){
+ return now!=(time_t)-1&&(last==0||(now>=last&&now-last>=period));
+}
 static void public_page_review(int case_count,const char *brief,char *status,size_t cap){
  if(status&&cap)snprintf(status,cap,"Not attempted: missing report or service.");
  if(!brief||!*brief)return;
@@ -226,8 +231,16 @@ static void public_page_review(int case_count,const char *brief,char *status,siz
  last_event=sqlite3_column_int64(st,0);
  sqlite3_finalize(st);st=NULL;
  time_t now=time(NULL);
- /* Every report is submitted without a publication throttle. */
+ /* Website update attempts are gated to six-hour intervals. */
  if(now==(time_t)-1)goto finish;
+ sqlite3_int64 last_attempt=0;
+ if(sqlite3_prepare_v2(db,
+  "SELECT last_attempt FROM s2_publication_state WHERE id=1",
+  -1,&st,NULL)!=SQLITE_OK)goto finish;
+ if(sqlite3_step(st)!=SQLITE_ROW)goto finish;
+ last_attempt=sqlite3_column_int64(st,0);
+ sqlite3_finalize(st);st=NULL;
+ if(!interval_due(now,(time_t)last_attempt,PUBLIC_REPORT_SECONDS))goto finish;
  if(sqlite3_prepare_v2(db,
   "UPDATE s2_publication_state SET last_attempt=?1 WHERE id=1",
   -1,&st,NULL)!=SQLITE_OK)goto finish;
@@ -927,7 +940,7 @@ static stnlabz_module_result_t poll_service(
   snprintf(previous_signature,sizeof previous_signature,"%s",signature);
   previous_lines=count;
   has_reported=1;
-  last_status_report=now;
+
   last_source_state=source_state;
   last_correlation=matched;
   unlock();
@@ -1044,7 +1057,16 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
   test(r,!public_format_brief(sample,markdown,80),1);
  }
 
- test(r,high("HIGH","HIGH"),0);
+ test(r,POLL_SECONDS==10800,0);
+  test(r,STATUS_REPORT_SECONDS==14400,0);
+  test(r,PUBLIC_REPORT_SECONDS==21600,0);
+  test(r,interval_due(100,0,STATUS_REPORT_SECONDS),0);
+  test(r,!interval_due(14499,100,STATUS_REPORT_SECONDS),1);
+  test(r,interval_due(14500,100,STATUS_REPORT_SECONDS),0);
+  test(r,!interval_due(50,100,STATUS_REPORT_SECONDS),1);
+  test(r,!interval_due(21699,100,PUBLIC_REPORT_SECONDS),1);
+  test(r,interval_due(21700,100,PUBLIC_REPORT_SECONDS),0);
+  test(r,high("HIGH","HIGH"),0);
  test(r,high("CRITICAL","HIGH"),0);
  test(r,high("HIGH","CRITICAL"),0);
  test(r,high("CRITICAL","CRITICAL"),0);
@@ -1286,22 +1308,28 @@ static void *scheduler_main(void *unused){
  struct timespec until;
  (void)unused;
  for(;;){
+  time_t now;
   pthread_mutex_lock(&scheduler_mutex);
   int stopping_now=scheduler_stop;
   pthread_mutex_unlock(&scheduler_mutex);
   if(stopping_now)break;
-  if(observation_report(&observation,&candidate_observation)){
-   char update[INTEL_REPORT_CAP]={0};
-   intelligence_brief(update,sizeof update,observation.report,-1,0,0,0,
-     "S2 observation ID in summary",1,-1,-1);
-   if(deliver_intel(update))observation_cursor=candidate_observation;
-  }
-  memset(&observation,0,sizeof observation);
-  candidate_observation=0;
+  /* Three-hour collection guard remains in poll_service. This worker
+   * wakes every minute for the independent four-hour report cadence. */
   memset(&result,0,sizeof result);used=0;
   (void)poll_service(NULL,0,&result,sizeof result,&used,NULL);
-  {
+  now=time(NULL);
+  if(interval_due(now,last_status_report,STATUS_REPORT_SECONDS)){
+   int observation_ok=1,brief_ok=0;
    char brief[INTEL_REPORT_CAP]={0};
+   memset(&observation,0,sizeof observation);
+   candidate_observation=0;
+   if(observation_report(&observation,&candidate_observation)){
+    char update[INTEL_REPORT_CAP]={0};
+    intelligence_brief(update,sizeof update,observation.report,-1,0,0,0,
+      "S2 observation ID in summary",1,-1,-1);
+    if(deliver_intel(update))observation_cursor=candidate_observation;
+    else observation_ok=0;
+   }
    pthread_mutex_lock(&intel_mutex);
    if(intel_pending[0])memcpy(brief,intel_pending,sizeof brief);
    pthread_mutex_unlock(&intel_mutex);
@@ -1309,10 +1337,12 @@ static void *scheduler_main(void *unused){
     pthread_mutex_lock(&intel_mutex);
     if(!strcmp(intel_pending,brief))intel_pending[0]=0;
     pthread_mutex_unlock(&intel_mutex);
+    brief_ok=1;
    }
+   if(brief_ok&&observation_ok)last_status_report=now;
   }
   if(clock_gettime(CLOCK_REALTIME,&until)!=0)break;
-  until.tv_sec+=POLL_SECONDS;
+  until.tv_sec+=SCHEDULER_TICK_SECONDS;
   pthread_mutex_lock(&scheduler_mutex);
   while(!scheduler_stop){
    int rc=pthread_cond_timedwait(&scheduler_cond,&scheduler_mutex,&until);
@@ -1332,6 +1362,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api){
   host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
  }
  observation_cursor=0;
+  last_status_report=0;
  pthread_mutex_lock(&intel_mutex);intel_pending[0]=0;pthread_mutex_unlock(&intel_mutex);
  scheduler_stop=0;
  if(pthread_create(&scheduler,NULL,scheduler_main,NULL)){
@@ -1355,7 +1386,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=4,.version_patch=12,
+ .version_major=0,.version_minor=4,.version_patch=13,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
