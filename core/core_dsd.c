@@ -250,8 +250,11 @@ static stnlabz_module_result_t diagnose_service(
 static int evidence_rank(const digit_dsd_event_t *e){
  const char *v=e->status;
  if(!strcmp(e->module,"irc"))return 0;
+ /* NOT_FOUND from a registered handler can mean an optional capability
+  * declined a request. A later successful response outweighs the probe,
+  * while an actual missing Core registration remains a real failure. */
+ if(!strcmp(v,"HANDLER_NOT_FOUND"))return 15;
  if(!strcmp(v,"SERVICE_ERROR")||!strcmp(v,"SERVICE_NOT_FOUND")||
-    !strcmp(v,"HANDLER_NOT_FOUND")||
     !strcmp(v,"INVALID_STATE")||!strcmp(v,"QUERY_ERROR")||
     !strcmp(v,"RETRIEVAL_UNAVAILABLE"))
      return !strcmp(e->module,"core")?90:100;
