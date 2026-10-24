@@ -44,3 +44,11 @@ The October 24 trace for `explain yourself` included `digit.socials.family` befo
 Core DSD now ranks a registered handler's `HANDLER_NOT_FOUND` below a later recorded successful response, while retaining the unmatched handler event in the complete trace. A genuine Core registry lookup miss (`SERVICE_NOT_FOUND`) remains high priority. A handler no-match with **no** downstream success remains reportable rather than being erased. The regression test reproduces the optional family probe followed by successful `digit.gru.generate` generation and verifies that the final response is not falsely assessed as missing registration.
 
 This fixes attribution for the observed source path, **not** the GRU's weak generated content. Meaningful answer quality still requires separate language qualification.
+
+### Skipped retrieval is not a failed retrieval (2026-10-24)
+
+An IRC request such as `explain yourself` contains no eligible factual Corpus search subject after Conversation filters grammatical and discourse words. Consequently **no SQLite corpus search service is invoked**. Previous Conversation code emitted `RETRIEVAL_UNAVAILABLE` whenever no search succeeded, even if no search was attempted. Reasoning independently interpreted `retrieval_attempted=0` as a failure; Core DSD then reported this synthetic technical defect.
+
+The correction preserves separate observations: `RETRIEVAL_SKIPPED` for no attempted Corpus query, `NO_CORPUS_MATCH` when a query succeeds without relevant evidence, and `RETRIEVAL_UNAVAILABLE` when at least one actual query is attempted but none succeeds. Reasoning now returns `ABSTAIN` for no attempted query, while retaining `FAILURE` when an attempted retrieval fails; its DSD event names an abstention explicitly. Core DSD treats skipped/no-subject/abstention events as low-priority information, not failures outranking a successful generated reply.
+
+The recorded lack of a SQLite operation therefore represents a non-attempt, **not an established SQLite failure**. This fixes attribution only. It does not qualify the GRU's language quality or authorize new SQL queries. A Core regression test reproduces the full skipped-search → Reasoning abstention → successful GRU response path. Operator-run compilation, qualification and live traces remain required.
