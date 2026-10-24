@@ -70,6 +70,7 @@ static const char *status_meaning(const char *status){
  if(!strcmp(status,"QUERY_ERROR"))return "the corpus search failed";
  if(!strcmp(status,"SERVICE_OK"))return "the service completed without reporting an error";
  if(!strcmp(status,"NO_RESPONSE"))return "request returned without a reply";
+ if(!strcmp(status,"REASONING_ABSTAIN"))return "Reasoning abstained without claiming a failed retrieval";
  if(!strcmp(status,"NO_GENERATOR"))return "Conversation has no general response generator";
  if(!strcmp(status,"SERVICE_NOT_FOUND"))return "Core found no registered handler for the named service";
  if(!strcmp(status,"HANDLER_NOT_FOUND"))return "the registered service handler returned NOT_FOUND";
@@ -256,7 +257,8 @@ static int evidence_rank(const digit_dsd_event_t *e){
   * declined a request. A later successful response outweighs the probe,
   * while an actual missing Core registration remains a real failure. */
  if(!strcmp(v,"HANDLER_NOT_FOUND"))return 15;
- if(!strcmp(v,"RETRIEVAL_SKIPPED")||!strcmp(v,"NO_SEARCH_CANDIDATE"))return 5;
+ if(!strcmp(v,"RETRIEVAL_SKIPPED")||!strcmp(v,"NO_SEARCH_CANDIDATE")||
+    !strcmp(v,"REASONING_ABSTAIN"))return 5;
  if(!strcmp(v,"SERVICE_ERROR")||!strcmp(v,"SERVICE_NOT_FOUND")||
     !strcmp(v,"INVALID_STATE")||!strcmp(v,"QUERY_ERROR")||
     !strcmp(v,"RETRIEVAL_UNAVAILABLE"))
@@ -290,6 +292,8 @@ static const char *evidence_assessment(const digit_dsd_event_t *e){
   return "Conversation withheld a response; underlying decision must be examined.";
  if(!strcmp(v,"RETRIEVAL_SKIPPED")||!strcmp(v,"NO_SEARCH_CANDIDATE"))
   return "No eligible factual search subject was selected; Corpus retrieval was not attempted, so a retrieval failure is not established.";
+ if(!strcmp(v,"REASONING_ABSTAIN"))
+  return "Reasoning abstained; the trace does not establish a retrieval failure.";
  if(!strcmp(v,"QUERY_NO_MATCH"))
   return "SQLite3 returned no matching records; retrieval completed without a match.";
  if(!strcmp(v,"RETRIEVAL_FAILED")||!strcmp(v,"RETRIEVAL_FAILURE_STATED")||
