@@ -86,6 +86,8 @@ static const char *status_meaning(const char *status){
  if(!strcmp(status,"SQLITE_IOERR"))return "database I/O failed";
  if(!strcmp(status,"SERVICE_TIMEOUT"))return "service did not respond in time";
  if(!strcmp(status,"SERVICE_UNAVAILABLE"))return "service is unavailable";
+ if(!strcmp(status,"RETRIEVAL_SKIPPED"))return "no eligible factual corpus search candidate was selected";
+ if(!strcmp(status,"NO_SEARCH_CANDIDATE"))return "no eligible search subject was identified; no retrieval failure established";
  if(!strcmp(status,"MODULE_NOT_FOUND"))return "module was not found";
  return NULL;
 }
@@ -254,6 +256,7 @@ static int evidence_rank(const digit_dsd_event_t *e){
   * declined a request. A later successful response outweighs the probe,
   * while an actual missing Core registration remains a real failure. */
  if(!strcmp(v,"HANDLER_NOT_FOUND"))return 15;
+ if(!strcmp(v,"RETRIEVAL_SKIPPED")||!strcmp(v,"NO_SEARCH_CANDIDATE"))return 5;
  if(!strcmp(v,"SERVICE_ERROR")||!strcmp(v,"SERVICE_NOT_FOUND")||
     !strcmp(v,"INVALID_STATE")||!strcmp(v,"QUERY_ERROR")||
     !strcmp(v,"RETRIEVAL_UNAVAILABLE"))
@@ -285,6 +288,8 @@ static const char *evidence_assessment(const digit_dsd_event_t *e){
   return "Conversation View rejected available evidence as unsuitable for output.";
  if(!strcmp(v,"RESPONSE_ABSTAIN"))
   return "Conversation withheld a response; underlying decision must be examined.";
+ if(!strcmp(v,"RETRIEVAL_SKIPPED")||!strcmp(v,"NO_SEARCH_CANDIDATE"))
+  return "No eligible factual search subject was selected; Corpus retrieval was not attempted, so a retrieval failure is not established.";
  if(!strcmp(v,"QUERY_NO_MATCH"))
   return "SQLite3 returned no matching records; retrieval completed without a match.";
  if(!strcmp(v,"RETRIEVAL_FAILED")||!strcmp(v,"RETRIEVAL_FAILURE_STATED")||
