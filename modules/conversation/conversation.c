@@ -1153,7 +1153,8 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
         decision.outcome=DIGIT_REASONING_OUTCOME_PARTIAL;
         strcpy(data.hits[0].excerpt,"Chaos Foundation maintains engineering documentation.");
         check(q,digit_response_render(&decision,&data,&question,"What is PHP?",render,sizeof render,&length)&&
-          strstr(render,"not a full explanation")!=NULL,0);
+          strstr(render,"I can establish this much:")!=NULL&&
+          strstr(render,"Corpus #")==NULL,0);
         strcpy(data.hits[0].verification_status,"unverified");
         check(q,!digit_response_render(&decision,&data,&question,"What is PHP?",render,sizeof render,&length),1);
         strcpy(data.hits[0].verification_status,"verified");
