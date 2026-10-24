@@ -132,3 +132,14 @@ pronoun resolution, or the actual deployed Corpus contents.
 ## v1.2.3 — GRU generation handoff
 
 After the existing Interpretation, Corpus Search, Reasoning and deterministic View succeed, Conversation calls `digit.gru.generate` using a bounded prompt containing the evidence-backed View answer. The registered `gru_bridge` service posts to `http://127.0.0.1:8765/generate`. A missing bridge, rejected HTTP/model response, timeout or failed candidate validation retains the original View answer; an optional module never blocks the established reply. The candidate acceptance policy is intentionally narrow: the verified View statement must be preserved verbatim and only a small approved conversational introduction may precede it. This does not yet enable open-ended paraphrasing; a robust independent factual-equivalence validator would be needed before allowing freer generation. No inference, SQL changes or Core/IRC changes were introduced. The existing approved-pair learning path remains separate. Live acceptance needs the GRU API schema expected by `gru_bridge` (including `model=stn-labz-gru`, `text`, `generated_bytes`, and `experimental`).
+
+
+## v1.2.9 — GRU question-format alignment (2026-10-24)
+
+Conversation now submits the **original user message** as the GRU generate prompt instead of prepending natural-language instructions, evidence metadata, and retrieval labels. The word-GRU sampler itself supplies its learned question/answer context markers. Conversation requests **32 maximum words**, matching the Windows GO diagnostic generation budget; the bridge retains its established default seed (913), temperature (0.65), and repetition penalty (0) because the ABI request leaves those fields unset.
+
+The change is deliberately confined to `modules/conversation/conversation.c`. It does not alter Core, Interpretation, Reasoning, the evidence-backed View, SQLite persistence, the GRU bridge ABI, the HTTP service, checkpoint selection or deployment. A generated reply remains **unverified language**: verified excerpts are still protected by the existing exact source-quotation acceptance check, with fallback retaining the evidence-backed response when the GRU cannot preserve it. The existing sensitive metadata output checks remain.
+
+Qualification's deterministic GRU stub now verifies that the prompt equals the user's original message, the requested word budget is 32, a response missing a required verified source quotation is rejected, and one containing that quotation is accepted. These tests establish request formatting and guard behavior only, not live GRU fluency or factual correctness.
+
+**Operator gate:** Build and run module qualification, then compare matched prompts on Windows and IRC under the same checkpoint, executable revision, seed, temperature and word limit. Checkpoint equality alone does not prove executable equality. This revision does not install, hotload or activate the module.
