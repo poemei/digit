@@ -1,5 +1,5 @@
 /* Digit Conversation: ABI-only interpretation dispatch; no inference or
- * generated response. Conversation v1.2.7. The IRC module and Core are
+ * generated response. Conversation v1.2.8. The IRC module and Core are
  * unchanged; both registered conversation routes share this handler.
  */
 #include <stddef.h>
@@ -127,6 +127,18 @@ static int core_identity_field(const digit_interpretation_result_t *r,
   *field=DIGIT_IDENTITY_LINEAGE;return 1;
  }
  return 0;
+}
+/* Preserve the Core mission text and adjust only its explicit introduction
+ * when rendering Digit's own speech. Other formats pass through unchanged. */
+static int mission_first_person(const char *mission,char *out,size_t cap){
+ static const char prefix[]="Digit's mission is";
+ static const char replacement[]="My mission is";
+ size_t n=sizeof prefix-1;
+ if(!mission||!out||!cap)return -1;
+ if(!strncmp(mission,prefix,n)&&
+    (!mission[n]||isspace((unsigned char)mission[n])))
+   return snprintf(out,cap,"%s%s",replacement,mission+n);
+ return snprintf(out,cap,"%s",mission);
 }
 /* Conversational participation is decided here, after Interpretation.
  * A question mark alone is not an invitation. */
@@ -310,7 +322,7 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
                        "Core identifies %s as my mother, but does not specify my creator.",
                        core_value.text);
                 else if(field==DIGIT_IDENTITY_MISSION)
-                    written=snprintf(response,capacity,"%s",core_value.text);
+                    written=mission_first_person(core_value.text,response,capacity);
                 else if(field==DIGIT_IDENTITY_LINEAGE)
                     written=snprintf(response,capacity,
                        "I am Digit, a %s within STN-LABZ.",core_value.text);
@@ -654,7 +666,7 @@ static stnlabz_module_result_t mock_invoke(const char *service,
           case DIGIT_IDENTITY_LINEAGE:
             strcpy(out.text,"foundational autonomous agent");break;
           case DIGIT_IDENTITY_MISSION:
-            strcpy(out.text,"Digit supports STN-LABZ through research and engineering.");break;
+            strcpy(out.text,"Digit's mission is to support STN-LABZ through research and engineering.");break;
           case DIGIT_IDENTITY_MOTHER:
             strcpy(out.text,"poe");break;
           default:return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
@@ -881,6 +893,16 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
     check(q,!gru_generate_response(&mock,"Hello",NULL,NULL,
         response,sizeof response,&used),1);
     {
+        char mission[256]={0};
+        check(q,mission_first_person("Digit's mission is to help.",mission,
+            sizeof mission)>0&&!strcmp(mission,"My mission is to help."),0);
+        check(q,mission_first_person("Support STN-LABZ.",mission,
+            sizeof mission)>0&&!strcmp(mission,"Support STN-LABZ."),0);
+        check(q,mission_first_person("Digit's missionary work",mission,
+            sizeof mission)>0&&!strcmp(mission,"Digit's missionary work"),1);
+        check(q,mission_first_person("Digit's mission is to help.",mission,8)>=8,1);
+    }
+    {
         message_t sample=msg;size_t count=0;
         strcpy(sample.message,"what is the Chaos Foundation?");
         mock_mode=11;
@@ -933,7 +955,8 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
         emitted=0;
         check(q,process_route(&mock,&self,sizeof self,response,
              sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&
-             emitted>0&&strstr(response,"STN-LABZ")!=NULL,0);
+             emitted>0&&!strcmp(response,
+                 "My mission is to support STN-LABZ through research and engineering."),0);
         strcpy(self.message,"who is your creator?");
         emitted=0;
         check(q,process_route(&mock,&self,sizeof self,response,
@@ -1205,7 +1228,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 2, .version_patch = 7,
+    .version_major = 1, .version_minor = 2, .version_patch = 8,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
