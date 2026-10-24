@@ -83,9 +83,8 @@ int digit_response_render(const digit_reasoning_result_t *d,
   if(spelling_followup(original_text,asked,sizeof asked)&&
      corpus_spelling(hit->excerpt,asked,stored,sizeof stored)){
    n=snprintf(output,capacity,
-     "Corpus #%lld writes it as \"%s\". This source does not establish "
-     "whether that capitalization is required.",
-     (long long)hit->id,stored);
+     "It is written as \"%s\". The available evidence does not establish "
+     "whether that capitalization is required.",stored);
    if(n<=0||(size_t)n>=capacity)return 0;
    *used=(size_t)n;return 1;
   }
@@ -128,12 +127,13 @@ int digit_response_render(const digit_reasoning_result_t *d,
   while(end>0&&hit->excerpt[end-1]==' ')end--;
  }
  if(!end)return 0;
+ /* Identifiers belong in diagnostic data, never in conversational text.
+  * Keep the excerpt source-faithful without pretending it fully answers. */
  n=snprintf(output,capacity,
    d->outcome==DIGIT_REASONING_OUTCOME_PARTIAL?
-     "What I can establish from Corpus #%lld (not a full explanation): \"%.*s%s\"":
-     "Corpus #%lld excerpt: \"%.*s%s\"",
-   (long long)hit->id,(int)end,hit->excerpt,
-   end<source_length?"...":"");
+     "I can establish this much: \"%.*s%s\"":
+     "%.*s%s",
+   (int)end,hit->excerpt,end<source_length?"...":"");
  if(n<=0||(size_t)n>=capacity)return 0;
  length=(size_t)n;
  *used=length;
