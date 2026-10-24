@@ -17,13 +17,11 @@
 #include <unistd.h>
 #include "module.h"
 #include "s2.h"
-#include "s2_observations.h"
 #define RICTUS "/var/log/rictus/rictus.log"
 #define SENTINEL "https://api.stn-labz.com/threats"
 #define FETCH_MAX (1024u*1024u)
 #define RICTUS_LINES 128u
 #define POLL_SECONDS (3*60*60)
-#define DELIVER_SERVICE "digit.irc.deliver"
 #define INTEL_DELIVERY "digit.slack.intel.deliver"
 #define INTEL_REPORT_CAP 8192
 #define CASE_DB "/opt/digit/state/s2_cases.sqlite3"
@@ -47,7 +45,6 @@ static int has_reported;
 static int last_source_state=-1;
 static int last_correlation=-1;
 static int last_persistence_ok=-1;
-static int64_t observation_cursor;
 static char intel_pending[INTEL_REPORT_CAP];
 static pthread_mutex_t intel_mutex=PTHREAD_MUTEX_INITIALIZER;
 static void intelligence_brief(char *,size_t,const char *,long,int,int,int,const char *,int,int,int);
@@ -1138,10 +1135,6 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  return r->tests_executed>=20&&!r->tests_failed&&r->negative_test_executed&&
    r->negative_test_passed?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_QUALIFICATION;
 }
-/* Passive, bounded observation bridge. Rictus Intel is presented as
- * STN-Labz S2 intelligence transported through IRC. The current SQLite3
- * query does not authenticate sender identity; this label must not be used
- * as proof that the agent or an external claim was independently verified. */
 /* Structured private assessment. Unknown counts are not invented.
  * Only source state, bounded log counts and direct indicator correlations
  * evidenced by this poll are reported. No raw log entries leave S2. */
@@ -1263,48 +1256,11 @@ static int deliver_intel(const char *brief){
  }
  return 1;
 }
-static int observation_report(digit_s2_report_t *out,int64_t *selected){
- digit_s2_observations_query_t query={0};
- digit_s2_observations_result_t result={0};
- size_t used=0;
- const char *id;
- char token[48]={0},summary[140]={0};
- const char *description;
- size_t i=0;
- if(!out||!selected||!host||!host->invoke_service)return 0;
- query.after_id=observation_cursor;
- if(host->invoke_service(DIGIT_S2_OBSERVATIONS_SERVICE,&query,sizeof query,
-    &result,sizeof result,&used)!=STNLABZ_MODULE_OK||
-    used!=sizeof result||result.id<=query.after_id||
-    !memchr(result.text,0,sizeof result.text))return 0;
- id=strstr(result.text,"INT-");
- if(id){
-  while(id[i]&&i<sizeof token-1&&
-        ((id[i]>='A'&&id[i]<='Z')||
-         (id[i]>='0'&&id[i]<='9')||id[i]=='-')){
-   token[i]=id[i];i++;
-  }
- }
- if(!token[0])snprintf(token,sizeof token,"not supplied");
- description=strstr(result.text,"SUMMARY:");
- description=description?description+8:result.text;
- while(*description==' ')description++;
- for(i=0;i<sizeof summary-1&&description[i]&&description[i]!='\n'&&description[i]!='\r';i++)
-  summary[i]=description[i];
- memset(out,0,sizeof *out);
- snprintf(out->report,sizeof out->report,
-  "[S2] IRC observation #%lld, Rictus Intel %s: %.130s "
-  "(STN-Labz S2 intelligence; IRC transport).",
-  (long long)result.id,token,summary);
- *selected=result.id;
- return 1;
-}
 /* Dedicated scheduler: never invokes an ABI service from another service
  * handler, avoiding Core's non-recursive registry lock. */
 /* Slack is S2's reporting transport; no routine IRC notifications. */
 static void *scheduler_main(void *unused){
- digit_s2_report_t result={0},observation={0};size_t used=0;
- int64_t candidate_observation=0;
+ digit_s2_report_t result={0};size_t used=0;
  struct timespec until;
  (void)unused;
  for(;;){
@@ -1319,17 +1275,8 @@ static void *scheduler_main(void *unused){
   (void)poll_service(NULL,0,&result,sizeof result,&used,NULL);
   now=time(NULL);
   if(interval_due(now,last_status_report,STATUS_REPORT_SECONDS)){
-   int observation_ok=1,brief_ok=0;
+   int brief_ok=0;
    char brief[INTEL_REPORT_CAP]={0};
-   memset(&observation,0,sizeof observation);
-   candidate_observation=0;
-   if(observation_report(&observation,&candidate_observation)){
-    char update[INTEL_REPORT_CAP]={0};
-    intelligence_brief(update,sizeof update,observation.report,-1,0,0,0,
-      "S2 observation ID in summary",1,-1,-1);
-    if(deliver_intel(update))observation_cursor=candidate_observation;
-    else observation_ok=0;
-   }
    pthread_mutex_lock(&intel_mutex);
    if(intel_pending[0])memcpy(brief,intel_pending,sizeof brief);
    pthread_mutex_unlock(&intel_mutex);
@@ -1339,7 +1286,7 @@ static void *scheduler_main(void *unused){
     pthread_mutex_unlock(&intel_mutex);
     brief_ok=1;
    }
-   if(brief_ok&&observation_ok)last_status_report=now;
+   if(brief_ok)last_status_report=now;
   }
   if(clock_gettime(CLOCK_REALTIME,&until)!=0)break;
   until.tv_sec+=SCHEDULER_TICK_SECONDS;
@@ -1361,7 +1308,6 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api){
  if(!api->register_service(DIGIT_S2_POLL_SERVICE,poll_service,NULL)){
   host=NULL;return STNLABZ_MODULE_ERR_START_FAILED;
  }
- observation_cursor=0;
   last_status_report=0;
  pthread_mutex_lock(&intel_mutex);intel_pending[0]=0;pthread_mutex_unlock(&intel_mutex);
  scheduler_stop=0;
@@ -1386,7 +1332,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="s2",.name="S2 passive security intelligence",
- .version_major=0,.version_minor=4,.version_patch=13,
+ .version_major=0,.version_minor=4,.version_patch=14,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
