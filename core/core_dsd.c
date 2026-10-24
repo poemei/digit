@@ -71,7 +71,8 @@ static const char *status_meaning(const char *status){
  if(!strcmp(status,"SERVICE_OK"))return "the service completed without reporting an error";
  if(!strcmp(status,"NO_RESPONSE"))return "request returned without a reply";
  if(!strcmp(status,"NO_GENERATOR"))return "Conversation has no general response generator";
- if(!strcmp(status,"SERVICE_NOT_FOUND"))return "the requested service was not registered";
+ if(!strcmp(status,"SERVICE_NOT_FOUND"))return "Core found no registered handler for the named service";
+ if(!strcmp(status,"HANDLER_NOT_FOUND"))return "the registered service handler returned NOT_FOUND";
  if(!strcmp(status,"NOT_AUTHORIZED"))return "the request was not authorized";
  if(!strcmp(status,"INVALID_ARGUMENT"))return "the service rejected its input";
  if(!strcmp(status,"INVALID_STATE"))return "the service was not ready for this operation";
@@ -250,8 +251,10 @@ static int evidence_rank(const digit_dsd_event_t *e){
  const char *v=e->status;
  if(!strcmp(e->module,"irc"))return 0;
  if(!strcmp(v,"SERVICE_ERROR")||!strcmp(v,"SERVICE_NOT_FOUND")||
+    !strcmp(v,"HANDLER_NOT_FOUND")||
     !strcmp(v,"INVALID_STATE")||!strcmp(v,"QUERY_ERROR")||
-    !strcmp(v,"RETRIEVAL_UNAVAILABLE"))return 100;
+    !strcmp(v,"RETRIEVAL_UNAVAILABLE"))
+     return !strcmp(e->module,"core")?90:100;
  if(!strcmp(v,"NO_GENERATOR"))return 95;
  if(!strcmp(v,"EVIDENCE_NOT_RENDERABLE")||
     !strcmp(v,"INSUFFICIENT_EVIDENCE"))return 80;
@@ -287,7 +290,10 @@ static const char *evidence_assessment(const digit_dsd_event_t *e){
  if(!strcmp(v,"NO_GENERATOR"))return "Conversation has no general response generator.";
  if(!strcmp(v,"RESPONSE_COMPOSED")||!strcmp(v,"RESPONSE_RETURNED"))
   return "A response was produced; substantive answer quality remains unverified.";
- if(!strcmp(v,"SERVICE_NOT_FOUND"))return "An upstream service was not registered.";
+ if(!strcmp(v,"SERVICE_NOT_FOUND"))
+  return "Core registry lookup found no handler for the named service.";
+ if(!strcmp(v,"HANDLER_NOT_FOUND"))
+  return "A registered service handler returned NOT_FOUND; its internal cause is unverified.";
  if(!strcmp(v,"SERVICE_ERROR")||!strcmp(v,"INVALID_STATE"))
   return "The named upstream service reported a technical failure.";
  return "The reported module status is observed; deeper cause is unverified.";
@@ -357,9 +363,9 @@ static stnlabz_module_result_t report_service(
    "undetermined (upstream evidence missing)");
  if(responsible)
   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
-    "Code: %s:%u (%s.%s), status=%s",
+    "Code: %s:%u (%s.%s), service=%s, status=%s",
     responsible->file,responsible->line,responsible->module,
-    responsible->method,responsible->status);
+    responsible->method,responsible->operation,responsible->status);
  else
   snprintf(out->lines[out->count++],DIGIT_DSD_REPORT_LINE_MAX,
     "Code: upstream source unverified; IRC records only delivery.");
@@ -522,10 +528,25 @@ void core_dsd_service_result(const char *service,
  snprintf(event.file,sizeof event.file,"core/digit.c");
  snprintf(event.operation,sizeof event.operation,"%s",service);
  snprintf(event.status,sizeof event.status,"%s",
-    rc==STNLABZ_MODULE_ERR_NOT_FOUND?"SERVICE_NOT_FOUND":
+    rc==STNLABZ_MODULE_ERR_NOT_FOUND?"HANDLER_NOT_FOUND":
     rc==STNLABZ_MODULE_ERR_INVALID_ARGUMENT?"INVALID_ARGUMENT":
     rc==STNLABZ_MODULE_ERR_INVALID_STATE?"INVALID_STATE":
     rc!=STNLABZ_MODULE_OK?"SERVICE_ERROR":
     produced?"RESPONSE_RETURNED":"NO_RESPONSE");
+ (void)record(&event);
+}
+
+/* Core registry miss is distinct from a registered handler returning
+ * NOT_FOUND. Keep these signals separate to avoid invented attribution. */
+void core_dsd_service_missing(const char *service,unsigned line){
+ digit_dsd_event_t event={0};
+ if(!current_trace||!service)return;
+ event.trace_id=current_trace;event.span_id=8;event.line=line;
+ event.result=1;
+ snprintf(event.module,sizeof event.module,"core");
+ snprintf(event.method,sizeof event.method,"registry_lookup");
+ snprintf(event.file,sizeof event.file,"core/digit.c");
+ snprintf(event.operation,sizeof event.operation,"%s",service);
+ snprintf(event.status,sizeof event.status,"SERVICE_NOT_FOUND");
  (void)record(&event);
 }
