@@ -387,7 +387,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="reasoning",.name="Evidence Constrained Reasoning",
- .version_major=0,.version_minor=1,.version_patch=8,
+ .version_major=0,.version_minor=1,.version_patch=9,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
