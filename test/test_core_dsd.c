@@ -59,6 +59,28 @@ int main(void){
  assert(strstr(report.lines[3],"modules/conversation/conversation.c:201"));
  assert(strstr(report.lines[5],"insufficient evidence")!=NULL||
         strstr(report.lines[5],"adequate evidence")!=NULL);
+ id=993;
+ /* A handler returned NOT_FOUND: it was registered, so DSD must not
+  * claim that the upstream service was absent from Core's registry. */
+ assert(core_dsd_dispatch(DIGIT_DSD_BIND_SERVICE,&id,sizeof id,NULL,0,&used)==STNLABZ_MODULE_OK);
+ core_dsd_service_begin("digit.gru.generate",__LINE__);
+ core_dsd_service_result("digit.gru.generate",STNLABZ_MODULE_ERR_NOT_FOUND,0,__LINE__);
+ query.trace_id=id;
+ assert(core_dsd_dispatch(DIGIT_DSD_REPORT_SERVICE,&query,sizeof query,&report,sizeof report,&used)==STNLABZ_MODULE_OK);
+ assert(strstr(report.lines[3],"service=digit.gru.generate")!=NULL);
+ assert(strstr(report.lines[3],"HANDLER_NOT_FOUND")!=NULL);
+ assert(strstr(report.lines[5],"registered service handler returned NOT_FOUND")!=NULL);
+ id=994;
+ /* Actual registry miss is separately recorded and attributed to the
+  * precise named service, not a guessed upstream module. */
+ assert(core_dsd_dispatch(DIGIT_DSD_BIND_SERVICE,&id,sizeof id,NULL,0,&used)==STNLABZ_MODULE_OK);
+ core_dsd_service_begin("digit.absent",__LINE__);
+ core_dsd_service_missing("digit.absent",__LINE__);
+ query.trace_id=id;
+ assert(core_dsd_dispatch(DIGIT_DSD_REPORT_SERVICE,&query,sizeof query,&report,sizeof report,&used)==STNLABZ_MODULE_OK);
+ assert(strstr(report.lines[3],"service=digit.absent")!=NULL);
+ assert(strstr(report.lines[3],"SERVICE_NOT_FOUND")!=NULL);
+ assert(strstr(report.lines[5],"registry lookup found no handler")!=NULL);
  id=991;
  trace_query.trace_id=id;used=0;
  assert(core_dsd_dispatch(DIGIT_DSD_DIAGNOSE_SERVICE,&trace_query,sizeof trace_query,&trace,sizeof trace,&used)==STNLABZ_MODULE_OK);
