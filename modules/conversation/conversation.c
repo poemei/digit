@@ -1,5 +1,5 @@
 /* Digit Conversation: ABI-only interpretation dispatch; no inference or
- * generated response. Conversation v1.2.10. The IRC module and Core are
+ * generated response. Conversation v1.2.11. The IRC module and Core are
  * unchanged; both registered conversation routes share this handler.
  */
 #include <stddef.h>
@@ -162,39 +162,82 @@ static int conversation_invitation(const digit_interpretation_result_t *r){
  * generator. Model output is not evidence. For supported factual answers,
  * the evidence-backed View remains the fallback, and generated wording must
  * retain the verified quotation rather than silently replacing it. */
+/* Debug every generator boundary without persisting the prompt or reply.
+ * DSD records length and disposition; output quality is NOT assessed. */
+static void gru_debug(const stnlabz_module_host_t *api,const char *status,
+ unsigned result,unsigned count,unsigned selected,unsigned line){
+ uint64_t trace=0,token=1;size_t used=0;
+ digit_dsd_record_t r={0};
+ if(!api||!api->invoke_service)return;
+ if(api->invoke_service(DIGIT_DSD_CURRENT_SERVICE,&token,sizeof token,
+    &trace,sizeof trace,&used)!=STNLABZ_MODULE_OK||
+    used!=sizeof trace||!trace)return;
+ r.trace_id=r.event.trace_id=trace;
+ r.event.span_id=5;r.event.parent_span_id=1;
+ r.event.line=line;r.event.result=(unsigned char)result;
+ r.event.records=count;r.event.selected=selected;
+ snprintf(r.event.module,sizeof r.event.module,"conversation");
+ snprintf(r.event.method,sizeof r.event.method,"gru_generate_response");
+ snprintf(r.event.file,sizeof r.event.file,"modules/conversation/conversation.c");
+ snprintf(r.event.operation,sizeof r.event.operation,"gru.debug");
+ snprintf(r.event.status,sizeof r.event.status,"%s",status);
+ (void)api->invoke_service(DIGIT_DSD_RECORD_SERVICE,&r,sizeof r,NULL,0,&used);
+}
 static int gru_generate_response(const stnlabz_module_host_t *api,
  const char *message,const char *verified,const char *source_quote,
  char *output,size_t capacity,size_t *used){
  digit_gru_generate_request_t request={0};
  digit_gru_generate_result_t result={0};
  size_t received=0;stnlabz_module_result_t rc;
- size_t prompt_length;
+ size_t prompt_length,length;
  (void)verified;
  if(!api||!api->invoke_service||!message||!message[0]||
     !output||capacity<2||!used)return 0;
- /* The word GRU trains with Question/Answer boundaries. Send the original
-  * message only; its sampler applies the corresponding context markers.
-  * Factual grounding stays outside probabilistic prompting, including
-  * the existing source-quote acceptance check below. */
  prompt_length=strlen(message);
- if(prompt_length>=sizeof request.prompt)return 0;
+ if(prompt_length>=sizeof request.prompt){
+  gru_debug(api,"PROMPT_TOO_LONG",1,(unsigned)prompt_length,0,__LINE__);
+  return 0;
+ }
  memcpy(request.prompt,message,prompt_length+1);
  request.length=32;
+ gru_debug(api,"PROMPT_SENT",0,(unsigned)prompt_length,request.length,__LINE__);
  rc=api->invoke_service(DIGIT_GRU_GENERATE_SERVICE,&request,sizeof request,
     &result,sizeof result,&received);
- if(rc!=STNLABZ_MODULE_OK||received!=sizeof result||
-    !memchr(result.text,0,sizeof result.text))return 0;
- size_t length=strlen(result.text);
- if(!length||length>=capacity||length!=result.generated_bytes)return 0;
+ if(rc!=STNLABZ_MODULE_OK){
+  gru_debug(api,"GENERATOR_SERVICE_ERROR",1,(unsigned)rc,0,__LINE__);
+  return 0;
+ }
+ if(received!=sizeof result||!memchr(result.text,0,sizeof result.text)){
+  gru_debug(api,"INVALID_GENERATOR_RESULT",1,(unsigned)received,0,__LINE__);
+  return 0;
+ }
+ length=strlen(result.text);
+ if(!length||length>=capacity||length!=result.generated_bytes){
+  gru_debug(api,"INVALID_OUTPUT_LENGTH",1,(unsigned)length,
+      result.generated_bytes,__LINE__);
+  return 0;
+ }
  for(size_t i=0;i<length;i++)
-    if((unsigned char)result.text[i]<32||
-       (unsigned char)result.text[i]==127)return 0;
- if(source_quote&&*source_quote&&!strstr(result.text,source_quote))return 0;
+  if((unsigned char)result.text[i]<32||
+     (unsigned char)result.text[i]==127){
+   gru_debug(api,"OUTPUT_CONTROL_CHAR",1,(unsigned)length,0,__LINE__);
+   return 0;
+  }
+ if(source_quote&&*source_quote&&!strstr(result.text,source_quote)){
+  gru_debug(api,"VERIFIED_QUOTE_MISSING",1,(unsigned)length,0,__LINE__);
+  return 0;
+ }
  if(strstr(result.text,"Corpus #")||strstr(result.text,"corpus #")||
     strstr(result.text,"source_record_id")||
-    strstr(result.text,"verification_status"))return 0;
+    strstr(result.text,"verification_status")){
+  gru_debug(api,"OUTPUT_METADATA_REJECTED",1,(unsigned)length,0,__LINE__);
+  return 0;
+ }
  memcpy(output,result.text,length+1);
  *used=length;
+ /* Structural acceptance is not relevance, truth, or language qualification. */
+ gru_debug(api,"ACCEPTED_UNVERIFIED",0,(unsigned)length,
+     source_quote&&*source_quote?1:0,__LINE__);
  return 1;
 }
 static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
@@ -1249,7 +1292,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 2, .version_patch = 10,
+    .version_major = 1, .version_minor = 2, .version_patch = 11,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
