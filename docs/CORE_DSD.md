@@ -36,3 +36,11 @@ Core now distinguishes two observably different failure boundaries that previous
 The Core report's `Code:` line includes `service=<service_name>` alongside module, location and status. Report selection favors an instrumented module's explicit failure over a generic Core wrapper with otherwise equal severity, while retaining Core registry errors when those are the actual failure. A successful user-visible reply can coexist with a failed optional service; the report identifies the observed failure rather than claiming the entire request failed.
 
 The regression in `test/test_core_dsd.c` exercises both distinct cases. These source-level changes do not change the module ABI, dynamically load DSD, inspect private SQL, or automatically repair anything. Before declaring a root cause, follow nested service events where available; if no deeper event exists, report that its origin is unverified. Operator-controlled Core compilation, tests, and deployment are required before live DSD output changes.
+
+### Observed IRC family-probe fall-through
+
+The October 24 trace for `explain yourself` included `digit.socials.family` before Conversation and `digit.gru.generate`. Source inspection established the call chain: `modules/irc/irc.c` attempts the optional family responder; `modules/socials/socials.c` returns `STNLABZ_MODULE_ERR_NOT_FOUND` when `family_intent()` finds no family-specific intent; IRC then continues routing. This return does **not** mean `digit.socials.family` is unregistered, and is not in itself a request failure.
+
+Core DSD now ranks a registered handler's `HANDLER_NOT_FOUND` below a later recorded successful response, while retaining the unmatched handler event in the complete trace. A genuine Core registry lookup miss (`SERVICE_NOT_FOUND`) remains high priority. A handler no-match with **no** downstream success remains reportable rather than being erased. The regression test reproduces the optional family probe followed by successful `digit.gru.generate` generation and verifies that the final response is not falsely assessed as missing registration.
+
+This fixes attribution for the observed source path, **not** the GRU's weak generated content. Meaningful answer quality still requires separate language qualification.
