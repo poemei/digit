@@ -621,6 +621,7 @@ static stnlabz_module_result_t handle(const void *request, size_t bytes,
 static int mock_calls;
 static int mock_mode;
 static int mock_context_writes, mock_context_reads;
+static int mock_corpus_searches;
 static stnlabz_module_result_t mock_invoke(const char *service,
     const void *request, size_t bytes, void *response, size_t capacity,
     size_t *used)
@@ -690,6 +691,7 @@ static stnlabz_module_result_t mock_invoke(const char *service,
         if(used)*used=0;
         if(!request||bytes!=sizeof(digit_corpus_query_t)||!response||
             capacity<sizeof empty||!used)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+        mock_corpus_searches++;
         if(mock_mode==10&&!strcmp(q->query,"speak")){
             empty.count=1;empty.hits[0].id=7;
             strcpy(empty.hits[0].category,"feline");
@@ -763,6 +765,15 @@ static stnlabz_module_result_t mock_invoke(const char *service,
        r.kind=DIGIT_UTTERANCE_STATEMENT;
        r.term_count=1;
        strcpy(r.terms[0],!strcmp(q->text,"mrrp")?"mrrp":"paws");
+    }else if(!strcmp(q->text,"Digit explain yourself")){
+        r.kind=DIGIT_UTTERANCE_STATEMENT;r.term_count=3;
+        strcpy(r.terms[0],"digit");strcpy(r.terms[1],"explain");
+        strcpy(r.terms[2],"yourself");
+    }else if(!strcmp(q->text,"how long will this take?")){
+        r.kind=DIGIT_UTTERANCE_QUESTION;r.term_count=5;
+        strcpy(r.terms[0],"how");strcpy(r.terms[1],"long");
+        strcpy(r.terms[2],"will");strcpy(r.terms[3],"this");
+        strcpy(r.terms[4],"take");
     }else if(!strcmp(q->text,"what is the Chaos Foundation?")){
        r.kind=DIGIT_UTTERANCE_QUESTION;r.term_count=5;
        strcpy(r.terms[0],"what");strcpy(r.terms[1],"is");
@@ -984,6 +995,20 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
             sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&emitted>0&&
             strstr(response,"Corpus #")==NULL,0);
         mock_mode=0;
+        /* Generic conversational questions must not select arbitrary
+         * Corpus documentation through non-subject terms. */
+        {
+            int searches=mock_corpus_searches;
+            strcpy(channel.message,"Digit explain yourself");emitted=99;
+            check(q,process_route(&mock,&channel,sizeof channel,response,
+                sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&
+                mock_corpus_searches==searches,1);
+            searches=mock_corpus_searches;
+            strcpy(channel.message,"how long will this take?");emitted=99;
+            check(q,process_route(&mock,&channel,sizeof channel,response,
+                sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&
+                mock_corpus_searches==searches,1);
+        }
         strcpy(channel.message,"good to see you");emitted=99;
         check(q,process_route(&mock,&channel,sizeof channel,response,
             sizeof response,&emitted,0)==STNLABZ_MODULE_OK&&emitted==0,0);
