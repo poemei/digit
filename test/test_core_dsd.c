@@ -94,6 +94,34 @@ int main(void){
  assert(strstr(report.lines[3],"service=digit.gru.generate")!=NULL);
  assert(strstr(report.lines[3],"RESPONSE_RETURNED")!=NULL);
  assert(strstr(report.lines[5],"response was produced")!=NULL);
+ id=996;
+ /* "explain yourself": no eligible corpus subject, so no SQLite lookup.
+  * GRU still returns a response; skipped retrieval is not a fault. */
+ assert(core_dsd_dispatch(DIGIT_DSD_BIND_SERVICE,&id,sizeof id,NULL,0,&used)==STNLABZ_MODULE_OK);
+ record.trace_id=record.event.trace_id=id;
+ record.event.result=0;
+ strcpy(record.event.module,"conversation");
+ strcpy(record.event.method,"process");
+ strcpy(record.event.file,"modules/conversation/conversation.c");
+ strcpy(record.event.operation,"digit.sqlite3.corpus_search");
+ strcpy(record.event.status,"RETRIEVAL_SKIPPED");
+ assert(core_dsd_dispatch(DIGIT_DSD_RECORD_SERVICE,&record,sizeof record,NULL,0,&used)==STNLABZ_MODULE_OK);
+ strcpy(record.event.operation,"digit.reasoning.evaluate");
+ strcpy(record.event.status,"NO_SEARCH_CANDIDATE");
+ assert(core_dsd_dispatch(DIGIT_DSD_RECORD_SERVICE,&record,sizeof record,NULL,0,&used)==STNLABZ_MODULE_OK);
+ strcpy(record.event.module,"reasoning");
+ strcpy(record.event.file,"modules/reasoning/reasoning.c");
+ strcpy(record.event.method,"evaluate");
+ strcpy(record.event.status,"REASONING_ABSTAIN");
+ record.event.result=2;
+ assert(core_dsd_dispatch(DIGIT_DSD_RECORD_SERVICE,&record,sizeof record,NULL,0,&used)==STNLABZ_MODULE_OK);
+ core_dsd_service_begin("digit.gru.generate",__LINE__);
+ core_dsd_service_result("digit.gru.generate",STNLABZ_MODULE_OK,15,__LINE__);
+ query.trace_id=id;
+ assert(core_dsd_dispatch(DIGIT_DSD_REPORT_SERVICE,&query,sizeof query,&report,sizeof report,&used)==STNLABZ_MODULE_OK);
+ assert(strstr(report.lines[3],"service=digit.gru.generate")!=NULL);
+ assert(strstr(report.lines[3],"RESPONSE_RETURNED")!=NULL);
+ assert(strstr(report.lines[5],"response was produced")!=NULL);
  id=991;
  trace_query.trace_id=id;used=0;
  assert(core_dsd_dispatch(DIGIT_DSD_DIAGNOSE_SERVICE,&trace_query,sizeof trace_query,&trace,sizeof trace,&used)==STNLABZ_MODULE_OK);
