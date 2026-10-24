@@ -516,7 +516,8 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
                 "PARTIAL_EVIDENCE":decision.outcome==DIGIT_REASONING_OUTCOME_CLARIFY?
                 "CLARIFICATION_REQUIRED":decision.outcome==DIGIT_REASONING_OUTCOME_UNKNOWN?
                 "KNOWLEDGE_UNKNOWN":decision.outcome==DIGIT_REASONING_OUTCOME_FAILURE?
-                "RETRIEVAL_FAILED":"EVIDENCE_INSUFFICIENT"):
+                "RETRIEVAL_FAILED":!reasoning.retrieval_attempted?
+                "NO_SEARCH_CANDIDATE":"EVIDENCE_INSUFFICIENT"):
               rc==STNLABZ_MODULE_ERR_NOT_FOUND?"SERVICE_NOT_FOUND":"SERVICE_ERROR",
             rc==STNLABZ_MODULE_OK&&decision_used==sizeof decision?0:1,
             rc==STNLABZ_MODULE_OK&&decision_used==sizeof decision?
@@ -539,7 +540,8 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
                   "CLARIFICATION_REQUESTED":decision.outcome==DIGIT_REASONING_OUTCOME_FAILURE?
                   "RETRIEVAL_FAILURE_STATED":decision.outcome==DIGIT_REASONING_OUTCOME_PARTIAL?
                   "PARTIAL_KNOWLEDGE_STATED":"RESPONSE_COMPOSED"):
-                "EVIDENCE_NOT_RENDERABLE";
+                !reasoning.retrieval_attempted?
+                "NO_SEARCH_CANDIDATE":"EVIDENCE_NOT_RENDERABLE";
 
             trace_stage(host,"process","response.view",status,
                 rendered?0:2,rendered?(unsigned)*used:0,__LINE__);
