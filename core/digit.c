@@ -162,7 +162,7 @@ static stnlabz_module_result_t digit_service(const char *name,
         service_lock_release();
         core_dsd_service_begin(name,__LINE__);
         if(!handler){
-            core_dsd_service_result(name,STNLABZ_MODULE_ERR_NOT_FOUND,0,__LINE__);
+            core_dsd_service_missing(name,__LINE__);
             return STNLABZ_MODULE_ERR_NOT_FOUND;
         }
         rc=handler(request,request_size,response,response_size,response_used,
