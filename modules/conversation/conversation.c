@@ -1,5 +1,5 @@
 /* Digit Conversation: ABI-only interpretation dispatch; no inference or
- * generated response. Conversation v1.2.9. The IRC module and Core are
+ * generated response. Conversation v1.2.10. The IRC module and Core are
  * unchanged; both registered conversation routes share this handler.
  */
 #include <stddef.h>
@@ -501,8 +501,11 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
         }
         trace_stage(host,"process",DIGIT_CORPUS_SEARCH_SERVICE,
             found.count?"EVIDENCE_RETRIEVED":
+            !reasoning.retrieval_attempted?"RETRIEVAL_SKIPPED":
             reasoning.retrieval_succeeded?"NO_CORPUS_MATCH":
-            "RETRIEVAL_UNAVAILABLE",found.count?0:2,found.count,__LINE__);
+            "RETRIEVAL_UNAVAILABLE",
+            found.count?0:reasoning.retrieval_attempted?2:0,
+            found.count,__LINE__);
         reasoning.context_count=have_history?history.count:0;
         rc=host->invoke_service(DIGIT_REASONING_SERVICE,&reasoning,
             sizeof reasoning,&decision,sizeof decision,&decision_used);
@@ -1244,7 +1247,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 2, .version_patch = 9,
+    .version_major = 1, .version_minor = 2, .version_patch = 10,
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
