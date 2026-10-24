@@ -367,8 +367,7 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
                 "say","said","mean","means","talk","answer","question",
                 "long","much","many","take","takes","taking","time",
                 "today","tomorrow","now","then","before","after",
-                "here","there","doing","done","just","really",
-                "digit","digicat"
+                "here","there","doing","done","just","really"
             };
             unsigned best_score=0;
             for(i=0;i<result.term_count;i++){
