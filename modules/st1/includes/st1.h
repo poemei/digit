@@ -3,6 +3,8 @@
 /* [AI:GPT-6 | 2026-10-25 18:20:00 UTC] */
 #include "module.h"
 #define DIGIT_ST1_SERVICE "st1.query"
+#define DIGIT_ST1_REPORT_SERVICE "st1.report"
+#define DIGIT_ST1_SLACK_DELIVERY "digit.slack.st1.deliver"
 #define DIGIT_ST1_PATH "/opt/digit/research/st1/research.tsv"
 #define DIGIT_ST1_RESULTS 8
 typedef struct {
