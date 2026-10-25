@@ -9,12 +9,14 @@
 #include <dlfcn.h>
 
 static stnlabz_module_service_handler_fn registered_service;
+static stnlabz_module_service_handler_fn registered_report;
 static int reg_service(const char *name,stnlabz_module_service_handler_fn fn,void *ctx){
- (void)ctx;if(strcmp(name,DIGIT_ST1_SERVICE))return 0;
- registered_service=fn;return 1;
+ (void)ctx;if(!strcmp(name,DIGIT_ST1_SERVICE)){registered_service=fn;return 1;}
+ if(!strcmp(name,DIGIT_ST1_REPORT_SERVICE)){registered_report=fn;return 1;}
+ return 0;
 }
 static int unreg_service(const char *name,void *ctx){
- (void)ctx;return !strcmp(name,DIGIT_ST1_SERVICE);
+ (void)ctx;return !strcmp(name,DIGIT_ST1_SERVICE)||!strcmp(name,DIGIT_ST1_REPORT_SERVICE);
 }
 static void sample(digit_st1_record_t *r){
  memset(r,0,sizeof *r);
@@ -74,13 +76,14 @@ int main(void){
   assert(descriptor_fn!=NULL);
   descriptor=descriptor_fn();
   assert(!strcmp(descriptor->id,"st1")&&descriptor->version_major==0&&
-         descriptor->version_minor==1&&descriptor->version_patch==0);checks++;
+         descriptor->version_minor==1&&descriptor->version_patch==1);checks++;
   assert(descriptor->qualify(&q)==STNLABZ_MODULE_OK&&
          q.tests_executed>=STNLABZ_MODULE_MIN_TESTS&&
          q.tests_passed==q.tests_executed&&q.negative_test_passed);checks++;
   host.register_service=reg_service;host.unregister_service=unreg_service;
-  assert(descriptor->start(&host)==STNLABZ_MODULE_OK&&registered_service);checks++;
+  assert(descriptor->start(&host)==STNLABZ_MODULE_OK&&registered_service&&registered_report);checks++;
   assert(registered_service(NULL,0,NULL,0,NULL,NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT);checks++;
+  assert(registered_report(NULL,0,NULL,0,NULL,NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT);checks++;
   assert(descriptor->stop()==STNLABZ_MODULE_OK);checks++;
   assert(dlclose(handle)==0);
  }
