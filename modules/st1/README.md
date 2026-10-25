@@ -1,4 +1,4 @@
-# Digit ST-1 Research Registry — 0.1.0
+# Digit ST-1 Research Registry — 0.1.1
 
 **Engineering status:** Corrected source candidate. Operator end-to-end acceptance is OPEN. No live activation or production installation has been verified.
 
@@ -10,7 +10,7 @@ Native, bounded evidence registry for external ST-1 research concerning Ezra, Se
 
 ## Digit compatibility and boundary
 
-The actual Core startup host in `poemei/digit/core/digit.c` exposes `register_service`, `unregister_service` and `invoke_service`. It does **not** expose module command-registration callbacks. This module therefore registers only the independent read-only ABI service `st1.query`. No module-specific logic has been added to Router or Core.
+The actual Core startup host in `poemei/digit/core/digit.c` exposes `register_service`, `unregister_service` and `invoke_service`. It does **not** expose module command-registration callbacks. This module registers `st1.query` and a manually invoked, source-attributed `st1.report` service. It invokes the existing Slack module's `digit.slack.st1.deliver` ABI service; no Core or Router modifications are required. No module-specific logic has been added to Router or Core.
 
 The prior advertised `/st1` command was incompatible with the actual running Core contract and **is not a supported console route in this revision**. Free-form Digit conversation retrieval is also not connected to the service. A future integration requires inspection and authorized changes to the relevant module controller, not an unauthorized Core patch.
 
@@ -63,6 +63,6 @@ If and only if the operator explicitly authorizes installation, use the module's
 5. Operator-selected end-to-end retrieval tested, including unknown-ID and invalid-input cases.
 6. Explicit human acceptance.
 
-No claim of Slack reports, automatic memory dumps, scheduled ingestion, or free-form language integration is made by this module.
+The operator designated Slack channel `C0CBYDEKK6J`. Slack's protected production configuration must contain `st1_channel_id=C0CBYDEKK6J`, its bot must have posting permission, and Slack module v0.2.1 must be active. `st1.report` takes zero request bytes and reports up to eight current, source-attributed registry records to that dedicated Slack ABI transport. Empty or unavailable research data, missing transport, and posting failures return errors: none is mislabeled as successful delivery. The report is **not** automatically scheduled, and no channel is directly accessed by ST-1 outside the ABI. Triggering the reporting service requires an independently authorized ABI consumer; no public `/st1` command is claimed. No claim of scheduled reports, automated ingestion, or free-form language integration is made.
 
 **AWAITING OPERATOR END-TO-END TESTING AND ACCEPTANCE**
