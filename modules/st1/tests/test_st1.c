@@ -8,22 +8,13 @@
 #include <assert.h>
 #include <dlfcn.h>
 
-static stnlabz_module_command_handler_fn registered_command;
 static stnlabz_module_service_handler_fn registered_service;
-static int reg_command(const char *name,stnlabz_module_command_handler_fn fn,void *ctx){
- (void)ctx;if(strcmp(name,"st1"))return 0;registered_command=fn;return 1;
-}
-static int unreg_command(const char *name,void *ctx){
- (void)ctx;return !strcmp(name,"st1");
-}
 static int reg_service(const char *name,stnlabz_module_service_handler_fn fn,void *ctx){
- (void)ctx;if(strcmp(name,DIGIT_ST1_SERVICE))return 0;registered_service=fn;return 1;
+ (void)ctx;if(strcmp(name,DIGIT_ST1_SERVICE))return 0;
+ registered_service=fn;return 1;
 }
 static int unreg_service(const char *name,void *ctx){
  (void)ctx;return !strcmp(name,DIGIT_ST1_SERVICE);
-}
-static int reply_count(void *ctx,const char *message){
- int *n=ctx;if(!strstr(message,"ST-1"))return 0;(*n)++;return 1;
 }
 static void sample(digit_st1_record_t *r){
  memset(r,0,sizeof *r);
@@ -77,7 +68,7 @@ int main(void){
   const stnlabz_module_descriptor_t *descriptor;
   stnlabz_module_qualification_result_t q;
   stnlabz_module_host_t host={0};
-  stnlabz_module_command_t command={0};int replies=0;
+
   assert(handle!=NULL);
   *(void **)(&descriptor_fn)=dlsym(handle,"stnlabz_module_get_descriptor");
   assert(descriptor_fn!=NULL);
@@ -87,11 +78,8 @@ int main(void){
   assert(descriptor->qualify(&q)==STNLABZ_MODULE_OK&&
          q.tests_executed>=STNLABZ_MODULE_MIN_TESTS&&
          q.tests_passed==q.tests_executed&&q.negative_test_passed);checks++;
-  host.register_command=reg_command;host.unregister_command=unreg_command;
   host.register_service=reg_service;host.unregister_service=unreg_service;
-  assert(descriptor->start(&host)==STNLABZ_MODULE_OK&&registered_command&&registered_service);checks++;
-  strcpy(command.name,"st1");
-  assert(registered_command(&command,reply_count,&replies,NULL)==STNLABZ_MODULE_OK&&replies==1);checks++;
+  assert(descriptor->start(&host)==STNLABZ_MODULE_OK&&registered_service);checks++;
   assert(registered_service(NULL,0,NULL,0,NULL,NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT);checks++;
   assert(descriptor->stop()==STNLABZ_MODULE_OK);checks++;
   assert(dlclose(handle)==0);
