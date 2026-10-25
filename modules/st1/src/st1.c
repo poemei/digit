@@ -236,47 +236,6 @@ static stnlabz_module_result_t query_service(const void *in,size_t n,void *out,
  memcpy(out,&result,sizeof result);*used=sizeof result;
  return STNLABZ_MODULE_OK;
 }
-static stnlabz_module_result_t command_handler(const stnlabz_module_command_t *cmd,
- stnlabz_module_command_reply_fn reply,void *ctx,void *unused){
- digit_st1_query_t req={0};digit_st1_query_result_t result;char line[800];
- unsigned i;const char *p,*sep;(void)unused;
- if(!cmd||!reply||!memchr(cmd->arguments,0,sizeof cmd->arguments))
-  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
- p=cmd->arguments;while(*p==' ')p++;
- if(!*p){(void)reply(ctx,"ST-1: list | watchlist | search TERM | show ID | history ID");return STNLABZ_MODULE_OK;}
- sep=strchr(p,' ');
- {
-  size_t len=sep?(size_t)(sep-p):strlen(p);
-  if(len>=sizeof req.action)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
-  memcpy(req.action,p,len);req.action[len]=0;
- }
- if(sep){
-  while(*sep==' ')sep++;
-  if(strlen(sep)>=sizeof req.term)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
-  strcpy(req.term,sep);
- }
- if(!query(ST1_PATH,&req,&result)){
-  (void)reply(ctx,"ST-1: registry missing, unsafe or invalid query");
-  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
- }
- if(!result.count){(void)reply(ctx,"ST-1: no matching research records");return STNLABZ_MODULE_OK;}
- for(i=0;i<result.count;i++){
-  const digit_st1_record_t *r=&result.records[i];
-  snprintf(line,sizeof line,"ST-1 %s r%u [%s/%s] %s | %s | %s",
-   r->id,r->revision,r->evidence,r->relevance,r->title,r->date,r->url);
-  if(!reply(ctx,line))return STNLABZ_MODULE_ERR_INVALID_STATE;
-  if(!strcmp(req.action,"show")||!strcmp(req.action,"history")){
-   snprintf(line,sizeof line,"Systems: %s | Impact: %s | %s",
-    r->systems,r->impact,r->summary);
-   if(!reply(ctx,line))return STNLABZ_MODULE_ERR_INVALID_STATE;
-   if(r->milestone[0]){
-    snprintf(line,sizeof line,"Mission milestone: %s",r->milestone);
-    if(!reply(ctx,line))return STNLABZ_MODULE_ERR_INVALID_STATE;
-   }
-  }
- }
- return STNLABZ_MODULE_OK;
-}
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q){
  digit_st1_record_t r={0};unsigned pass=0;
  if(!q)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
@@ -328,23 +287,18 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
   STNLABZ_MODULE_ERR_QUALIFICATION:STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t start(const stnlabz_module_host_t *host){
- if(!host||!host->register_service||!host->register_command||
-    !host->unregister_service||!host->unregister_command)
+ /* Digit Core startup_host supplies service registration, not command registration. */
+ if(!host||!host->register_service||!host->unregister_service)
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  if(!host->register_service(DIGIT_ST1_SERVICE,query_service,NULL))
   return STNLABZ_MODULE_ERR_START_FAILED;
- if(!host->register_command("st1",command_handler,NULL)){
-  (void)host->unregister_service(DIGIT_ST1_SERVICE,NULL);
-  return STNLABZ_MODULE_ERR_START_FAILED;
- }
- module_host=host;return STNLABZ_MODULE_OK;
+ module_host=host;
+ return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t stop(void){
  int ok=1;
- if(module_host){
-  if(!module_host->unregister_command("st1",NULL))ok=0;
-  if(!module_host->unregister_service(DIGIT_ST1_SERVICE,NULL))ok=0;
- }
+ if(module_host&&module_host->unregister_service)
+  ok=module_host->unregister_service(DIGIT_ST1_SERVICE,NULL);
  module_host=NULL;
  return ok?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_STOP_FAILED;
 }
