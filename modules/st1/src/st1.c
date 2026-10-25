@@ -240,7 +240,8 @@ static stnlabz_module_result_t command_handler(const stnlabz_module_command_t *c
  stnlabz_module_command_reply_fn reply,void *ctx,void *unused){
  digit_st1_query_t req={0};digit_st1_query_result_t result;char line[800];
  unsigned i;const char *p,*sep;(void)unused;
- if(!cmd||!reply)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ if(!cmd||!reply||!memchr(cmd->arguments,0,sizeof cmd->arguments))
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  p=cmd->arguments;while(*p==' ')p++;
  if(!*p){(void)reply(ctx,"ST-1: list | watchlist | search TERM | show ID | history ID");return STNLABZ_MODULE_OK;}
  sep=strchr(p,' ');
