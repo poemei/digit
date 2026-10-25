@@ -256,6 +256,43 @@ static stnlabz_module_result_t query_service(const void *in,size_t n,void *out,
  memcpy(out,&result,sizeof result);*used=sizeof result;
  return STNLABZ_MODULE_OK;
 }
+/* Explicit, source-attributed report dispatch. This service never schedules itself. */
+static stnlabz_module_result_t report_service(const void *request,size_t bytes,
+ void *response,size_t capacity,size_t *used,void *ctx){
+ digit_st1_query_t q={0};
+ digit_st1_query_result_t found;
+ char report[8192];size_t pos=0,i,delivered=0;int n;
+ stnlabz_module_result_t rc;
+ (void)ctx;(void)response;(void)capacity;
+ if(used)*used=0;
+ if(request||bytes||!module_host||!module_host->invoke_service)
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ strcpy(q.action,"list");
+ if(!query(ST1_PATH,&q,&found))return STNLABZ_MODULE_ERR_INVALID_STATE;
+ if(!found.count)return STNLABZ_MODULE_ERR_NOT_FOUND;
+ n=snprintf(report,sizeof report,
+    "*STN-LABZ | ST-1 RESEARCH REPORT*\n"
+    "Evidence registry snapshot; maximum %u current records shown. "
+    "Research does not authorize mission changes.\n",DIGIT_ST1_RESULTS);
+ if(n<0||(size_t)n>=sizeof report)return STNLABZ_MODULE_ERR_INVALID_STATE;
+ pos=(size_t)n;
+ for(i=0;i<found.count;i++){
+  const digit_st1_record_t *r=&found.records[i];
+  n=snprintf(report+pos,sizeof report-pos,
+   "\n*%s* (revision %u) — %s [%s | relevance %s]\n"
+   "Published: %s | Source: %s\n"
+   "Systems: %s | Impact: %s\n"
+   "Summary: %s\n"
+   "Milestone: %s\n",
+   r->id,r->revision,r->title,r->evidence,r->relevance,r->date,r->url,
+   r->systems,r->impact,r->summary,r->milestone);
+  if(n<0||(size_t)n>=sizeof report-pos)return STNLABZ_MODULE_ERR_INVALID_STATE;
+  pos+=(size_t)n;
+ }
+ rc=module_host->invoke_service(DIGIT_ST1_SLACK_DELIVERY,
+       report,pos+1,NULL,0,&delivered);
+ return rc;
+}
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q){
  digit_st1_record_t r={0};unsigned pass=0;
  if(!q)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
@@ -312,18 +349,24 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *host){
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  if(!host->register_service(DIGIT_ST1_SERVICE,query_service,NULL))
   return STNLABZ_MODULE_ERR_START_FAILED;
+ if(!host->register_service(DIGIT_ST1_REPORT_SERVICE,report_service,NULL)){
+  (void)host->unregister_service(DIGIT_ST1_SERVICE,NULL);
+  return STNLABZ_MODULE_ERR_START_FAILED;
+ }
  module_host=host;
  return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t stop(void){
  int ok=1;
- if(module_host&&module_host->unregister_service)
-  ok=module_host->unregister_service(DIGIT_ST1_SERVICE,NULL);
+ if(module_host&&module_host->unregister_service){
+  if(!module_host->unregister_service(DIGIT_ST1_REPORT_SERVICE,NULL))ok=0;
+  if(!module_host->unregister_service(DIGIT_ST1_SERVICE,NULL))ok=0;
+ }
  module_host=NULL;
  return ok?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_STOP_FAILED;
 }
 static const stnlabz_module_descriptor_t descriptor={
- "st1","ST-1 Research Registry",0,1,0,
+ "st1","ST-1 Research Registry",0,1,1,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
