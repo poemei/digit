@@ -95,7 +95,7 @@ static int parse(char *line,digit_st1_record_t *r){
  r->revision=(unsigned int)rev;
  return valid(r)&&strlen(r->recorded)==20;
 }
-#if !defined(ST1_CLI) || defined(ST1_TEST)
+/* Shared read-only query engine for native ABI and operator CLI. */
 static int contains_ci(const char *text,const char *term){
  size_t i,j,n=strlen(term),len=strlen(text);
  if(!n||n>len)return 0;
@@ -148,7 +148,6 @@ static int query(const char *path,const digit_st1_query_t *q,digit_st1_query_res
  if(fclose(f))out->error=4;
  return !out->error;
 }
-#endif
 
 #ifdef ST1_CLI
 static int append_record(const char *path,digit_st1_record_t *r){
@@ -210,6 +209,27 @@ done:
 }
 int main(int argc,char **argv){
  digit_st1_record_t r;
+ if((argc==2||argc==3)&&oneof(argv[1],"list","watchlist","show","history") ||
+    (argc==3&&!strcmp(argv[1],"search"))){
+  digit_st1_query_t q={0};
+  digit_st1_query_result_t out;
+  unsigned i;
+  if(strlen(argv[1])>=sizeof q.action||
+     (argc==3&&strlen(argv[2])>=sizeof q.term))return 2;
+  strcpy(q.action,argv[1]);
+  if(argc==3)strcpy(q.term,argv[2]);
+  if(!query(ST1_PATH,&q,&out)){
+   fputs("st1: registry unavailable or query rejected\n",stderr);return 1;
+  }
+  for(i=0;i<out.count;i++){
+   const digit_st1_record_t *v=&out.records[i];
+   printf("%s r%u [%s/%s] %s | %s | %s\n",v->id,v->revision,
+          v->evidence,v->relevance,v->title,v->date,v->url);
+   if(!strcmp(q.action,"show")||!strcmp(q.action,"history"))
+    printf("  %s | %s | %s | %s\n",v->systems,v->impact,v->summary,v->milestone);
+  }
+  return 0;
+ }
  if(argc!=13||strcmp(argv[1],"upsert")){
   fputs("usage: st1_manage upsert ID KIND TITLE HTTPS_URL YYYY-MM-DD SUMMARY EVIDENCE RELEVANCE SYSTEMS IMPACT MILESTONE\n",stderr);
   return 2;
