@@ -1,4 +1,4 @@
-# Digit Slack v0.2.0 — ABI 1.5 transport candidate
+# Digit Slack v0.2.1 — ABI 1.5 transport candidate
 
 This is a **source candidate**, not a certified or connected Slack deployment.
 It is separate from Digit Core and uses the existing ABI 1.5 named service registry.
@@ -11,7 +11,8 @@ It is separate from Digit Core and uses the existing ABI 1.5 named service regis
 - Direct messages and addressed `app_mention` events use `digit.conversation`; Slack `<@USER>` markup is stripped from addressed mentions. The transport does not manufacture a greeting or override Conversation's participation decision.
 - DM-only DSD `show dsd`, `show trace`, and `diagnose my last request` commands now invoke the existing DSD ABI service. The transport stores each Slack user's previous DM trace separately. Unscoped trace/module commands remain denied. General channels cannot invoke DSD.
 - Channel event classification falls back to Slack channel IDs when `channel_type` is absent; it continues to reject bot and subtype events.
-- Two registered outgoing delivery endpoints: `digit.slack.intel.deliver` and `digit.slack.modules.deliver`, each restricted to its configured private-channel destination.
+- Dedicated ST-1 research endpoint: `digit.slack.st1.deliver`, registered only when `st1_channel_id` is configured in the protected Slack config. This is distinct from intelligence and module operations destinations. No automatic ST-1 reporting or scheduling is introduced.
+- Two pre-existing registered outgoing delivery endpoints: `digit.slack.intel.deliver` and `digit.slack.modules.deliver`, each restricted to its configured private-channel destination.
 - Operational feedback: Slack reads **new** authoritative loader audit events from `/opt/digit/logs/modules.log` and forwards admitted/replaced, denied, and failed hot-load outcomes to the configured private `module_channel_id` (intended for `#digit-ops`). Failure reports never claim a candidate was activated. The module does not replay the historical log when first activated, and retries unsuccessful Slack posts from their original file offset while running.
 - SQLite3 ingestion sends `[SQLITE MEMORY] ...` sync reports to the existing `digit.slack.modules.deliver` endpoint with an independent bounded retry queue. The current SQLite ingestion text reports per-source added, updated, skipped counts rather than the historical aggregate example.
 - `learn_operator_user_id` and `learn_authorization_key` are parsed as reserved configuration for future Lessons integration, but Lessons is not active or implemented here.
@@ -49,6 +50,10 @@ In Slack app configuration, subscribe to bot events `message.channels` and `mess
 The offline qualification checks helper behavior, mention normalization, direct/passive classification (including missing `channel_type`), DSD command classification, descriptor compatibility and negative cases. These tests do not constitute a live DSD or Slack integration test. It **does not** prove live Slack delivery, correct all-frame WebSocket handling, event replay deduplication, outbound delivery reliability, authorization for restricted content, S2 full intelligence generation, or shutdown/restart recovery. Manual end-to-end acceptance remains pending.
 
 Current revision is intended for code review; do not equate publishing it with operator activation or security certification.
+
+## v0.2.1 — ST-1 research reporting destination
+
+Operator-designated channel `C0CBYDEKK6J` is recorded in the checked-in configuration example as `st1_channel_id`; the production private `/opt/digit/auth/slack/slack.conf` must be configured separately by the operator. The destination is validated as a Slack channel ID. The Slack module registers a dedicated ABI delivery endpoint only when configured. It neither invents a channel nor schedules research reports. ST-1's own module assembles source-attributed reports from its registry and dispatches them only on an explicit `st1.report` service call; a Slack API posting failure is reported as a failure.
 
 ## v0.2.0 — Loader audit visibility
 
