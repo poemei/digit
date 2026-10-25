@@ -8,6 +8,8 @@ intel_channel_id=
 # Retired: legacy bridge_channel_id is ignored if present in existing configuration.
 # Separate private module lifecycle destination
 module_channel_id=
+# Operator-designated ST-1 mission research channel
+st1_channel_id=C0CBYDEKK6J
 # Reserved for future Lessons integration; currently ignored
 learn_operator_user_id=
 learn_authorization_key=
