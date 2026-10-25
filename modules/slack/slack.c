@@ -26,6 +26,7 @@
 #define CONVERSATION_LISTEN_SERVICE "digit.conversation.listen"
 #define INTEL_DELIVERY "digit.slack.intel.deliver"
 #define MODULE_DELIVERY "digit.slack.modules.deliver"
+#define ST1_DELIVERY "digit.slack.st1.deliver"
 #define MAX_REPORT 16000
 #define WS_BUFFER 65536
 
@@ -35,7 +36,7 @@ typedef struct {
 typedef struct {
     int enabled;
     char workspace[64], app_token[512], bot_token[512];
-    char intel_channel[64], module_channel[64], bridge_channel[64], learn_user[64];
+    char intel_channel[64], module_channel[64], st1_channel[64], bridge_channel[64], learn_user[64];
     char learn_key[256]; /* Reserved for unimplemented Lessons; never consumed. */
 } slack_config_t;
 typedef struct {char *bytes;size_t used,cap;} response_buffer_t;
@@ -100,6 +101,7 @@ static int load_config(slack_config_t *dst){
    else if(!strcmp(k,"bot_token"))ok=copy(c.bot_token,sizeof c.bot_token,v);
    else if(!strcmp(k,"intel_channel_id"))ok=copy(c.intel_channel,sizeof c.intel_channel,v);
    else if(!strcmp(k,"module_channel_id"))ok=copy(c.module_channel,sizeof c.module_channel,v);
+   else if(!strcmp(k,"st1_channel_id"))ok=copy(c.st1_channel,sizeof c.st1_channel,v);
    else if(!strcmp(k,"bridge_channel_id")){ /* ignored legacy setting */ }
    else if(!strcmp(k,"learn_operator_user_id"))ok=copy(c.learn_user,sizeof c.learn_user,v);
    else if(!strcmp(k,"learn_authorization_key"))ok=copy(c.learn_key,sizeof c.learn_key,v);
@@ -108,6 +110,14 @@ static int load_config(slack_config_t *dst){
  }
  if(ferror(fp))ok=0;
  fclose(fp);
+ if(ok&&c.st1_channel[0]){
+  size_t i;
+  if(c.st1_channel[0]!='C'&&c.st1_channel[0]!='G')ok=0;
+  for(i=1;c.st1_channel[i];i++)
+   if(!((c.st1_channel[i]>='A'&&c.st1_channel[i]<='Z')||
+        (c.st1_channel[i]>='0'&&c.st1_channel[i]<='9')))ok=0;
+  if(i<9)ok=0;
+ }
  if(ok&&c.enabled)ok=c.workspace[0]&&c.app_token[0]&&c.bot_token[0]&&
   !strncmp(c.app_token,"xapp-",5)&&!strncmp(c.bot_token,"xoxb-",5);
  if(ok)*dst=c;
@@ -579,6 +589,9 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *r)
  }
 
  check(r,strcmp(INTEL_DELIVERY,MODULE_DELIVERY)!=0,0);
+ check(r,strcmp(ST1_DELIVERY,MODULE_DELIVERY)!=0,0);
+ check(r,strcmp(ST1_DELIVERY,INTEL_DELIVERY)!=0,0);
+ check(r,sizeof cfg_check.st1_channel>=32,0);
  check(r,MAX_REPORT>=8192,0);
  check(r,sizeof cfg_check.learn_key>=128,0);
  check(r,sizeof cfg_check.intel_channel==sizeof cfg_check.module_channel,0);
@@ -637,9 +650,14 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api){
  if(!api->register_service(MODULE_DELIVERY,delivery,config.module_channel)){
   (void)api->unregister_service(INTEL_DELIVERY,config.intel_channel);goto fail;
  }
+ if(config.st1_channel[0]&&!api->register_service(ST1_DELIVERY,delivery,config.st1_channel)){
+  (void)api->unregister_service(MODULE_DELIVERY,config.module_channel);
+  (void)api->unregister_service(INTEL_DELIVERY,config.intel_channel);goto fail;
+ }
  atomic_store(&running,1);
  if(pthread_create(&worker,NULL,socket_worker,NULL)!=0){
   atomic_store(&running,0);
+  if(config.st1_channel[0]) (void)api->unregister_service(ST1_DELIVERY,config.st1_channel);
   (void)api->unregister_service(MODULE_DELIVERY,config.module_channel);
   (void)api->unregister_service(INTEL_DELIVERY,config.intel_channel);goto fail;
  }
@@ -647,18 +665,20 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *api){
  fail:host_api=NULL;wipe(&config,sizeof config);return STNLABZ_MODULE_ERR_START_FAILED;
 }
 static stnlabz_module_result_t stop(void){
+ int ok=1;
  if(!host_api)return STNLABZ_MODULE_ERR_INVALID_STATE;
  atomic_store(&running,0);
  if(worker_started){pthread_join(worker,NULL);worker_started=0;}
  if(module_audit){fclose(module_audit);module_audit=NULL;audit_inode=0;}
- if(!host_api->unregister_service(MODULE_DELIVERY,config.module_channel)||
-    !host_api->unregister_service(INTEL_DELIVERY,config.intel_channel))
-    return STNLABZ_MODULE_ERR_STOP_FAILED;
+ if(config.st1_channel[0]&&!host_api->unregister_service(ST1_DELIVERY,config.st1_channel))ok=0;
+ if(!host_api->unregister_service(MODULE_DELIVERY,config.module_channel))ok=0;
+ if(!host_api->unregister_service(INTEL_DELIVERY,config.intel_channel))ok=0;
+ if(!ok)return STNLABZ_MODULE_ERR_STOP_FAILED;
  host_api=NULL;wipe(&config,sizeof config);return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="slack",.name="Slack ABI Transport",
- .version_major=0,.version_minor=2,.version_patch=0,
+ .version_major=0,.version_minor=2,.version_patch=1,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
