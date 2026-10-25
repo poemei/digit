@@ -1,3 +1,9 @@
+## 0.1.1 — 2026-10-25
+
+- Added explicit `st1.report` service for source-attributed reports using `digit.slack.st1.deliver` (Slack module v0.2.1).
+- Slack delivery goes only to operator-designated channel configured in Slack private configuration; report is never automatically scheduled or triggered on module activation.
+- Report failures remain failures; no claimed delivery without transport success.
+
 # ST-1 Research Module Changelog
 
 ## 0.1.0 — corrective source revision, 2026-10-25
