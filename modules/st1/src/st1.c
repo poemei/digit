@@ -209,7 +209,7 @@ done:
 }
 int main(int argc,char **argv){
  digit_st1_record_t r;
- if((argc==2||argc==3)&&oneof(argv[1],"list","watchlist","show","history") ||
+ if(((argc==2||argc==3)&&oneof(argv[1],"list","watchlist","show","history")) ||
     (argc==3&&!strcmp(argv[1],"search"))){
   digit_st1_query_t q={0};
   digit_st1_query_result_t out;
