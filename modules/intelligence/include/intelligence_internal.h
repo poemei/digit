@@ -4,7 +4,7 @@
 #include <stddef.h>
 
 #define RICTUS_INTELLIGENCE_LOG_PATH "/var/log/rictus/rictus.log"
-#define RICTUS_INTELLIGENCE_STATE_PATH "/opt/rictus/state/intelligence.cursor"
+#define RICTUS_INTELLIGENCE_STATE_PATH "/opt/digit/state/intelligence.cursor"
 
 #define RICTUS_INTELLIGENCE_ID_MAX 96
 #define RICTUS_INTELLIGENCE_TYPE_MAX 96
