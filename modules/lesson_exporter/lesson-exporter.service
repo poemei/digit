@@ -1,0 +1,22 @@
+[Unit]
+Description=Independent Digit and Rictus Lesson Export Module
+Wants=ollama.service
+After=local-fs.target ollama.service
+
+[Service]
+Type=simple
+User=lesson-exporter
+Group=lesson-exporter
+ExecStart=/usr/bin/python3 /opt/lesson-exporter/lesson_exporter.py scan --watch 300 --output /var/lib/lesson-exporter
+Restart=on-failure
+RestartSec=15
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/lesson-exporter
+ReadOnlyPaths=/opt/digit/lessons /opt/rictus/lessons
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
