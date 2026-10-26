@@ -104,7 +104,7 @@ static stnlabz_module_result_t stop(void)
 }
 
 static const stnlabz_module_descriptor_t descriptor={
- "ollama","Rictus Ollama LLM",OLLAMA_VERSION_MAJOR,OLLAMA_VERSION_MINOR,
+ "ollama","Digit Ollama LLM",OLLAMA_VERSION_MAJOR,OLLAMA_VERSION_MINOR,
  OLLAMA_VERSION_PATCH,STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
