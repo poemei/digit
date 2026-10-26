@@ -43,9 +43,13 @@ static int valid_identity(const char *value)
 static int valid_channel(const char *value)
 {
     const unsigned char *p = (const unsigned char *)value;
+    unsigned int channels = 1U;
     if (!value || (value[0] != '#' && value[0] != '&') || !value[1]) return 0;
     while (*p) {
-        if (*p <= 0x20 || *p == ',' || *p == 0x7f) return 0;
+        if (*p == ',') {
+            ++channels;
+            if (channels > 2U || (p[1] != '#' && p[1] != '&') || !p[2]) return 0;
+        } else if (*p <= 0x20 || *p == 0x7f) return 0;
         ++p;
     }
     return 1;
