@@ -25,7 +25,7 @@ int main(int argc,char **argv){
  if(!library){fprintf(stderr,"dlopen: %s\n",dlerror());return 1;}
  *(void **)(&get)=dlsym(library,"stnlabz_module_get_descriptor");
  assert(get);d=get();
- assert(!strcmp(d->id,"ollama")&&d->version_major==0&&d->version_minor==1&&d->version_patch==0);
+ assert(!strcmp(d->id,"ollama")&&d->version_major==0&&d->version_minor==1&&d->version_patch==2);
  assert(d->qualify(&q)==STNLABZ_MODULE_OK&&q.tests_executed>=20&&
  q.tests_passed==q.tests_executed&&q.negative_test_passed);
  host.register_service=reg;host.unregister_service=unreg;
