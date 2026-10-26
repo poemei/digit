@@ -1,6 +1,6 @@
-# Rictus Intelligence Module
+# Digit Intelligence Module
 
-`intelligence` is Rictus's bounded threat-intelligence watcher.
+`intelligence` is Digit's bounded threat-intelligence watcher.
 
 ## Scope
 
@@ -10,20 +10,20 @@ API's explicit `severity` and `relevance` classifications.
 - `relevance=LOW` is ignored.
 - `relevance=MEDIUM` is recorded as an intelligence candidate.
 - `relevance=HIGH` is recorded as an intelligence candidate.
-- Rictus does not locally reclassify severity or relevance.
-- Fetch, parse, and state failures do not terminate Rictus.
+- Digit does not locally reclassify severity or relevance.
+- Fetch, parse, and state failures do not terminate Digit.
 
 The watcher is persistent. The newest observed threat ID is stored in:
 
 ```text
-/opt/rictus/state/intelligence.cursor
+/opt/digit/state/intelligence.cursor
 ```
 
 That cursor prevents the entire feed from replaying after a normal restart.
 
 ## Source
 
-This module is Rictus-specific. Its intelligence source is compiled into the module:
+This module is Digit-specific. Its intelligence source is compiled into the module:
 
 ```text
 https://api.stn-labz.com/threats
@@ -68,8 +68,10 @@ sudo make install
 The hotload artifact is:
 
 ```text
-/opt/rictus/modules/intelligence/intelligence.so
+/opt/digit/modules/intelligence/intelligence.so
 ```
 
-Rictus sees the new shared object, runs qualification, and activates it only
+Digit sees the new shared object, runs qualification, and activates it only
 when qualification passes.
+
+The module retains `/var/log/rictus/rictus.log` as an intelligence evidence input from the separate Rictus agent. Digit's identity/operational cursor path is independent. Source descriptor v1.0.6; runtime acceptance unverified.
