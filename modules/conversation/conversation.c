@@ -1,6 +1,6 @@
-/* Digit Conversation: ABI-only interpretation dispatch; no inference or
- * generated response. Conversation v1.2.12. The IRC module and Core are
- * unchanged; both registered conversation routes share this handler.
+/* Digit Conversation: ABI interpretation, reasoning, evidence-backed View,
+ * and optional local Ollama language generation. Conversation v1.2.12.
+ * The IRC module and Core are unchanged; both routes share this handler.
  */
 #include <stddef.h>
 #include <stdint.h>
@@ -1296,7 +1296,9 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor = {
     .id = "conversation",
     .name = "Conversation Interpretation Dispatch",
-    .version_major = 1, .version_minor = 2, .version_patch = 11,
+    /* [AI:GPT-6 | 2026-10-26 02:44:00 UTC] */
+    .version_major = 1, .version_minor = 2, .version_patch = 12,
+    /* [End AI:GPT-6] */
     .required_core_api_major = STNLABZ_MODULE_API_MAJOR,
     .required_core_api_minor = STNLABZ_MODULE_API_MINOR,
     .qualify = qualify, .start = start, .stop = stop
