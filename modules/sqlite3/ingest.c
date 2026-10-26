@@ -34,7 +34,6 @@ static int running(void){int v;pthread_mutex_lock(&lock);v=live;pthread_mutex_un
 #define REPORT_CAP 64
 static irc_report_t irc_pending[REPORT_CAP],slack_pending[REPORT_CAP];
 static unsigned irc_count,slack_count;
-static time_t last_irc_sync_notice;
 /* Track changes to operator-approved Lessons files independently of reports. */
 static file_state_t lesson_states[256];
 static unsigned lesson_count;
@@ -60,22 +59,13 @@ static void push_report(irc_report_t *queue,unsigned *count,const irc_report_t *
  }
  queue[(*count)++]=*item;
 }
-static void sync_started(const char *name){
- time_t now=time(NULL);
- if(now!=(time_t)-1&&(!last_irc_sync_notice||now-last_irc_sync_notice>=300)){
-  irc_report_t irc={{0}};
-  snprintf(irc.report,sizeof irc.report,"SQLite Sync Started");
-  push_report(irc_pending,&irc_count,&irc,"IRC");
-  last_irc_sync_notice=now;
- }
- /* Detailed per-source information goes to Slack digit-ops only. */
- irc_report_t slack={{0}};
- snprintf(slack.report,sizeof slack.report,
-   "[SQLITE MEMORY] Sync started: %.220s",name?name:"unknown source");
- push_report(slack_pending,&slack_count,&slack,"Slack");
- flush_reports();
+/* [AI:GPT-6 | 2026-10-26] File scans themselves are not reportable.
+ * Only actual additions/updates and failures generate Slack notifications. */
+static int reportable(unsigned add,unsigned change,int error){
+ return error||add||change;
 }
 static void report(const char *name,unsigned add,unsigned change,unsigned skip,int error){
+ if(!reportable(add,change,error))return;
  irc_report_t slack={{0}};
  snprintf(slack.report,sizeof slack.report,
    "[SQLITE MEMORY] %.100s: added=%u updated=%u skipped=%u %s",
@@ -182,7 +172,6 @@ static int observation_upsert(sqlite3 *db,const char *line,unsigned *add,unsigne
  ++*add;return 1;
 }
 static int ingest(sqlite3 *db,const char *path,int type){
- sync_started(path);
  FILE *fp=fopen(path,"rb");char *line=NULL;size_t cap=0;ssize_t n;
  if(!fp){syslog(LOG_ERR,"digit.sqlite3 ingest: cannot open %s",path);report(path,0,0,0,1);return 0;}
  unsigned add=0,change=0,skip=0,batch=0;int transaction_open=0,ok=1;unsigned long line_number=0;const char *reason="unknown";const char *name=strrchr(path,'/');
@@ -274,7 +263,6 @@ static void *watcher(void *unused){
    report("ingest indexes",0,0,0,1);
    sqlite3_close(db);return NULL;
  }
- report("watcher started: corpus.tsv, observations.jsonl, lessons/*.txt",0,0,0,0);
  while(running()){
   int i;DIR *dir;
   for(i=0;i<2&&running();i++){
