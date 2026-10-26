@@ -1,4 +1,4 @@
-# Digit Ollama harness — v0.1.1
+# Digit Ollama harness — v0.1.2
 
 Operator-authorized **temporary** local language-generation harness for the STN-Labz LLM development effort. This is **not** Digit's knowledge source or replacement for SQLite3, Corpus, Observations, Interpretation or Reasoning.
 
@@ -33,3 +33,7 @@ The local language harness now prompts Ollama to respond as Digit's conversation
 Runtime compilation, module qualification, activation, and live-chat acceptance remain unverified in this source update.
 
 **AWAITING OPERATOR END-TO-END TESTING AND ACCEPTANCE**
+
+## v0.1.2 — ABI test version synchronization (2026-10-26)
+
+The offline ABI test previously asserted descriptor version 0.1.0 even after the runtime descriptor advanced, causing `make test` to abort before executing qualification. Updated the test's expected descriptor and incremented the module release to 0.1.2 in accordance with version numbering doctrine. No change to the Ollama service ABI or transport. Offline test rerun and live acceptance remain unverified.
