@@ -128,3 +128,9 @@ The module descriptor reports **1.5.0**, as directed under approved STN-LABZ Ver
 ## v1.5.2 — Operational sync reporting
 
 A source ingestion attempt emits only `SQLite Sync Started` through the existing IRC delivery service. The per-source start detail, records added/updated/skipped, and errors are sent solely to the configured Slack operations delivery service (`digit.slack.modules.deliver`, intended for `#digit-ops`) and syslog. No IRC↔Slack bridge is restored. Source and database processing remain unchanged. IRC start notifications are coalesced to at most one per five minutes to prevent a busy source watcher flooding chat. The bounded in-memory reporting queues remain non-durable.
+
+## v1.5.4 — Quiet unchanged restart synchronization (2026-10-26)
+
+The source watcher still checks operator-approved Corpus, Observation, and Lessons files after activation, preserving SQLite3's existing database upsert and deduplication behavior. A file scan is no longer itself an IRC or Slack notification. The Slack operations report `digit.slack.modules.deliver` now emits a result only for **nonzero added/updated records or a real ingestion/database error**. A successful unchanged scan with only skipped records is silent. The generic watcher-start notification is also suppressed. Errors remain visible, and changed records continue to report their actual added/updated/skipped totals.
+
+This eliminates repeat full-sync notifications on ordinary restarts without adding persistent state or altering the data model. The source version, descriptor and offline descriptor test are now 1.5.4. Compilation, runtime hotload qualification, Slack delivery, and operator acceptance remain unverified by these GitHub commits.
