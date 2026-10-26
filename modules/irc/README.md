@@ -10,7 +10,7 @@ The module owns IRC network/session behavior only:
 - IRCv3 capability negotiation
 - SASL PLAIN authentication over verified TLS
 - nick/user registration
-- channel join and rejoin after KICK
+- one or two comma-separated channels, each joined and tracked; targeted rejoin after KICK
 - PING/PONG handling
 - bounded reconnect backoff after transport/session loss
 - strict loading of `/opt/digit/auth/irc/irc.env`
@@ -25,12 +25,12 @@ The module requires these exact keys in `/opt/digit/auth/irc/irc.env`:
 DIGIT_IRC_SERVER=...
 DIGIT_IRC_PORT=...
 DIGIT_IRC_NICK=...
-DIGIT_IRC_CHANNEL=...
+DIGIT_IRC_CHANNEL=#stn-labz,#second-channel
 DIGIT_IRC_ACCOUNT=...
 DIGIT_IRC_PASSWORD=...
 ```
 
-Unknown keys, duplicate keys, missing keys, invalid ports, invalid nick/account values, and invalid channel values cause module start to fail. Credentials are not written to module output.
+Unknown keys, duplicate keys, missing keys, invalid ports, invalid nick/account values, and invalid channel values cause module start to fail. `DIGIT_IRC_CHANNEL` accepts one or two distinct channel names separated by a single comma, without spaces. Credentials are not written to module output.
 
 ## Build and test
 
@@ -65,9 +65,13 @@ available, the IRC module forwards only:
 - channel messages explicitly addressed as `digit: ...`, `digit, ...`, or
   `digit ...`
 
-Ordinary channel traffic is not sent to the LLM service. Generated CR/LF
+A reply to an addressed channel message goes to the originating channel. Explicit generic channel-send service calls continue using the first configured channel. Startup is considered online only once all configured channels have joined; rejoin-after-KICK is handled per channel. Ordinary channel traffic is not sent to the LLM service. Generated CR/LF
 characters are flattened before an IRC reply is queued.
 
 ## v1.0.8 — IRC startup failure diagnostics (2026-10-26)
 
 IRC startup now records safe, categorized server numeric failures (nickname conflicts, server bans, SASL errors, and channel admission failures), a server ERROR indicator with its untrusted text withheld, and socket poll/TLS read failures. Raw IRC messages, SASL payloads, credentials, and account passwords are never logged by these diagnostics. The existing 30-second authenticated-channel startup gate and reconnect policy remain unchanged. Qualification and live server admission are not yet verified after this source update.
+
+## v1.0.9 — Two-channel IRC configuration (2026-10-26)
+
+Use `DIGIT_IRC_CHANNEL=#stn-labz,#another-channel` to join two channels; the single-channel form remains supported. There must be no whitespace between names. Each channel is tracked separately for join completion and KICK recovery. Addressed replies return to their source channel, while the generic module channel-deliver service retains the first channel as its default. The existing startup gate requires both channels to be joined. Build, qualification, and live dual-channel behavior are not yet verified.
