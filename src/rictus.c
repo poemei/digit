@@ -11,7 +11,7 @@
 #include "stnlabz_abi/module_loader.h"
 #include "runtime.h"
 
-#define RICTUS_MODULE_DIRECTORY STNLABZ_INSTALL_PATH "/modules"
+#define DIGIT_MODULE_DIRECTORY STNLABZ_INSTALL_PATH "/modules"
 
 /* Core identity and operations never depend on any one capability module. */
 int stnlabz_initialize(void)
@@ -40,12 +40,12 @@ int stnlabz_initialize(void)
         stnlabz_log_close();
         return 1;
     }
-    if (!stnlabz_log_event("CORE", "ROOT_VERIFIED", "agent=rictus revision=1"))
+    if (!stnlabz_log_event("CORE", "ROOT_VERIFIED", "agent=digit revision=18"))
         goto log_failure;
 
     stnlabz_runtime_init(&runtime);
 
-    watch = stnlabz_hotload_create(RICTUS_MODULE_DIRECTORY, &modules, &loader,
+    watch = stnlabz_hotload_create(DIGIT_MODULE_DIRECTORY, &modules, &loader,
                                    module_host);
     if (!watch) {
         (void)stnlabz_log_event("MODULE", "HOTLOAD_FAILED",
@@ -55,7 +55,7 @@ int stnlabz_initialize(void)
 
     /*
      * Evaluate modules already present before entering the runtime loop.
-     * New arrivals are evaluated by the same poll path while Rictus runs.
+     * New arrivals are evaluated by the same poll path while Digit runs.
      */
     stnlabz_hotload_poll(watch);
 
@@ -71,7 +71,7 @@ int stnlabz_initialize(void)
            root->agent_name, (unsigned)root->revision);
     printf("[CORE] Module manager ready: %zu registered modules.\n", modules.count);
     printf("[CORE] Watching %s for qualified modules. SIGINT/SIGTERM to stop.\n",
-           RICTUS_MODULE_DIRECTORY);
+           DIGIT_MODULE_DIRECTORY);
     fflush(stdout);
 
     if (!stnlabz_log_event("CORE", "RUNNING",
