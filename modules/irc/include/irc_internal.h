@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 
-#define RICTUS_IRC_ENV_PATH "/opt/rictus/auth/irc/irc.env"
+#define RICTUS_IRC_ENV_PATH "/opt/digit/auth/irc/irc.env"
 #define RICTUS_IRC_SERVER_MAX 256
 #define RICTUS_IRC_NICK_MAX 64
 #define RICTUS_IRC_CHANNEL_MAX 128
