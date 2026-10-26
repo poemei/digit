@@ -1,4 +1,4 @@
-# Digit Publisher v0.4.9 — ABI 1.5
+# Digit Publisher v0.5.0 — ABI 1.5
 
 The production service `digit.publisher.publish` now uses the tested ChAoS MVC browser-form contract, not an invented Bearer JSON API. It accepts a revised fixed-size request (`site`, `kind`, `category`, `title`, `markdown`, `subject`, `source_actor`, `evidence_ref`, `post_title`, `post_markdown`) and responds with confirmation/error in the original response shape. Configured sites: `chaos`, `stnlabz`, `poemei`. PoeMei publishing uses the existing IRC configuration and requires the caller to supply the authenticated IRC account-tag identity. Supported kinds: `announcements`, `news`, `page`, `posts`, and opt-in `intelligence` for STN-LABZ only. SRT remains disabled.
 
@@ -74,3 +74,9 @@ The S2 Core Page update previously used a 24,000-byte URL-encoded form buffer ev
 ## v0.4.9 — S2 Executive Summary metadata
 
 For S2's `page_update` only, Publisher extracts the report's *1. EXECUTIVE SUMMARY* section as a plain-text description, flattening lines and removing lightweight Markdown markers. The complete S2 report remains the Core Page content. If the section is missing, submission fails rather than silently publishing stale indexing metadata. All other Publisher publication kinds retain their previous behavior. No Core code modified.
+
+## Version numbering correction — v0.5.0 (2026-10-26)
+
+The previously assigned descriptor 0.4.15 exceeded the permitted revision maximum of 10 under approved Version Numbering Doctrine 20260906.0. Corrected the runtime module descriptor to **0.5.0** and synchronized its offline qualification test's version requirement. This is a version-compliance correction only; existing module behavior and ABI are unchanged. Earlier documentation sections are historical records, not current release identities.
+
+Source committed; compilation, module qualification, hotload, and operator acceptance have not been verified by this repository update.
