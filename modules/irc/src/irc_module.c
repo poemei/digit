@@ -21,7 +21,7 @@
 
 #define IRC_VERSION_MAJOR 1U
 #define IRC_VERSION_MINOR 0U
-#define IRC_VERSION_PATCH 8U
+#define IRC_VERSION_PATCH 9U
 #define IRC_OUTBOUND_MAX 32U
 #define IRC_STARTUP_WAIT_SECONDS 30U
 
@@ -40,10 +40,53 @@ static int worker_started;
 static int services_registered;
 static const stnlabz_module_host_t *module_host;
 static rictus_irc_config_t config;
+static char channels[2][RICTUS_IRC_CHANNEL_MAX];
+static unsigned int channel_count;
 static irc_outbound_t outbound[IRC_OUTBOUND_MAX];
 static size_t outbound_head;
 static size_t outbound_tail;
 static size_t outbound_count;
+
+static int configure_channels(void)
+{
+    const char *comma = strchr(config.channel, ',');
+    size_t first = comma ? (size_t)(comma - config.channel) : strlen(config.channel);
+    if (!first || first >= sizeof channels[0]) return 0;
+    memset(channels, 0, sizeof channels);
+    memcpy(channels[0], config.channel, first);
+    channel_count = 1U;
+    if (comma) {
+        size_t second = strlen(comma + 1);
+        if (!second || second >= sizeof channels[1] ||
+            !strcasecmp(channels[0], comma + 1)) return 0;
+        memcpy(channels[1], comma + 1, second + 1U);
+        channel_count = 2U;
+    }
+    return 1;
+}
+
+static int channel_index(const char *name)
+{
+    unsigned int i;
+    if (!name) return -1;
+    for (i = 0U; i < channel_count; ++i)
+        if (!strcasecmp(name, channels[i])) return (int)i;
+    return -1;
+}
+
+static int channel_in_params(const char *params, const char *name)
+{
+    const char *p = params;
+    size_t len = strlen(name);
+    while (p && *p) {
+        if ((p == params || p[-1] == ' ' || p[-1] == ':') &&
+            !strncasecmp(p, name, len) &&
+            (p[len] == 0 || p[len] == ' ' || p[len] == ':')) return 1;
+        p = strchr(p, ' ');
+        if (p) ++p;
+    }
+    return 0;
+}
 
 static void status(const char *message)
 {
@@ -134,11 +177,9 @@ static int queue_outbound(int private_message,
     if (!message || !*message || !atomic_load(&online)) return 0;
     message_length = strlen(message);
     if (message_length >= RICTUS_TRANSPORT_MESSAGE_MAX) return 0;
-    if (private_message) {
-        if (!target || !*target) return 0;
-        target_length = strlen(target);
-        if (target_length >= RICTUS_TRANSPORT_TARGET_MAX) return 0;
-    }
+    if (!target || !*target) return 0;
+    target_length = strlen(target);
+    if (target_length >= RICTUS_TRANSPORT_TARGET_MAX) return 0;
 
     if (pthread_mutex_lock(&outbound_lock) != 0) return 0;
     if (outbound_count >= IRC_OUTBOUND_MAX) {
@@ -149,7 +190,7 @@ static int queue_outbound(int private_message,
     slot = &outbound[outbound_tail];
     memset(slot, 0, sizeof *slot);
     slot->private_message = private_message;
-    if (private_message) memcpy(slot->target, target, target_length + 1U);
+    memcpy(slot->target, target, target_length + 1U);
     memcpy(slot->message, message, message_length + 1U);
     outbound_tail = (outbound_tail + 1U) % IRC_OUTBOUND_MAX;
     outbound_count++;
@@ -176,7 +217,7 @@ static int flush_outbound(SSL *ssl)
         (void)pthread_mutex_unlock(&outbound_lock);
 
         written = snprintf(line, sizeof line, "PRIVMSG %s :%s",
-                           item.private_message ? item.target : config.channel,
+                           item.target,
                            item.message);
         if (written < 0 || (size_t)written >= sizeof line || !send_line(ssl, line))
             return 0;
@@ -196,7 +237,7 @@ static stnlabz_module_result_t channel_send_service(
     if (!message || request_size != sizeof *message ||
         !memchr(message->message, '\0', sizeof message->message))
         return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
-    return queue_outbound(0, NULL, message->message) ?
+    return queue_outbound(0, channels[0], message->message) ?
         STNLABZ_MODULE_OK : STNLABZ_MODULE_ERR_INVALID_STATE;
 }
 
@@ -294,7 +335,7 @@ static void handle_conversation_message(const char *line)
     if (!strcasecmp(target, config.nick)) {
         private_message = 1;
         prompt = message;
-    } else if (!strcasecmp(target, config.channel)) {
+    } else if (channel_index(target) >= 0) {
         if (!channel_prompt(message, &prompt)) return;
     } else {
         return;
@@ -337,7 +378,7 @@ static void handle_conversation_message(const char *line)
     if (private_message)
         (void)queue_outbound(1, sender, response.text);
     else
-        (void)queue_outbound(0, NULL, response.text);
+        (void)queue_outbound(0, target, response.text);
 }
 
 static int send_authenticate_plain(SSL *ssl)
@@ -398,7 +439,7 @@ static void server_failure(const char *command)
 }
 static int handle_line(SSL *ssl, const char *line, int *sasl_seen,
                        int *sasl_requested, int *authenticated,
-                       int *registered, int *join_sent, int *joined)
+                       int *registered, int *join_sent, unsigned int *joined)
 {
     char command[32];
     const char *params;
@@ -478,22 +519,26 @@ static int handle_line(SSL *ssl, const char *line, int *sasl_seen,
 
     if (!strcmp(command, "001")) {
         *registered = 1;
+        /* JOIN accepts a comma-separated channel list on IRC. */
         if (*authenticated && !*join_sent) {
             char join[RICTUS_IRC_CHANNEL_MAX + 8U];
             int written = snprintf(join, sizeof join, "JOIN %s", config.channel);
             if (written < 0 || (size_t)written >= sizeof join || !send_line(ssl, join))
                 return 0;
             *join_sent = 1;
-            status("authenticated; join requested");
+            status("authenticated; channel joins requested");
         }
         return 1;
     }
 
-    if (!strcmp(command, "366") && *join_sent && strstr(params, config.channel)) {
-        if (!*joined) {
-            *joined = 1;
+    if (!strcmp(command, "366") && *join_sent) {
+        unsigned int i;
+        for (i = 0U; i < channel_count; ++i)
+            if (channel_in_params(params, channels[i]))
+                *joined |= 1U << i;
+        if (*joined == ((1U << channel_count) - 1U) && !atomic_load(&online)) {
             atomic_store(&online, 1);
-            status("joined configured IRC channel; Digit online");
+            status("joined all configured IRC channels; Digit online");
         }
         return 1;
     }
@@ -506,17 +551,20 @@ static int handle_line(SSL *ssl, const char *line, int *sasl_seen,
         return 0;
     }
 
-    if (!strcmp(command, "KICK") &&
-        strstr(params, config.channel) && strstr(params, config.nick)) {
-        char join[RICTUS_IRC_CHANNEL_MAX + 8U];
-        int written = snprintf(join, sizeof join, "JOIN %s", config.channel);
-        if (written < 0 || (size_t)written >= sizeof join) return 0;
-        *joined = 0;
-        *join_sent = 0;
-        atomic_store(&online, 0);
-        if (!send_line(ssl, join)) return 0;
-        *join_sent = 1;
-        status("rejoin requested after kick");
+    if (!strcmp(command, "KICK") && strstr(params, config.nick)) {
+        unsigned int i;
+        for (i = 0U; i < channel_count; ++i) {
+            if (channel_in_params(params, channels[i])) {
+                char join[RICTUS_IRC_CHANNEL_MAX + 8U];
+                int written = snprintf(join, sizeof join, "JOIN %s", channels[i]);
+                if (written < 0 || (size_t)written >= sizeof join) return 0;
+                *joined &= ~(1U << i);
+                atomic_store(&online, 0);
+                if (!send_line(ssl, join)) return 0;
+                status("rejoin requested after kick");
+                break;
+            }
+        }
     }
 
     if (*registered && *authenticated && !*join_sent) {
@@ -542,7 +590,7 @@ static int run_session(void)
     int authenticated = 0;
     int registered = 0;
     int join_sent = 0;
-    int joined = 0;
+    unsigned int joined = 0U;
     char receive_buffer[8192];
     size_t receive_used = 0U;
 
@@ -698,6 +746,12 @@ static stnlabz_module_result_t irc_start(const stnlabz_module_host_t *host)
     }
     if (!rictus_irc_config_load(RICTUS_IRC_ENV_PATH, &config)) {
         status("credential/config load failed");
+        unregister_transport_services();
+        return STNLABZ_MODULE_ERR_START_FAILED;
+    }
+    if (!configure_channels()) {
+        status("duplicate or invalid channel list");
+        rictus_irc_config_clear(&config);
         unregister_transport_services();
         return STNLABZ_MODULE_ERR_START_FAILED;
     }
