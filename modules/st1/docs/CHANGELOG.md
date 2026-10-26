@@ -1,3 +1,11 @@
+## 0.1.3 — 2026-10-26
+
+- Followed S2's independent module-owned, interruptible background scheduler pattern for ST-1 private reporting.
+- Immediate attempt on activation, four-hour cadence following successful Slack delivery, one-hour retry after data/delivery failure.
+- Uses the configured dedicated `digit.slack.st1.deliver` endpoint only; never substitutes S2 intelligence or module-ops destinations.
+- Preserved the read-only ST-1 ABI, local operator-controlled research persistence, and clean thread stop/join on module deactivation.
+- Synchronizes build pthread flags and offline descriptor test with ST-1 v0.1.3. Runtime delivery not verified.
+
 ## 0.1.1 — 2026-10-25
 
 - Added explicit `st1.report` service for source-attributed reports using `digit.slack.st1.deliver` (Slack module v0.2.1).
