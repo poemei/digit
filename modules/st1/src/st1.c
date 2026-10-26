@@ -7,6 +7,8 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,6 +27,13 @@
 #define ST1_FIELDS 13
 #ifndef ST1_CLI
 static const stnlabz_module_host_t *module_host;
+/* [AI:GPT-6 | 2026-10-26] Scheduled reporting remains module-owned. */
+static pthread_t report_worker;
+static atomic_int report_stop;
+static int report_worker_started;
+#define ST1_REPORT_INTERVAL_SECONDS 86400U
+#define ST1_REPORT_RETRY_SECONDS 3600U
+/* [End AI:GPT-6] */
 #endif
 
 static int bounded(const char *p,size_t n,int required){
@@ -293,6 +302,34 @@ static stnlabz_module_result_t report_service(const void *request,size_t bytes,
        report,pos+1,NULL,0,&delivered);
  return rc;
 }
+/* [AI:GPT-6 | 2026-10-26]
+ * ST-1 publishes source-attributed current records through Slack's
+ * dedicated ST-1 ABI. Never reroute to generic intel/module channels.
+ * Startup attempts once; delivery/data failures retry hourly; after
+ * successful delivery the next report is due 24 hours later.
+ */
+static int report_delay(unsigned seconds){
+ struct timespec tick={1,0},remaining;
+ unsigned i;
+ for(i=0;i<seconds;i++){
+  if(atomic_load(&report_stop))return 0;
+  remaining=tick;
+  while(nanosleep(&remaining,&remaining)&&errno==EINTR)
+   if(atomic_load(&report_stop))return 0;
+ }
+ return !atomic_load(&report_stop);
+}
+static void *report_loop(void *unused){
+ (void)unused;
+ while(!atomic_load(&report_stop)){
+  size_t used=0;
+  stnlabz_module_result_t result=report_service(NULL,0,NULL,0,&used,NULL);
+  if(!report_delay(result==STNLABZ_MODULE_OK?
+       ST1_REPORT_INTERVAL_SECONDS:ST1_REPORT_RETRY_SECONDS))break;
+ }
+ return NULL;
+}
+/* [End AI:GPT-6] */
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q){
  digit_st1_record_t r={0};unsigned pass=0;
  if(!q)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
@@ -354,10 +391,23 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *host){
   return STNLABZ_MODULE_ERR_START_FAILED;
  }
  module_host=host;
+ atomic_store(&report_stop,0);
+ if(pthread_create(&report_worker,NULL,report_loop,NULL)!=0){
+  module_host=NULL;
+  (void)host->unregister_service(DIGIT_ST1_REPORT_SERVICE,NULL);
+  (void)host->unregister_service(DIGIT_ST1_SERVICE,NULL);
+  return STNLABZ_MODULE_ERR_START_FAILED;
+ }
+ report_worker_started=1;
  return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t stop(void){
  int ok=1;
+ atomic_store(&report_stop,1);
+ if(report_worker_started){
+  if(pthread_join(report_worker,NULL)!=0)return STNLABZ_MODULE_ERR_STOP_FAILED;
+  report_worker_started=0;
+ }
  if(module_host&&module_host->unregister_service){
   if(!module_host->unregister_service(DIGIT_ST1_REPORT_SERVICE,NULL))ok=0;
   if(!module_host->unregister_service(DIGIT_ST1_SERVICE,NULL))ok=0;
@@ -366,7 +416,7 @@ static stnlabz_module_result_t stop(void){
  return ok?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_STOP_FAILED;
 }
 static const stnlabz_module_descriptor_t descriptor={
- "st1","ST-1 Research Registry",0,1,1,
+ "st1","ST-1 Research Registry",0,1,2,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
