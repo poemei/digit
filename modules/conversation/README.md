@@ -163,3 +163,13 @@ Conversation now calls the established `digit.ollama.generate` ABI instead of re
 The Makefile uses `../ollama/ollama.h`, and the module descriptor is `1.2.12`. Conversation qualification includes a deterministic Ollama service mock, request budget, unavailable service, accepted output, and rejected missing-evidence quotation. These checks alone do not establish complete malformed-output coverage or live language quality. `make test` builds the shared module; authoritative qualification executes through Digit Core. This GitHub source correction has **not** been compiled, qualified, installed, hotloaded, or tested against live IRC/Slack in this session.
 
 **AWAITING OPERATOR END-TO-END TESTING AND ACCEPTANCE**
+
+## v1.3.0 — qualification correction and version rollover (2026-10-26)
+
+The prior v1.2.12 descriptor exceeded the maximum revision allowed by 20260906.0 Version Numbering Doctrine. The next valid release identity is **v1.3.0**, now reflected in the Conversation descriptor and Makefile.
+
+The Ollama qualification fixture previously required a nonempty factual reply for `what is the Chaos Foundation?` while its own mock Reasoning outcome was ABSTAIN with no eligible Corpus evidence. This assertion contradicted the production evidence policy and could cause `candidate_qualification_failed`. The fixture now expects successful processing with no generated factual reply under that deliberately evidence-free condition. The separate direct Ollama service tests still check the request contract, missing verified quotation rejection, valid marked-unverified output, unavailable service, and malformed responses.
+
+No Core, SQLite3, Reasoning, Router, or Ollama module changes were made. Repository source changes alone do not establish successful compilation, module qualification, hotload, or live client acceptance.
+
+**AWAITING OPERATOR END-TO-END TESTING AND ACCEPTANCE**
