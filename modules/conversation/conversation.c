@@ -1,5 +1,5 @@
 /* Digit Conversation: ABI-only interpretation dispatch; no inference or
- * generated response. Conversation v1.2.11. The IRC module and Core are
+ * generated response. Conversation v1.2.12. The IRC module and Core are
  * unchanged; both registered conversation routes share this handler.
  */
 #include <stddef.h>
@@ -20,8 +20,7 @@
 #include "../socials/socials.h"
 #include "../social_intelligence/social_intelligence.h"
 /* [AI:GPT-6 | 2026-10-20 UTC] */
-#include "../gru_learning/gru_learning.h"
-#include "../gru_bridge/gru_bridge.h"
+#include "../ollama/ollama.h"
 /* [End AI:GPT-6] */
 
 #define LISTEN "digit.conversation.listen"
@@ -158,13 +157,11 @@ static int conversation_invitation(const digit_interpretation_result_t *r){
  }
  return 0;
 }
-/* Conversation sends interpreted requests to the registered GRU language
- * generator. Model output is not evidence. For supported factual answers,
- * the evidence-backed View remains the fallback, and generated wording must
- * retain the verified quotation rather than silently replacing it. */
-/* Debug every generator boundary without persisting the prompt or reply.
- * DSD records length and disposition; output quality is NOT assessed. */
-static void gru_debug(const stnlabz_module_host_t *api,const char *status,
+/* [AI:GPT-6 | 2026-10-26 UTC]
+ * Ollama is a local language harness, not Digit's knowledge authority.
+ * SQLite3 retrieval and Reasoning must select verified evidence first.
+ */
+static void ollama_debug(const stnlabz_module_host_t *api,const char *status,
  unsigned result,unsigned count,unsigned selected,unsigned line){
  uint64_t trace=0,token=1;size_t used=0;
  digit_dsd_record_t r={0};
@@ -177,69 +174,78 @@ static void gru_debug(const stnlabz_module_host_t *api,const char *status,
  r.event.line=line;r.event.result=(unsigned char)result;
  r.event.records=count;r.event.selected=selected;
  snprintf(r.event.module,sizeof r.event.module,"conversation");
- snprintf(r.event.method,sizeof r.event.method,"gru_generate_response");
+ snprintf(r.event.method,sizeof r.event.method,"ollama_generate_response");
  snprintf(r.event.file,sizeof r.event.file,"modules/conversation/conversation.c");
- snprintf(r.event.operation,sizeof r.event.operation,"gru.debug");
+ snprintf(r.event.operation,sizeof r.event.operation,"ollama.debug");
  snprintf(r.event.status,sizeof r.event.status,"%s",status);
  (void)api->invoke_service(DIGIT_DSD_RECORD_SERVICE,&r,sizeof r,NULL,0,&used);
 }
-static int gru_generate_response(const stnlabz_module_host_t *api,
+static int ollama_generate_response(const stnlabz_module_host_t *api,
  const char *message,const char *verified,const char *source_quote,
  char *output,size_t capacity,size_t *used){
- digit_gru_generate_request_t request={0};
- digit_gru_generate_result_t result={0};
+ digit_ollama_request_t request={0};
+ digit_ollama_result_t result={0};
  size_t received=0;stnlabz_module_result_t rc;
- size_t prompt_length,length;
+ size_t length;
  (void)verified;
  if(!api||!api->invoke_service||!message||!message[0]||
     !output||capacity<2||!used)return 0;
- prompt_length=strlen(message);
- if(prompt_length>=sizeof request.prompt){
-  gru_debug(api,"PROMPT_TOO_LONG",1,(unsigned)prompt_length,0,__LINE__);
+ if(strlen(message)>=sizeof request.question){
+  ollama_debug(api,"PROMPT_TOO_LONG",1,(unsigned)strlen(message),0,__LINE__);
   return 0;
  }
- memcpy(request.prompt,message,prompt_length+1);
- request.length=32;
- gru_debug(api,"PROMPT_SENT",0,(unsigned)prompt_length,request.length,__LINE__);
- rc=api->invoke_service(DIGIT_GRU_GENERATE_SERVICE,&request,sizeof request,
+ strcpy(request.question,message);
+ request.max_tokens=128;
+ if(source_quote&&*source_quote){
+  if(strlen(source_quote)>=sizeof request.evidence){
+   ollama_debug(api,"EVIDENCE_TOO_LONG",1,0,0,__LINE__);
+   return 0;
+  }
+  strcpy(request.evidence,source_quote);
+  request.evidence_required=1;
+ }
+ ollama_debug(api,"PROMPT_SENT",0,(unsigned)strlen(message),
+      request.evidence_required,__LINE__);
+ rc=api->invoke_service(DIGIT_OLLAMA_GENERATE_SERVICE,&request,sizeof request,
     &result,sizeof result,&received);
  if(rc!=STNLABZ_MODULE_OK){
-  gru_debug(api,"GENERATOR_SERVICE_ERROR",1,(unsigned)rc,0,__LINE__);
+  ollama_debug(api,"GENERATOR_SERVICE_ERROR",1,(unsigned)rc,0,__LINE__);
   return 0;
  }
  if(received!=sizeof result||!memchr(result.text,0,sizeof result.text)){
-  gru_debug(api,"INVALID_GENERATOR_RESULT",1,(unsigned)received,0,__LINE__);
+  ollama_debug(api,"INVALID_GENERATOR_RESULT",1,(unsigned)received,0,__LINE__);
   return 0;
  }
  length=strlen(result.text);
- if(!length||length>=capacity||length!=result.generated_bytes){
-  gru_debug(api,"INVALID_OUTPUT_LENGTH",1,(unsigned)length,
+ if(!length||length>=capacity||length!=result.generated_bytes||
+    result.unverified!=1){
+  ollama_debug(api,"INVALID_OUTPUT_LENGTH",1,(unsigned)length,
       result.generated_bytes,__LINE__);
   return 0;
  }
  for(size_t i=0;i<length;i++)
   if((unsigned char)result.text[i]<32||
      (unsigned char)result.text[i]==127){
-   gru_debug(api,"OUTPUT_CONTROL_CHAR",1,(unsigned)length,0,__LINE__);
+   ollama_debug(api,"OUTPUT_CONTROL_CHAR",1,(unsigned)length,0,__LINE__);
    return 0;
   }
  if(source_quote&&*source_quote&&!strstr(result.text,source_quote)){
-  gru_debug(api,"VERIFIED_QUOTE_MISSING",1,(unsigned)length,0,__LINE__);
+  ollama_debug(api,"VERIFIED_QUOTE_MISSING",1,(unsigned)length,0,__LINE__);
   return 0;
  }
  if(strstr(result.text,"Corpus #")||strstr(result.text,"corpus #")||
     strstr(result.text,"source_record_id")||
     strstr(result.text,"verification_status")){
-  gru_debug(api,"OUTPUT_METADATA_REJECTED",1,(unsigned)length,0,__LINE__);
+  ollama_debug(api,"OUTPUT_METADATA_REJECTED",1,(unsigned)length,0,__LINE__);
   return 0;
  }
  memcpy(output,result.text,length+1);
  *used=length;
- /* Structural acceptance is not relevance, truth, or language qualification. */
- gru_debug(api,"ACCEPTED_UNVERIFIED",0,(unsigned)length,
-     source_quote&&*source_quote?1:0,__LINE__);
+ ollama_debug(api,"ACCEPTED_UNVERIFIED",0,(unsigned)length,
+     request.evidence_required,__LINE__);
  return 1;
 }
+/* [End AI:GPT-6] */
 static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
     const void *request, size_t bytes, void *response, size_t capacity,
     size_t *used, int passive)
@@ -593,27 +599,27 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
                 const char *quote=NULL;
                 char generated[512]={0};size_t generated_used=0;
                 int uncertain=decision.outcome==DIGIT_REASONING_OUTCOME_UNKNOWN||
-                    decision.outcome==DIGIT_REASONING_OUTCOME_CLARIFY;
+                    decision.outcome==DIGIT_REASONING_OUTCOME_CLARIFY||
+                    decision.outcome==DIGIT_REASONING_OUTCOME_FAILURE;
                 if(!uncertain&&found.count&&
                     (strcmp(found.hits[0].verification_status,"verified")==0||
                      strcmp(found.hits[0].verification_status,"operator-verified")==0))
                     quote=found.hits[0].excerpt;
-                if(gru_generate_response(host,msg->message,
-                     uncertain?NULL:response,quote,
+                if(!uncertain&&quote&&ollama_generate_response(host,msg->message,
+                     response,quote,
                      generated,sizeof generated,&generated_used)&&
                      generated_used<capacity){
                     memcpy(response,generated,generated_used+1);
                     *used=generated_used;
                 }
-                trace_stage(host,"process",DIGIT_GRU_GENERATE_SERVICE,
+                trace_stage(host,"process",DIGIT_OLLAMA_GENERATE_SERVICE,
                     *used!=before?"CANDIDATE_ACCEPTED":"FALLBACK_RETAINED",
                     0,(unsigned)*used,__LINE__);
             }else if(participate){
-                /* Reasoning may abstain without yielding a View message.
-                 * GRU is the language generation path for this case. */
-                int generated=gru_generate_response(host,msg->message,NULL,NULL,
-                    response,capacity,used);
-                trace_stage(host,"process",DIGIT_GRU_GENERATE_SERVICE,
+                /* A factual request without eligible evidence cannot use the
+                 * language harness to invent a factual answer. */
+                int generated=0;
+                trace_stage(host,"process",DIGIT_OLLAMA_GENERATE_SERVICE,
                     generated?"CONVERSATIONAL_RESPONSE":"NO_GENERATED_RESPONSE",
                     generated?0:2,generated?(unsigned)*used:0,__LINE__);
             }
@@ -622,9 +628,9 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
         /* Interpretation did not classify an information inquiry. This
          * is still a possible conversational instruction or social turn. */
         int generated=participate&&response&&capacity&&
-            gru_generate_response(host,msg->message,NULL,NULL,
+            ollama_generate_response(host,msg->message,NULL,NULL,
                 response,capacity,used);
-        trace_stage(host,"process",DIGIT_GRU_GENERATE_SERVICE,
+        trace_stage(host,"process",DIGIT_OLLAMA_GENERATE_SERVICE,
             generated?"CONVERSATIONAL_RESPONSE":"NO_GENERATED_RESPONSE",
             generated?0:2,generated?(unsigned)*used:0,__LINE__);
     }
@@ -648,8 +654,7 @@ static stnlabz_module_result_t process_route(const stnlabz_module_host_t *host,
             (void)code_diagnostic(msg, &visible, response, capacity, used);
         }
     }
-    /* Generated replies cannot self-authorize training.
-     * Reviewed learning remains the responsibility of gru_learning. */
+    /* Generated replies cannot authorize training or SQLite writes. */
     /* Addressed channel messages may return the View result. Passive
      * channel messages remain observations, not obligatory replies. */
     trace_stage(host,"process","participation",
@@ -682,8 +687,8 @@ static stnlabz_module_result_t handle(const void *request, size_t bytes,
  * not claim to test the real Interpretation module or live IRC integration. */
 static int mock_calls;
 static int mock_mode;
-static char mock_gru_prompt[DIGIT_GRU_PROMPT_MAX];
-static uint32_t mock_gru_length;
+static char mock_ollama_question[DIGIT_OLLAMA_PROMPT_MAX];
+static uint32_t mock_ollama_budget;
 static int mock_context_writes, mock_context_reads;
 static int mock_corpus_searches;
 static stnlabz_module_result_t mock_invoke(const char *service,
@@ -692,18 +697,19 @@ static stnlabz_module_result_t mock_invoke(const char *service,
 {
     const digit_interpretation_request_t *q = request;
     digit_interpretation_result_t r = {0};
-    if(!strcmp(service,DIGIT_GRU_GENERATE_SERVICE)){
-        const digit_gru_generate_request_t *in=request;
-        digit_gru_generate_result_t out={0};
+    if(!strcmp(service,DIGIT_OLLAMA_GENERATE_SERVICE)){
+        const digit_ollama_request_t *in=request;
+        digit_ollama_result_t out={0};
         if(used)*used=0;
         if(mock_mode!=11)return STNLABZ_MODULE_ERR_NOT_FOUND;
         if(!in||bytes!=sizeof *in||!response||capacity<sizeof out||
-           !used||!memchr(in->prompt,0,sizeof in->prompt))
+           !used||!memchr(in->question,0,sizeof in->question))
             return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
-        memcpy(mock_gru_prompt,in->prompt,strlen(in->prompt)+1);
-        mock_gru_length=in->length;
-        strcpy(out.text,"Language generated by GRU.");
+        memcpy(mock_ollama_question,in->question,strlen(in->question)+1);
+        mock_ollama_budget=in->max_tokens;
+        strcpy(out.text,"Language generated by Ollama.");
         out.generated_bytes=(uint32_t)strlen(out.text);
+        out.unverified=1;
         memcpy(response,&out,sizeof out);*used=sizeof out;
         return STNLABZ_MODULE_OK;
     }
@@ -941,7 +947,7 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
         check(q,core_identity_field(&identity,&field,&creator)&&
             field==DIGIT_IDENTITY_LINEAGE,0);
     }
-    check(q,!gru_generate_response(&mock,"Hello",NULL,NULL,
+    check(q,!ollama_generate_response(&mock,"Hello",NULL,NULL,
         response,sizeof response,&used),1);
     {
         char mission[256]={0};
@@ -959,23 +965,21 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
         mock_mode=11;
         check(q,process(&mock,&sample,sizeof sample,response,
               sizeof response,&count)==STNLABZ_MODULE_OK&&
-              count>0&&!strcmp(response,"Language generated by GRU."),0);
-        check(q,!strcmp(mock_gru_prompt,sample.message)&&
-            mock_gru_length==32,0);
+              count>0&&strcmp(response,"Language generated by Ollama."),0);
         count=0;
-        check(q,gru_generate_response(&mock,"Digit, explain yourself",
+        check(q,ollama_generate_response(&mock,"Digit, explain yourself",
              "Unverified metadata","Nonmatching verified quotation",
              response,sizeof response,&count)==0&&count==0,1);
-        check(q,!strcmp(mock_gru_prompt,"Digit, explain yourself")&&
-             mock_gru_length==32,0);
+        check(q,!strcmp(mock_ollama_question,"Digit, explain yourself")&&
+             mock_ollama_budget==128,0);
         count=0;
-        check(q,gru_generate_response(&mock,"Digit, explain yourself",
-             NULL,"Language generated by GRU.",
+        check(q,ollama_generate_response(&mock,"Digit, explain yourself",
+             NULL,"Language generated by Ollama.",
              response,sizeof response,&count)==1&&
-             !strcmp(response,"Language generated by GRU."),0);
+             !strcmp(response,"Language generated by Ollama."),0);
         mock_mode=0;
         count=0;
-        check(q,gru_generate_response(&mock,"A message",NULL,NULL,
+        check(q,ollama_generate_response(&mock,"A message",NULL,NULL,
               response,sizeof response,&count)==0,1);
     }
     check(q, !strcmp(msg.message, "Database latency increased"), 0);
