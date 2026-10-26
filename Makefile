@@ -1,4 +1,4 @@
-# STN-LABZ Rictus executable (Linux)
+# STN-LABZ Digit executable (Linux)
 # The shared STN-LABZ ABI is maintained outside this repository.
 #
 # Default layout:
@@ -20,9 +20,9 @@ ABI_SRC_DIR ?= $(ABI_DIR)/src
 CPPFLAGS += -Iinclude -I$(ABI_INCLUDE_DIR) -Iinclude/stnlabz_abi
 
 BUILD_DIR ?= build
-TARGET ?= bin/rictus
+TARGET ?= bin/digit
 
-PREFIX ?= /opt/rictus
+PREFIX ?= /opt/digit
 BINDIR ?= $(PREFIX)/bin
 LOGDIR ?= $(PREFIX)/logs
 MODULEDIR ?= $(PREFIX)/modules
@@ -61,7 +61,7 @@ $(BUILD_DIR)/abi/%.o: $(ABI_SRC_DIR)/%.c
 
 install: $(TARGET)
 	install -d $(BINDIR) $(LOGDIR) $(MODULEDIR) $(CONFIGDIR) $(STATEDIR)
-	install -m 0755 $(TARGET) $(BINDIR)/rictus
+	install -m 0755 $(TARGET) $(BINDIR)/digit
 
 uninstall:
 	rm -f $(BINDIR)/rictus
