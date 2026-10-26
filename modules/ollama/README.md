@@ -1,4 +1,4 @@
-# Digit Ollama harness — v0.1.0
+# Digit Ollama harness — v0.1.1
 
 Operator-authorized **temporary** local language-generation harness for the STN-Labz LLM development effort. This is **not** Digit's knowledge source or replacement for SQLite3, Corpus, Observations, Interpretation or Reasoning.
 
@@ -23,5 +23,13 @@ The test compiles against the real Digit ABI and exercises qualification, servic
 ## Acceptance
 
 Compilation and qualification do not prove local Ollama connectivity, response quality, correct source grounding, or end-to-end chat behavior. Actual operator testing remains necessary. No automatic learning/training or corpus insertion is authorized.
+
+**AWAITING OPERATOR END-TO-END TESTING AND ACCEPTANCE**
+
+## v0.1.1 — Digit conversational voice (2026-10-26)
+
+The local language harness now prompts Ollama to respond as Digit's conversational voice for directly addressed messages, rather than instructing it to deny being Digit or disallowing all questions without supplied Corpus evidence. Ordinary chat and general questions are permitted; generated text still has `unverified=1` and cannot write SQLite3, assert operational state, or grant authority. Conversation v1.3.1 now invokes this service before its evidence-retrieval fallback. Rictus and Core remain untouched.
+
+Runtime compilation, module qualification, activation, and live-chat acceptance remain unverified in this source update.
 
 **AWAITING OPERATOR END-TO-END TESTING AND ACCEPTANCE**
