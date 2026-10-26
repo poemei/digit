@@ -2,6 +2,8 @@ IRC v0.3.17: The IRC↔Slack chat bridge has been removed. Regular IRC conversat
 
 # Digit IRC transport — Libera.Chat
 
+**Current source descriptor: 0.4.0.** Earlier version mentions below describe historical milestones.
+
 **Version:** 0.1.0 (unqualified, inactive)
 
 This is an ABI 1.5 shared-object transport module. It reads configuration from
@@ -105,3 +107,9 @@ For directly addressed messages, IRC compares the supplied IRC account tag with 
 ## v0.3.16 — Public IRC / Slack bridge
 
 The IRC transport now registers `digit.irc.bridge.deliver` and consumes `digit.slack.bridge.deliver` through the ABI 1.5 service registry. Authenticated IRC channel speech is forwarded to Slack's explicitly configured general-chat bridge channel, excluding IRC private messages and Digit's own posts. Slack-origin chat uses the existing IRC bounded outbound queue and its flood interval. No private DSD command, S2 intelligence brief, or private Slack operations channel is automatically bridged. The bridge is best-effort and only functions while both transport modules are active; no Core changes are required. Live acceptance and cross-transport replay testing remain pending.
+
+## Version numbering correction — v0.4.0 (2026-10-26)
+
+The previously assigned descriptor 0.3.18 exceeded the permitted revision maximum of 10 under approved Version Numbering Doctrine 20260906.0. Corrected the runtime module descriptor to **0.4.0** and synchronized its offline qualification test's version requirement. This is a version-compliance correction only; existing module behavior and ABI are unchanged. Earlier documentation sections are historical records, not current release identities.
+
+Source committed; compilation, module qualification, hotload, and operator acceptance have not been verified by this repository update.
