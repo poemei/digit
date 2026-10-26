@@ -109,7 +109,21 @@ def ollama_pairs(text, model, url, timeout):
     return records
 
 
+def load_previous(path):
+    try:
+        with path.open(encoding="utf-8") as stream:
+            return [json.loads(line) for line in stream if line.strip()]
+    except (OSError, ValueError, UnicodeError):
+        return []
+
+
 def scan(roots, output, model, url, timeout):
+    previous = load_previous(output / "candidate_records.jsonl")
+    cached = {}
+    for item in previous:
+        if (isinstance(item, dict) and isinstance(item.get("sha256"), str)
+                and validate_record(item.get("record"))):
+            cached.setdefault(item["sha256"], []).append(item["record"])
     rows, audit, seen = [], [], set()
     for label, root in roots:
         if not root.is_dir():
@@ -127,6 +141,13 @@ def scan(roots, output, model, url, timeout):
                 audit.append({"source": label + "/" + rel, "status": "SKIPPED", "reason": "duplicate content"})
                 continue
             seen.add(fingerprint)
+            if fingerprint in cached:
+                for record in cached[fingerprint]:
+                    rows.append({"source": label + "/" + rel, "sha256": fingerprint,
+                                 "record": record, "review_status": "PENDING_HUMAN_REVIEW"})
+                audit.append({"source": label + "/" + rel, "sha256": fingerprint,
+                              "status": "CACHED", "records": len(cached[fingerprint])})
+                continue
             # Split conservatively on paragraph boundaries, never silently truncate.
             chunks = []
             current = ""
