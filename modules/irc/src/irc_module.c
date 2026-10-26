@@ -463,7 +463,7 @@ static int handle_line(SSL *ssl, const char *line, int *sasl_seen,
         if (!*joined) {
             *joined = 1;
             atomic_store(&online, 1);
-            status("joined configured IRC channel; Rictus online");
+            status("joined configured IRC channel; Digit online");
         }
         return 1;
     }
@@ -539,7 +539,7 @@ static int run_session(void)
     }
     {
         char line[RICTUS_IRC_NICK_MAX + 64U];
-        int written = snprintf(line, sizeof line, "USER %s 0 * :STN-LABZ Rictus", config.nick);
+        int written = snprintf(line, sizeof line, "USER %s 0 * :STN-LABZ Digit", config.nick);
         if (written < 0 || (size_t)written >= sizeof line || !send_line(ssl, line)) goto done;
     }
     status("TLS connected; negotiating CAP and SASL");
@@ -720,7 +720,7 @@ static stnlabz_module_result_t irc_stop(void)
 
 static const stnlabz_module_descriptor_t descriptor = {
     "irc",
-    "Rictus IRC Transport",
+    "Digit IRC Transport",
     IRC_VERSION_MAJOR,
     IRC_VERSION_MINOR,
     IRC_VERSION_PATCH,
