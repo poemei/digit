@@ -15,8 +15,8 @@
 #include <openssl/ssl.h>
 #include <openssl/x509_vfy.h>
 #include "stnlabz_abi/module.h"
-#include "rictus_transport.h"
-#include "rictus_llm.h"
+#include "digit_transport.h"
+#include "digit_llm.h"
 #include "irc_internal.h"
 
 #define IRC_VERSION_MAJOR 1U
