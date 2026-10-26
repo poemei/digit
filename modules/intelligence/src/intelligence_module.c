@@ -19,12 +19,12 @@
 
 #define INTELLIGENCE_VERSION_MAJOR 1U
 #define INTELLIGENCE_VERSION_MINOR 0U
-#define INTELLIGENCE_VERSION_PATCH 5U
+#define INTELLIGENCE_VERSION_PATCH 6U
 #define INTELLIGENCE_RESPONSE_MAX (4U * 1024U * 1024U)
 #define INTELLIGENCE_RECORD_MAX 512U
 #define INTELLIGENCE_FEED_URL "https://api.stn-labz.com/threats"
 #define INTELLIGENCE_INTERVAL_SECONDS 60U
-#define INTELLIGENCE_STATE_DIRECTORY "/opt/rictus/state"
+#define INTELLIGENCE_STATE_DIRECTORY "/opt/digit/state"
 
 typedef struct {
     char *data;
@@ -173,7 +173,7 @@ static int fetch_feed(char **json)
     curl_easy_setopt(curl, CURLOPT_URL, INTELLIGENCE_FEED_URL);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, response_write);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "STN-LABZ-Rictus-Intelligence/1.0");
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "STN-LABZ-Digit-Intelligence/1.0");
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 20L);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0L);
@@ -418,7 +418,7 @@ static stnlabz_module_result_t intelligence_stop(void)
 
 static const stnlabz_module_descriptor_t descriptor = {
     "intelligence",
-    "Rictus Intelligence",
+    "Digit Intelligence",
     INTELLIGENCE_VERSION_MAJOR,
     INTELLIGENCE_VERSION_MINOR,
     INTELLIGENCE_VERSION_PATCH,
