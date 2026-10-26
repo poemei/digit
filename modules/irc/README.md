@@ -67,3 +67,7 @@ available, the IRC module forwards only:
 
 Ordinary channel traffic is not sent to the LLM service. Generated CR/LF
 characters are flattened before an IRC reply is queued.
+
+## v1.0.8 — IRC startup failure diagnostics (2026-10-26)
+
+IRC startup now records safe, categorized server numeric failures (nickname conflicts, server bans, SASL errors, and channel admission failures), a server ERROR indicator with its untrusted text withheld, and socket poll/TLS read failures. Raw IRC messages, SASL payloads, credentials, and account passwords are never logged by these diagnostics. The existing 30-second authenticated-channel startup gate and reconnect policy remain unchanged. Qualification and live server admission are not yet verified after this source update.
