@@ -76,7 +76,7 @@ int main(void){
   assert(descriptor_fn!=NULL);
   descriptor=descriptor_fn();
   assert(!strcmp(descriptor->id,"st1")&&descriptor->version_major==0&&
-         descriptor->version_minor==1&&descriptor->version_patch==1);checks++;
+         descriptor->version_minor==1&&descriptor->version_patch==3);checks++;
   assert(descriptor->qualify(&q)==STNLABZ_MODULE_OK&&
          q.tests_executed>=STNLABZ_MODULE_MIN_TESTS&&
          q.tests_passed==q.tests_executed&&q.negative_test_passed);checks++;
