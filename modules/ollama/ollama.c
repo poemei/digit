@@ -171,7 +171,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="ollama",.name="Temporary Ollama Language Harness",
- .version_major=0,.version_minor=1,.version_patch=1,
+ .version_major=0,.version_minor=1,.version_patch=2,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
