@@ -21,7 +21,7 @@
 
 #define IRC_VERSION_MAJOR 1U
 #define IRC_VERSION_MINOR 0U
-#define IRC_VERSION_PATCH 9U
+#define IRC_VERSION_PATCH 10U
 #define IRC_OUTBOUND_MAX 32U
 #define IRC_STARTUP_WAIT_SECONDS 30U
 
@@ -324,20 +324,29 @@ static void handle_conversation_message(const char *line)
     size_t response_used = 0U;
     stnlabz_module_result_t result;
 
-    if (!module_host || !module_host->invoke_service) return;
+    if (!module_host || !module_host->invoke_service) {
+        status("PRIVMSG rejected: LLM invocation host unavailable");
+        return;
+    }
     if (!rictus_irc_parse_privmsg(line,
                                   sender, sizeof sender,
                                   target, sizeof target,
-                                  message, sizeof message))
+                                  message, sizeof message)) {
+        status("PRIVMSG rejected: invalid or unsupported message format");
         return;
+    }
     if (!strcasecmp(sender, config.nick)) return;
 
     if (!strcasecmp(target, config.nick)) {
         private_message = 1;
         prompt = message;
     } else if (channel_index(target) >= 0) {
-        if (!channel_prompt(message, &prompt)) return;
+        if (!channel_prompt(message, &prompt)) {
+            status("PRIVMSG ignored: channel message did not address Digit");
+            return;
+        }
     } else {
+        status("PRIVMSG ignored: target not a configured channel or private message");
         return;
     }
 
@@ -634,17 +643,21 @@ static int run_session(void)
 
         if (!flush_outbound(ssl)) goto done;
 
-        polled = poll(&pollfd, 1, 1000);
-        if (polled < 0) {
-            if (errno == EINTR) continue;
-            goto done;
+        /* OpenSSL can hold decrypted bytes after the socket becomes idle. */
+        if (SSL_pending(ssl) == 0) {
+            pollfd.revents = 0;
+            polled = poll(&pollfd, 1, 1000);
+            if (polled < 0) {
+                if (errno == EINTR) continue;
+                goto done;
+            }
+            if (polled == 0) continue;
+            if (pollfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+                status("IRC socket poll error or hangup");
+                goto done;
+            }
+            if (!(pollfd.revents & POLLIN)) continue;
         }
-        if (polled == 0) continue;
-        if (pollfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
-            status("IRC socket poll error or hangup");
-            goto done;
-        }
-        if (!(pollfd.revents & POLLIN)) continue;
 
         if (receive_used >= sizeof receive_buffer - 1U) goto done;
         received = SSL_read(ssl, receive_buffer + receive_used,
