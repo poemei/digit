@@ -107,7 +107,8 @@ static stnlabz_module_result_t generate(const void *req,size_t size,
  }
 done:
  curl_slist_free_all(headers);if(curl)curl_easy_cleanup(curl);
- if(opts)json_object_put(opts);if(j)json_object_put(j);
+ if(opts)json_object_put(opts);
+ if(j)json_object_put(j);
  if(!success)return STNLABZ_MODULE_ERR_INVALID_STATE;
  *used=sizeof *out;return STNLABZ_MODULE_OK;
 }
