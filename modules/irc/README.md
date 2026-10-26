@@ -1,6 +1,6 @@
-# Rictus IRC Transport Module
+# Digit IRC Transport Module
 
-`irc` is Rictus's IRC transport/session module.
+`irc` is Digit's IRC transport/session module.
 
 ## Responsibility
 
@@ -13,21 +13,21 @@ The module owns IRC network/session behavior only:
 - channel join and rejoin after KICK
 - PING/PONG handling
 - bounded reconnect backoff after transport/session loss
-- strict loading of `/opt/rictus/auth/irc/irc.env`
+- strict loading of `/opt/digit/auth/irc/irc.env`
 
 It does not implement conversational interpretation, reasoning, or mission logic.
 
 ## Required credential file
 
-The module requires these exact keys in `/opt/rictus/auth/irc/irc.env`:
+The module requires these exact keys in `/opt/digit/auth/irc/irc.env`:
 
 ```text
-RICTUS_IRC_SERVER=...
-RICTUS_IRC_PORT=...
-RICTUS_IRC_NICK=...
-RICTUS_IRC_CHANNEL=...
-RICTUS_IRC_ACCOUNT=...
-RICTUS_IRC_PASSWORD=...
+DIGIT_IRC_SERVER=...
+DIGIT_IRC_PORT=...
+DIGIT_IRC_NICK=...
+DIGIT_IRC_CHANNEL=...
+DIGIT_IRC_ACCOUNT=...
+DIGIT_IRC_PASSWORD=...
 ```
 
 Unknown keys, duplicate keys, missing keys, invalid ports, invalid nick/account values, and invalid channel values cause module start to fail. Credentials are not written to module output.
@@ -50,20 +50,20 @@ sudo make install
 The installed hotload artifact is:
 
 ```text
-/opt/rictus/modules/irc/irc.so
+/opt/digit/modules/irc/irc.so
 ```
 
-Rictus watches `/opt/rictus/modules/`. A new or changed `/opt/rictus/modules/<module>/<module>.so` is snapshotted, loaded, verified, and qualified. A passing candidate is activated. A failing candidate remains inert while Rictus continues running; the same failed bytes are not retried until the file changes.
+Digit watches `/opt/digit/modules/`. A new or changed `/opt/digit/modules/<module>/<module>.so` is snapshotted, loaded, verified, and qualified. A passing candidate is activated. A failing candidate remains inert while Digit continues running; the same failed bytes are not retried until the file changes.
 
 
 ## Conversational handoff
 
-IRC remains the transport owner. When the `rictus.llm.generate` service is
+IRC remains the transport owner. When the `rictus.llm.generate` (legacy ABI service name) service is
 available, the IRC module forwards only:
 
-- private messages sent directly to Rictus
-- channel messages explicitly addressed as `rictus: ...`, `rictus, ...`, or
-  `rictus ...`
+- private messages sent directly to Digit
+- channel messages explicitly addressed as `digit: ...`, `digit, ...`, or
+  `digit ...`
 
 Ordinary channel traffic is not sent to the LLM service. Generated CR/LF
 characters are flattened before an IRC reply is queued.
