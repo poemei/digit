@@ -16,6 +16,7 @@ int main(int argc,char **argv) {
     memcpy(&get,&sym,sizeof get);
     d=get();
     if(!d||strcmp(d->id,"sqlite3")||
+       d->version_major!=1||d->version_minor!=5||d->version_patch!=4||
        d->required_core_api_major!=STNLABZ_MODULE_API_MAJOR||
        d->required_core_api_minor>STNLABZ_MODULE_API_MINOR||
        !d->qualify||!d->start||!d->stop){dlclose(handle);return 4;}
