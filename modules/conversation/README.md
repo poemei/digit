@@ -173,3 +173,13 @@ The Ollama qualification fixture previously required a nonempty factual reply fo
 No Core, SQLite3, Reasoning, Router, or Ollama module changes were made. Repository source changes alone do not establish successful compilation, module qualification, hotload, or live client acceptance.
 
 **AWAITING OPERATOR END-TO-END TESTING AND ACCEPTANCE**
+
+## v1.3.1 — Ollama-first addressed conversation and passive silence (2026-10-26)
+
+Conversation now invokes the local `digit.ollama.generate` service **first** for nonempty, directly addressed messages, mirroring Rictus's IRC → LLM → reply orchestration. Local generated replies remain marked unverified. If the service is unavailable or its output violates the existing ABI/output checks, Conversation falls through to its existing deterministic interpretation, Corpus/Reasoning, and View paths. Core identity questions retain their authoritative Core response. No database writes or training are authorized by generated text.
+
+The passive IRC listener now observes without emitting unsolicited replies, even when another participant asks an ordinary question or sends a social expression. Direct requests and passive observations continue to use their established distinct services. Qualification fixtures updated for the intentional addressed Ollama reply and passive no-response behavior.
+
+No Core, SQLite3, Rictus, or Ollama changes were made. Source is committed but local compilation, runtime Core qualification, and live chat acceptance are not confirmed by this update.
+
+**AWAITING OPERATOR END-TO-END TESTING AND ACCEPTANCE**
