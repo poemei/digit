@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <dirent.h>
 #include <fcntl.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -83,8 +84,20 @@ static int snapshot(const char *path, char *copy, size_t copy_size, char sha[65]
     size_t offset, i;
     int input, output;
 
-    if (snprintf(copy, copy_size, "%s.candidate.XXXXXX", path) >= (int)copy_size)
-        return 0;
+    /* [AI:GPT-6 | 2026-10-26] Installed modules may be read-only.
+     * Stage candidates beneath Digit's existing writable log directory.
+     * A private directory prevents untrusted replacement of candidate paths. */
+    (void)path;
+    {
+        struct stat state;
+        const char *stage = STNLABZ_LOG_DIRECTORY "/.module-staging";
+        if (mkdir(stage, 0700) != 0 && errno != EEXIST) return 0;
+        if (lstat(stage, &state) != 0 || !S_ISDIR(state.st_mode) ||
+            state.st_uid != geteuid() || (state.st_mode & 0777) != 0700)
+            return 0;
+        if (snprintf(copy, copy_size, "%s/candidate.XXXXXX", stage) >= (int)copy_size)
+            return 0;
+    }
     output = mkstemp(copy);
     if (output < 0) return 0;
     input = open(path, O_RDONLY | O_CLOEXEC);
