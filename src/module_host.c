@@ -2,7 +2,7 @@
 #include <string.h>
 
 #include "module_host.h"
-#include "rictus_transport.h"
+#include "digit_transport.h"
 
 #define RICTUS_HOST_SERVICE_MAX 32U
 #define RICTUS_HOST_COMMAND_MAX 32U
