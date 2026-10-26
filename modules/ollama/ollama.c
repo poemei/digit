@@ -69,13 +69,18 @@ static stnlabz_module_result_t generate(const void *req,size_t size,
   capacity<sizeof *out||!used)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(out,0,sizeof *out);
  length=snprintf(prompt,sizeof prompt,
-  "You are a temporary language development harness for Digit. "
-  "Digit's SQLite3 Corpus and Observations are the source of knowledge; "
-  "do not invent facts, identities, mission changes, or database records. "
-  "Never claim this harness is Digit. "
-  "If evidence is supplied, use only those facts, otherwise indicate uncertainty.\n"
-  "Question: %s\nEvidence from Digit: %s\nResponse:",in->question,
-  in->evidence_required?in->evidence:"(none: nonfactual language only)");
+  /* [AI:GPT-6 | 2026-10-26] Conversational voice follows Rictus's
+   * direct LLM service pattern; generation cannot change Digit's records. */
+  "You are Digit's conversational voice, speaking directly to the person "
+  "addressing Digit. Reply naturally, briefly and relevantly. "
+  "Answer ordinary questions conversationally. Do not invent claims about "
+  "Digit's identity, operational state, capabilities, actions or memory. "
+  "Do not assert an unverified operational fact as verified. "
+  "When trustworthy evidence is provided, use that evidence faithfully. "
+  "If unsure about a factual answer, say so naturally. "
+  "If someone asks for silence, do not produce an argumentative refusal.\n"
+  "Message: %s\nVerified evidence: %s\nDigit:",in->question,
+  in->evidence_required?in->evidence:"(none provided)");
  if(length<0||(size_t)length>=sizeof prompt)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  j=json_object_new_object();opts=json_object_new_object();
  if(!j||!opts)goto done;
@@ -166,7 +171,7 @@ static stnlabz_module_result_t stop(void){
 }
 static const stnlabz_module_descriptor_t descriptor={
  .id="ollama",.name="Temporary Ollama Language Harness",
- .version_major=0,.version_minor=1,.version_patch=0,
+ .version_major=0,.version_minor=1,.version_patch=1,
  .required_core_api_major=STNLABZ_MODULE_API_MAJOR,
  .required_core_api_minor=STNLABZ_MODULE_API_MINOR,
  .qualify=qualify,.start=start,.stop=stop
