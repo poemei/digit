@@ -64,7 +64,7 @@ install: $(TARGET)
 	install -m 0755 $(TARGET) $(BINDIR)/digit
 
 uninstall:
-	rm -f $(BINDIR)/rictus
+	rm -f $(BINDIR)/digit
 
 clean:
 	rm -rf $(BUILD_DIR) $(TARGET)
