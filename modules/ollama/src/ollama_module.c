@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "stnlabz_abi/module.h"
-#include "rictus_llm.h"
+#include "digit_llm.h"
 #include "ollama_internal.h"
 
 #define OLLAMA_VERSION_MAJOR 1U
