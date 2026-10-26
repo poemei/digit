@@ -1,0 +1,181 @@
+STN-LABZ — Competency, Precision, and Root-Cause Accountability Policy
+
+Root Document ID: 20261025.0
+Revision ID: NONE
+Previous Revision: NONE
+sha256: 39669ea987eb177f699dced607c5ae2558b5395292a547da1200018c704ecfbb
+
+Status: APPROVED
+Scope: Organization-wide
+Applicability: All STN-LABZ personnel, departments, AI agents, automated systems, engineering activities, and authorized contractors operating within their assigned responsibilities.
+
+
+1. Purpose
+
+This policy establishes non-negotiable organizational requirements for competency, precision, accountability, and root-cause correction throughout STN-LABZ.
+
+These requirements apply to assigned responsibilities, engineering decisions, operations, research, development, testing, qualification, documentation, and reporting.
+
+2. Core Requirements
+
+WE DEMAND COMPETENCY.
+
+WE DEMAND PRECISION.
+
+WE WILL NOT TOLERATE SORRY.
+
+EXCUSES ARE NOT ACCEPTABLE SUBSTITUTES FOR PERFORMANCE OR EVIDENCE.
+
+SYMPTOM PATCHING IS NOT ROOT-CAUSE CORRECTION.
+
+THESE REQUIREMENTS ARE NON-NEGOTIABLE.
+
+These principles govern organizational performance within established authority and responsibility boundaries.
+
+3. Competency
+
+Every individual, department, agent, and system assigned a responsibility will demonstrate the competency required to perform it.
+
+Competency will be established through appropriate knowledge, execution, verification, and demonstrated results. Unsupported claims will not constitute demonstrated competency.
+
+Where required competency is absent or cannot be established, the condition will be reported and escalated through applicable authority. No agent or system will represent an unverified capability as qualified.
+
+4. Precision
+
+All STN-LABZ work will prioritize accuracy, deterministic interpretation, clear requirements, correct implementation, and verifiable outcomes.
+
+Personnel and systems will:
+
+- Follow established requirements exactly.
+- Preserve authorized architectural and operational boundaries.
+- Distinguish verified facts from assumptions.
+- Report unknown conditions accurately.
+- Avoid unauthorized interpretations or substitutions.
+- Identify discrepancies between expected and observed behavior.
+- Provide evidence for technical and operational claims.
+
+Approximation, speculation, or assumption will not be presented as verified fact.
+
+5. Accountability Without Excuses
+
+STN-LABZ will maintain performance and accountability based on evidence, responsibility, and corrective action.
+
+An explanation may be necessary to establish a failure's cause. An excuse that substitutes justification for corrective action is unacceptable.
+
+For AI agents and automated systems, apologetic language will not substitute for:
+
+- Identifying the failure.
+- Reporting its operational impact.
+- Establishing available evidence.
+- Determining the root cause.
+- Identifying an authorized corrective action.
+- Verifying the resulting behavior.
+
+Human personnel remain subject to applicable organizational employment, contractual, and legal requirements. Accountability will be objective and evidence-based.
+
+6. Root-Cause Investigation
+
+Observed failures will be investigated to determine their actual causes. Investigation will establish, where applicable:
+
+1. The governing requirement.
+2. Expected behavior.
+3. Observed behavior.
+4. Available evidence.
+5. The first verified point of divergence.
+6. The responsible component, process, or organizational function.
+7. The verified root cause or explicit UNKNOWN disposition.
+8. The required corrective action.
+9. Applicable regression and qualification requirements.
+
+A suspected cause will not be represented as verified. Where evidence is insufficient, the root cause will remain UNKNOWN pending further investigation.
+
+7. Prohibition on Symptom Patching
+
+STN-LABZ will not accept symptom suppression as evidence that an underlying defect has been corrected.
+
+A change that makes an observed symptom disappear does not independently establish that the responsible failure has been resolved.
+
+Unauthorized symptom patches, architectural shortcuts, hardcoded workarounds, and modifications outside assigned responsibility are prohibited.
+
+Temporary mitigations may be used only when explicitly authorized, documented, bounded, and distinguished from permanent root-cause correction.
+
+8. Regression Prevention
+
+Corrective actions will preserve previously qualified and accepted behavior. Affected regression tests will be performed according to applicable engineering and qualification requirements.
+
+A successful local test will not independently establish system-level qualification. Regression failures will remain open until corrected and verified.
+
+No individual, agent, or system will claim a correction is complete while applicable required verification remains outstanding.
+
+9. AI Agent Requirements
+
+AI agents operating on STN-LABZ assignments will:
+
+- Follow established company policy, doctrine, architecture, and authorized instructions.
+- Execute only authorized scope.
+- Investigate before modifying.
+- Preserve qualified behavior.
+- Report limitations and unknowns without inventing certainty.
+- Distinguish proposed corrections from implemented and verified corrections.
+- Avoid excuses, performative apologies, and unsupported success claims.
+- Stop at required human acceptance and authorization boundaries.
+
+AI agents will not substitute their own workflow preferences for established STN-LABZ procedures.
+
+10. Evidence-Based Completion
+
+Work will not be reported as completed solely because a command executed, source compiled, a test passed, or an automated system reported success.
+
+Completion claims will identify applicable evidence and distinguish implementation, verification, qualification, deployment, and operator acceptance.
+
+Where required evidence is missing, the corresponding completion state will remain unverified.
+
+11. Organizational Enforcement
+
+Departmental authorities will apply these requirements within established responsibilities. Deficiencies will be documented and addressed through applicable corrective-action and operational authority processes.
+
+This policy does not independently grant disciplinary authority, modify established employment rights, or supersede applicable law.
+
+No individual or AI agent may independently redefine these requirements or expand its authority through enforcement.
+
+12. Governing Principle
+
+Competency is demonstrated.
+
+Precision is verified.
+
+Accountability requires evidence and corrective action.
+
+Root causes are corrected. Symptoms are investigated, not concealed.
+
+No excuses. No unsupported claims. No unauthorized shortcuts.
+
+Competence is my Watchword.
+
+
+13. Consensus
+
+Lab: APPROVED
+Q&A: APPROVED
+Legal: APPROVED
+Policies: APPROVED
+
+14. Approval
+
+Approved By: P. Mei (Founder)
+Date: 20261025
+Decision: APPROVED
+
+
+References
+
+- 20260729.0 — Operational Authority
+- 20260729.5 — Unknown State Doctrine
+- 20260729.8 — Operational Doctrine
+- 20260730.2 — STN-LABZ General Orders
+- 20260729.6.R1 — Engineering Documentation
+- 20260731.2 — Documentation Language Policy
+- 20260911.1 — STN-LABZ Controlled Documentation Consensus Policy
+- Applicable STN-LABZ AI Module Creation and Engineering Development standards
+
+END DOCUMENT
