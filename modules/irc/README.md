@@ -75,3 +75,7 @@ IRC startup now records safe, categorized server numeric failures (nickname conf
 ## v1.0.9 — Two-channel IRC configuration (2026-10-26)
 
 Use `DIGIT_IRC_CHANNEL=#stn-labz,#another-channel` to join two channels; the single-channel form remains supported. There must be no whitespace between names. Each channel is tracked separately for join completion and KICK recovery. Addressed replies return to their source channel, while the generic module channel-deliver service retains the first channel as its default. The existing startup gate requires both channels to be joined. Build, qualification, and live dual-channel behavior are not yet verified.
+
+## v1.0.10 — Incoming message handling (2026-10-26)
+
+The IRC PRIVMSG parser now accepts tagged or untagged IRCv3 messages and nick-only as well as nick!user@host source prefixes. The TLS read loop processes data already buffered by OpenSSL with `SSL_pending()`. Incoming PRIVMSG rejection paths produce reason-category logs (parse failure, unconfigured channel, not directly addressed, or unavailable LLM host); message contents and credentials are not logged. All configured channels retain individual response routing. Source self-tests cover nick-only prefixes, IRCv3 tags, second-channel traffic, and rejected non-PRIVMSG commands. Build, self-test execution, and a live IRC/Ollama round trip still require verification on the target host.
