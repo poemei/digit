@@ -93,25 +93,25 @@ int rictus_irc_config_load(const char *path, rictus_irc_config_t *config)
         value = equals + 1;
         if (!*value) goto invalid;
 
-        if (!strcmp(line, "RICTUS_IRC_SERVER")) {
+        if (!strcmp(line, "DIGIT_IRC_SERVER")) {
             bit = SEEN_SERVER;
             if (!copy_value(config->server, sizeof config->server, value)) goto invalid;
-        } else if (!strcmp(line, "RICTUS_IRC_PORT")) {
+        } else if (!strcmp(line, "DIGIT_IRC_PORT")) {
             bit = SEEN_PORT;
             if (!parse_port(value, &config->port)) goto invalid;
-        } else if (!strcmp(line, "RICTUS_IRC_NICK")) {
+        } else if (!strcmp(line, "DIGIT_IRC_NICK")) {
             bit = SEEN_NICK;
             if (!valid_identity(value) ||
                 !copy_value(config->nick, sizeof config->nick, value)) goto invalid;
-        } else if (!strcmp(line, "RICTUS_IRC_CHANNEL")) {
+        } else if (!strcmp(line, "DIGIT_IRC_CHANNEL")) {
             bit = SEEN_CHANNEL;
             if (!valid_channel(value) ||
                 !copy_value(config->channel, sizeof config->channel, value)) goto invalid;
-        } else if (!strcmp(line, "RICTUS_IRC_ACCOUNT")) {
+        } else if (!strcmp(line, "DIGIT_IRC_ACCOUNT")) {
             bit = SEEN_ACCOUNT;
             if (!valid_identity(value) ||
                 !copy_value(config->account, sizeof config->account, value)) goto invalid;
-        } else if (!strcmp(line, "RICTUS_IRC_PASSWORD")) {
+        } else if (!strcmp(line, "DIGIT_IRC_PASSWORD")) {
             bit = SEEN_PASSWORD;
             if (!copy_value(config->password, sizeof config->password, value)) goto invalid;
         } else {
