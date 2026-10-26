@@ -21,7 +21,7 @@
 
 #define IRC_VERSION_MAJOR 1U
 #define IRC_VERSION_MINOR 0U
-#define IRC_VERSION_PATCH 7U
+#define IRC_VERSION_PATCH 8U
 #define IRC_OUTBOUND_MAX 32U
 #define IRC_STARTUP_WAIT_SECONDS 30U
 
@@ -375,6 +375,27 @@ static int cap_is_continuation(const char *params)
     return params && strstr(params, " LS * ") != NULL;
 }
 
+/* Log only trusted numeric reasons: server text can contain secrets. */
+static void server_failure(const char *command)
+{
+    const char *reason = "IRC server rejected session";
+    if (!strcmp(command,"433")) reason="IRC nick already in use (433)";
+    else if (!strcmp(command,"432")) reason="IRC invalid nick (432)";
+    else if (!strcmp(command,"464")) reason="IRC authentication rejected (464)";
+    else if (!strcmp(command,"465")) reason="IRC server ban (465)";
+    else if (!strcmp(command,"471")) reason="IRC channel full (471)";
+    else if (!strcmp(command,"473")) reason="IRC invite only (473)";
+    else if (!strcmp(command,"474")) reason="IRC channel banned (474)";
+    else if (!strcmp(command,"475")) reason="IRC channel key required (475)";
+    else if (!strcmp(command,"476")) reason="IRC invalid channel (476)";
+    else if (!strcmp(command,"477")) reason="IRC registered nick required (477)";
+    else if (!strcmp(command,"489")) reason="IRC secure channel required (489)";
+    else if (!strcmp(command,"904")) reason="SASL credentials rejected (904)";
+    else if (!strcmp(command,"905")) reason="SASL message too long (905)";
+    else if (!strcmp(command,"906")) reason="SASL aborted (906)";
+    else if (!strcmp(command,"907")) reason="SASL already authenticated (907)";
+    status(reason);
+}
 static int handle_line(SSL *ssl, const char *line, int *sasl_seen,
                        int *sasl_requested, int *authenticated,
                        int *registered, int *join_sent, int *joined)
@@ -383,6 +404,15 @@ static int handle_line(SSL *ssl, const char *line, int *sasl_seen,
     const char *params;
 
     if (!rictus_irc_line_command(line, command, sizeof command, &params)) return 1;
+    if (!strcmp(command, "ERROR")) {
+        status("IRC server closed session (ERROR); text redacted");
+        return 0;
+    }
+    if (!strcmp(command, "432") || !strcmp(command, "433") ||
+        !strcmp(command, "464") || !strcmp(command, "465")) {
+        server_failure(command);
+        return 0;
+    }
 
     if (!strcmp(command, "PRIVMSG")) {
         handle_conversation_message(line);
@@ -442,7 +472,7 @@ static int handle_line(SSL *ssl, const char *line, int *sasl_seen,
     }
     if (!strcmp(command, "904") || !strcmp(command, "905") ||
         !strcmp(command, "906") || !strcmp(command, "907")) {
-        status("SASL authentication rejected");
+        server_failure(command);
         return 0;
     }
 
@@ -471,9 +501,10 @@ static int handle_line(SSL *ssl, const char *line, int *sasl_seen,
     if (!strcmp(command, "471") || !strcmp(command, "473") ||
         !strcmp(command, "474") || !strcmp(command, "475") ||
         !strcmp(command, "476") || !strcmp(command, "477") ||
-        !strcmp(command, "489")) return 0;
-
-    if (!strcmp(command, "433")) return 0;
+        !strcmp(command, "489")) {
+        server_failure(command);
+        return 0;
+    }
 
     if (!strcmp(command, "KICK") &&
         strstr(params, config.channel) && strstr(params, config.nick)) {
@@ -561,13 +592,22 @@ static int run_session(void)
             goto done;
         }
         if (polled == 0) continue;
-        if (pollfd.revents & (POLLERR | POLLHUP | POLLNVAL)) goto done;
+        if (pollfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+            status("IRC socket poll error or hangup");
+            goto done;
+        }
         if (!(pollfd.revents & POLLIN)) continue;
 
         if (receive_used >= sizeof receive_buffer - 1U) goto done;
         received = SSL_read(ssl, receive_buffer + receive_used,
                             (int)(sizeof receive_buffer - receive_used - 1U));
-        if (received <= 0) goto done;
+        if (received <= 0) {
+            char detail[96];
+            int ssl_error = SSL_get_error(ssl, received);
+            (void)snprintf(detail, sizeof detail, "IRC TLS read failed (SSL error=%d)", ssl_error);
+            status(detail);
+            goto done;
+        }
         receive_used += (size_t)received;
         receive_buffer[receive_used] = '\0';
 
