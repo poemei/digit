@@ -8,7 +8,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
-#include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,10 +28,11 @@
 static const stnlabz_module_host_t *module_host;
 /* [AI:GPT-6 | 2026-10-26] Scheduled reporting remains module-owned. */
 static pthread_t report_worker;
-static atomic_int report_stop;
-static int report_worker_started;
-#define ST1_REPORT_INTERVAL_SECONDS 86400U
-#define ST1_REPORT_RETRY_SECONDS 3600U
+static pthread_mutex_t report_mutex=PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t report_cond=PTHREAD_COND_INITIALIZER;
+static int report_stop,report_worker_started;
+#define ST1_REPORT_INTERVAL_SECONDS (4U*60U*60U)
+#define ST1_REPORT_RETRY_SECONDS (60U*60U)
 /* [End AI:GPT-6] */
 #endif
 
@@ -309,21 +309,29 @@ static stnlabz_module_result_t report_service(const void *request,size_t bytes,
  * successful delivery the next report is due 24 hours later.
  */
 static int report_delay(unsigned seconds){
- struct timespec tick={1,0},remaining;
- unsigned i;
- for(i=0;i<seconds;i++){
-  if(atomic_load(&report_stop))return 0;
-  remaining=tick;
-  while(nanosleep(&remaining,&remaining)&&errno==EINTR)
-   if(atomic_load(&report_stop))return 0;
+ struct timespec until;
+ int stopping;
+ if(clock_gettime(CLOCK_REALTIME,&until)!=0)return 0;
+ until.tv_sec+=(time_t)seconds;
+ pthread_mutex_lock(&report_mutex);
+ while(!report_stop){
+  int rc=pthread_cond_timedwait(&report_cond,&report_mutex,&until);
+  if(rc==ETIMEDOUT||rc!=0)break;
  }
- return !atomic_load(&report_stop);
+ stopping=report_stop;
+ pthread_mutex_unlock(&report_mutex);
+ return !stopping;
 }
 static void *report_loop(void *unused){
  (void)unused;
- while(!atomic_load(&report_stop)){
+ for(;;){
   size_t used=0;
-  stnlabz_module_result_t result=report_service(NULL,0,NULL,0,&used,NULL);
+  stnlabz_module_result_t result;
+  pthread_mutex_lock(&report_mutex);
+  int stopping=report_stop;
+  pthread_mutex_unlock(&report_mutex);
+  if(stopping)break;
+  result=report_service(NULL,0,NULL,0,&used,NULL);
   if(!report_delay(result==STNLABZ_MODULE_OK?
        ST1_REPORT_INTERVAL_SECONDS:ST1_REPORT_RETRY_SECONDS))break;
  }
@@ -391,7 +399,9 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *host){
   return STNLABZ_MODULE_ERR_START_FAILED;
  }
  module_host=host;
- atomic_store(&report_stop,0);
+ pthread_mutex_lock(&report_mutex);
+ report_stop=0;
+ pthread_mutex_unlock(&report_mutex);
  if(pthread_create(&report_worker,NULL,report_loop,NULL)!=0){
   module_host=NULL;
   (void)host->unregister_service(DIGIT_ST1_REPORT_SERVICE,NULL);
@@ -403,7 +413,10 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *host){
 }
 static stnlabz_module_result_t stop(void){
  int ok=1;
- atomic_store(&report_stop,1);
+ pthread_mutex_lock(&report_mutex);
+ report_stop=1;
+ pthread_cond_signal(&report_cond);
+ pthread_mutex_unlock(&report_mutex);
  if(report_worker_started){
   if(pthread_join(report_worker,NULL)!=0)return STNLABZ_MODULE_ERR_STOP_FAILED;
   report_worker_started=0;
@@ -416,7 +429,7 @@ static stnlabz_module_result_t stop(void){
  return ok?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_STOP_FAILED;
 }
 static const stnlabz_module_descriptor_t descriptor={
- "st1","ST-1 Research Registry",0,1,2,
+ "st1","ST-1 Research Registry",0,1,3,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
