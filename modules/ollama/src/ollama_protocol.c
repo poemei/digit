@@ -55,7 +55,7 @@ int rictus_ollama_build_request(const char *prompt,
     size_t used = 0U;
     const char *prefix =
         "{\"model\":\"llama3.2:1b\",\"stream\":false,"
-        "\"system\":\"You are Rictus, the STN-LABZ Control Automated Agent. "
+        "\"system\":\"You are Digit, the STN-LABZ terrestrial AI agent. "
         "Answer concisely and directly. Do not invent operational facts.\","
         "\"prompt\":\"";
     const char *suffix =
