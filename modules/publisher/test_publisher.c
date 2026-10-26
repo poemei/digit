@@ -10,7 +10,8 @@ int main(int argc,char **argv){
  if(!h){fprintf(stderr,"dlopen failed: %s\n",dlerror());return 2;}
  *(void **)(&get)=dlsym(h,"stnlabz_module_get_descriptor");
  if(!get)return 2;
- d=get();if(!d||!d->qualify||!d->start||!d->stop)return 2;
+ d=get();if(!d||!d->qualify||!d->start||!d->stop||
+  d->version_major!=0||d->version_minor!=5||d->version_patch!=0)return 2;
  result=d->qualify(&r);
  printf("Publisher qualification: %u/%u passed, failed=%u, negative=%d/%d\n",
  r.tests_passed,r.tests_executed,r.tests_failed,r.negative_test_passed,r.negative_test_executed);
