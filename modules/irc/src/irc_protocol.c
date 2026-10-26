@@ -74,51 +74,49 @@ int rictus_irc_parse_privmsg(const char *line,
                              char *target, size_t target_size,
                              char *message, size_t message_size)
 {
-    const char *bang;
-    const char *command;
-    const char *target_start;
-    const char *message_start;
-    size_t sender_length;
-    size_t target_length;
-    size_t message_length;
-
-    const char *prefix;
-
+    const char *p, *end, *text;
+    size_t n;
     if (!line || !sender || sender_size < 2U ||
         !target || target_size < 2U || !message || message_size < 2U)
         return 0;
-
-    prefix = line;
-    if (*prefix == '@') {
-        prefix = strchr(prefix, ' ');
-        if (!prefix) return 0;
-        while (*prefix == ' ') ++prefix;
+    p = line;
+    /* IRCv3 message tags are optional. */
+    if (*p == '@') {
+        p = strchr(p, ' ');
+        if (!p) return 0;
+        while (*p == ' ') ++p;
     }
-    if (*prefix != ':') return 0;
-
-    bang = strchr(prefix + 1, '!');
-    if (!bang) return 0;
-    sender_length = (size_t)(bang - (prefix + 1));
-    if (!sender_length || sender_length >= sender_size) return 0;
-
-    command = strstr(bang, " PRIVMSG ");
-    if (!command) return 0;
-    target_start = command + 9;
-    message_start = strstr(target_start, " :");
-    if (!message_start) return 0;
-
-    target_length = (size_t)(message_start - target_start);
-    message_start += 2;
-    message_length = strlen(message_start);
-    if (!target_length || target_length >= target_size ||
-        !message_length || message_length >= message_size)
-        return 0;
-
-    memcpy(sender, prefix + 1, sender_length);
-    sender[sender_length] = '\0';
-    memcpy(target, target_start, target_length);
-    target[target_length] = '\0';
-    memcpy(message, message_start, message_length + 1U);
+    if (*p++ != ':') return 0;
+    end = strchr(p, ' ');
+    if (!end) return 0;
+    /* A nick prefix may be nick, nick!user or nick!user@host. */
+    {
+        const char *bang = memchr(p, '!', (size_t)(end - p));
+        const char *at = memchr(p, '@', (size_t)(end - p));
+        const char *nick_end = bang ? bang : (at ? at : end);
+        n = (size_t)(nick_end - p);
+    }
+    if (!n || n >= sender_size) return 0;
+    memcpy(sender, p, n);
+    sender[n] = '\0';
+    p = end;
+    while (*p == ' ') ++p;
+    if (strncmp(p, "PRIVMSG", 7) || p[7] != ' ') return 0;
+    p += 7;
+    while (*p == ' ') ++p;
+    end = strchr(p, ' ');
+    if (!end) return 0;
+    n = (size_t)(end - p);
+    if (!n || n >= target_size) return 0;
+    memcpy(target, p, n);
+    target[n] = '\0';
+    p = end;
+    while (*p == ' ') ++p;
+    if (*p != ':') return 0;
+    text = p + 1;
+    n = strlen(text);
+    if (!n || n >= message_size) return 0;
+    memcpy(message, text, n + 1U);
     return 1;
 }
 
@@ -195,6 +193,23 @@ int rictus_irc_run_selftests(unsigned int *executed, unsigned int *passed,
     expect(rictus_irc_parse_privmsg(":PoeMei!u@h PRIVMSG rictus :hello", sender, sizeof sender, target, sizeof target, message, sizeof message) && !strcmp(target, "rictus") && !strcmp(message, "hello"), &e, &p);
     expect(rictus_irc_line_command("@account=PoeMei :PoeMei!u@h PRIVMSG #stn-labz :rictus: who are you?", command, sizeof command, &params) && !strcmp(command, "PRIVMSG"), &e, &p);
     expect(rictus_irc_parse_privmsg("@account=PoeMei :PoeMei!u@h PRIVMSG #stn-labz :rictus: who are you?", sender, sizeof sender, target, sizeof target, message, sizeof message) && !strcmp(sender, "PoeMei") && !strcmp(target, "#stn-labz") && !strcmp(message, "rictus: who are you?"), &e, &p);
+
+    expect(rictus_irc_parse_privmsg(
+           ":PoeMei PRIVMSG #stn-labz :digit: hello",
+           sender, sizeof sender, target, sizeof target, message, sizeof message) &&
+           !strcmp(sender, "PoeMei") && !strcmp(target, "#stn-labz") &&
+           !strcmp(message, "digit: hello"), &e, &p);
+    expect(rictus_irc_parse_privmsg(
+           "@account=PoeMei :PoeMei!u@h PRIVMSG #second :digit: online?",
+           sender, sizeof sender, target, sizeof target, message, sizeof message) &&
+           !strcmp(sender, "PoeMei") && !strcmp(target, "#second") &&
+           !strcmp(message, "digit: online?"), &e, &p);
+    expect(!rictus_irc_parse_privmsg(
+           ":PoeMei NOTICE #second :digit: ignored",
+           sender, sizeof sender, target, sizeof target, message, sizeof message), &e, &p);
+    expect(!rictus_irc_parse_privmsg(
+           ":PoeMei PRIVMSG #second",
+           sender, sizeof sender, target, sizeof target, message, sizeof message), &e, &p);
 
     neg_e = 1;
     neg_p = !rictus_irc_build_plain(NULL, "p", encoded, sizeof encoded);
