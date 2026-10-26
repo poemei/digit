@@ -38,6 +38,6 @@ Published records have exactly `{"messages":[{"role":"user","content":"..."},{"r
 - Approved controlled policy revisions require external authoritative-index and integrity evidence. Until supplied, policy documents are quarantined, never silently selected or rewritten.
 - Existing 20.6 MB source JSONL is not automatically ingested or validated.
 - Structural validation is not factual validation. Human review remains required.
-- **Current polling implementation regenerates candidates on each scan**, rather than caching unchanged input; this is a known issue to correct before production activation.
+- Unchanged successfully converted source content is reused from the prior candidate dataset by SHA-256; failed generations may retry on later scans.
 - The build performs a Python syntax check only. No installed runtime or end-to-end Ollama qualification has been verified.
 - No Core or Rictus files changed. This module is NOT loaded via either agent's module host.
