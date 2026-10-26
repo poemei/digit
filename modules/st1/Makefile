@@ -12,11 +12,11 @@ check-abi:
 bin:
 	mkdir -p bin
 bin/st1.so: src/st1.c includes/st1.h | bin
-	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared src/st1.c -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared src/st1.c -o $@ -pthread
 bin/st1_manage: src/st1.c includes/st1.h | bin
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DST1_CLI -DST1_PATH='"$(ST1_PATH)"' src/st1.c -o $@
 bin/test_st1: tests/test_st1.c src/st1.c includes/st1.h | bin
-	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_st1.c -o $@ -ldl
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_st1.c -o $@ -ldl -pthread
 test: all bin/test_st1
 	./bin/test_st1
 	sh tests/test_st1.sh
