@@ -1,4 +1,4 @@
-#include "rictus.h"
+#include "digit.h"
 
 /* Digit executable entry point; Core startup remains STN-LABZ-owned. */
 int main(void)
