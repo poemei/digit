@@ -23,6 +23,8 @@ int main(int argc, char **argv)
     memcpy(&get_descriptor, &symbol, sizeof get_descriptor);
     descriptor = get_descriptor();
     if (!descriptor || strcmp(descriptor->id, "irc") ||
+        descriptor->version_major != 0 || descriptor->version_minor != 4 ||
+        descriptor->version_patch != 0 ||
         descriptor->required_core_api_major != STNLABZ_MODULE_API_MAJOR ||
         descriptor->required_core_api_minor > STNLABZ_MODULE_API_MINOR ||
         !descriptor->qualify || !descriptor->start || !descriptor->stop) {
