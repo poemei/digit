@@ -13,7 +13,7 @@ MODULE_NAME := irc
 TARGET := $(BUILD_DIR)/$(MODULE_NAME).so
 TEST_TARGET := $(BUILD_DIR)/test_irc
 
-PREFIX ?= /opt/rictus
+PREFIX ?= /opt/digit
 MODULEDIR ?= $(PREFIX)/modules/$(MODULE_NAME)
 
 CPPFLAGS += -I$(INCLUDE_DIR) -I$(ABI_INCLUDE_DIR)
