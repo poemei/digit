@@ -1,4 +1,4 @@
-# Digit ST-1 Research Registry — 0.1.1
+# Digit ST-1 Research Registry — 0.1.3
 
 **Engineering status:** Corrected source candidate. Operator end-to-end acceptance is OPEN. No live activation or production installation has been verified.
 
@@ -63,6 +63,14 @@ If and only if the operator explicitly authorizes installation, use the module's
 5. Operator-selected end-to-end retrieval tested, including unknown-ID and invalid-input cases.
 6. Explicit human acceptance.
 
-The operator designated Slack channel `C0CBYDEKK6J`. Slack's protected production configuration must contain `st1_channel_id=C0CBYDEKK6J`, its bot must have posting permission, and Slack module v0.2.1 must be active. `st1.report` takes zero request bytes and reports up to eight current, source-attributed registry records to that dedicated Slack ABI transport. Empty or unavailable research data, missing transport, and posting failures return errors: none is mislabeled as successful delivery. The report is **not** automatically scheduled, and no channel is directly accessed by ST-1 outside the ABI. Triggering the reporting service requires an independently authorized ABI consumer; no public `/st1` command is claimed. No claim of scheduled reports, automated ingestion, or free-form language integration is made.
+The operator designated Slack channel `C0CBYDEKK6J`. Slack's protected production configuration must contain `st1_channel_id=C0CBYDEKK6J`, its bot must have posting permission, and Slack module v0.2.1 must be active. `st1.report` takes zero request bytes and reports up to eight current, source-attributed registry records to that dedicated Slack ABI transport. Empty or unavailable research data, missing transport, and posting failures return errors: none is mislabeled as successful delivery. As of v0.1.3, the report is automatically attempted at module activation and then at four-hour intervals following successful delivery, with one-hour retries after unavailable data or failed delivery. and no channel is directly accessed by ST-1 outside the ABI. The module-owned scheduler invokes the existing report service; the operator CLI still exclusively owns research record writes, and no public `/st1` command is claimed. No claim of scheduled reports, automated ingestion, or free-form language integration is made.
 
 **AWAITING OPERATOR END-TO-END TESTING AND ACCEPTANCE**
+
+## v0.1.3 — S2-style autonomous private reporting
+
+An interruptible module-owned pthread scheduler, following S2's lifecycle pattern, triggers the existing `st1.report` ABI logic immediately on activation, every four hours after a successful delivery, and every hour after an unsuccessful attempt. Delivery uses **only** `digit.slack.st1.deliver`, which Slack routes to its configured `st1_channel_id` (operator-designated `C0CBYDEKK6J`). No credentials or channel override are stored in ST-1 source.
+
+The scheduler is stopped and joined before services are unregistered. It does not auto-ingest external articles: if `/opt/digit/research/st1/research.tsv` is absent or empty it cannot create a research report. Its report lists at most eight current records. The periodic timer is intentionally aligned with S2's reporting cadence, without editing S2, Slack, Core, or SQLite3.
+
+The source and descriptor are version 0.1.3. Successful compilation, runtime module qualification, and real Slack delivery have not been established by these GitHub source commits.
