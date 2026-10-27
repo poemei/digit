@@ -2,6 +2,14 @@
 
 This is the source-change record for Digit. Dates are source dates, not deployment or acceptance dates. Module versions are independent of Digit's agent release. A GitHub commit, successful compilation, or a module reconnect does not establish qualification or operator acceptance.
 
+## 2026-10-27 — OpenSSL 3 EVP SHA-256 hotload correction (source committed; verification pending)
+
+- **Authorized protected Core change:** replaced deprecated `SHA256_Init`, `SHA256_Update`, and `SHA256_Final` in `src/core_hotload.c` with `EVP_DigestInit_ex`, `EVP_DigestUpdate`, and `EVP_DigestFinal_ex`.
+- Preserved SHA-256 binary digest size, lowercase 64-character hexadecimal output, module candidate comparison, and existing private staging path protections.
+- Checked all EVP operation results and expected digest length; failures during reading, hashing, writing, or file closure reject a candidate rather than accepting an incomplete snapshot. Retry interrupted read/write calls and remove failed staged snapshots.
+- No public ABI layout, module contract, transport, or hotload lifecycle transition changes were intended.
+- **Evidence:** GitHub source change committed; deprecation calls removed from this Core file by source inspection. The target-host build, zero-warning compiler output, regression tests, hotload replacement tests, deployment, and operator acceptance remain **unverified**. Do not mark the change qualified until those receipts exist.
+
 ## 2026-10-27 — Core routing handoff (source committed; qualification pending)
 
 - Added `include/digit_route.h` for transport-neutral request and reply data, with the Core-owned `digit.router.dispatch` service name.
