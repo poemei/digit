@@ -7,7 +7,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
-#include <openssl/sha.h>
+#include <openssl/evp.h>
 #include "core_hotload.h"
 #include "core_activation.h"
 #include "logging.h"
@@ -56,38 +56,73 @@ static observed_t *ensure_seen(stnlabz_hotload_t *watch, const char *id)
     return entry;
 }
 
+/* SHA-256 checksums are part of Core module admission and snapshot integrity. */
+static void sha256_hex(const unsigned char hash[32], char out[65])
+{
+    static const char hex[] = "0123456789abcdef";
+    size_t i;
+    for (i = 0; i < 32U; ++i) {
+        out[i * 2U] = hex[hash[i] >> 4];
+        out[i * 2U + 1U] = hex[hash[i] & 0x0fU];
+    }
+    out[64] = '\0';
+}
+
 static int digest_file(const char *path, char out[65])
 {
-    unsigned char buffer[16384], hash[SHA256_DIGEST_LENGTH];
-    SHA256_CTX context;
+    unsigned char buffer[16384], hash[32];
+    EVP_MD_CTX *context = NULL;
+    unsigned int hash_length = 0U;
     ssize_t amount;
-    size_t i;
-    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    int fd, ok = 0;
+
+    if (!path || !out) return 0;
+    fd = open(path, O_RDONLY | O_CLOEXEC);
     if (fd < 0) return 0;
-    if (!SHA256_Init(&context)) { close(fd); return 0; }
-    while ((amount = read(fd, buffer, sizeof buffer)) > 0)
-        SHA256_Update(&context, buffer, (size_t)amount);
-    if (amount < 0 || !SHA256_Final(hash, &context)) { close(fd); return 0; }
-    close(fd);
-    for (i = 0; i < sizeof hash; ++i)
-        (void)sprintf(out + i * 2U, "%02x", hash[i]);
-    out[64] = '\0';
-    return 1;
+    context = EVP_MD_CTX_new();
+    if (!context || EVP_DigestInit_ex(context, EVP_sha256(), NULL) != 1)
+        goto done;
+
+    for (;;) {
+        amount = read(fd, buffer, sizeof buffer);
+        if (amount < 0 && errno == EINTR) continue;
+        if (amount < 0) goto done;
+        if (amount == 0) break;
+        if (EVP_DigestUpdate(context, buffer, (size_t)amount) != 1)
+            goto done;
+    }
+    if (EVP_DigestFinal_ex(context, hash, &hash_length) != 1 ||
+        hash_length != sizeof hash)
+        goto done;
+    if (close(fd) != 0) {
+        fd = -1;
+        goto done;
+    }
+    fd = -1;
+    sha256_hex(hash, out);
+    ok = 1;
+
+done:
+    EVP_MD_CTX_free(context);
+    if (fd >= 0) (void)close(fd);
+    return ok;
 }
 
 static int snapshot(const char *path, char *copy, size_t copy_size, char sha[65])
 {
-    char buffer[16384];
-    unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256_CTX context;
+    unsigned char buffer[16384], hash[32];
+    EVP_MD_CTX *context = NULL;
+    unsigned int hash_length = 0U;
     ssize_t amount;
-    size_t offset, i;
-    int input, output;
+    size_t offset;
+    int input = -1, output = -1;
+    int ok = 0;
+
+    if (!path || !copy || !copy_size || !sha) return 0;
 
     /* [AI:GPT-6 | 2026-10-26] Installed modules may be read-only.
      * Stage candidates beneath Digit's existing writable log directory.
      * A private directory prevents untrusted replacement of candidate paths. */
-    (void)path;
     {
         struct stat state;
         const char *stage = STNLABZ_LOG_DIRECTORY "/.module-staging";
@@ -98,31 +133,51 @@ static int snapshot(const char *path, char *copy, size_t copy_size, char sha[65]
         if (snprintf(copy, copy_size, "%s/candidate.XXXXXX", stage) >= (int)copy_size)
             return 0;
     }
+
     output = mkstemp(copy);
     if (output < 0) return 0;
     input = open(path, O_RDONLY | O_CLOEXEC);
-    if (input < 0) { close(output); unlink(copy); return 0; }
-    if (!SHA256_Init(&context)) { close(input); close(output); unlink(copy); return 0; }
+    if (input < 0) goto done;
+    context = EVP_MD_CTX_new();
+    if (!context || EVP_DigestInit_ex(context, EVP_sha256(), NULL) != 1)
+        goto done;
 
-    while ((amount = read(input, buffer, sizeof buffer)) > 0) {
-        SHA256_Update(&context, buffer, (size_t)amount);
+    for (;;) {
+        amount = read(input, buffer, sizeof buffer);
+        if (amount < 0 && errno == EINTR) continue;
+        if (amount < 0) goto done;
+        if (amount == 0) break;
+        if (EVP_DigestUpdate(context, buffer, (size_t)amount) != 1)
+            goto done;
         for (offset = 0; offset < (size_t)amount;) {
             ssize_t written = write(output, buffer + offset, (size_t)amount - offset);
-            if (written <= 0) {
-                close(input); close(output); unlink(copy); return 0;
-            }
+            if (written < 0 && errno == EINTR) continue;
+            if (written <= 0) goto done;
             offset += (size_t)written;
         }
     }
-    close(input);
-    if (amount < 0 || close(output) != 0 || !SHA256_Final(hash, &context)) {
-        unlink(copy);
-        return 0;
+    if (EVP_DigestFinal_ex(context, hash, &hash_length) != 1 ||
+        hash_length != sizeof hash)
+        goto done;
+    if (close(input) != 0) {
+        input = -1;
+        goto done;
     }
-    for (i = 0; i < sizeof hash; ++i)
-        (void)sprintf(sha + i * 2U, "%02x", hash[i]);
-    sha[64] = '\0';
-    return 1;
+    input = -1;
+    if (close(output) != 0) {
+        output = -1;
+        goto done;
+    }
+    output = -1;
+    sha256_hex(hash, sha);
+    ok = 1;
+
+done:
+    EVP_MD_CTX_free(context);
+    if (input >= 0) (void)close(input);
+    if (output >= 0) (void)close(output);
+    if (!ok) (void)unlink(copy);
+    return ok;
 }
 
 static void log_result(const char *event, const char *id,
