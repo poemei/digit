@@ -66,7 +66,7 @@ static int parse_port(const char *value, unsigned short *port)
     return 1;
 }
 
-int rictus_irc_config_load(const char *path, rictus_irc_config_t *config)
+int digit_irc_config_load(const char *path, digit_irc_config_t *config)
 {
     FILE *file;
     char line[1024];
@@ -85,7 +85,7 @@ int rictus_irc_config_load(const char *path, rictus_irc_config_t *config)
 
         if (length && line[length - 1] != '\n' && !feof(file)) {
             fclose(file);
-            rictus_irc_config_clear(config);
+            digit_irc_config_clear(config);
             return 0;
         }
         while (length && (line[length - 1] == '\n' || line[length - 1] == '\r'))
@@ -132,11 +132,11 @@ int rictus_irc_config_load(const char *path, rictus_irc_config_t *config)
 
 invalid:
     fclose(file);
-    rictus_irc_config_clear(config);
+    digit_irc_config_clear(config);
     return 0;
 }
 
-void rictus_irc_config_clear(rictus_irc_config_t *config)
+void digit_irc_config_clear(digit_irc_config_t *config)
 {
     if (!config) return;
     OPENSSL_cleanse(config, sizeof *config);
