@@ -323,8 +323,43 @@ static stnlabz_module_result_t route_dispatch_service(
     void *response, size_t response_size, size_t *response_used,
     void *context)
 {
-    return dispatch_command(request, request_size, response,
-                            response_size, response_used, context);
+    const digit_route_request_t *in = request;
+    stnlabz_module_command_t command;
+    const char *cursor, *end;
+    size_t name_len, arg_len;
+    (void)context;
+    if (response_used) *response_used = 0U;
+    if (!in || request_size != sizeof *in ||
+        !memchr(in->sender, 0, sizeof in->sender) ||
+        !memchr(in->account, 0, sizeof in->account) ||
+        !memchr(in->text, 0, sizeof in->text) || !in->text[0])
+        return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+
+    memset(&command, 0, sizeof command);
+    memcpy(command.sender, in->sender, sizeof command.sender);
+    memcpy(command.account, in->account, sizeof command.account);
+
+    /* Explicit /module operation; ordinary conversation uses registered chat. */
+    cursor = in->text;
+    if (*cursor == '/') {
+        ++cursor;
+        end = cursor;
+        while (*end && *end != ' ' && *end != '\t') ++end;
+        name_len = (size_t)(end - cursor);
+        if (!name_len || name_len >= sizeof command.name)
+            return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+        memcpy(command.name, cursor, name_len);
+        while (*end == ' ' || *end == '\t') ++end;
+        cursor = end;
+    } else {
+        memcpy(command.name, "chat", sizeof "chat");
+    }
+    arg_len = bounded_length(cursor, sizeof command.arguments);
+    if (arg_len >= sizeof command.arguments)
+        return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+    memcpy(command.arguments, cursor, arg_len + 1U);
+    return dispatch_command(&command, sizeof command,
+                            response, response_size, response_used, NULL);
 }
 
 static const stnlabz_module_host_t host = {
