@@ -22,7 +22,7 @@ int stnlabz_initialize(void)
     stnlabz_hotload_t *watch = NULL;
     const stnlabz_agent_root_t *root;
     int runtime_ok;
-    const stnlabz_module_host_t *module_host = rictus_module_host();
+    const stnlabz_module_host_t *module_host = digit_module_host();
 
     stnlabz_module_registry_init(&modules);
     stnlabz_module_loader_init(&loader);
