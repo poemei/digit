@@ -36,7 +36,7 @@ ABI_OBJS := $(patsubst $(ABI_SRC_DIR)/%.c,$(BUILD_DIR)/abi/%.o,$(ABI_SRCS))
 OBJS := $(CORE_OBJS) $(ABI_OBJS)
 DEPS := $(OBJS:.o=.d)
 
-.PHONY: all clean install uninstall
+.PHONY: all clean install uninstall test test-contracts
 all: $(TARGET)
 
 .PHONY: check-abi
@@ -58,6 +58,14 @@ $(BUILD_DIR)/%.o: src/%.c
 $(BUILD_DIR)/abi/%.o: $(ABI_SRC_DIR)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
+
+# Source-contract checks are an early regression gate, not Core qualification.
+# Runtime/negative/failure-injection qualification is still separately required.
+test-contracts:
+	python3 -m unittest discover -s tests -p 'test_*.py' -v
+
+test: $(TARGET) test-contracts
+	@echo "Core source-contract checks complete; runtime Core qualification (minimum 20/20) remains required."
 
 install: $(TARGET)
 	install -d $(BINDIR) $(LOGDIR) $(MODULEDIR) $(CONFIGDIR) $(STATEDIR)
