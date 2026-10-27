@@ -39,3 +39,11 @@ The 20 integration assertions are a supplemental gate, **not** proof of hotload 
 ## Threaded withdrawal gate (2026-10-27)
 
 `make test-concurrency` compiles `tests/test_core_concurrency.c` with the **real** Core `module_host.c` and pthreads. It checks service and command registration, in-flight callback completion under concurrent withdrawal, post-unregistration rejection, and safe reuse of freed slots. The test does not change the installed service. Operator test receipts are pending. More extensive concurrent module stop/hotload and reentrant-unregister validation are separate gates.
+
+## Core self-unregistration guard
+
+2026-10-27: Director-authorized Core fix: module callback self-unregistration now fails immediately instead of deadlocking on its own in-flight counter. Added 12 executable service/command assertions in tests/test_core_self_unregister.c; make test-reentrant is included in make test. Source committed; compilation and operator results pending. Existing 23/23 threaded tests must be re-run because Core changed.
+
+## Reentrant withdrawal guard
+
+2026-10-27: Director-authorized Core fix: module callback self-unregistration now fails immediately instead of deadlocking on its own in-flight counter. Added 12 executable service/command assertions in tests/test_core_self_unregister.c; make test-reentrant is included in make test. Source committed; compilation and operator results pending. Existing 23/23 threaded tests must be re-run because Core changed.
