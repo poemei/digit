@@ -3,6 +3,7 @@
 
 #include "module_host.h"
 #include "digit_transport.h"
+#include "digit_route.h"
 
 #define DIGIT_HOST_SERVICE_MAX 32U
 #define DIGIT_HOST_COMMAND_MAX 32U
@@ -54,7 +55,7 @@ static int register_service(const char *name,
     size_t free_slot = DIGIT_HOST_SERVICE_MAX;
     size_t length;
 
-    if (!name || !handler) return 0;
+    if (!name || !handler || !strcmp(name, DIGIT_ROUTER_DISPATCH_SERVICE)) return 0;
     length = bounded_length(name, STNLABZ_MODULE_SERVICE_NAME_MAX);
     if (!length || length >= STNLABZ_MODULE_SERVICE_NAME_MAX) return 0;
 
@@ -145,7 +146,7 @@ static stnlabz_module_result_t invoke_service(
     }
     unlock(&service_lock);
 
-    if (!handler && !strcmp(name, "digit.router.dispatch"))
+    if (!handler && !strcmp(name, DIGIT_ROUTER_DISPATCH_SERVICE))
         return route_dispatch_service(request, request_size, response,
                                       response_size, response_used, NULL);
     if (!handler) return STNLABZ_MODULE_ERR_NOT_FOUND;
@@ -259,11 +260,6 @@ static int unregister_command(const char *name, void *context)
 }
 
 /* Core performs only named dispatch. Controller handlers own internal routing. */
-typedef struct {
-    char text[512];
-    int replied;
-} digit_route_reply_t;
-
 static int digit_route_capture(void *ctx, const char *message)
 {
     digit_route_reply_t *out = ctx;
@@ -276,7 +272,6 @@ static int digit_route_capture(void *ctx, const char *message)
     return 1;
 }
 
-#define DIGIT_ROUTER_DISPATCH_SERVICE "digit.router.dispatch"
 
 static stnlabz_module_result_t dispatch_command(
     const void *request, size_t request_size,
