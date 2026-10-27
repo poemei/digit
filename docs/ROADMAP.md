@@ -50,6 +50,11 @@
 - **Critical acceptance gate:** full latest Core qualification (minimum 20/20), module regression tests (minimum 10/10 each), candidate activation-failure injection with incumbent restoration, no stale command handlers, correct loader ownership, and zero-warning target build. Source changes are unverified and not deployed.
 - Director controls activation of the revised Core.
 
+### Core hotload executable integration tests (2026-10-27)
+
+- Four real `.so` candidate fixtures and 20 executable integration assertions now exercise Core's actual qualification rejection, candidate activation failure, incumbent rollback, successful replacement and log evidence.
+- `make test` runs these alongside Root/policy unit tests and source contracts. Tests are not yet executed or qualified; concurrent dispatch and actual hotload under load require separate checks.
+
 ### Executable Core unit behavioral tests (2026-10-27)
 
 - `make test` now also compiles/runs 20 C unit behavior cases for Root and policy evaluation (positive and negative paths); execution receipts pending.
