@@ -126,3 +126,10 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 ## S2 Sentinel collection milestone — 2026-10-27
 
 2026-10-27 — Director-authorized S2 Cyber Security collection milestone: added native `modules/s2` v1.0.0. Source reads the documented Sentinel JSON `https://api.stn-labz.com/threats`, polls autonomously at 900-second intervals, tracks cases by source ID and content signature, atomically persists the register, and exposes `/s2` aggregate status. Source covers missing severity explicitly; it does not infer compromise. Includes ten internal qualification assertions plus an independent persistence test, and owner-verified staged installation. Dependencies: libcurl, json-c and pthreads. **Source only. Build/test, module qualification, installation, live Sentinel ingestion and operator acceptance NOT yet performed.** Full source evidence/event history, investigative correlation and Ollama-assisted narrative are not yet implemented; do not claim the full S2 mission is restored. No Core or shared ABI touched.
+
+## 2026-10-27 — S2 collection cadence reduced
+
+- Director requested Sentinel collection every four hours rather than every 15 minutes to minimize noise.
+- Updated the S2 native module timer to 14400 seconds and module.conf accordingly; bumped module release from 1.0.0 to 1.0.1 so Core can hotload the revision.
+- S2 polling does not independently post to IRC; /s2 reporting remains on-demand. This change does not create unsolicited IRC announcements.
+- Source committed; revised module qualification, installation and operator verification pending. Core and shared ABI unchanged.
