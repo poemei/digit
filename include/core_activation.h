@@ -16,7 +16,7 @@ stnlabz_module_result_t stnlabz_core_activate(
     const stnlabz_policy_request_t *request);
 
 /*
- * Rictus automatic module admission.
+ * Digit automatic module admission.
  * A module reaches this boundary only after Core verification and qualification.
  * No external account or conversational identity participates in this decision.
  */
