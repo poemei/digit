@@ -14,6 +14,8 @@ Build and test:
 ```sh
 make clean all test
 sudo make install
+sha256sum build/ollama.so /opt/digit/modules/ollama/ollama.so
+stat -c '%U:%G %a %n' /opt/digit/modules/ollama/ollama.so
 ```
 
 Installed artifact:
@@ -23,7 +25,13 @@ Installed artifact:
 /opt/digit/modules/ollama/module.conf
 ```
 
-Identity prompt identifies Digit. The service identifier is `digit.llm.generate`; the IRC consumer and Ollama provider must use the same identifier. Source descriptor v1.0.3; live qualification unverified.
+Identity prompt identifies Digit. The service identifier is `digit.llm.generate`; the IRC consumer and Ollama provider must use the same identifier. Source descriptor v1.0.4; live qualification unverified.
+
+## Installation integrity and ownership (2026-10-27)
+
+The Makefile requires an existing `digit` user and `digit` group (overridable via `MODULE_USER` and `MODULE_GROUP`). Its `install` target stages the built shared object within the module directory, verifies byte-for-byte equality, atomically renames it into the hotload path, and verifies the installed bytes and ownership `digit:digit`. It fails on mismatch rather than silently leaving an unverified installation. The installed file is mode 0755; `module.conf` is mode 0644 with the same owner/group.
+
+The operator reported on 2026-10-27 that the installed Ollama shared object was root-owned, dated 2026-10-26, and had a different SHA-256 than the newly built artifact. The last observed running Ollama module version was 1.0.3; the 1.0.4 activation remains unverified. Run installation as a privileged operator and confirm a new activation receipt. Ownership alone did not prove or explain the outdated bytes.
 
 ## v1.0.4 — Module controller dispatch (2026-10-27)
 
