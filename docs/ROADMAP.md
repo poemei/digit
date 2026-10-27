@@ -50,6 +50,11 @@
 - **Critical acceptance gate:** full latest Core qualification (minimum 20/20), module regression tests (minimum 10/10 each), candidate activation-failure injection with incumbent restoration, no stale command handlers, correct loader ownership, and zero-warning target build. Source changes are unverified and not deployed.
 - Director controls activation of the revised Core.
 
+### Core test infrastructure restoration (2026-10-27)
+
+- Root `make test` now builds Core and invokes 20 source-contract regression checks; `docs/CORE_QUALIFICATION.md` restored.
+- **Not qualified:** these static source checks cannot count as the mandatory minimum 20 behavioral Core tests. A genuine executable suite and failure-injection / safe hotload testing remain open. No 20/20 acceptance claim.
+
 ## Milestone 2 — Transport neutrality and end-to-end delivery
 
 **State: Planned; not authorized by prior source acceptance.**
