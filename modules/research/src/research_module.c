@@ -2,22 +2,12 @@
 #include <string.h>
 #include "stnlabz_abi/module.h"
 #include "research_internal.h"
+#include "research_service.h"
 
 #define RESEARCH_VERSION_MAJOR 1U
 #define RESEARCH_VERSION_MINOR 0U
 #define RESEARCH_VERSION_PATCH 1U
 #define RESEARCH_ROOT "/opt/digit/research/sources"
-#define RESEARCH_SERVICE "digit.research.lookup"
-
-typedef struct {
-    char topic[64];
-    char terms[RESEARCH_INPUT_MAX];
-} research_request_t;
-typedef struct {
-    char text[RESEARCH_OUTPUT_MAX];
-    unsigned int verified;
-} research_response_t;
-
 static const stnlabz_module_host_t *owner;
 static int registered;
 
@@ -28,8 +18,8 @@ static stnlabz_module_result_t lookup(
     void *response, size_t response_size, size_t *response_used,
     void *handler_context)
 {
-    const research_request_t *in = request;
-    research_response_t *out = response;
+    const digit_research_request_t *in = request;
+    digit_research_response_t *out = response;
     (void)handler_context;
     if (response_used) *response_used = 0;
     if (!in || request_size != sizeof(*in) || !out ||
@@ -68,19 +58,19 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *host)
 {
     if (!host || !host->register_service || !host->unregister_service)
         return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
-    if (!host->register_service(RESEARCH_SERVICE, lookup, NULL))
+    if (!host->register_service(DIGIT_RESEARCH_LOOKUP_SERVICE, lookup, NULL))
         return STNLABZ_MODULE_ERR_START_FAILED;
     owner = host;
     registered = 1;
     fprintf(stderr, "[RESEARCH] service active: %s; no chat commands registered\n",
-            RESEARCH_SERVICE);
+            DIGIT_RESEARCH_LOOKUP_SERVICE);
     return STNLABZ_MODULE_OK;
 }
 
 static stnlabz_module_result_t stop(void)
 {
     if (registered && owner)
-        (void)owner->unregister_service(RESEARCH_SERVICE, NULL);
+        (void)owner->unregister_service(DIGIT_RESEARCH_LOOKUP_SERVICE, NULL);
     registered = 0;
     owner = NULL;
     return STNLABZ_MODULE_OK;
