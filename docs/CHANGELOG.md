@@ -133,3 +133,9 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 - Updated the S2 native module timer to 14400 seconds and module.conf accordingly; bumped module release from 1.0.0 to 1.0.1 so Core can hotload the revision.
 - S2 polling does not independently post to IRC; /s2 reporting remains on-demand. This change does not create unsolicited IRC announcements.
 - Source committed; revised module qualification, installation and operator verification pending. Core and shared ABI unchanged.
+
+## 2026-10-27 — S2 v1.0.2 IRC scheduled synopsis
+
+- S2 now submits a short baseline synopsis to the registered `digit.transport.channel.send` service after its first successful Sentinel collection, then an update only when a scheduled four-hour collection detects new or revised source records. Unchanged polls remain silent; no direct IRC socket or Publisher dependency.
+- The command `/s2` remains available. Source findings are identified as leads rather than confirmed incidents. Delivery failure logs and does not block evidence collection.
+- Operator build, module qualification, hotload, and IRC client verification are pending for v1.0.2; no Core or shared ABI changes.
