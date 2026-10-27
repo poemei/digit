@@ -72,6 +72,28 @@ static int log_contains(const char *path, const char *needle)
     return 0;
 }
 
+
+/* The operator module log intentionally omits success-detail prose.
+ * Assert the two real HOTLOAD_ACTIVE events, not an internal reason token. */
+static unsigned log_event_count(const char *path, const char *event)
+{
+    FILE *f = fopen(path, "r");
+    char line[2048], needle[128];
+    unsigned count = 0U;
+    if (!f) return 0U;
+    if (snprintf(needle, sizeof needle, " MODULE %s ", event) >=
+        (int)sizeof needle) {
+        (void)fclose(f);
+        return 0U;
+    }
+    while (fgets(line, sizeof line, f)) {
+        if (strstr(line, needle) && strstr(line, "module=fixture"))
+            ++count;
+    }
+    (void)fclose(f);
+    return count;
+}
+
 int main(int argc, char **argv)
 {
     char base[] = "/tmp/digit-hotload-XXXXXX";
@@ -129,7 +151,7 @@ int main(int argc, char **argv)
     CHECK("qualified replacement installed", install_fixture(argv[4], target));
     stnlabz_hotload_poll(watch);
     CHECK("qualified replacement becomes active", active_version(&registry, 2U));
-    CHECK("replacement activation audit", log_contains(module_log, "replacement_active"));
+    CHECK("replacement activation audit", log_event_count(module_log, "HOTLOAD_ACTIVE") == 2U);
     CHECK("replacement owns live shared object",
           stnlabz_module_loader_find(&loader, "fixture") != NULL &&
           stnlabz_module_loader_find(&loader, "fixture")->descriptor->version_patch == 2U);
