@@ -5,7 +5,7 @@
 First operational collection milestone for Digit's **Cyber Security** mission: research and engineering of security systems centered on evidence, operator authority, containment and predictable behavior.
 
 - Native Digit ABI 1.5 module; **no changes to Core or the shared ABI**.
-- Retrieves the HTTPS Sentinel JSON feed at `https://api.stn-labz.com/threats` every 900 seconds on its own worker.
+- Retrieves the HTTPS Sentinel JSON feed at `https://api.stn-labz.com/threats` every 14,400 seconds (4 hours) on its own worker.
 - Bounded JSON ingest (8 MiB / 10,000 records), case IDs, content signatures, new/revised/unchanged counters.
 - Existing IDs absent from a later feed are **retained, not automatically closed**.
 - Persisted register at `/opt/digit/state/s2/sentinel-register.txt`, written with an atomic rename. Never assume historical bulk import is current activity.
