@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include "stnlabz_abi/module.h"
 #include "s2_model.h"
+#include "digit_transport.h"
 
 #define S2_URL "https://api.stn-labz.com/threats"
 #define S2_MAX_BYTES (8U * 1024U * 1024U)
@@ -28,6 +29,32 @@ static s2_register_t cases;
 static char last_result[400] = "No successful Sentinel collection yet.";
 static size_t latest_opened, latest_changed, latest_qualifying;
 static time_t last_success;
+static int initial_report_sent;
+
+/* A successful collection produces at most one short, scheduled IRC synopsis.
+ * The first successful poll sends a baseline. Later polls send only on change.
+ * Failed delivery remains visible in logs; a subsequent material change can retry. */
+static void publish_synopsis(size_t total, size_t opened, size_t changed,
+                             size_t qualifying, int baseline)
+{
+    digit_transport_channel_request_t req = {{0}};
+    size_t used = 0;
+    stnlabz_module_result_t result;
+    if (!owner || !owner->invoke_service) return;
+    (void)snprintf(req.message, sizeof req.message,
+        "[S2] %s | Sentinel records=%zu; new=%zu revised=%zu; "
+        "MEDIUM/HIGH/CRITICAL=%zu. Source records are leads, not confirmed incidents. "
+        "Next check in 4h. /s2 for status.",
+        baseline ? "Baseline intelligence synopsis" : "Intelligence update",
+        total, opened, changed, qualifying);
+    result = owner->invoke_service(DIGIT_TRANSPORT_CHANNEL_SEND_SERVICE,
+        &req, sizeof req, NULL, 0, &used);
+    if (result != STNLABZ_MODULE_OK)
+        fprintf(stderr, "[S2] IRC delivery unavailable result=%d; collection retained\\n",
+                (int)result);
+    else
+        fprintf(stderr, "[S2] scheduled synopsis queued to IRC\\n");
+}
 
 static size_t on_bytes(char *data, size_t size, size_t amount, void *ctx)
 {
@@ -53,6 +80,8 @@ static int collect_once(void)
     long status = 0;
     s2_register_t next = {0};
     int ok = 0;
+    int announce = 0, baseline = 0;
+    size_t report_total = 0, report_opened = 0, report_changed = 0, report_qualifying = 0;
     if (!curl) return 0;
     curl_easy_setopt(curl, CURLOPT_URL, S2_URL);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0L);
@@ -62,7 +91,7 @@ static int collect_once(void)
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 20L);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, on_bytes);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "Digit-S2/1.0.1");
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "Digit-S2/1.0.2");
     result = curl_easy_perform(curl);
     if (result == CURLE_OK) curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
     curl_easy_cleanup(curl);
@@ -89,6 +118,13 @@ static int collect_once(void)
     latest_changed = cases.changed;
     latest_qualifying = cases.qualifying;
     last_success = time(NULL);
+    baseline = !initial_report_sent;
+    announce = baseline || cases.opened != 0U || cases.changed != 0U;
+    report_total = cases.count;
+    report_opened = cases.opened;
+    report_changed = cases.changed;
+    report_qualifying = cases.qualifying;
+    if (announce) initial_report_sent = 1;
     (void)snprintf(last_result, sizeof last_result,
         "Sentinel source records tracked=%zu; this poll new=%zu revised=%zu unchanged=%zu; "
         "MEDIUM/HIGH/CRITICAL observed=%zu; records without explicit severity=%zu. "
@@ -167,6 +203,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h)
         return STNLABZ_MODULE_ERR_START_FAILED;
     }
     owner = h; registered = 1;
+    initial_report_sent = 0;
     atomic_store(&stop_requested, 0);
     if (pthread_create(&worker, NULL, run_collection, NULL)) {
         (void)h->unregister_command("s2", NULL);
@@ -194,7 +231,7 @@ static stnlabz_module_result_t stop(void)
     return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor = {
-    "s2", "Digit S2 Security Intelligence", 1, 0, 1,
+    "s2", "Digit S2 Security Intelligence", 1, 0, 2,
     STNLABZ_MODULE_API_MAJOR, STNLABZ_MODULE_API_MINOR,
     qualify, start, stop
 };
