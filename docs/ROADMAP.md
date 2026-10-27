@@ -36,6 +36,12 @@
 - **Open inspection:** route naming/collisions; exact command parser behavior; source/authority integrity; response and argument bounds; safe unload and registration withdrawal; error semantics; no hardcoded per-module Core logic.
 - **Exit gate:** review full-file source and external ABI contract; compile and run qualified negative/positive tests; independent Core, IRC, Ollama verification; operator acceptance.
 
+### Installation-integrity gate (2026-10-27)
+
+- The Ollama installed artifact did not match its built artifact and was owned by `root:root` instead of `digit:digit` in operator-provided evidence.
+- IRC and Ollama Makefiles now enforce user/group, compare built and installed bytes, and stage/rename binaries within the watched directory. Source committed; operator installation and activation unverified.
+- Capture `sha256sum`, `stat`, and module activation receipts; then re-run routed IRC tests. Do not infer an installed revision from GitHub source.
+
 ## Milestone 2 — Transport neutrality and end-to-end delivery
 
 **State: Planned; not authorized by prior source acceptance.**
