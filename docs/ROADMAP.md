@@ -50,6 +50,11 @@
 - **Critical acceptance gate:** full latest Core qualification (minimum 20/20), module regression tests (minimum 10/10 each), candidate activation-failure injection with incumbent restoration, no stale command handlers, correct loader ownership, and zero-warning target build. Source changes are unverified and not deployed.
 - Director controls activation of the revised Core.
 
+### Hotload integration test audit correction (2026-10-27)
+
+- Operator observed 19/20 integration results. Actual replacement, rollback, and loader assertions passed; only an audit test falsely expected suppressed success-detail text.
+- Assertion now requires two emitted `HOTLOAD_ACTIVE` events. Re-run is required before marking 20/20; source change only, no production behavior change.
+
 ### Core hotload executable integration tests (2026-10-27)
 
 - Four real `.so` candidate fixtures and 20 executable integration assertions now exercise Core's actual qualification rejection, candidate activation failure, incumbent rollback, successful replacement and log evidence.
