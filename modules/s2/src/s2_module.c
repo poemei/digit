@@ -62,7 +62,7 @@ static int collect_once(void)
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 20L);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, on_bytes);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "Digit-S2/1.0.0");
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "Digit-S2/1.0.1");
     result = curl_easy_perform(curl);
     if (result == CURLE_OK) curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
     curl_easy_cleanup(curl);
@@ -194,7 +194,7 @@ static stnlabz_module_result_t stop(void)
     return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor = {
-    "s2", "Digit S2 Security Intelligence", 1, 0, 0,
+    "s2", "Digit S2 Security Intelligence", 1, 0, 1,
     STNLABZ_MODULE_API_MAJOR, STNLABZ_MODULE_API_MINOR,
     qualify, start, stop
 };
