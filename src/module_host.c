@@ -28,6 +28,35 @@ static digit_service_entry_t services[DIGIT_HOST_SERVICE_MAX];
 static digit_command_entry_t commands[DIGIT_HOST_COMMAND_MAX];
 static atomic_flag service_lock = ATOMIC_FLAG_INIT;
 static atomic_flag command_lock = ATOMIC_FLAG_INIT;
+/* A callback cannot synchronously withdraw itself: its own in_flight
+ * reference would make unregister wait forever. Keep a per-thread stack
+ * to catch both direct and nested reentrant withdrawal attempts. */
+typedef struct digit_service_frame {
+    const digit_service_entry_t *entry;
+    struct digit_service_frame *previous;
+} digit_service_frame_t;
+typedef struct digit_command_frame {
+    const digit_command_entry_t *entry;
+    struct digit_command_frame *previous;
+} digit_command_frame_t;
+static _Thread_local digit_service_frame_t *current_service_frame;
+static _Thread_local digit_command_frame_t *current_command_frame;
+
+static int on_service_stack(const digit_service_entry_t *entry)
+{
+    const digit_service_frame_t *frame;
+    for (frame = current_service_frame; frame; frame = frame->previous)
+        if (frame->entry == entry) return 1;
+    return 0;
+}
+static int on_command_stack(const digit_command_entry_t *entry)
+{
+    const digit_command_frame_t *frame;
+    for (frame = current_command_frame; frame; frame = frame->previous)
+        if (frame->entry == entry) return 1;
+    return 0;
+}
+
 
 static size_t bounded_length(const char *text, size_t maximum)
 {
@@ -92,6 +121,10 @@ static int unregister_service(const char *name, void *context)
             !services[i].withdrawing &&
             services[i].context == context &&
             !strcmp(services[i].name, name)) {
+            if (on_service_stack(&services[i])) {
+                unlock(&service_lock);
+                return 0;
+            }
             services[i].withdrawing = 1;
             entry = &services[i];
             break;
@@ -151,8 +184,13 @@ static stnlabz_module_result_t invoke_service(
                                       response_size, response_used, NULL);
     if (!handler) return STNLABZ_MODULE_ERR_NOT_FOUND;
 
-    result = handler(request, request_size, response, response_size,
-                     response_used, context);
+    {
+        digit_service_frame_t frame = {entry, current_service_frame};
+        current_service_frame = &frame;
+        result = handler(request, request_size, response, response_size,
+                         response_used, context);
+        current_service_frame = frame.previous;
+    }
 
     lock(&service_lock);
     entry->in_flight--;
@@ -241,6 +279,10 @@ static int unregister_command(const char *name, void *context)
         if (commands[i].handler && !commands[i].withdrawing &&
             commands[i].context == context &&
             !strcmp(commands[i].name, name)) {
+            if (on_command_stack(&commands[i])) {
+                unlock(&command_lock);
+                return 0;
+            }
             commands[i].withdrawing = 1;
             entry = &commands[i];
             break;
@@ -308,7 +350,12 @@ static stnlabz_module_result_t dispatch_command(
     }
     unlock(&command_lock);
     if (!handler) return STNLABZ_MODULE_ERR_NOT_FOUND;
-    result = handler(cmd, digit_route_capture, out, handler_context);
+    {
+        digit_command_frame_t frame = {entry, current_command_frame};
+        current_command_frame = &frame;
+        result = handler(cmd, digit_route_capture, out, handler_context);
+        current_command_frame = frame.previous;
+    }
     lock(&command_lock);
     entry->in_flight--;
     unlock(&command_lock);
