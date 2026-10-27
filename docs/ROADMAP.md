@@ -23,10 +23,11 @@
 
 ## Milestone 1 — Core Router and module controller handoff
 
-**State: Initial source implementation committed on 2026-10-27; NOT qualified or operator accepted.**
+**State: Initial source committed; three targeted operator live tests PASSED on 2026-10-27. Broader qualification and final operator acceptance pending.**
 
 - Operational evidence supplied on 2026-10-27: IRC 1.0.11 activated, while last observed Ollama activation was 1.0.3; zero replies to nine test messages. IRC source identity subsequently corrected to doctrine-compliant 1.1.0. Ollama source is 1.0.4, but its deployment has not been established.
-- **Next gate:** obtain activation receipts for IRC 1.1.0 and Ollama 1.0.4 and confirm running Core revision, then retest channel nick addressing and controller dispatch without treating missing replies as acceptance.
+- **Subsequent operator receipts:** IRC 1.1.0 AUTO_ACTIVE at 16:32:15 UTC; Ollama 1.0.4 AUTO_ACTIVE at 16:43:14 UTC. `digicat: Hello` and `digicat: /chat Hello` both returned replies. `digicat: /unknown test` produced ABI `NOT_FOUND` (result=5) in IRC logs. These supersede the earlier unverified-deployment state without erasing the failure history.
+- **Next gate:** establish full Core/IRC/Ollama build and qualification receipts, source-to-installed revision mapping, concurrent dispatch and unregister/hotload behavior, identity and authority handling, bounded arguments/replies, and error delivery. Director's milestone acceptance is separate from observed test passes.
 
 - Existing ABI 1.5 `register_command`, `unregister_command`, and `invoke_service` are used for controller registration and Core dispatch.
 - New Core-owned ingress contract: `digit.router.dispatch`.
@@ -39,7 +40,7 @@
 ### Installation-integrity gate (2026-10-27)
 
 - The Ollama installed artifact did not match its built artifact and was owned by `root:root` instead of `digit:digit` in operator-provided evidence.
-- IRC and Ollama Makefiles now enforce user/group, compare built and installed bytes, and stage/rename binaries within the watched directory. Source committed; operator installation and activation unverified.
+- IRC and Ollama Makefiles now enforce user/group, compare built and installed bytes, and stage/rename binaries within the watched directory. Source committed; IRC 1.1.0 and Ollama 1.0.4 activation confirmed by operator. Post-install byte-hash and owner receipts were not supplied.
 - Capture `sha256sum`, `stat`, and module activation receipts; then re-run routed IRC tests. Do not infer an installed revision from GitHub source.
 
 ## Milestone 2 — Transport neutrality and end-to-end delivery
