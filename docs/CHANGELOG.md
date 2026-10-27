@@ -2,6 +2,13 @@
 
 This is the source-change record for Digit. Dates are source dates, not deployment or acceptance dates. Module versions are independent of Digit's agent release. A GitHub commit, successful compilation, or a module reconnect does not establish qualification or operator acceptance.
 
+## 2026-10-27 — Core hotload executable integration gate (source committed; run pending)
+
+- Added four independently compiled native-module fixtures (original, 9/10 unqualified update, qualified update with deliberately failing start, qualified successful update).
+- Added 20 runtime integration assertions in `tests/test_core_hotload.c` covering discovery, admission, rejection without disturbance, rollback to previous ACTIVE module after failed start, success update, uniqueness of registry/loader ownership, stopping, and audit evidence.
+- Connected `make test` to the executable integration harness. Its test-only staging directory is private and isolated; production Core staging remains unchanged.
+- **Limitations:** No host execution receipts yet, and concurrent in-flight command withdrawal and physical crash resilience are not covered. All code remains pending compile/test and operator qualification.
+
 ## 2026-10-27 — Executable Core unit behavior tests added (source committed, not run)
 
 - Added `tests/test_core_behavior.c` with 20 actual C behavior cases for Digit Root validation and Core policy decisions, including negative and escalation cases, and isolated audit-log verification.
