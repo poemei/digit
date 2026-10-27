@@ -36,7 +36,7 @@ ABI_OBJS := $(patsubst $(ABI_SRC_DIR)/%.c,$(BUILD_DIR)/abi/%.o,$(ABI_SRCS))
 OBJS := $(CORE_OBJS) $(ABI_OBJS)
 DEPS := $(OBJS:.o=.d)
 
-.PHONY: all clean install uninstall test test-contracts
+.PHONY: all clean install uninstall test test-contracts test-behavior
 all: $(TARGET)
 
 .PHONY: check-abi
@@ -59,13 +59,19 @@ $(BUILD_DIR)/abi/%.o: $(ABI_SRC_DIR)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
 
-# Source-contract checks are an early regression gate, not Core qualification.
-# Runtime/negative/failure-injection qualification is still separately required.
+# Unit-level C behavior tests are distinct from Core integration qualification.
+$(BUILD_DIR)/test_core_behavior: tests/test_core_behavior.c src/agent_root.c src/identity_digit.c src/core_policy.c src/logging.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $^
+
 test-contracts:
 	python3 -m unittest discover -s tests -p 'test_*.py' -v
 
-test: $(TARGET) test-contracts
-	@echo "Core source-contract checks complete; runtime Core qualification (minimum 20/20) remains required."
+test-behavior: $(BUILD_DIR)/test_core_behavior
+	./$(BUILD_DIR)/test_core_behavior
+
+test: $(TARGET) test-contracts test-behavior
+	@echo "Core source and unit behavior checks complete; full hotload/rollback integration qualification remains required."
 
 install: $(TARGET)
 	install -d $(BINDIR) $(LOGDIR) $(MODULEDIR) $(CONFIGDIR) $(STATEDIR)
