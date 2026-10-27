@@ -69,5 +69,5 @@ int main(void)
                 STNLABZ_MODULE_ERR_NOT_FOUND);
     printf("Core reentrant withdrawal: checks=%u passed=%u failed=%u\n",
            checks, passed, checks - passed);
-    return checks == 12U && checks == passed ? 0 : 1;
+    return checks == 13U && checks == passed ? 0 : 1;
 }
