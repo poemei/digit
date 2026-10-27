@@ -111,7 +111,12 @@ int s2_ingest_json(s2_register_t *state, const char *body, size_t bytes)
         (void)snprintf(existing->id, sizeof existing->id, "%s", id);
         existing->hash = digest;
         if (severity_qualifies(row)) incoming.qualifying++;
-        else if (!jstring(row, "severity")) incoming.missing_severity++;
+        else if (!jstring(row, "severity")) {
+            struct json_object *details = NULL;
+            if (!json_object_object_get_ex(row, "details", &details) ||
+                !details || !jstring(details, "severity"))
+                incoming.missing_severity++;
+        }
     }
     /* Malformed or conflicting evidence must not overwrite known cases. */
     if (incoming.invalid) goto done;
@@ -178,8 +183,12 @@ int s2_save_register(const s2_register_t *state, const char *path)
     for (i = 0; i < state->count; ++i)
         if (fprintf(f, "%s %016" PRIx64 "\n", state->cases[i].id,
                     state->cases[i].hash) < 0) break;
-    if (i != state->count || fflush(f) || fsync(fd) || fclose(f)) {
-        (void)unlink(temp); return 0;
+    {
+        int failed = i != state->count;
+        if (fflush(f) != 0) failed = 1;
+        if (fsync(fd) != 0) failed = 1;
+        if (fclose(f) != 0) failed = 1;
+        if (failed) { (void)unlink(temp); return 0; }
     }
     if (rename(temp, path)) { (void)unlink(temp); return 0; }
     return 1;
