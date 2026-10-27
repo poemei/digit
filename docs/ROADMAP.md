@@ -136,3 +136,7 @@ These are review items, not permission to enlarge the ABI or rewrite Core.
 ### Self-unregister deadlock correction
 
 2026-10-27: Director-authorized Core fix: module callback self-unregistration now fails immediately instead of deadlocking on its own in-flight counter. Added 12 executable service/command assertions in tests/test_core_self_unregister.c; make test-reentrant is included in make test. Source committed; compilation and operator results pending. Existing 23/23 threaded tests must be re-run because Core changed.
+
+## Concurrent hotload with an in-flight callback
+
+2026-10-27: Added `tests/test_core_hotload_inflight.c` with 15 real C integration assertions for concurrent replacement of a module whose service callback is blocked in flight. The fixture's `stop()` unregisters its service through Core; the test checks replacement waits, callback completion, loader and registry uniqueness, stale-route removal and successful replacement. Added `test-inflight` to mandatory `make test`. No production Core or ABI logic changed. New test has not been executed; host-side verification is required. This does not cover every shutdown implementation or crash scenario.
