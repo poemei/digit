@@ -1,43 +1,40 @@
-# Digit Research Module — 1.0.0
+# Digit Research Module — 1.0.1
 
-Digit ABI 1.5 module. This is **not** an ST-1 Mission Module. No Slack or external network research providers. Core unchanged.
+Native C module for Digit ABI 1.5. No ST-1 Mission dependency, Slack, IRC changes, or Core changes.
 
-## Scope
-Security, autonomous systems, software engineering, and space systems.
+## Correction in 1.0.1
 
-## Architecture
-- **Router:** existing Core command registry maps `research` to the module.
-- **Controller:** `src/research_module.c` owns request dispatch and view responses.
-- **Model:** `src/research_model.c` reads approved-location local text sources, without changing their contents.
-- **View:** command callback renders a cited excerpt, explicitly labeled UNVERIFIED.
-- **Database:** not used yet; no substitute intelligence or approval authority is created.
+Removed all chat-command registration. Version 1.0.0 incorrectly registered `research` as a command and assumed IRC would route conversational messages through the command registry. That assumption was not supported by runtime evidence.
 
-## Evidence input
-The operator may place UTF-8 `.txt` research materials in:
-- `/opt/digit/research/sources/security/`
-- `/opt/digit/research/sources/autonomous-systems/`
-- `/opt/digit/research/sources/software-engineering/`
-- `/opt/digit/research/sources/space-systems/`
+Research now registers only the standard ABI service `digit.research.lookup`. This does **not** add IRC routing or make Digit's conversational interface invoke research by itself. No such integration is claimed or silently patched.
 
-The module searches for literal text, not semantic similarity. The first matching source excerpt is returned as UNVERIFIED. It is **not** authorized Digit knowledge. Filenames are used for source citation. Nothing automatically trains or modifies Digit.
+## Typed ABI request and response
 
-## Build and test
+See `include/research_service.h`.
+
+- Input: `digit_research_request_t` with NUL-terminated `topic[64]` and `terms[512]`.
+- Output: `digit_research_response_t` with `text[512]` and `verified=0`.
+- Callers use the Core service registry's `invoke_service` function; modules must not bind one another directly.
+- Valid topics: `security`, `autonomous-systems`, `software-engineering`, `space-systems`.
+
+## Architecture and boundaries
+
+- Controller: `src/research_module.c` provides service entry and lifecycle.
+- Model: `src/research_model.c` searches local text evidence.
+- View: no IRC-specific or command-specific rendering; response is structured for a separate authorized caller.
+- Source root: `/opt/digit/research/sources/<topic>/*.txt`.
+- Source excerpts are always UNVERIFIED, never automatically treated as Digit's approved knowledge.
+- No automatic online research, scheduling, or source ingestion has been implemented.
+
+## Build and installation
+
 ```sh
 make -C modules/research clean all test
 sudo make -C modules/research install
 ```
 
-## Console acceptance
-Once the operator observes version 1.0.0 active, test:
-```text
-/research status
-/research topics
-/research security firmware
-/research mission test
-```
-Expected: status/topics, source-backed or UNKNOWN, then usage guidance. Exact command prefix depends on active console routing; observe the registered command.
+Then inspect Digit's module audit for `module=research` and `version=1.0.1`. Existing hotload/version qualification rules apply.
 
-## Known limitations
-This initial module is a safe, functional **local research retrieval boundary**, not autonomous online research. Live web collection, scheduling, source qualification, deduplication, structured research database, and ingestion approval require operator-defined source and authorization requirements. No claim that this module performs those activities.
+**Qualification note:** The standalone tests cover model parsing, filtering, and negative cases. They do not currently run an ABI host simulation for service registration, invocation, and unregistration. A successful build or hotload alone is not evidence of conversational integration or end-to-end research capability.
 
-No actual server build, Core admission, hotload, or end-to-end acceptance is established by committing files.
+No operational interaction with Rictus, and no changes to Core or IRC.
