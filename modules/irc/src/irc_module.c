@@ -20,8 +20,8 @@
 #include "irc_internal.h"
 
 #define IRC_VERSION_MAJOR 1U
-#define IRC_VERSION_MINOR 0U
-#define IRC_VERSION_PATCH 11U
+#define IRC_VERSION_MINOR 1U
+#define IRC_VERSION_PATCH 0U
 #define IRC_OUTBOUND_MAX 32U
 #define IRC_STARTUP_WAIT_SECONDS 30U
 
