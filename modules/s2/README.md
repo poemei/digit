@@ -1,4 +1,4 @@
-# Digit S2 — Sentinel Intelligence Module 1.0.1
+# Digit S2 — Sentinel Intelligence Module 1.0.2
 
 ## Scope
 
@@ -12,7 +12,7 @@ First operational collection milestone for Digit's **Cyber Security** mission: r
 - A registered `/s2` or `/s2 status` command reports the current observed register and last successful collection. No Publisher or Slack dependencies.
 - MEDIUM/HIGH/CRITICAL are considered qualifying only when source severity is explicitly present (top-level or `details`). The feed can omit severity; missing is reported, not invented.
 - No claim of compromise, malicious attribution, financial loss, or business impact from suspicious URLs, shared IP values, or resolver failures.
-- **No alert flood**: this version does not post unsolicited CISA comments or automatically send priority alerts.
+- **Noise control:** one baseline synopsis per successful startup, then a concise IRC channel update only when a later successful poll contains new or revised records. Unchanged four-hour polls remain silent. The /s2 command always remains available.
 
 ## Build and qualification
 
