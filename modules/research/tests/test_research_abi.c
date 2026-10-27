@@ -3,6 +3,9 @@
 #include "stnlabz_abi/module.h"
 #include "research_service.h"
 
+/* Module entry point is exported by research_module.c, not declared by the ABI header. */
+extern const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void);
+
 static stnlabz_module_service_handler_fn registered_handler;
 static void *registered_context;
 static unsigned int register_calls, unregister_calls;
