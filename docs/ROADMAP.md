@@ -25,6 +25,9 @@
 
 **State: Initial source implementation committed on 2026-10-27; NOT qualified or operator accepted.**
 
+- Operational evidence supplied on 2026-10-27: IRC 1.0.11 activated, while last observed Ollama activation was 1.0.3; zero replies to nine test messages. IRC source identity subsequently corrected to doctrine-compliant 1.1.0. Ollama source is 1.0.4, but its deployment has not been established.
+- **Next gate:** obtain activation receipts for IRC 1.1.0 and Ollama 1.0.4 and confirm running Core revision, then retest channel nick addressing and controller dispatch without treating missing replies as acceptance.
+
 - Existing ABI 1.5 `register_command`, `unregister_command`, and `invoke_service` are used for controller registration and Core dispatch.
 - New Core-owned ingress contract: `digit.router.dispatch`.
 - Core selects a registered destination; the module controller selects its own operation.
