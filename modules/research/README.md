@@ -35,6 +35,6 @@ sudo make -C modules/research install
 
 Then inspect Digit's module audit for `module=research` and `version=1.0.1`. Existing hotload/version qualification rules apply.
 
-**Qualification note:** The standalone tests cover model parsing, filtering, and negative cases. They do not currently run an ABI host simulation for service registration, invocation, and unregistration. A successful build or hotload alone is not evidence of conversational integration or end-to-end research capability.
+**Qualification note:** `make test` now includes `test_research_abi`, an isolated mock-host test of service registration, invocation, rejection of invalid requests, and unregistration. This is not a test of Digit's live Core registry, and does not establish conversational integration or autonomous research. The tests still require execution and evidence from the operator.
 
 No operational interaction with Rictus, and no changes to Core or IRC.
