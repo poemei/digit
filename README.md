@@ -2,9 +2,16 @@
 
 ## Architecture and authority
 
-Digit follows the ChAoS MVC structure with a **core**, **model**, **view**, and **controller** flow. Core responsibilities live in `core/`; standard `includes/` and `src/` directory structures are not permitted by this project.
+Digit follows the ChAoS MVC structure. Core responsibilities are routing and management
 
 **Core change control:** Nothing in Digit's Core may be changed, altered, or updated without direct consent from the Director of the Digit Project. Core qualification results do not replace this requirement.
+
+**Modules** run like an MVC module in the ChAoS-MVC:
+```
+controllers == module router
+models == module (llm/db/etc)
+views == optional and only used when required
+```
 
 ## DIGIT IS
 An Intelligent Autonomous Engineering and Management Asset
