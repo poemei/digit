@@ -19,6 +19,8 @@ typedef struct {
     char name[STNLABZ_MODULE_COMMAND_NAME_MAX];
     stnlabz_module_command_handler_fn handler;
     void *context;
+    unsigned int in_flight;
+    int withdrawing;
 } digit_command_entry_t;
 
 static digit_service_entry_t services[DIGIT_HOST_SERVICE_MAX];
@@ -108,6 +110,9 @@ static int unregister_service(const char *name, void *context)
     }
 }
 
+static stnlabz_module_result_t route_dispatch_service(
+    const void *, size_t, void *, size_t, size_t *, void *);
+
 static stnlabz_module_result_t invoke_service(
     const char *name,
     const void *request,
@@ -140,6 +145,9 @@ static stnlabz_module_result_t invoke_service(
     }
     unlock(&service_lock);
 
+    if (!handler && !strcmp(name, "digit.router.dispatch"))
+        return route_dispatch_service(request, request_size, response,
+                                      response_size, response_used, NULL);
     if (!handler) return STNLABZ_MODULE_ERR_NOT_FOUND;
 
     result = handler(request, request_size, response, response_size,
@@ -224,21 +232,104 @@ static int register_command(const char *name,
 
 static int unregister_command(const char *name, void *context)
 {
+    digit_command_entry_t *entry = NULL;
     size_t i;
-
     if (!name) return 0;
     lock(&command_lock);
     for (i = 0; i < DIGIT_HOST_COMMAND_MAX; ++i) {
-        if (commands[i].handler &&
+        if (commands[i].handler && !commands[i].withdrawing &&
             commands[i].context == context &&
             !strcmp(commands[i].name, name)) {
-            memset(&commands[i], 0, sizeof commands[i]);
-            unlock(&command_lock);
-            return 1;
+            commands[i].withdrawing = 1;
+            entry = &commands[i];
+            break;
         }
     }
     unlock(&command_lock);
-    return 0;
+    if (!entry) return 0;
+    for (;;) {
+        lock(&command_lock);
+        if (!entry->in_flight) {
+            memset(entry, 0, sizeof *entry);
+            unlock(&command_lock);
+            return 1;
+        }
+        unlock(&command_lock);
+    }
+}
+
+/* Core performs only named dispatch. Controller handlers own internal routing. */
+typedef struct {
+    char text[512];
+    int replied;
+} digit_route_reply_t;
+
+static int digit_route_capture(void *ctx, const char *message)
+{
+    digit_route_reply_t *out = ctx;
+    size_t len;
+    if (!out || !message || out->replied) return 0;
+    len = bounded_length(message, sizeof out->text);
+    if (!len || len >= sizeof out->text) return 0;
+    memcpy(out->text, message, len + 1U);
+    out->replied = 1;
+    return 1;
+}
+
+#define DIGIT_ROUTER_DISPATCH_SERVICE "digit.router.dispatch"
+
+static stnlabz_module_result_t dispatch_command(
+    const void *request, size_t request_size,
+    void *response, size_t response_size, size_t *response_used,
+    void *context)
+{
+    const stnlabz_module_command_t *cmd = request;
+    digit_route_reply_t *out = response;
+    stnlabz_module_command_handler_fn handler = NULL;
+    digit_command_entry_t *entry = NULL;
+    stnlabz_module_result_t result;
+    void *handler_context = NULL;
+    size_t i;
+    (void)context;
+    if (response_used) *response_used = 0U;
+    if (!cmd || request_size != sizeof *cmd || !out ||
+        response_size < sizeof *out ||
+        !memchr(cmd->name, 0, sizeof cmd->name) || !cmd->name[0] ||
+        !memchr(cmd->arguments, 0, sizeof cmd->arguments) ||
+        !memchr(cmd->sender, 0, sizeof cmd->sender) ||
+        !memchr(cmd->account, 0, sizeof cmd->account))
+        return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+    memset(out, 0, sizeof *out);
+    lock(&command_lock);
+    for (i = 0; i < DIGIT_HOST_COMMAND_MAX; ++i) {
+        if (commands[i].handler && !commands[i].withdrawing &&
+            !strcmp(commands[i].name, cmd->name)) {
+            entry = &commands[i];
+            entry->in_flight++;
+            handler = entry->handler;
+            handler_context = entry->context;
+            break;
+        }
+    }
+    unlock(&command_lock);
+    if (!handler) return STNLABZ_MODULE_ERR_NOT_FOUND;
+    result = handler(cmd, digit_route_capture, out, handler_context);
+    lock(&command_lock);
+    entry->in_flight--;
+    unlock(&command_lock);
+    if (result == STNLABZ_MODULE_OK && response_used)
+        *response_used = sizeof *out;
+    return result;
+}
+
+/* A Core-owned endpoint; no module has to register or know another module. */
+static stnlabz_module_result_t route_dispatch_service(
+    const void *request, size_t request_size,
+    void *response, size_t response_size, size_t *response_used,
+    void *context)
+{
+    return dispatch_command(request, request_size, response,
+                            response_size, response_used, context);
 }
 
 static const stnlabz_module_host_t host = {
