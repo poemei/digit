@@ -118,3 +118,7 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 
 - Operator execution reported 13/13 PASS, but the test executable returned failure because its final assertion incorrectly required exactly 12 checks.
 - Corrected `tests/test_core_self_unregister.c` to require exactly 13 passing checks. No production Core logic changed. Corrected harness still requires a rerun for a successful exit-status receipt.
+
+## Concurrent hotload with an in-flight callback
+
+2026-10-27: Added `tests/test_core_hotload_inflight.c` with 15 real C integration assertions for concurrent replacement of a module whose service callback is blocked in flight. The fixture's `stop()` unregisters its service through Core; the test checks replacement waits, callback completion, loader and registry uniqueness, stale-route removal and successful replacement. Added `test-inflight` to mandatory `make test`. No production Core or ABI logic changed. New test has not been executed; host-side verification is required. This does not cover every shutdown implementation or crash scenario.
