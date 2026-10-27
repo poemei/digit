@@ -113,3 +113,8 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 ## Core self-unregistration guard
 
 2026-10-27: Director-authorized Core fix: module callback self-unregistration now fails immediately instead of deadlocking on its own in-flight counter. Added 12 executable service/command assertions in tests/test_core_self_unregister.c; make test-reentrant is included in make test. Source committed; compilation and operator results pending. Existing 23/23 threaded tests must be re-run because Core changed.
+
+## 2026-10-27 — Reentrant test count correction
+
+- Operator execution reported 13/13 PASS, but the test executable returned failure because its final assertion incorrectly required exactly 12 checks.
+- Corrected `tests/test_core_self_unregister.c` to require exactly 13 passing checks. No production Core logic changed. Corrected harness still requires a rerun for a successful exit-status receipt.
