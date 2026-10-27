@@ -10,11 +10,12 @@
 
 #define OLLAMA_VERSION_MAJOR 1U
 #define OLLAMA_VERSION_MINOR 0U
-#define OLLAMA_VERSION_PATCH 3U
+#define OLLAMA_VERSION_PATCH 4U
 
 typedef struct { char *data; size_t used; size_t capacity; } buffer_t;
 static const stnlabz_module_host_t *owner;
 static int service_registered;
+static int command_registered;
 
 static size_t write_cb(void *contents,size_t size,size_t nmemb,void *ctx)
 {
@@ -72,6 +73,34 @@ static stnlabz_module_result_t generate(const void *request,size_t request_size,
  return STNLABZ_MODULE_OK;
 }
 
+/* This transport registers its own controller route. Core never chooses Ollama. */
+static stnlabz_module_result_t chat_controller(
+    const stnlabz_module_command_t *command,
+    stnlabz_module_command_reply_fn reply,
+    void *reply_context, void *handler_context)
+{
+    digit_llm_request_t in;
+    digit_llm_response_t out;
+    size_t used = 0U;
+    size_t len;
+    stnlabz_module_result_t result;
+    (void)handler_context;
+    if (!command || !reply ||
+        !memchr(command->arguments, 0, sizeof command->arguments))
+        return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+    len = strlen(command->arguments);
+    if (!len || len >= sizeof in.prompt)
+        return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+    memset(&in, 0, sizeof in);
+    memset(&out, 0, sizeof out);
+    memcpy(in.prompt, command->arguments, len + 1U);
+    result = generate(&in, sizeof in, &out, sizeof out, &used, NULL);
+    if (result != STNLABZ_MODULE_OK) return result;
+    if (used != sizeof out) return STNLABZ_MODULE_ERR_INVALID_STATE;
+    return reply(reply_context, out.text)
+        ? STNLABZ_MODULE_OK : STNLABZ_MODULE_ERR_INVALID_STATE;
+}
+
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
 {
  unsigned int e=0,p=0;int ne=0,np=0;int ok;
@@ -85,20 +114,33 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
 
 static stnlabz_module_result_t start(const stnlabz_module_host_t *h)
 {
- if(!h||!h->register_service||!h->unregister_service)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
- if(curl_global_init(CURL_GLOBAL_DEFAULT)!=CURLE_OK)return STNLABZ_MODULE_ERR_START_FAILED;
+ if(!h||!h->register_service||!h->unregister_service||
+    !h->register_command||!h->unregister_command)
+    return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ if(curl_global_init(CURL_GLOBAL_DEFAULT)!=CURLE_OK)
+    return STNLABZ_MODULE_ERR_START_FAILED;
  if(!h->register_service(DIGIT_LLM_GENERATE_SERVICE,generate,NULL)){
-  curl_global_cleanup();return STNLABZ_MODULE_ERR_START_FAILED;
+    curl_global_cleanup();return STNLABZ_MODULE_ERR_START_FAILED;
  }
- owner=h;service_registered=1;
- fprintf(stderr,"[OLLAMA] service active model=%s endpoint=%s\n",DIGIT_OLLAMA_MODEL,DIGIT_OLLAMA_ENDPOINT);
+ service_registered=1;
+ if(!h->register_command("chat",chat_controller,NULL)){
+    (void)h->unregister_service(DIGIT_LLM_GENERATE_SERVICE,NULL);
+    service_registered=0;curl_global_cleanup();
+    return STNLABZ_MODULE_ERR_START_FAILED;
+ }
+ command_registered=1;owner=h;
+ fprintf(stderr,"[OLLAMA] service active model=%s endpoint=%s\n",
+         DIGIT_OLLAMA_MODEL,DIGIT_OLLAMA_ENDPOINT);
  return STNLABZ_MODULE_OK;
 }
 
 static stnlabz_module_result_t stop(void)
 {
+ if(command_registered&&owner)
+   (void)owner->unregister_command("chat",NULL);
+ command_registered=0;
  if(service_registered&&owner)
-  (void)owner->unregister_service(DIGIT_LLM_GENERATE_SERVICE,NULL);
+   (void)owner->unregister_service(DIGIT_LLM_GENERATE_SERVICE,NULL);
  service_registered=0;owner=NULL;curl_global_cleanup();
  return STNLABZ_MODULE_OK;
 }
