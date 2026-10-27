@@ -1,4 +1,4 @@
-# Digit S2 — Sentinel Intelligence Module 1.0.2
+# Digit S2 — Sentinel Intelligence Module 1.0.3
 
 ## Scope
 
@@ -32,3 +32,5 @@ Installation, module activation, and live end-to-end acceptance are **not** esta
 This **first collection milestone** maintains case identities, changed-source signatures, and summary counts. It does NOT yet archive the full original source payload per event, generate case-level investigative narratives, correlate independent log sources, or call Ollama's `digit.llm.generate` service. These are additional requirements of the established S2 mission, not features claimed to be implemented. It also does not establish Sentinel API feed freshness or completeness: those must be verified against live runtime results.
 
 The reporting command displays aggregate evidence only, not an incident verdict. Source timestamp timezone and top-level versus details IP roles remain unresolved until authoritative schema clarification. Avoid deploying for final incident adjudication on this version.
+
+The `/s2` status command renders last successful collection in `YYYY-MM-DD HH:MM:SS UTC`, not Unix epoch seconds. No collection or notification cadence change.
