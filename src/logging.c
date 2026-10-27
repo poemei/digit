@@ -103,7 +103,7 @@ int stnlabz_log_event(const char *component,const char *event,const char *detail
                 strstr(event,"DENIED")||strstr(event,"ERROR");
             written=fprintf(destination,"%s MODULE %s sequence=%lu module=%s%s%s%s%s\n",
                 stamp,event,module_sequence,id,version[0]?" version=":"",version,
-                failure&&detail?" evidence=":"",failure&&detail?detail:"");
+                (failure||!strcmp(event,"QUALIFICATION_GREEN"))&&detail?" evidence=":"",(failure||!strcmp(event,"QUALIFICATION_GREEN"))&&detail?detail:"");
         }
     }else{
         written=fprintf(destination,"%s %s %s%s%s\n",
