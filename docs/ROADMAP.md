@@ -47,7 +47,7 @@ Approval of this ROADMAP establishes its governance and development direction. I
 
 ## Milestone 0 — Continuity baseline
 
-**State: Documentation established; operator review pending.**
+**State: Continuity baseline documented; Director's 2026-10-27 Roadmap approval recorded below. Acceptance of individual engineering milestones remains separate.**
 
 - Maintain `docs/CHANGELOG.md` (what actually changed) and this `docs/ROADMAP.md` (gates, remaining work, and decisions).
 - Keep module version, Core revision, source commit, build evidence, qualification, installation, runtime results, and operator acceptance distinct.
@@ -56,11 +56,11 @@ Approval of this ROADMAP establishes its governance and development direction. I
 
 ## Milestone 1 — Core Router and module controller handoff
 
-**State: Initial source committed; three targeted operator live tests PASSED on 2026-10-27. Broader qualification and final operator acceptance pending.**
+**State: Core clean build and full configured test suite PASSED on 2026-10-27; revised Core installed and reported operational by Director. IRC 1.1.0 and Ollama 1.0.4 module activations also confirmed. Independent final acceptance for each broader transport requirement remains separate.**
 
 - Operational evidence supplied on 2026-10-27: IRC 1.0.11 activated, while last observed Ollama activation was 1.0.3; zero replies to nine test messages. IRC source identity subsequently corrected to doctrine-compliant 1.1.0. Ollama source is 1.0.4, but its deployment has not been established.
 - **Subsequent operator receipts:** IRC 1.1.0 AUTO_ACTIVE at 16:32:15 UTC; Ollama 1.0.4 AUTO_ACTIVE at 16:43:14 UTC. `digicat: Hello` and `digicat: /chat Hello` both returned replies. `digicat: /unknown test` produced ABI `NOT_FOUND` (result=5) in IRC logs. These supersede the earlier unverified-deployment state without erasing the failure history.
-- **Next gate:** establish full Core/IRC/Ollama build and qualification receipts, source-to-installed revision mapping, concurrent dispatch and unregister/hotload behavior, identity and authority handling, bounded arguments/replies, and error delivery. Director's milestone acceptance is separate from observed test passes.
+- **Updated evidence:** Director reported `make clean && make && make test` PASS on current Core checkout and confirmed installed/operational status. Earlier individual suites passed: 20/20 static source contracts (not behavioral), 20/20 executable Root/policy, 20/20 hotload integration, 23/23 concurrency, 13/13 self-unregister, 15/15 in-flight replacement; 111/111 combined checks of mixed types. IRC 1.1.0 and Ollama 1.0.4 qualification/activation receipts were also supplied (20/20 and 10/10 respectively, with negative tests). Remaining: installed-artifact provenance as needed; broader identity/authority, bounded route error delivery, and explicit Director acceptance.
 
 - Existing ABI 1.5 `register_command`, `unregister_command`, and `invoke_service` are used for controller registration and Core dispatch.
 - New Core-owned ingress contract: `digit.router.dispatch`.
@@ -80,34 +80,34 @@ Approval of this ROADMAP establishes its governance and development direction. I
 
 - Source correction committed: incumbent shared object retained until replacement activation succeeds; rollback attempts reactivate incumbent on candidate activation failure.
 - New and updated module qualification events record test-count and negative-test evidence in `modules.log`.
-- **Critical acceptance gate:** full latest Core qualification (minimum 20/20), module regression tests (minimum 10/10 each), candidate activation-failure injection with incumbent restoration, no stale command handlers, correct loader ownership, and zero-warning target build. Source changes are unverified and not deployed.
+- **Updated gate evidence:** Core behavioral and hotload suites subsequently passed, including candidate activation-failure rollback, loader ownership, stale-route removal and in-flight replacement checks. Director reported consolidated clean-build/full-suite PASS, followed by successful Core installation and operation. A zero-warning `-Werror` build and all possible live module stop/fault scenarios have not been separately evidenced.
 - Director controls activation of the revised Core.
 
 ### Concurrent routing and withdrawal verification (2026-10-27)
 
 - Threaded service and command tests now use the actual Core host to verify that unregister waits for active callbacks, removes routes and permits safe slot reuse.
-- `make test-concurrency` is wired into `make test`; operator execution evidence is pending.
-- Open: self-unregistration reentrancy, module-defined stop behavior, and end-to-end concurrent hotload with calls in flight.
+- `make test-concurrency` is wired into `make test`; Director subsequently reported 23/23 PASS, followed by consolidated `make clean && make && make test` PASS.
+- Self-unregister protection subsequently passed 13/13 and in-flight hotload replacement 15/15; broader module-defined stop behavior under arbitrary live workloads remains separate.
 
 ### Hotload integration test audit correction (2026-10-27)
 
 - Operator observed 19/20 integration results. Actual replacement, rollback, and loader assertions passed; only an audit test falsely expected suppressed success-detail text.
-- Assertion now requires two emitted `HOTLOAD_ACTIVE` events. Re-run is required before marking 20/20; source change only, no production behavior change.
+- Assertion now requires two emitted `HOTLOAD_ACTIVE` events. Director subsequently confirmed 20/20 PASS; the preceding 19/20 report is retained as failure history.
 
 ### Core hotload executable integration tests (2026-10-27)
 
 - Four real `.so` candidate fixtures and 20 executable integration assertions now exercise Core's actual qualification rejection, candidate activation failure, incumbent rollback, successful replacement and log evidence.
-- `make test` runs these alongside Root/policy unit tests and source contracts. Tests are not yet executed or qualified; concurrent dispatch and actual hotload under load require separate checks.
+- `make test` runs these alongside Root/policy and source-contract tests. Director subsequently confirmed hotload 20/20 PASS, concurrent routing 23/23 PASS, and in-flight hotload 15/15 PASS, plus consolidated clean-build/full-suite PASS.
 
 ### Executable Core unit behavioral tests (2026-10-27)
 
-- `make test` now also compiles/runs 20 C unit behavior cases for Root and policy evaluation (positive and negative paths); execution receipts pending.
+- `make test` compiles/runs 20 C unit behavior cases for Root and policy evaluation (positive and negative paths); Director subsequently confirmed 20/20 PASS and later consolidated test PASS.
 - Full module lifecycle/hotload regression and fault injection still required. Unit counts cannot substitute for all applicable Core qualification requirements.
 
 ### Core test infrastructure restoration (2026-10-27)
 
 - Root `make test` now builds Core and invokes 20 source-contract regression checks; `docs/CORE_QUALIFICATION.md` restored.
-- **Not qualified:** these static source checks cannot count as the mandatory minimum 20 behavioral Core tests. A genuine executable suite and failure-injection / safe hotload testing remain open. No 20/20 acceptance claim.
+- **Classification preserved:** the 20 source-contract checks are static and do not count as the mandatory behavioral Core minimum. Separate 20/20 executable Root/policy behavior and further executable integration suites subsequently passed, including a consolidated clean build/test receipt.
 
 ## Milestone 2 — Transport neutrality and end-to-end delivery
 
@@ -132,9 +132,9 @@ Approval of this ROADMAP establishes its governance and development direction. I
 
 ## Milestone 4 — Operational module integration
 
-**State: Future; each module requires its own authorization.**
+**State: S2 Sentinel collection operational and operator-demonstrated in IRC; full S2 investigation restoration remains open. Research and Publish integrations remain deferred and separately authorized.**
 
-- Examine Research, S2, and Publish against their actual interfaces and requirements; do not assume unimplemented routes exist.
+- S2 `modules/s2` v1.0.3 is now installed/operational per Director: Sentinel HTTPS collection, durable source-ID register, four-hour polling, `/s2` status with readable UTC timestamp, and a change-gated scheduled IRC synopsis implementation. Research and Publish remain separate work; do not assume unimplemented routes exist.
 - Passive Research or S2 work must not depend on someone typing an IRC command.
 - Optional views are appropriate for detailed Markdown reports and publishing formats.
 - Report generation, destination selection, and transport delivery remain distinct responsibilities.
@@ -164,19 +164,27 @@ These are review items, not permission to enlarge the ABI or rewrite Core.
 
 ## Core self-unregistration guard
 
-2026-10-27: Director-authorized Core fix: module callback self-unregistration now fails immediately instead of deadlocking on its own in-flight counter. Added 12 executable service/command assertions in tests/test_core_self_unregister.c; make test-reentrant is included in make test. Source committed; compilation and operator results pending. Existing 23/23 threaded tests must be re-run because Core changed.
+2026-10-27: Director-authorized Core fix: module callback self-unregistration now fails immediately instead of deadlocking on its own in-flight counter. `make test-reentrant` is included in `make test`. Originally described as 12 assertions; actual corrected harness reports 13/13 PASS. Director also reported consolidated clean-build/full-suite PASS after this correction.
 
 ### Self-unregister deadlock correction
 
-2026-10-27: Director-authorized Core fix: module callback self-unregistration now fails immediately instead of deadlocking on its own in-flight counter. Added 12 executable service/command assertions in tests/test_core_self_unregister.c; make test-reentrant is included in make test. Source committed; compilation and operator results pending. Existing 23/23 threaded tests must be re-run because Core changed.
+2026-10-27: Director-authorized Core fix: module callback self-unregistration now fails immediately instead of deadlocking on its own in-flight counter. `make test-reentrant` is included in `make test`. Originally described as 12 assertions; actual corrected harness reports 13/13 PASS. Director also reported consolidated clean-build/full-suite PASS after this correction.
 
 ## Concurrent hotload with an in-flight callback
 
-2026-10-27: Added `tests/test_core_hotload_inflight.c` with 15 real C integration assertions for concurrent replacement of a module whose service callback is blocked in flight. The fixture's `stop()` unregisters its service through Core; the test checks replacement waits, callback completion, loader and registry uniqueness, stale-route removal and successful replacement. Added `test-inflight` to mandatory `make test`. No production Core or ABI logic changed. New test has not been executed; host-side verification is required. This does not cover every shutdown implementation or crash scenario.
+2026-10-27: Added `tests/test_core_hotload_inflight.c` with 15 real C integration assertions for concurrent replacement of a module whose service callback is blocked in flight. The fixture's `stop()` unregisters its service through Core; the test checks replacement waits, callback completion, loader and registry uniqueness, stale-route removal and successful replacement. Added `test-inflight` to mandatory `make test`. No production Core or ABI logic changed. Director subsequently confirmed 15/15 PASS and consolidated clean-build/full-suite PASS. This does not cover every shutdown implementation or crash scenario.
 
 ## S2 Sentinel collection milestone — 2026-10-27
 
-2026-10-27 — Director-authorized S2 Cyber Security collection milestone: added native `modules/s2` v1.0.0. Source reads the documented Sentinel JSON `https://api.stn-labz.com/threats`, polls autonomously at 900-second intervals, tracks cases by source ID and content signature, atomically persists the register, and exposes `/s2` aggregate status. Source covers missing severity explicitly; it does not infer compromise. Includes ten internal qualification assertions plus an independent persistence test, and owner-verified staged installation. Dependencies: libcurl, json-c and pthreads. **Source only. Build/test, module qualification, installation, live Sentinel ingestion and operator acceptance NOT yet performed.** Full source evidence/event history, investigative correlation and Ollama-assisted narrative are not yet implemented; do not claim the full S2 mission is restored. No Core or shared ABI touched.
+2026-10-27 — Director-authorized S2 Cyber Security collection milestone: native `modules/s2` first introduced as v1.0.0, retrieving Sentinel JSON from `https://api.stn-labz.com/threats`, tracking source IDs and content signatures, atomically persisting case register, and serving `/s2`. Director reported 10/10 module qualification, 1/1 negative, persistence integration PASS, successful installation, and first live collection of 756 source records (563 explicit MEDIUM/HIGH/CRITICAL). Historical bulk import is not newly occurring attacks. v1.0.1 changed the collection cadence from 900 seconds to **14,400 seconds (four hours)**; operator logs showed 756 unchanged records on the next snapshot. v1.0.2 added automatic baseline IRC synopsis and change-gated updates using Core-mediated `digit.transport.channel.send`; operator confirmed qualification 10/10, negative 1/1, `AUTO_ACTIVE` and `HOTLOAD_ACTIVE`. Automatic unsolicited IRC delivery itself is **not yet independently confirmed** by an IRC receipt. v1.0.3 replaced `/s2` Unix epoch reporting with a readable UTC collection timestamp; operator supplied the working response `2026-10-27 19:10:30 UTC`. Full source evidence/event history, independent correlation, investigative findings and Ollama-assisted narratives remain unimplemented and are not represented as restored. No Core or shared ABI changes for S2.
+
+## Qualification and operational evidence snapshot — 2026-10-27
+
+- **Core:** Director reported clean source build and full configured `make test` PASS; revised Core installed and operational. Six suites individually passed: 20 static source checks; 20 executable Root/policy; 20 executable hotload; 23 threaded routing; 13 self-unregister; and 15 in-flight hotload = **111/111 total checks**. Static checks are not counted as behavioral tests.
+- **IRC / Ollama:** IRC 1.1.0 operator qualification 20/20 (negative 1/1) and Ollama 1.0.4 qualification 10/10 (negative 1/1), with activation observed.
+- **S2:** Version 1.0.3 status successfully retrieved through IRC: 756 Sentinel source records, 0 new, 0 revised, 756 unchanged, 563 MEDIUM/HIGH/CRITICAL and 0 missing severity; last successful collection **2026-10-27 19:10:30 UTC**. The four-hour collection schedule is active. This proves collection and on-demand report delivery, not incident outcomes or automatic push-to-channel delivery.
+- **Further S2 mission work:** evidence-rich investigation histories, independent source correlation, severity-change analysis, corroboration, Ollama-assisted investigative summaries and verification of autonomous IRC delivery. No Publisher or Slack dependency is required for Sentinel ingestion.
+- **Governance:** operator-provided technical receipts do not silently grant future development, production changes, incident confirmation, or blanket milestone acceptance. Existing Roadmap approval block is preserved verbatim below.
 
 ## Approval
 - **Name**: P.Mei
