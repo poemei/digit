@@ -2,6 +2,12 @@
 
 This is the source-change record for Digit. Dates are source dates, not deployment or acceptance dates. Module versions are independent of Digit's agent release. A GitHub commit, successful compilation, or a module reconnect does not establish qualification or operator acceptance.
 
+## 2026-10-27 — Concurrent Core routing withdrawal test coverage
+
+- Added threaded `tests/test_core_concurrency.c` exercising registered service and command handlers while a separate thread unregisters them, including in-flight completion, blocking withdrawal, removal, slot reuse and no post-withdrawal dispatch.
+- Added `test-concurrency` to mandatory `make test`, using pthreads and the real `src/module_host.c` implementation.
+- These tests do not emulate uncooperative third-party modules, self-unregistration, or a complete concurrent hotload sequence. All new concurrency checks are source committed and **not executed** as of this entry.
+
 ## 2026-10-27 — Hotload integration audit assertion correction
 
 - Operator ran the integration harness: 19/20 assertions passed. The only failure was the test expecting `replacement_active` in the operator module log.
