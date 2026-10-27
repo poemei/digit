@@ -7,7 +7,7 @@
 #include "module_host.h"
 #include "digit_route.h"
 
-static atomic_int entered, release_handler, finished, unregister_done;
+static atomic_int entered, release_handler, finished, unregister_done, withdrawal_started;
 static atomic_int calls, starts;
 static const stnlabz_module_host_t *host;
 static int service_context, command_context;
@@ -62,6 +62,7 @@ static void reset(void)
     atomic_store(&release_handler, 0);
     atomic_store(&finished, 0);
     atomic_store(&unregister_done, 0);
+    atomic_store(&withdrawal_started, 0);
     atomic_store(&calls, 0);
     atomic_store(&starts, 0);
 }
@@ -87,6 +88,7 @@ static void *withdraw_service(void *unused)
 {
     int ok;
     (void)unused;
+    atomic_store(&withdrawal_started, 1);
     ok = host->unregister_service("test.concurrent", &service_context);
     atomic_store(&unregister_done, ok ? 1 : -1);
     return NULL;
@@ -95,6 +97,7 @@ static void *withdraw_command(void *unused)
 {
     int ok;
     (void)unused;
+    atomic_store(&withdrawal_started, 1);
     ok = host->unregister_command("concurrent", &command_context);
     atomic_store(&unregister_done, ok ? 1 : -1);
     return NULL;
@@ -125,6 +128,7 @@ static void run_case(int use_command)
         (void)pthread_join(worker, NULL);
         return;
     }
+    CHECK("withdrawal thread started", wait_for(&withdrawal_started, 1));
     /* Wait for the registration to be marked withdrawing. The caller must
        remain blocked until the in-flight handler completes. */
     {
@@ -169,5 +173,5 @@ int main(void)
     run_case(1);
     printf("Core concurrent routing: checks=%u passed=%u failed=%u\n",
            checks, passed, checks - passed);
-    return checks >= 19U && checks == passed ? 0 : 1;
+    return checks >= 23U && checks == passed ? 0 : 1;
 }
