@@ -50,6 +50,12 @@
 - **Critical acceptance gate:** full latest Core qualification (minimum 20/20), module regression tests (minimum 10/10 each), candidate activation-failure injection with incumbent restoration, no stale command handlers, correct loader ownership, and zero-warning target build. Source changes are unverified and not deployed.
 - Director controls activation of the revised Core.
 
+### Concurrent routing and withdrawal verification (2026-10-27)
+
+- Threaded service and command tests now use the actual Core host to verify that unregister waits for active callbacks, removes routes and permits safe slot reuse.
+- `make test-concurrency` is wired into `make test`; operator execution evidence is pending.
+- Open: self-unregistration reentrancy, module-defined stop behavior, and end-to-end concurrent hotload with calls in flight.
+
 ### Hotload integration test audit correction (2026-10-27)
 
 - Operator observed 19/20 integration results. Actual replacement, rollback, and loader assertions passed; only an audit test falsely expected suppressed success-detail text.
