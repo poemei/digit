@@ -74,7 +74,7 @@ delivery remains channel-specific, and IRC line sanitization remains in IRC.
 This change requires synchronized Core and IRC installation; no independent
 deployment or live acceptance has been verified.
 
-## v1.0.11 — Core Router handoff (2026-10-27)
+## v1.1.0 — Core Router handoff (2026-10-27)
 
 Removed direct IRC-to-Ollama dispatch. Incoming addressed text now enters the
 Core Router via the existing ABI service-invocation callback. IRC transport
