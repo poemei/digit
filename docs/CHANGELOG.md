@@ -2,6 +2,13 @@
 
 This is the source-change record for Digit. Dates are source dates, not deployment or acceptance dates. Module versions are independent of Digit's agent release. A GitHub commit, successful compilation, or a module reconnect does not establish qualification or operator acceptance.
 
+## 2026-10-27 — Protected Core hotload rollback correction (source committed; qualification pending)
+
+- Director-authorized Core correction in `src/core_hotload.c`: candidate qualification remains isolated; the incumbent shared library is now retained through candidate activation. On candidate activation failure, Core attempts to restore the previously qualified incumbent descriptor and reactivate it, recording `HOTLOAD_ROLLBACK_ACTIVE` or `HOTLOAD_ROLLBACK_FAILED`. This is best-effort rollback, not proof of uninterrupted service.
+- Qualification evidence now records candidate SHA, executed/passed/failed counts, negative-executed/negative-passed counts, and ABI result for new and updated modules; `src/logging.c` retains the evidence even on `QUALIFICATION_GREEN` in `/opt/digit/logs/modules.log`.
+- **Limitations:** no target-host build or Core 20/20 test suite executed here. No rollback failure-injection test or deployed acceptance evidence has been established. Current source is NOT qualified for deployment without the required tests. Remaining concerns include candidate activation cleanup on partial failures, concurrent unload safety, and rollback failure scenarios.
+- No shared ABI, IRC or Ollama source changed.
+
 ## 2026-10-27 — Live IRC routing evidence (operator observed; full qualification pending)
 
 - **Module activation receipts:** IRC `1.1.0` activated at 16:32:15 UTC; Ollama `1.0.4` activated at 16:43:14 UTC.
