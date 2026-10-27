@@ -149,6 +149,7 @@ These are review items, not permission to enlarge the ABI or rewrite Core.
 - **Name**: P.Mei
 - **Section**: Operations
 - **Position**: Founder/CEO
+- **Company**: STN-Labz, LLC.
 - **Project**: Digit
-- **Date/TIme**: 20261027:1830Z
+- **Date/Time**: 20261027:1830Z
 - **Status**: Approved
