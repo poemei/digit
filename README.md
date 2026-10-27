@@ -1,5 +1,11 @@
 # Digit
 
+## Project continuity
+
+- [CHANGELOG](docs/CHANGELOG.md) — recorded source changes and evidence status.
+- [ROADMAP](docs/ROADMAP.md) — development milestones, qualification gates, open decisions, and operator acceptance.
+
+
 ## Architecture and authority
 
 Digit follows the ChAoS MVC structure. Core responsibilities are routing and management
