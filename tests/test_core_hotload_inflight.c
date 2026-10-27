@@ -161,5 +161,5 @@ cleanup:
     (void)unlink(target); (void)unlink(corelog); (void)unlink(modlog);
     (void)rmdir(module_dir); (void)rmdir(modules); (void)rmdir(staging); (void)rmdir(dir);
     printf("Core inflight hotload: checks=%u passed=%u failed=%u\n",checks,passed,checks-passed);
-    return checks == 13U && passed == checks ? 0 : 1;
+    return checks == 15U && passed == checks ? 0 : 1;
 }
