@@ -58,7 +58,7 @@ Digit watches `/opt/digit/modules/`. A new or changed `/opt/digit/modules/<modul
 
 ## Conversational handoff
 
-IRC remains the transport owner. When the `rictus.llm.generate` (legacy ABI service name) service is
+IRC remains the transport owner. When the `digit.llm.generate` service is
 available, the IRC module forwards only:
 
 - private messages sent directly to Digit
