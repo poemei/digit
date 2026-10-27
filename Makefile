@@ -36,7 +36,7 @@ ABI_OBJS := $(patsubst $(ABI_SRC_DIR)/%.c,$(BUILD_DIR)/abi/%.o,$(ABI_SRCS))
 OBJS := $(CORE_OBJS) $(ABI_OBJS)
 DEPS := $(OBJS:.o=.d)
 
-.PHONY: all clean install uninstall test test-contracts test-behavior
+.PHONY: all clean install uninstall test test-contracts test-behavior test-hotload
 all: $(TARGET)
 
 .PHONY: check-abi
@@ -70,8 +70,37 @@ test-contracts:
 test-behavior: $(BUILD_DIR)/test_core_behavior
 	./$(BUILD_DIR)/test_core_behavior
 
-test: $(TARGET) test-contracts test-behavior
-	@echo "Core source and unit behavior checks complete; full hotload/rollback integration qualification remains required."
+# Test fixtures are compiled as separate real shared objects. Test staging,
+# module installation and log files remain under a disposable private /tmp tree.
+HOTLOAD_FIXTURES := $(addprefix $(BUILD_DIR)/fixtures/,old.so badqual.so badstart.so good.so)
+HOTLOAD_TEST_SRCS := src/core_hotload.c src/core_activation.c src/core_policy.c src/agent_root.c src/identity_digit.c src/logging.c
+HOTLOAD_ABI_SRCS := $(addprefix $(ABI_SRC_DIR)/,abi.c module.c module_registry.c loader_linux.c)
+
+$(BUILD_DIR)/fixtures/old.so: tests/fixtures/hotload_fixture.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared -DFIXTURE_VERSION=0 -o $@ $<
+
+$(BUILD_DIR)/fixtures/badqual.so: tests/fixtures/hotload_fixture.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared -DFIXTURE_VERSION=1 -DFIXTURE_BAD_QUAL=1 -o $@ $<
+
+$(BUILD_DIR)/fixtures/badstart.so: tests/fixtures/hotload_fixture.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared -DFIXTURE_VERSION=1 -DFIXTURE_BAD_START=1 -o $@ $<
+
+$(BUILD_DIR)/fixtures/good.so: tests/fixtures/hotload_fixture.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared -DFIXTURE_VERSION=2 -o $@ $<
+
+$(BUILD_DIR)/test_core_hotload: tests/test_core_hotload.c $(HOTLOAD_TEST_SRCS) $(HOTLOAD_ABI_SRCS)
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -DDIGIT_HOTLOAD_TEST_STAGE=1 -o $@ $^ $(LDLIBS)
+
+test-hotload: $(BUILD_DIR)/test_core_hotload $(HOTLOAD_FIXTURES)
+	./$(BUILD_DIR)/test_core_hotload $(HOTLOAD_FIXTURES)
+
+test: $(TARGET) test-contracts test-behavior test-hotload
+	@echo "Core source, C behavior, and real shared-object hotload integration checks complete; operator acceptance and additional concurrency qualification remain separate."
 
 install: $(TARGET)
 	install -d $(BINDIR) $(LOGDIR) $(MODULEDIR) $(CONFIGDIR) $(STATEDIR)
