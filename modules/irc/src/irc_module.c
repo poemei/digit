@@ -27,8 +27,8 @@
 
 typedef struct {
     int private_message;
-    char target[RICTUS_TRANSPORT_TARGET_MAX];
-    char message[RICTUS_TRANSPORT_MESSAGE_MAX];
+    char target[DIGIT_TRANSPORT_TARGET_MAX];
+    char message[DIGIT_TRANSPORT_MESSAGE_MAX];
 } irc_outbound_t;
 
 static pthread_t worker;
@@ -39,8 +39,8 @@ static atomic_int online;
 static int worker_started;
 static int services_registered;
 static const stnlabz_module_host_t *module_host;
-static rictus_irc_config_t config;
-static char channels[2][RICTUS_IRC_CHANNEL_MAX];
+static digit_irc_config_t config;
+static char channels[2][DIGIT_IRC_CHANNEL_MAX];
 static unsigned int channel_count;
 static irc_outbound_t outbound[IRC_OUTBOUND_MAX];
 static size_t outbound_head;
@@ -158,7 +158,7 @@ static int ssl_write_all(SSL *ssl, const char *data, size_t length)
 
 static int send_line(SSL *ssl, const char *line)
 {
-    char buffer[RICTUS_IRC_LINE_MAX + 3U];
+    char buffer[DIGIT_IRC_LINE_MAX + 3U];
     int written;
     if (!ssl || !line) return 0;
     written = snprintf(buffer, sizeof buffer, "%s\r\n", line);
@@ -176,10 +176,10 @@ static int queue_outbound(int private_message,
 
     if (!message || !*message || !atomic_load(&online)) return 0;
     message_length = strlen(message);
-    if (message_length >= RICTUS_TRANSPORT_MESSAGE_MAX) return 0;
+    if (message_length >= DIGIT_TRANSPORT_MESSAGE_MAX) return 0;
     if (!target || !*target) return 0;
     target_length = strlen(target);
-    if (target_length >= RICTUS_TRANSPORT_TARGET_MAX) return 0;
+    if (target_length >= DIGIT_TRANSPORT_TARGET_MAX) return 0;
 
     if (pthread_mutex_lock(&outbound_lock) != 0) return 0;
     if (outbound_count >= IRC_OUTBOUND_MAX) {
@@ -202,7 +202,7 @@ static int flush_outbound(SSL *ssl)
 {
     for (;;) {
         irc_outbound_t item;
-        char line[RICTUS_IRC_LINE_MAX];
+        char line[DIGIT_IRC_LINE_MAX];
         int written;
 
         if (pthread_mutex_lock(&outbound_lock) != 0) return 0;
@@ -229,7 +229,7 @@ static stnlabz_module_result_t channel_send_service(
     void *response, size_t response_size, size_t *response_used,
     void *handler_context)
 {
-    const rictus_transport_channel_request_t *message = request;
+    const digit_transport_channel_request_t *message = request;
     (void)response;
     (void)response_size;
     (void)handler_context;
@@ -246,7 +246,7 @@ static stnlabz_module_result_t private_send_service(
     void *response, size_t response_size, size_t *response_used,
     void *handler_context)
 {
-    const rictus_transport_private_request_t *message = request;
+    const digit_transport_private_request_t *message = request;
     (void)response;
     (void)response_size;
     (void)handler_context;
@@ -263,12 +263,12 @@ static int register_transport_services(const stnlabz_module_host_t *host)
 {
     if (!host || !host->register_service || !host->unregister_service)
         return 0;
-    if (!host->register_service(RICTUS_TRANSPORT_CHANNEL_SEND_SERVICE,
+    if (!host->register_service(DIGIT_TRANSPORT_CHANNEL_SEND_SERVICE,
                                 channel_send_service, NULL))
         return 0;
-    if (!host->register_service(RICTUS_TRANSPORT_PRIVATE_SEND_SERVICE,
+    if (!host->register_service(DIGIT_TRANSPORT_PRIVATE_SEND_SERVICE,
                                 private_send_service, NULL)) {
-        (void)host->unregister_service(RICTUS_TRANSPORT_CHANNEL_SEND_SERVICE, NULL);
+        (void)host->unregister_service(DIGIT_TRANSPORT_CHANNEL_SEND_SERVICE, NULL);
         return 0;
     }
     services_registered = 1;
@@ -279,8 +279,8 @@ static int register_transport_services(const stnlabz_module_host_t *host)
 static void unregister_transport_services(void)
 {
     if (!services_registered || !module_host) return;
-    (void)module_host->unregister_service(RICTUS_TRANSPORT_PRIVATE_SEND_SERVICE, NULL);
-    (void)module_host->unregister_service(RICTUS_TRANSPORT_CHANNEL_SEND_SERVICE, NULL);
+    (void)module_host->unregister_service(DIGIT_TRANSPORT_PRIVATE_SEND_SERVICE, NULL);
+    (void)module_host->unregister_service(DIGIT_TRANSPORT_CHANNEL_SEND_SERVICE, NULL);
     services_registered = 0;
     module_host = NULL;
 }
@@ -313,13 +313,13 @@ static void sanitize_irc_text(char *text)
 
 static void handle_conversation_message(const char *line)
 {
-    char sender[RICTUS_IRC_NICK_MAX];
-    char target[RICTUS_IRC_CHANNEL_MAX];
-    char message[RICTUS_LLM_PROMPT_MAX];
+    char sender[DIGIT_IRC_NICK_MAX];
+    char target[DIGIT_IRC_CHANNEL_MAX];
+    char message[DIGIT_LLM_PROMPT_MAX];
     const char *prompt = NULL;
     int private_message = 0;
-    rictus_llm_request_t request;
-    rictus_llm_response_t response;
+    digit_llm_request_t request;
+    digit_llm_response_t response;
     size_t prompt_length;
     size_t response_used = 0U;
     stnlabz_module_result_t result;
@@ -328,7 +328,7 @@ static void handle_conversation_message(const char *line)
         status("PRIVMSG rejected: LLM invocation host unavailable");
         return;
     }
-    if (!rictus_irc_parse_privmsg(line,
+    if (!digit_irc_parse_privmsg(line,
                                   sender, sizeof sender,
                                   target, sizeof target,
                                   message, sizeof message)) {
@@ -358,7 +358,7 @@ static void handle_conversation_message(const char *line)
     memcpy(request.prompt, prompt, prompt_length + 1U);
 
     status("addressed message received; invoking LLM service");
-    result = module_host->invoke_service(RICTUS_LLM_GENERATE_SERVICE,
+    result = module_host->invoke_service(DIGIT_LLM_GENERATE_SERVICE,
                                          &request, sizeof request,
                                          &response, sizeof response,
                                          &response_used);
@@ -396,7 +396,7 @@ static int send_authenticate_plain(SSL *ssl)
     size_t length;
     size_t offset = 0U;
 
-    if (!rictus_irc_build_plain(config.account, config.password,
+    if (!digit_irc_build_plain(config.account, config.password,
                                 encoded, sizeof encoded)) return 0;
     length = strlen(encoded);
     while (offset < length) {
@@ -453,7 +453,7 @@ static int handle_line(SSL *ssl, const char *line, int *sasl_seen,
     char command[32];
     const char *params;
 
-    if (!rictus_irc_line_command(line, command, sizeof command, &params)) return 1;
+    if (!digit_irc_line_command(line, command, sizeof command, &params)) return 1;
     if (!strcmp(command, "ERROR")) {
         status("IRC server closed session (ERROR); text redacted");
         return 0;
@@ -470,7 +470,7 @@ static int handle_line(SSL *ssl, const char *line, int *sasl_seen,
     }
 
     if (!strcmp(command, "PING")) {
-        char response[RICTUS_IRC_LINE_MAX];
+        char response[DIGIT_IRC_LINE_MAX];
         int written = snprintf(response, sizeof response, "PONG %s", params);
         return written >= 0 && (size_t)written < sizeof response && send_line(ssl, response);
     }
@@ -530,7 +530,7 @@ static int handle_line(SSL *ssl, const char *line, int *sasl_seen,
         *registered = 1;
         /* JOIN accepts a comma-separated channel list on IRC. */
         if (*authenticated && !*join_sent) {
-            char join[RICTUS_IRC_CHANNEL_MAX + 8U];
+            char join[DIGIT_IRC_CHANNEL_MAX + 8U];
             int written = snprintf(join, sizeof join, "JOIN %s", config.channel);
             if (written < 0 || (size_t)written >= sizeof join || !send_line(ssl, join))
                 return 0;
@@ -564,7 +564,7 @@ static int handle_line(SSL *ssl, const char *line, int *sasl_seen,
         unsigned int i;
         for (i = 0U; i < channel_count; ++i) {
             if (channel_in_params(params, channels[i])) {
-                char join[RICTUS_IRC_CHANNEL_MAX + 8U];
+                char join[DIGIT_IRC_CHANNEL_MAX + 8U];
                 int written = snprintf(join, sizeof join, "JOIN %s", channels[i]);
                 if (written < 0 || (size_t)written >= sizeof join) return 0;
                 *joined &= ~(1U << i);
@@ -577,7 +577,7 @@ static int handle_line(SSL *ssl, const char *line, int *sasl_seen,
     }
 
     if (*registered && *authenticated && !*join_sent) {
-        char join[RICTUS_IRC_CHANNEL_MAX + 8U];
+        char join[DIGIT_IRC_CHANNEL_MAX + 8U];
         int written = snprintf(join, sizeof join, "JOIN %s", config.channel);
         if (written < 0 || (size_t)written >= sizeof join || !send_line(ssl, join))
             return 0;
@@ -621,12 +621,12 @@ static int run_session(void)
 
     if (!send_line(ssl, "CAP LS 302")) goto done;
     {
-        char line[RICTUS_IRC_NICK_MAX + 8U];
+        char line[DIGIT_IRC_NICK_MAX + 8U];
         int written = snprintf(line, sizeof line, "NICK %s", config.nick);
         if (written < 0 || (size_t)written >= sizeof line || !send_line(ssl, line)) goto done;
     }
     {
-        char line[RICTUS_IRC_NICK_MAX + 64U];
+        char line[DIGIT_IRC_NICK_MAX + 64U];
         int written = snprintf(line, sizeof line, "USER %s 0 * :STN-LABZ Digit", config.nick);
         if (written < 0 || (size_t)written >= sizeof line || !send_line(ssl, line)) goto done;
     }
@@ -674,7 +674,7 @@ static int run_session(void)
 
         while ((newline = strstr(receive_buffer, "\r\n")) != NULL) {
             size_t line_length = (size_t)(newline - receive_buffer);
-            char line[RICTUS_IRC_LINE_MAX];
+            char line[DIGIT_IRC_LINE_MAX];
             size_t consumed = line_length + 2U;
             if (line_length >= sizeof line) goto done;
             memcpy(line, receive_buffer, line_length);
@@ -738,7 +738,7 @@ static stnlabz_module_result_t irc_qualify(stnlabz_module_qualification_result_t
 
     if (!result) return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
     memset(result, 0, sizeof *result);
-    ok = rictus_irc_run_selftests(&executed, &passed,
+    ok = digit_irc_run_selftests(&executed, &passed,
                                   &negative_executed, &negative_passed);
     result->tests_executed = executed;
     result->tests_passed = passed;
@@ -757,19 +757,19 @@ static stnlabz_module_result_t irc_start(const stnlabz_module_host_t *host)
         status("ABI communication host unavailable");
         return STNLABZ_MODULE_ERR_START_FAILED;
     }
-    if (!rictus_irc_config_load(RICTUS_IRC_ENV_PATH, &config)) {
+    if (!digit_irc_config_load(DIGIT_IRC_ENV_PATH, &config)) {
         status("credential/config load failed");
         unregister_transport_services();
         return STNLABZ_MODULE_ERR_START_FAILED;
     }
     if (!configure_channels()) {
         status("duplicate or invalid channel list");
-        rictus_irc_config_clear(&config);
+        digit_irc_config_clear(&config);
         unregister_transport_services();
         return STNLABZ_MODULE_ERR_START_FAILED;
     }
     if (OPENSSL_init_ssl(0, NULL) != 1) {
-        rictus_irc_config_clear(&config);
+        digit_irc_config_clear(&config);
         unregister_transport_services();
         return STNLABZ_MODULE_ERR_START_FAILED;
     }
@@ -780,7 +780,7 @@ static stnlabz_module_result_t irc_start(const stnlabz_module_host_t *host)
     atomic_store(&online, 0);
 
     if (pthread_create(&worker, NULL, irc_worker, NULL) != 0) {
-        rictus_irc_config_clear(&config);
+        digit_irc_config_clear(&config);
         unregister_transport_services();
         return STNLABZ_MODULE_ERR_START_FAILED;
     }
@@ -803,7 +803,7 @@ static stnlabz_module_result_t irc_start(const stnlabz_module_host_t *host)
     (void)pthread_join(worker, NULL);
     worker_started = 0;
     reset_outbound();
-    rictus_irc_config_clear(&config);
+    digit_irc_config_clear(&config);
     unregister_transport_services();
     return STNLABZ_MODULE_ERR_START_FAILED;
 }
@@ -819,7 +819,7 @@ static stnlabz_module_result_t irc_stop(void)
     worker_started = 0;
     atomic_store(&online, 0);
     reset_outbound();
-    rictus_irc_config_clear(&config);
+    digit_irc_config_clear(&config);
     unregister_transport_services();
     status("transport worker stopped");
     return STNLABZ_MODULE_OK;
