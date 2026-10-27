@@ -1,4 +1,4 @@
-# Digit S2 — Sentinel Intelligence Module 1.0.0
+# Digit S2 — Sentinel Intelligence Module 1.0.1
 
 ## Scope
 
