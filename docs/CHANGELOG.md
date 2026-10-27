@@ -2,6 +2,12 @@
 
 This is the source-change record for Digit. Dates are source dates, not deployment or acceptance dates. Module versions are independent of Digit's agent release. A GitHub commit, successful compilation, or a module reconnect does not establish qualification or operator acceptance.
 
+## 2026-10-27 — Core regression entrypoint restored (not full qualification)
+
+- Director-authorized correction: added `tests/test_core_contracts.py` with 20 independently named source-contract regression checks covering root, logging, qualification, authorization, hotload and rollback safeguards.
+- Restored `make test` in the root Makefile to build Core and run these checks; created the previously missing `docs/CORE_QUALIFICATION.md`.
+- **Important distinction:** source-contract checks are not executable Core behavioral qualification and do not satisfy the mandatory 20/20 requirement. Runtime test suites and failure-injection coverage are still missing, and no target-host build, test run or qualification evidence was collected here.
+
 ## 2026-10-27 — Protected Core hotload rollback correction (source committed; qualification pending)
 
 - Director-authorized Core correction in `src/core_hotload.c`: candidate qualification remains isolated; the incumbent shared library is now retained through candidate activation. On candidate activation failure, Core attempts to restore the previously qualified incumbent descriptor and reactivate it, recording `HOTLOAD_ROLLBACK_ACTIVE` or `HOTLOAD_ROLLBACK_FAILED`. This is best-effort rollback, not proof of uninterrupted service.
