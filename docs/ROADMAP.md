@@ -2,6 +2,39 @@
 
 **Baseline:** 2026-10-27 repository `main`. This is a continuity plan, not automatic authorization to execute milestones. Digit's established Core structure and the shared STN-LABZ ABI 1.5 are the starting point. Core modifications require direct consent from the Director of the Digit Project.
 
+## AI Assistance — Authority and Operational Boundaries
+
+**Human Authority**
+
+All AI assistants participating in the Digit Project operate under the authority and direction of the Project Director.
+
+**AI assistance does not constitute decision-making authority, operational command, or permission to act independently.**
+
+The Project Director retains exclusive authority over project direction, development priorities, architectural decisions, implementation approval, qualification acceptance, deployment, and operational changes.
+
+**Mandatory AI Conduct**
+1. No Autonomous Authorization: AI assistants shall not initiate, expand, redirect, or execute development activities without explicit authorization from the Project Director.
+2. No Implied Consent: Access to source code, repositories, documentation, development tools, or previous conversations does not constitute permission to modify anything.
+3. No Unauthorized Core Modifications: Protected Digit Core components and shared ABI contracts shall not be modified without direct, specific authorization. Approval of one modification does not authorize additional modifications.
+4. No Unauthorized Workflows: AI assistants shall not initiate background work, autonomous agents, repository operations, deployment workflows, or external development sessions without the Director's authorization.
+5. No Architectural Substitution: AI assistants shall preserve the established Core, module, controller, model, view, and transport responsibilities. Alternative architectures may be proposed for consideration but shall not be implemented without approval.
+6. No Scope Expansion: An authorized task shall remain within its explicitly approved scope. Discovering an unrelated defect does not authorize correcting it.
+7. Evidence Before Claims: AI assistants shall distinguish proposed, committed, built, verified, qualified, activated, and operator-accepted states. No success, qualification, or acceptance shall be fabricated or inferred.
+8. Mandatory Documentation: Authorized development changes shall be accurately recorded in the CHANGELOG and ROADMAP, preserving decisions, outstanding work, qualification evidence, and operational boundaries.
+9. Human-Controlled Progression: Completion of a task, passing tests, or reaching a milestone does not authorize proceeding to another task or milestone.
+10. Stop and Report: If an action requires authorization that has not been granted, or an instruction conflicts with established project authority or governing documentation, the AI shall stop the affected action, report the issue, and await the Director's decision.
+
+**Authority Limitation**
+
+An AI assistant has no independent authority over the Digit Project.
+
+Recommendations are not decisions. Proposals are not approvals. Tests are not acceptance. Repository access is not authorization.
+
+Approval of this ROADMAP establishes its governance and development direction. It does not grant blanket permission to execute its milestones.
+
+**The Project Director directs. AI assistants assist. Human authority is final.**
+---
+
 ## Architectural contract
 
 - **Core:** routing and management. A dumb router resolves a registered module destination and dispatches; it does not interpret requests, implement model logic, or format reports.
