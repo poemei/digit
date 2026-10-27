@@ -251,6 +251,21 @@ static int qualify_isolated(const char *id,
     return result == STNLABZ_MODULE_OK;
 }
 
+static void log_qualification(const char *id, const char *sha,
+                              const stnlabz_module_qualification_result_t *q,
+                              stnlabz_module_result_t result)
+{
+    char detail[512];
+    (void)snprintf(detail, sizeof detail,
+        "module=%.63s candidate_sha256=%.64s result=%d executed=%u passed=%u failed=%u negative_executed=%d negative_passed=%d",
+        id, sha, (int)result, q->tests_executed, q->tests_passed,
+        q->tests_failed, q->negative_test_executed, q->negative_test_passed);
+    (void)stnlabz_log_event("MODULE",
+        result == STNLABZ_MODULE_OK ? "QUALIFICATION_GREEN" : "QUALIFICATION_FAILED",
+        detail);
+    (void)stnlabz_log_sync();
+}
+
 static void admit_new(stnlabz_hotload_t *watch, const char *id,
                       const char *binary, const char *sha)
 {
@@ -282,8 +297,12 @@ static void admit_new(stnlabz_hotload_t *watch, const char *id,
     result = stnlabz_module_registry_discover(watch->registry, descriptor);
     if (result == STNLABZ_MODULE_OK)
         result = stnlabz_module_registry_verify(watch->registry, id);
-    if (result == STNLABZ_MODULE_OK)
+    if (result == STNLABZ_MODULE_OK) {
         result = stnlabz_module_registry_qualify(watch->registry, id);
+        record = (stnlabz_module_record_t *)
+            stnlabz_module_registry_find(watch->registry, id);
+        if (record) log_qualification(id, sha, &record->qualification, result);
+    }
     if (result != STNLABZ_MODULE_OK) {
         mark_rejected(watch, id, sha, "qualification_failed");
         goto rollback;
@@ -331,52 +350,79 @@ static void replace_active(stnlabz_hotload_t *watch, const char *id,
     char staged[1400], staged_sha[65];
     stnlabz_module_loader_t candidate;
     const stnlabz_module_descriptor_t *descriptor = NULL;
-    stnlabz_module_qualification_result_t qualification = {0};
+    const stnlabz_module_descriptor_t *old_descriptor;
+    const stnlabz_loaded_module_t *old_loaded;
     const stnlabz_module_record_t *current;
+    stnlabz_module_qualification_result_t qualification = {0};
+    stnlabz_module_qualification_result_t old_qualification;
+    stnlabz_module_registry_t isolated;
     stnlabz_module_result_t result;
+    stnlabz_loaded_module_t *reserved;
     observed_t *entry;
-    int live_owned = 0;
+    size_t capacity;
+    int candidate_registered = 0;
 
-    /*
-     * ABI hot replacement rule:
-     * preflight the candidate before disturbing the ACTIVE incumbent.
-     */
     if (!snapshot(binary, staged, sizeof staged, staged_sha)) {
         mark_rejected(watch, id, sha, "candidate_snapshot_failed");
         return;
     }
     if (strcmp(sha, staged_sha)) {
         log_result("HOTLOAD_FAILED", id, sha, "candidate_changed_during_snapshot");
-        unlink(staged);
+        (void)unlink(staged);
         return;
     }
-
     stnlabz_module_loader_init(&candidate);
     if (stnlabz_module_loader_load(&candidate, id, staged, &descriptor) !=
         STNLABZ_MODULE_LOADER_OK) {
         mark_rejected(watch, id, sha, "candidate_load_failed");
         goto done;
     }
-
     if (!version_newer(known, descriptor)) {
         mark_rejected(watch, id, sha, "version_not_incremented_or_regressed");
         goto done;
     }
 
-    if (!qualify_isolated(id, descriptor, &qualification)) {
+    stnlabz_module_registry_init(&isolated);
+    result = stnlabz_module_registry_discover(&isolated, descriptor);
+    if (result == STNLABZ_MODULE_OK)
+        result = stnlabz_module_registry_verify(&isolated, id);
+    if (result == STNLABZ_MODULE_OK)
+        result = stnlabz_module_registry_qualify(&isolated, id);
+    current = stnlabz_module_registry_find(&isolated, id);
+    if (current) qualification = current->qualification;
+    log_qualification(id, sha, &qualification, result);
+    stnlabz_module_registry_destroy(&isolated);
+    if (result != STNLABZ_MODULE_OK) {
         mark_rejected(watch, id, sha, "qualification_failed_incumbent_retained");
         goto done;
     }
 
     current = stnlabz_module_registry_find(watch->registry, id);
-    if (!current || current->state != STNLABZ_MODULE_STATE_ACTIVE) {
-        mark_rejected(watch, id, sha, "incumbent_not_active");
+    old_loaded = stnlabz_module_loader_find(watch->loader, id);
+    if (!current || current->state != STNLABZ_MODULE_STATE_ACTIVE ||
+        !old_loaded || !old_loaded->descriptor) {
+        mark_rejected(watch, id, sha, "incumbent_not_available");
         goto done;
+    }
+    old_descriptor = old_loaded->descriptor;
+    old_qualification = current->qualification;
+
+    /* Reserve space for candidate ownership before stopping incumbent. */
+    if (watch->loader->count == watch->loader->capacity) {
+        capacity = watch->loader->capacity ?
+            watch->loader->capacity * 2U : 16U;
+        reserved = realloc(watch->loader->modules, capacity * sizeof *reserved);
+        if (!reserved) {
+            mark_rejected(watch, id, sha, "candidate_ownership_capacity_failed");
+            goto done;
+        }
+        watch->loader->modules = reserved;
+        watch->loader->capacity = capacity;
     }
 
     /*
-     * Candidate is GREEN. Cross the ABI replacement boundary in order:
-     * ACTIVE -> STOPPED -> UNREGISTERED -> old shared object unloaded.
+     * The old shared object stays loaded until candidate activation succeeds.
+     * If activation fails, restore the incumbent using its retained descriptor.
      */
     if (!stnlabz_core_stop(watch->registry, id)) {
         mark_rejected(watch, id, sha, "incumbent_stop_failed");
@@ -385,48 +431,34 @@ static void replace_active(stnlabz_hotload_t *watch, const char *id,
     if (stnlabz_module_registry_unregister(watch->registry, id) !=
         STNLABZ_MODULE_OK) {
         mark_rejected(watch, id, sha, "incumbent_unregister_failed");
-        goto done;
+        goto restore;
     }
-    if (stnlabz_module_loader_unload(watch->loader, id) !=
-        STNLABZ_MODULE_LOADER_OK) {
-        mark_rejected(watch, id, sha, "incumbent_unload_failed");
-        goto done;
-    }
-
-    /*
-     * The candidate handle was loaded only for preflight. Transfer ownership
-     * to the live loader after the old revision has crossed UNREGISTERED.
-     */
-    if (!take_loaded_module(watch->loader, &candidate)) {
-        mark_rejected(watch, id, sha, "candidate_loader_ownership_failed");
-        goto done;
-    }
-    live_owned = 1;
-
     result = stnlabz_module_registry_discover(watch->registry, descriptor);
+    if (result == STNLABZ_MODULE_OK) candidate_registered = 1;
     if (result == STNLABZ_MODULE_OK)
         result = stnlabz_module_registry_verify(watch->registry, id);
     if (result == STNLABZ_MODULE_OK)
         result = stnlabz_module_registry_restore_qualification(
             watch->registry, id, &qualification);
     if (result == STNLABZ_MODULE_OK)
-        result = stnlabz_core_activate_qualified(
-            watch->registry, id, watch->host);
-
+        result = stnlabz_core_activate_qualified(watch->registry, id, watch->host);
     if (result != STNLABZ_MODULE_OK) {
-        if (stnlabz_module_registry_find(watch->registry, id)) {
-            const stnlabz_module_record_t *failed =
-                stnlabz_module_registry_find(watch->registry, id);
-            if (failed && failed->state == STNLABZ_MODULE_STATE_ACTIVE)
-                (void)stnlabz_core_stop(watch->registry, id);
-            (void)stnlabz_module_registry_unregister(watch->registry, id);
-        }
-        if (live_owned)
-            (void)stnlabz_module_loader_unload(watch->loader, id);
         mark_rejected(watch, id, sha, "replacement_activation_failed");
-        goto done;
+        goto restore;
     }
 
+    /* Capacity was reserved; take candidate ownership before retiring old. */
+    if (!take_loaded_module(watch->loader, &candidate)) {
+        log_result("HOTLOAD_FAILED", id, sha, "candidate_ownership_failed");
+        /* An active module must not be unloaded even if transfer fails. */
+        candidate.count = 0U;
+        goto done;
+    }
+    if (stnlabz_module_loader_unload(watch->loader, id) !=
+        STNLABZ_MODULE_LOADER_OK) {
+        log_result("HOTLOAD_FAILED", id, sha, "incumbent_unload_failed");
+        goto done;
+    }
     entry = ensure_seen(watch, id);
     if (entry) {
         (void)snprintf(entry->active_sha, sizeof entry->active_sha, "%s", sha);
@@ -436,10 +468,38 @@ static void replace_active(stnlabz_hotload_t *watch, const char *id,
         entry->patch = descriptor->version_patch;
     }
     log_result("HOTLOAD_ACTIVE", id, sha, "replacement_active");
+    goto done;
+
+restore:
+    if (candidate_registered) {
+        const stnlabz_module_record_t *failed =
+            stnlabz_module_registry_find(watch->registry, id);
+        if (failed && failed->state == STNLABZ_MODULE_STATE_ACTIVE)
+            (void)stnlabz_core_stop(watch->registry, id);
+        (void)stnlabz_module_registry_unregister(watch->registry, id);
+    }
+    current = stnlabz_module_registry_find(watch->registry, id);
+    if (current && current->state == STNLABZ_MODULE_STATE_STOPPED) {
+        result = stnlabz_core_activate_qualified(watch->registry, id, watch->host);
+    } else {
+        result = stnlabz_module_registry_discover(watch->registry, old_descriptor);
+        if (result == STNLABZ_MODULE_OK)
+            result = stnlabz_module_registry_verify(watch->registry, id);
+        if (result == STNLABZ_MODULE_OK)
+            result = stnlabz_module_registry_restore_qualification(
+                watch->registry, id, &old_qualification);
+        if (result == STNLABZ_MODULE_OK)
+            result = stnlabz_core_activate_qualified(
+                watch->registry, id, watch->host);
+    }
+    log_result(result == STNLABZ_MODULE_OK ?
+               "HOTLOAD_ROLLBACK_ACTIVE" : "HOTLOAD_ROLLBACK_FAILED",
+               id, sha, result == STNLABZ_MODULE_OK ?
+               "incumbent_restored" : "incumbent_restoration_failed");
 
 done:
     stnlabz_module_loader_unload_all(&candidate);
-    unlink(staged);
+    (void)unlink(staged);
 }
 
 static void scan(stnlabz_hotload_t *watch)
