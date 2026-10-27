@@ -128,3 +128,11 @@
 - How to validate unload safety, concurrency, and failures before expanding the contract.
 
 These are review items, not permission to enlarge the ABI or rewrite Core.
+
+## Core self-unregistration guard
+
+2026-10-27: Director-authorized Core fix: module callback self-unregistration now fails immediately instead of deadlocking on its own in-flight counter. Added 12 executable service/command assertions in tests/test_core_self_unregister.c; make test-reentrant is included in make test. Source committed; compilation and operator results pending. Existing 23/23 threaded tests must be re-run because Core changed.
+
+### Self-unregister deadlock correction
+
+2026-10-27: Director-authorized Core fix: module callback self-unregistration now fails immediately instead of deadlocking on its own in-flight counter. Added 12 executable service/command assertions in tests/test_core_self_unregister.c; make test-reentrant is included in make test. Source committed; compilation and operator results pending. Existing 23/23 threaded tests must be re-run because Core changed.
