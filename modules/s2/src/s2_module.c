@@ -91,7 +91,7 @@ static int collect_once(void)
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 20L);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, on_bytes);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "Digit-S2/1.0.2");
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "Digit-S2/1.0.3");
     result = curl_easy_perform(curl);
     if (result == CURLE_OK) curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
     curl_easy_cleanup(curl);
@@ -164,15 +164,21 @@ static stnlabz_module_result_t s2_command(
     stnlabz_module_command_reply_fn reply, void *reply_context, void *ctx)
 {
     char output[480];
+    char collected_at[48] = "never";
+    struct tm utc;
     (void)ctx;
     if (!cmd || !reply) return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
     if (cmd->arguments[0] && strcmp(cmd->arguments, "status"))
         return reply(reply_context, "S2 supports /s2 and /s2 status.")
             ? STNLABZ_MODULE_OK : STNLABZ_MODULE_ERR_INVALID_STATE;
     pthread_mutex_lock(&mutex);
-    (void)snprintf(output, sizeof output, "[S2] %s Last successful collection epoch=%lld. "
+    if (last_success > (time_t)0 && gmtime_r(&last_success, &utc) &&
+        strftime(collected_at, sizeof collected_at,
+                 "%Y-%m-%d %H:%M:%S UTC", &utc) == 0U)
+        (void)snprintf(collected_at, sizeof collected_at, "unavailable");
+    (void)snprintf(output, sizeof output, "[S2] %s Last successful collection: %s. "
         "Case counts measure source records, not attacks.",
-        last_result, (long long)last_success);
+        last_result, collected_at);
     pthread_mutex_unlock(&mutex);
     return reply(reply_context, output) ? STNLABZ_MODULE_OK :
         STNLABZ_MODULE_ERR_INVALID_STATE;
@@ -231,7 +237,7 @@ static stnlabz_module_result_t stop(void)
     return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor = {
-    "s2", "Digit S2 Security Intelligence", 1, 0, 2,
+    "s2", "Digit S2 Security Intelligence", 1, 0, 3,
     STNLABZ_MODULE_API_MAJOR, STNLABZ_MODULE_API_MINOR,
     qualify, start, stop
 };
