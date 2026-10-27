@@ -14,7 +14,7 @@ static int ascii_equal_nocase(const char *left, const char *right, size_t length
     return 1;
 }
 
-int rictus_irc_line_command(const char *line, char *command, size_t command_size,
+int digit_irc_line_command(const char *line, char *command, size_t command_size,
                             const char **params_out)
 {
     const char *p;
@@ -45,7 +45,7 @@ int rictus_irc_line_command(const char *line, char *command, size_t command_size
     return 1;
 }
 
-int rictus_irc_word_present(const char *text, const char *word)
+int digit_irc_word_present(const char *text, const char *word)
 {
     size_t word_length;
     const char *p;
@@ -69,7 +69,7 @@ int rictus_irc_word_present(const char *text, const char *word)
 }
 
 
-int rictus_irc_parse_privmsg(const char *line,
+int digit_irc_parse_privmsg(const char *line,
                              char *sender, size_t sender_size,
                              char *target, size_t target_size,
                              char *message, size_t message_size)
@@ -120,10 +120,10 @@ int rictus_irc_parse_privmsg(const char *line,
     return 1;
 }
 
-int rictus_irc_build_plain(const char *account, const char *password,
+int digit_irc_build_plain(const char *account, const char *password,
                            char *output, size_t output_size)
 {
-    unsigned char plain[RICTUS_IRC_ACCOUNT_MAX + RICTUS_IRC_PASSWORD_MAX + 2U];
+    unsigned char plain[DIGIT_IRC_ACCOUNT_MAX + DIGIT_IRC_PASSWORD_MAX + 2U];
     size_t account_length;
     size_t password_length;
     size_t plain_length;
@@ -134,8 +134,8 @@ int rictus_irc_build_plain(const char *account, const char *password,
         return 0;
     account_length = strlen(account);
     password_length = strlen(password);
-    if (account_length >= RICTUS_IRC_ACCOUNT_MAX ||
-        password_length >= RICTUS_IRC_PASSWORD_MAX) return 0;
+    if (account_length >= DIGIT_IRC_ACCOUNT_MAX ||
+        password_length >= DIGIT_IRC_PASSWORD_MAX) return 0;
 
     plain[0] = '\0';
     memcpy(plain + 1U, account, account_length);
@@ -160,7 +160,7 @@ static int expect(int condition, unsigned int *executed, unsigned int *passed)
     return 0;
 }
 
-int rictus_irc_run_selftests(unsigned int *executed, unsigned int *passed,
+int digit_irc_run_selftests(unsigned int *executed, unsigned int *passed,
                              int *negative_executed, int *negative_passed)
 {
     char command[32];
@@ -172,47 +172,47 @@ int rictus_irc_run_selftests(unsigned int *executed, unsigned int *passed,
     int neg_e = 0;
     int neg_p = 0;
 
-    expect(rictus_irc_line_command("PING :abc", command, sizeof command, &params) &&
+    expect(digit_irc_line_command("PING :abc", command, sizeof command, &params) &&
            !strcmp(command, "PING") && !strcmp(params, ":abc"), &e, &p);
-    expect(rictus_irc_line_command(":server 903 rictus :SASL successful",
+    expect(digit_irc_line_command(":server 903 digit :SASL successful",
            command, sizeof command, &params) && !strcmp(command, "903"), &e, &p);
-    expect(rictus_irc_line_command(":server CAP rictus LS :multi-prefix sasl",
+    expect(digit_irc_line_command(":server CAP digit LS :multi-prefix sasl",
            command, sizeof command, &params) && !strcmp(command, "CAP"), &e, &p);
-    expect(rictus_irc_word_present("multi-prefix sasl account-tag", "sasl"), &e, &p);
-    expect(rictus_irc_word_present("SASL", "sasl"), &e, &p);
-    expect(!rictus_irc_word_present("nosaslhere", "sasl"), &e, &p);
-    expect(rictus_irc_build_plain("u", "p", encoded, sizeof encoded) &&
+    expect(digit_irc_word_present("multi-prefix sasl account-tag", "sasl"), &e, &p);
+    expect(digit_irc_word_present("SASL", "sasl"), &e, &p);
+    expect(!digit_irc_word_present("nosaslhere", "sasl"), &e, &p);
+    expect(digit_irc_build_plain("u", "p", encoded, sizeof encoded) &&
            !strcmp(encoded, "AHUAcA=="), &e, &p);
-    expect(!rictus_irc_build_plain("", "p", encoded, sizeof encoded), &e, &p);
-    expect(!rictus_irc_build_plain("u", "", encoded, sizeof encoded), &e, &p);
-    expect(!rictus_irc_line_command("", command, sizeof command, &params), &e, &p);
-    expect(rictus_irc_line_command(":s NOTICE r :hello",
+    expect(!digit_irc_build_plain("", "p", encoded, sizeof encoded), &e, &p);
+    expect(!digit_irc_build_plain("u", "", encoded, sizeof encoded), &e, &p);
+    expect(!digit_irc_line_command("", command, sizeof command, &params), &e, &p);
+    expect(digit_irc_line_command(":s NOTICE r :hello",
            command, sizeof command, &params) && !strcmp(command, "NOTICE"), &e, &p);
-    expect(rictus_irc_word_present("sasl=PLAIN,EXTERNAL", "sasl"), &e, &p);
-    expect(rictus_irc_parse_privmsg(":PoeMei!u@h PRIVMSG #stn-labz :rictus: status", sender, sizeof sender, target, sizeof target, message, sizeof message) && !strcmp(sender, "PoeMei") && !strcmp(target, "#stn-labz") && !strcmp(message, "rictus: status"), &e, &p);
-    expect(rictus_irc_parse_privmsg(":PoeMei!u@h PRIVMSG rictus :hello", sender, sizeof sender, target, sizeof target, message, sizeof message) && !strcmp(target, "rictus") && !strcmp(message, "hello"), &e, &p);
-    expect(rictus_irc_line_command("@account=PoeMei :PoeMei!u@h PRIVMSG #stn-labz :rictus: who are you?", command, sizeof command, &params) && !strcmp(command, "PRIVMSG"), &e, &p);
-    expect(rictus_irc_parse_privmsg("@account=PoeMei :PoeMei!u@h PRIVMSG #stn-labz :rictus: who are you?", sender, sizeof sender, target, sizeof target, message, sizeof message) && !strcmp(sender, "PoeMei") && !strcmp(target, "#stn-labz") && !strcmp(message, "rictus: who are you?"), &e, &p);
+    expect(digit_irc_word_present("sasl=PLAIN,EXTERNAL", "sasl"), &e, &p);
+    expect(digit_irc_parse_privmsg(":PoeMei!u@h PRIVMSG #stn-labz :digit: status", sender, sizeof sender, target, sizeof target, message, sizeof message) && !strcmp(sender, "PoeMei") && !strcmp(target, "#stn-labz") && !strcmp(message, "digit: status"), &e, &p);
+    expect(digit_irc_parse_privmsg(":PoeMei!u@h PRIVMSG digit :hello", sender, sizeof sender, target, sizeof target, message, sizeof message) && !strcmp(target, "digit") && !strcmp(message, "hello"), &e, &p);
+    expect(digit_irc_line_command("@account=PoeMei :PoeMei!u@h PRIVMSG #stn-labz :digit: who are you?", command, sizeof command, &params) && !strcmp(command, "PRIVMSG"), &e, &p);
+    expect(digit_irc_parse_privmsg("@account=PoeMei :PoeMei!u@h PRIVMSG #stn-labz :digit: who are you?", sender, sizeof sender, target, sizeof target, message, sizeof message) && !strcmp(sender, "PoeMei") && !strcmp(target, "#stn-labz") && !strcmp(message, "digit: who are you?"), &e, &p);
 
-    expect(rictus_irc_parse_privmsg(
+    expect(digit_irc_parse_privmsg(
            ":PoeMei PRIVMSG #stn-labz :digit: hello",
            sender, sizeof sender, target, sizeof target, message, sizeof message) &&
            !strcmp(sender, "PoeMei") && !strcmp(target, "#stn-labz") &&
            !strcmp(message, "digit: hello"), &e, &p);
-    expect(rictus_irc_parse_privmsg(
+    expect(digit_irc_parse_privmsg(
            "@account=PoeMei :PoeMei!u@h PRIVMSG #second :digit: online?",
            sender, sizeof sender, target, sizeof target, message, sizeof message) &&
            !strcmp(sender, "PoeMei") && !strcmp(target, "#second") &&
            !strcmp(message, "digit: online?"), &e, &p);
-    expect(!rictus_irc_parse_privmsg(
+    expect(!digit_irc_parse_privmsg(
            ":PoeMei NOTICE #second :digit: ignored",
            sender, sizeof sender, target, sizeof target, message, sizeof message), &e, &p);
-    expect(!rictus_irc_parse_privmsg(
+    expect(!digit_irc_parse_privmsg(
            ":PoeMei PRIVMSG #second",
            sender, sizeof sender, target, sizeof target, message, sizeof message), &e, &p);
 
     neg_e = 1;
-    neg_p = !rictus_irc_build_plain(NULL, "p", encoded, sizeof encoded);
+    neg_p = !digit_irc_build_plain(NULL, "p", encoded, sizeof encoded);
 
     if (executed) *executed = e;
     if (passed) *passed = p;
