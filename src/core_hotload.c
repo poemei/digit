@@ -126,6 +126,11 @@ static int snapshot(const char *path, char *copy, size_t copy_size, char sha[65]
     {
         struct stat state;
         const char *stage = STNLABZ_LOG_DIRECTORY "/.module-staging";
+#ifdef DIGIT_HOTLOAD_TEST_STAGE
+        /* Test binary only: production builds never read this override. */
+        stage = getenv("DIGIT_HOTLOAD_TEST_STAGE");
+        if (!stage || stage[0] != '/') return 0;
+#endif
         if (mkdir(stage, 0700) != 0 && errno != EEXIST) return 0;
         if (lstat(stage, &state) != 0 || !S_ISDIR(state.st_mode) ||
             state.st_uid != geteuid() || (state.st_mode & 0777) != 0700)
