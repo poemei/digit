@@ -139,3 +139,8 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 - S2 now submits a short baseline synopsis to the registered `digit.transport.channel.send` service after its first successful Sentinel collection, then an update only when a scheduled four-hour collection detects new or revised source records. Unchanged polls remain silent; no direct IRC socket or Publisher dependency.
 - The command `/s2` remains available. Source findings are identified as leads rather than confirmed incidents. Delivery failure logs and does not block evidence collection.
 - Operator build, module qualification, hotload, and IRC client verification are pending for v1.0.2; no Core or shared ABI changes.
+
+## 2026-10-27 — S2 v1.0.3 readable collection time
+
+- Corrected `/s2` and `/s2 status` to format the last successful Sentinel collection as UTC (`YYYY-MM-DD HH:MM:SS UTC`) using thread-safe `gmtime_r`; displays `never` when no successful collection exists. No changes to the four-hour poll cadence or automatic IRC noise controls.
+- Revision committed only; compilation, test qualification and installation remain operator-controlled and unverified for v1.0.3.
