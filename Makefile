@@ -36,7 +36,7 @@ ABI_OBJS := $(patsubst $(ABI_SRC_DIR)/%.c,$(BUILD_DIR)/abi/%.o,$(ABI_SRCS))
 OBJS := $(CORE_OBJS) $(ABI_OBJS)
 DEPS := $(OBJS:.o=.d)
 
-.PHONY: all clean install uninstall test test-contracts test-behavior test-hotload
+.PHONY: all clean install uninstall test test-contracts test-behavior test-hotload test-concurrency
 all: $(TARGET)
 
 .PHONY: check-abi
@@ -99,8 +99,15 @@ $(BUILD_DIR)/test_core_hotload: tests/test_core_hotload.c $(HOTLOAD_TEST_SRCS) $
 test-hotload: $(BUILD_DIR)/test_core_hotload $(HOTLOAD_FIXTURES)
 	./$(BUILD_DIR)/test_core_hotload $(HOTLOAD_FIXTURES)
 
-test: $(TARGET) test-contracts test-behavior test-hotload
-	@echo "Core source, C behavior, and real shared-object hotload integration checks complete; operator acceptance and additional concurrency qualification remain separate."
+$(BUILD_DIR)/test_core_concurrency: tests/test_core_concurrency.c src/module_host.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -pthread -o $@ $^
+
+test-concurrency: $(BUILD_DIR)/test_core_concurrency
+	./$(BUILD_DIR)/test_core_concurrency
+
+test: $(TARGET) test-contracts test-behavior test-hotload test-concurrency
+	@echo "Core source, C behavior, hotload integration, and threaded handler-withdrawal checks complete; live module concurrency qualification remains separate."
 
 install: $(TARGET)
 	install -d $(BINDIR) $(LOGDIR) $(MODULEDIR) $(CONFIGDIR) $(STATEDIR)
