@@ -109,3 +109,7 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 4. Preserve the established ChAoS MVC boundaries: Core routes/manages; module controllers route internally; module models work; views are optional; transports communicate.
 5. Correct demonstrated root causes and log resulting evidence. Changes to protected Core require direct Director authorization.
 6. For future work, update this changelog and `docs/ROADMAP.md` together; do not fabricate results or rewrite history.
+
+## Core self-unregistration guard
+
+2026-10-27: Director-authorized Core fix: module callback self-unregistration now fails immediately instead of deadlocking on its own in-flight counter. Added 12 executable service/command assertions in tests/test_core_self_unregister.c; make test-reentrant is included in make test. Source committed; compilation and operator results pending. Existing 23/23 threaded tests must be re-run because Core changed.
