@@ -36,7 +36,7 @@ ABI_OBJS := $(patsubst $(ABI_SRC_DIR)/%.c,$(BUILD_DIR)/abi/%.o,$(ABI_SRCS))
 OBJS := $(CORE_OBJS) $(ABI_OBJS)
 DEPS := $(OBJS:.o=.d)
 
-.PHONY: all clean install uninstall test test-contracts test-behavior test-hotload test-concurrency test-reentrant
+.PHONY: all clean install uninstall test test-contracts test-behavior test-hotload test-concurrency test-reentrant test-inflight
 all: $(TARGET)
 
 .PHONY: check-abi
@@ -113,7 +113,18 @@ $(BUILD_DIR)/test_core_self_unregister: tests/test_core_self_unregister.c src/mo
 test-reentrant: $(BUILD_DIR)/test_core_self_unregister
 	./$(BUILD_DIR)/test_core_self_unregister
 
-test: $(TARGET) test-contracts test-behavior test-hotload test-concurrency test-reentrant
+$(BUILD_DIR)/fixtures/blocking.so: tests/fixtures/hotload_fixture.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared -DFIXTURE_VERSION=0 -DFIXTURE_REGISTER_SERVICE=1 -o $@ $<
+
+$(BUILD_DIR)/test_core_hotload_inflight: tests/test_core_hotload_inflight.c $(HOTLOAD_TEST_SRCS) src/module_host.c $(HOTLOAD_ABI_SRCS)
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -pthread -DDIGIT_HOTLOAD_TEST_STAGE=1 -o $@ $^ $(LDLIBS)
+
+test-inflight: $(BUILD_DIR)/test_core_hotload_inflight $(BUILD_DIR)/fixtures/blocking.so $(BUILD_DIR)/fixtures/good.so
+	./$(BUILD_DIR)/test_core_hotload_inflight $(BUILD_DIR)/fixtures/blocking.so $(BUILD_DIR)/fixtures/good.so
+
+test: $(TARGET) test-contracts test-behavior test-hotload test-concurrency test-reentrant test-inflight
 	@echo "Core source, C behavior, hotload integration, and threaded handler-withdrawal and self-unregister checks complete; live module concurrency qualification remains separate."
 
 install: $(TARGET)
