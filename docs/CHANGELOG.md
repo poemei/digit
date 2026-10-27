@@ -2,6 +2,13 @@
 
 This is the source-change record for Digit. Dates are source dates, not deployment or acceptance dates. Module versions are independent of Digit's agent release. A GitHub commit, successful compilation, or a module reconnect does not establish qualification or operator acceptance.
 
+## 2026-10-27 — Hotload integration audit assertion correction
+
+- Operator ran the integration harness: 19/20 assertions passed. The only failure was the test expecting `replacement_active` in the operator module log.
+- Source inspection confirms `src/logging.c` deliberately omits success-reason text for `HOTLOAD_ACTIVE`; the event name itself is recorded.
+- Corrected the complete `tests/test_core_hotload.c` file so its audit check counts exactly two `HOTLOAD_ACTIVE` events (initial admission and replacement), instead of expecting an unlogged reason string. No production Core logic or ABI modified.
+- **Re-run pending:** this correction has not yet been executed; 20/20 integration must not be claimed until independently observed.
+
 ## 2026-10-27 — Core hotload executable integration gate (source committed; run pending)
 
 - Added four independently compiled native-module fixtures (original, 9/10 unqualified update, qualified update with deliberately failing start, qualified successful update).
