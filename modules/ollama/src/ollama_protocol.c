@@ -49,7 +49,7 @@ static int append_json_string(char *output, size_t output_size, size_t *used,
     return 1;
 }
 
-int rictus_ollama_build_request(const char *prompt,
+int digit_ollama_build_request(const char *prompt,
                                 char *output, size_t output_size)
 {
     size_t used = 0U;
@@ -98,7 +98,7 @@ static int append_codepoint(char *output, size_t output_size, size_t *used,
                        (char)(0x80U | (codepoint & 0x3fU)));
 }
 
-int rictus_ollama_extract_response(const char *json,
+int digit_ollama_extract_response(const char *json,
                                    char *output, size_t output_size)
 {
     const char *p;
@@ -151,7 +151,7 @@ static int expect(int condition, unsigned int *executed, unsigned int *passed)
     return condition;
 }
 
-int rictus_ollama_run_selftests(unsigned int *executed,
+int digit_ollama_run_selftests(unsigned int *executed,
                                 unsigned int *passed,
                                 int *negative_executed,
                                 int *negative_passed)
@@ -161,32 +161,32 @@ int rictus_ollama_run_selftests(unsigned int *executed,
     unsigned int e = 0U, p = 0U;
     int ne = 0, np = 0;
 
-    expect(rictus_ollama_build_request("hello", request, sizeof request) &&
+    expect(digit_ollama_build_request("hello", request, sizeof request) &&
            strstr(request, "\"model\":\"llama3.2:1b\"") &&
            strstr(request, "\"prompt\":\"hello\""), &e, &p);
-    expect(rictus_ollama_build_request("say \"hi\"", request, sizeof request) &&
+    expect(digit_ollama_build_request("say \"hi\"", request, sizeof request) &&
            strstr(request, "say \\\"hi\\\""), &e, &p);
-    expect(rictus_ollama_extract_response(
+    expect(digit_ollama_extract_response(
            "{\"response\":\"Hello there\",\"done\":true}",
            response, sizeof response) && !strcmp(response, "Hello there"), &e, &p);
-    expect(rictus_ollama_extract_response(
+    expect(digit_ollama_extract_response(
            "{\"response\":\"line1\\nline2\"}",
            response, sizeof response) && !strcmp(response, "line1\nline2"), &e, &p);
-    expect(rictus_ollama_extract_response(
+    expect(digit_ollama_extract_response(
            "{\"response\":\"caf\\u00e9\"}",
            response, sizeof response) && !strcmp(response, "caf\xc3\xa9"), &e, &p);
-    expect(!rictus_ollama_extract_response("{\"done\":true}",
+    expect(!digit_ollama_extract_response("{\"done\":true}",
            response, sizeof response), &e, &p);
-    expect(!rictus_ollama_build_request("", request, sizeof request), &e, &p);
-    expect(rictus_ollama_build_request("line1\nline2", request, sizeof request) &&
+    expect(!digit_ollama_build_request("", request, sizeof request), &e, &p);
+    expect(digit_ollama_build_request("line1\nline2", request, sizeof request) &&
            strstr(request, "line1\\nline2"), &e, &p);
-    expect(rictus_ollama_build_request("back\\slash", request, sizeof request) &&
+    expect(digit_ollama_build_request("back\\slash", request, sizeof request) &&
            strstr(request, "back\\\\slash"), &e, &p);
-    expect(!rictus_ollama_extract_response(
+    expect(!digit_ollama_extract_response(
            "{\"response\":\"\"}", response, sizeof response), &e, &p);
 
     ne = 1;
-    np = !rictus_ollama_extract_response(NULL, response, sizeof response);
+    np = !digit_ollama_extract_response(NULL, response, sizeof response);
 
     if (executed) *executed = e;
     if (passed) *passed = p;
