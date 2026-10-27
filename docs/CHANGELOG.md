@@ -2,6 +2,13 @@
 
 This is the source-change record for Digit. Dates are source dates, not deployment or acceptance dates. Module versions are independent of Digit's agent release. A GitHub commit, successful compilation, or a module reconnect does not establish qualification or operator acceptance.
 
+## 2026-10-27 — IRC version doctrine correction and routing diagnostic (source committed; runtime pending)
+
+- Corrected the IRC module descriptor from invalid **1.0.11** to **1.1.0**, because approved STN-LABZ version doctrine mandates **1.0.10 → 1.1.0**. The previously recorded 1.0.11 activation is a historical observation, not the new target version.
+- Verified Ollama source currently declares **1.0.4** and registers its `chat` controller; the supplied operational logs last show **Ollama 1.0.3** active. A source declaration is not proof that 1.0.4 was built, installed or activated.
+- IRC source and documentation version identities were aligned. No installed binaries or running modules were changed through GitHub updates.
+- **Gate:** deploy and observe the corrected IRC 1.1.0 and Ollama 1.0.4 alongside the new Core Router, then verify default/explicit/unknown-route behaviors and capture the failure category where applicable.
+
 ## 2026-10-27 — OpenSSL 3 EVP SHA-256 hotload correction (source committed; verification pending)
 
 - **Authorized protected Core change:** replaced deprecated `SHA256_Init`, `SHA256_Update`, and `SHA256_Final` in `src/core_hotload.c` with `EVP_DigestInit_ex`, `EVP_DigestUpdate`, and `EVP_DigestFinal_ex`.
@@ -14,7 +21,7 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 
 - Added `include/digit_route.h` for transport-neutral request and reply data, with the Core-owned `digit.router.dispatch` service name.
 - Updated `src/module_host.c` so the Core host resolves registered command destinations and invokes module controllers, with in-flight protection on command withdrawal.
-- Updated IRC to submit addressed input to the Core-owned dispatch service instead of invoking the Ollama generation service directly. IRC source version: **1.0.11**.
+- Updated IRC to submit addressed input to the Core-owned dispatch service instead of invoking the Ollama generation service directly. IRC source version: **1.1.0** (corrected from noncompliant 1.0.11).
 - Updated Ollama to register a `chat` controller via existing ABI host callbacks. Ollama source version: **1.0.4**.
 - The current Core ingress selects explicitly addressed routes using `/name arguments`; ordinary input selects the registered `chat` controller. This is current implementation behavior, not authorization to require users to enter commands for passive module work.
 - Kept the shared STN-LABZ ABI **1.5** host structure unchanged. No changes were made in `stnlabz/ABI`.
