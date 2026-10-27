@@ -2,6 +2,13 @@
 
 This is the source-change record for Digit. Dates are source dates, not deployment or acceptance dates. Module versions are independent of Digit's agent release. A GitHub commit, successful compilation, or a module reconnect does not establish qualification or operator acceptance.
 
+## 2026-10-27 — Module installation integrity correction (source committed; live verification pending)
+
+- Investigated operator evidence: installed Ollama `ollama.so` was `root:root` with an October 26 timestamp, while its SHA-256 differed from the newly built `modules/ollama/build/ollama.so`. Runtime evidence last confirmed Ollama 1.0.3, whereas repository source declares 1.0.4. Incorrect owner and different bytes are **separate observed facts**; ownership alone is not proven to have caused the stale installation.
+- Corrected complete `modules/ollama/Makefile` and `modules/irc/Makefile` install targets to specify `digit:digit`, stage binaries in the destination directory, compare staged versus built bytes, rename into the watched path atomically, verify installed bytes and owner, and fail on a violated invariant.
+- Kept the separately managed `modules/lesson_exporter` service's `lesson-exporter` account unchanged; its deployment is not a Digit hotload shared object. No protected Core or shared ABI source changed.
+- **Verification pending:** operator privileged install, matching SHA-256 digests, `digit:digit` ownership, Ollama 1.0.4 activation and runtime chat-controller dispatch. Repository source changes do not install binaries.
+
 ## 2026-10-27 — IRC version doctrine correction and routing diagnostic (source committed; runtime pending)
 
 - Corrected the IRC module descriptor from invalid **1.0.11** to **1.1.0**, because approved STN-LABZ version doctrine mandates **1.0.10 → 1.1.0**. The previously recorded 1.0.11 activation is a historical observation, not the new target version.
