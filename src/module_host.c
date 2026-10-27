@@ -4,8 +4,8 @@
 #include "module_host.h"
 #include "digit_transport.h"
 
-#define RICTUS_HOST_SERVICE_MAX 32U
-#define RICTUS_HOST_COMMAND_MAX 32U
+#define DIGIT_HOST_SERVICE_MAX 32U
+#define DIGIT_HOST_COMMAND_MAX 32U
 
 typedef struct {
     char name[STNLABZ_MODULE_SERVICE_NAME_MAX];
@@ -13,16 +13,16 @@ typedef struct {
     void *context;
     unsigned int in_flight;
     int withdrawing;
-} rictus_service_entry_t;
+} digit_service_entry_t;
 
 typedef struct {
     char name[STNLABZ_MODULE_COMMAND_NAME_MAX];
     stnlabz_module_command_handler_fn handler;
     void *context;
-} rictus_command_entry_t;
+} digit_command_entry_t;
 
-static rictus_service_entry_t services[RICTUS_HOST_SERVICE_MAX];
-static rictus_command_entry_t commands[RICTUS_HOST_COMMAND_MAX];
+static digit_service_entry_t services[DIGIT_HOST_SERVICE_MAX];
+static digit_command_entry_t commands[DIGIT_HOST_COMMAND_MAX];
 static atomic_flag service_lock = ATOMIC_FLAG_INIT;
 static atomic_flag command_lock = ATOMIC_FLAG_INIT;
 
@@ -49,7 +49,7 @@ static int register_service(const char *name,
                             void *context)
 {
     size_t i;
-    size_t free_slot = RICTUS_HOST_SERVICE_MAX;
+    size_t free_slot = DIGIT_HOST_SERVICE_MAX;
     size_t length;
 
     if (!name || !handler) return 0;
@@ -57,15 +57,15 @@ static int register_service(const char *name,
     if (!length || length >= STNLABZ_MODULE_SERVICE_NAME_MAX) return 0;
 
     lock(&service_lock);
-    for (i = 0; i < RICTUS_HOST_SERVICE_MAX; ++i) {
+    for (i = 0; i < DIGIT_HOST_SERVICE_MAX; ++i) {
         if (services[i].handler && !strcmp(services[i].name, name)) {
             unlock(&service_lock);
             return 0;
         }
-        if (!services[i].handler && free_slot == RICTUS_HOST_SERVICE_MAX)
+        if (!services[i].handler && free_slot == DIGIT_HOST_SERVICE_MAX)
             free_slot = i;
     }
-    if (free_slot == RICTUS_HOST_SERVICE_MAX) {
+    if (free_slot == DIGIT_HOST_SERVICE_MAX) {
         unlock(&service_lock);
         return 0;
     }
@@ -79,12 +79,12 @@ static int register_service(const char *name,
 
 static int unregister_service(const char *name, void *context)
 {
-    rictus_service_entry_t *entry = NULL;
+    digit_service_entry_t *entry = NULL;
     size_t i;
 
     if (!name) return 0;
     lock(&service_lock);
-    for (i = 0; i < RICTUS_HOST_SERVICE_MAX; ++i) {
+    for (i = 0; i < DIGIT_HOST_SERVICE_MAX; ++i) {
         if (services[i].handler &&
             !services[i].withdrawing &&
             services[i].context == context &&
@@ -116,7 +116,7 @@ static stnlabz_module_result_t invoke_service(
     size_t response_size,
     size_t *response_used)
 {
-    rictus_service_entry_t *entry = NULL;
+    digit_service_entry_t *entry = NULL;
     stnlabz_module_service_handler_fn handler = NULL;
     void *context = NULL;
     stnlabz_module_result_t result;
@@ -127,7 +127,7 @@ static stnlabz_module_result_t invoke_service(
         return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
 
     lock(&service_lock);
-    for (i = 0; i < RICTUS_HOST_SERVICE_MAX; ++i) {
+    for (i = 0; i < DIGIT_HOST_SERVICE_MAX; ++i) {
         if (services[i].handler &&
             !services[i].withdrawing &&
             !strcmp(services[i].name, name)) {
@@ -153,7 +153,7 @@ static stnlabz_module_result_t invoke_service(
 
 static int send_message(const char *message)
 {
-    rictus_transport_channel_request_t request;
+    digit_transport_channel_request_t request;
     size_t length;
 
     if (!message) return 0;
@@ -162,14 +162,14 @@ static int send_message(const char *message)
     memset(&request, 0, sizeof request);
     memcpy(request.message, message, length + 1U);
 
-    return invoke_service(RICTUS_TRANSPORT_CHANNEL_SEND_SERVICE,
+    return invoke_service(DIGIT_TRANSPORT_CHANNEL_SEND_SERVICE,
                           &request, sizeof request,
                           NULL, 0U, NULL) == STNLABZ_MODULE_OK;
 }
 
 static int send_private_message(const char *target, const char *message)
 {
-    rictus_transport_private_request_t request;
+    digit_transport_private_request_t request;
     size_t target_length;
     size_t message_length;
 
@@ -184,7 +184,7 @@ static int send_private_message(const char *target, const char *message)
     memcpy(request.target, target, target_length + 1U);
     memcpy(request.message, message, message_length + 1U);
 
-    return invoke_service(RICTUS_TRANSPORT_PRIVATE_SEND_SERVICE,
+    return invoke_service(DIGIT_TRANSPORT_PRIVATE_SEND_SERVICE,
                           &request, sizeof request,
                           NULL, 0U, NULL) == STNLABZ_MODULE_OK;
 }
@@ -194,7 +194,7 @@ static int register_command(const char *name,
                             void *context)
 {
     size_t i;
-    size_t free_slot = RICTUS_HOST_COMMAND_MAX;
+    size_t free_slot = DIGIT_HOST_COMMAND_MAX;
     size_t length;
 
     if (!name || !handler) return 0;
@@ -202,15 +202,15 @@ static int register_command(const char *name,
     if (!length || length >= STNLABZ_MODULE_COMMAND_NAME_MAX) return 0;
 
     lock(&command_lock);
-    for (i = 0; i < RICTUS_HOST_COMMAND_MAX; ++i) {
+    for (i = 0; i < DIGIT_HOST_COMMAND_MAX; ++i) {
         if (commands[i].handler && !strcmp(commands[i].name, name)) {
             unlock(&command_lock);
             return 0;
         }
-        if (!commands[i].handler && free_slot == RICTUS_HOST_COMMAND_MAX)
+        if (!commands[i].handler && free_slot == DIGIT_HOST_COMMAND_MAX)
             free_slot = i;
     }
-    if (free_slot == RICTUS_HOST_COMMAND_MAX) {
+    if (free_slot == DIGIT_HOST_COMMAND_MAX) {
         unlock(&command_lock);
         return 0;
     }
@@ -228,7 +228,7 @@ static int unregister_command(const char *name, void *context)
 
     if (!name) return 0;
     lock(&command_lock);
-    for (i = 0; i < RICTUS_HOST_COMMAND_MAX; ++i) {
+    for (i = 0; i < DIGIT_HOST_COMMAND_MAX; ++i) {
         if (commands[i].handler &&
             commands[i].context == context &&
             !strcmp(commands[i].name, name)) {
@@ -251,7 +251,7 @@ static const stnlabz_module_host_t host = {
     .invoke_service = invoke_service
 };
 
-const stnlabz_module_host_t *rictus_module_host(void)
+const stnlabz_module_host_t *digit_module_host(void)
 {
     return &host;
 }
