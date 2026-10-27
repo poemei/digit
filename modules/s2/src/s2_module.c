@@ -17,7 +17,7 @@
 #define S2_MAX_BYTES (8U * 1024U * 1024U)
 #define S2_STATE_DIR "/opt/digit/state/s2"
 #define S2_STATE_FILE S2_STATE_DIR "/sentinel-register.txt"
-#define S2_POLL_SECONDS 900U
+#define S2_POLL_SECONDS 14400U
 typedef struct { char *body; size_t length; } received_t;
 static pthread_t worker;
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
