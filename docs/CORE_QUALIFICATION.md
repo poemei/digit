@@ -35,3 +35,7 @@ On 2026-10-27 operator logs confirmed IRC 1.1.0 module internal qualification 20
 `tests/test_core_hotload.c` runs against compiled real test modules from `tests/fixtures/hotload_fixture.c` with disposable private test directories and audit logs. It verifies initial admission, rejection of 9/10 qualification, preservation of the previous ACTIVE module, start-failure rollback, successful new revision activation, loader ownership and record uniqueness, and shutdown. Source build uses an explicit **test-only** private staging override; deployed Digit does not read that override.
 
 The 20 integration assertions are a supplemental gate, **not** proof of hotload thread-safety or Core production qualification. Actual results and warnings are pending operator execution of `make test`. Avoid implying that a synthetic start-failure fixture proves real-world rollback across all module implementations.
+
+## Threaded withdrawal gate (2026-10-27)
+
+`make test-concurrency` compiles `tests/test_core_concurrency.c` with the **real** Core `module_host.c` and pthreads. It checks service and command registration, in-flight callback completion under concurrent withdrawal, post-unregistration rejection, and safe reuse of freed slots. The test does not change the installed service. Operator test receipts are pending. More extensive concurrent module stop/hotload and reentrant-unregister validation are separate gates.
