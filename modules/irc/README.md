@@ -56,17 +56,29 @@ The installed hotload artifact is:
 Digit watches `/opt/digit/modules/`. A new or changed `/opt/digit/modules/<module>/<module>.so` is snapshotted, loaded, verified, and qualified. A passing candidate is activated. A failing candidate remains inert while Digit continues running; the same failed bytes are not retried until the file changes.
 
 
-## Conversational handoff
+## Conversational handoff — Core Router
 
-IRC remains the transport owner. When the `digit.llm.generate` service is
-available, the IRC module forwards only:
+IRC remains the transport/session owner. Incoming private messages and channel
+messages addressed to Digit are passed unchanged (after protocol-level address
+extraction) to the Core-owned `digit.router.dispatch` service. IRC does not
+select the destination capability, invoke the Ollama model, or interpret content.
 
-- private messages sent directly to Digit
-- channel messages explicitly addressed as `digit: ...`, `digit, ...`, or
-  `digit ...`
+Core resolves explicit `/route arguments` destinations against command
+controllers registered by active modules. Ordinary text resolves to a
+registered `chat` controller. Each controller owns its internal operations.
+The module result returns through Core to the originating IRC channel or
+private sender. Unregistered routes and failed controllers return errors;
+IRC records a categorized status without fabricating answers. Message reply
+delivery remains channel-specific, and IRC line sanitization remains in IRC.
 
-A reply to an addressed channel message goes to the originating channel. Explicit generic channel-send service calls continue using the first configured channel. Startup is considered online only once all configured channels have joined; rejoin-after-KICK is handled per channel. Ordinary channel traffic is not sent to the LLM service. Generated CR/LF
-characters are flattened before an IRC reply is queued.
+This change requires synchronized Core and IRC installation; no independent
+deployment or live acceptance has been verified.
+
+## v1.0.11 — Core Router handoff (2026-10-27)
+
+Removed direct IRC-to-Ollama dispatch. Incoming addressed text now enters the
+Core Router via the existing ABI service-invocation callback. IRC transport
+reconnection and outbound message services are unchanged.
 
 ## v1.0.8 — IRC startup failure diagnostics (2026-10-26)
 
