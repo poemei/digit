@@ -50,6 +50,11 @@
 - **Critical acceptance gate:** full latest Core qualification (minimum 20/20), module regression tests (minimum 10/10 each), candidate activation-failure injection with incumbent restoration, no stale command handlers, correct loader ownership, and zero-warning target build. Source changes are unverified and not deployed.
 - Director controls activation of the revised Core.
 
+### Executable Core unit behavioral tests (2026-10-27)
+
+- `make test` now also compiles/runs 20 C unit behavior cases for Root and policy evaluation (positive and negative paths); execution receipts pending.
+- Full module lifecycle/hotload regression and fault injection still required. Unit counts cannot substitute for all applicable Core qualification requirements.
+
 ### Core test infrastructure restoration (2026-10-27)
 
 - Root `make test` now builds Core and invokes 20 source-contract regression checks; `docs/CORE_QUALIFICATION.md` restored.
