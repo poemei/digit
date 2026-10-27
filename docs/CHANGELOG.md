@@ -2,6 +2,14 @@
 
 This is the source-change record for Digit. Dates are source dates, not deployment or acceptance dates. Module versions are independent of Digit's agent release. A GitHub commit, successful compilation, or a module reconnect does not establish qualification or operator acceptance.
 
+## 2026-10-27 — Live IRC routing evidence (operator observed; full qualification pending)
+
+- **Module activation receipts:** IRC `1.1.0` activated at 16:32:15 UTC; Ollama `1.0.4` activated at 16:43:14 UTC.
+- **Positive live routes:** `digicat: Hello` returned `Hello.`; `digicat: /chat Hello` returned `Greetings. What can I assist you with?`. This demonstrates a live IRC ingress → Core dispatch → registered chat controller → Ollama generation → IRC reply path.
+- **Negative live route:** `digicat: /unknown test` produced `[IRC] Core route unavailable result=5`; ABI 1.5 defines result 5 as `STNLABZ_MODULE_ERR_NOT_FOUND`. An IRC-side error reply is not implemented; this test proves internal rejection, not user-facing failure feedback.
+- **Timeout investigation:** `[OLLAMA] request failed curl=28 http=0` and route result 7 correlated with Ollama API timeouts. An independent 60-second localhost API request also timed out. Operator identified a `lesson-exporter` Python client connected to Ollama, elected to remove the competing service, and subsequently observed a successful Digit reply. No continuous-performance qualification or installed-service removal receipt was recorded.
+- **Scope of evidence:** successful targeted live checks and activation receipts only. Not proof of a warning-free build, all unit/negative suites, concurrency/unload integrity, identity/authorization verification, deployment byte hashes, or Director's final milestone acceptance. Protected Core and ABI source unchanged by this documentation update.
+
 ## 2026-10-27 — Module installation integrity correction (source committed; live verification pending)
 
 - Investigated operator evidence: installed Ollama `ollama.so` was `root:root` with an October 26 timestamp, while its SHA-256 differed from the newly built `modules/ollama/build/ollama.so`. Runtime evidence last confirmed Ollama 1.0.3, whereas repository source declares 1.0.4. Incorrect owner and different bytes are **separate observed facts**; ownership alone is not proven to have caused the stale installation.
