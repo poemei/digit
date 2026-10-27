@@ -45,6 +45,8 @@ The module qualification callback runs the same protocol self-test set used by `
 
 ```sh
 sudo make install
+sha256sum build/irc.so /opt/digit/modules/irc/irc.so
+stat -c '%U:%G %a %n' /opt/digit/modules/irc/irc.so
 ```
 
 The installed hotload artifact is:
@@ -55,6 +57,10 @@ The installed hotload artifact is:
 
 Digit watches `/opt/digit/modules/`. A new or changed `/opt/digit/modules/<module>/<module>.so` is snapshotted, loaded, verified, and qualified. A passing candidate is activated. A failing candidate remains inert while Digit continues running; the same failed bytes are not retried until the file changes.
 
+
+## Installation integrity and ownership (2026-10-27)
+
+Installation enforces the existing `digit:digit` module-artifact ownership expectation. The Makefile uses a private staging filename in the module directory, verifies that the staged file matches the build, atomically renames it to `irc.so`, and verifies the installed bytes and ownership. Installation fails explicitly if either check fails; installed module binary mode is 0755 and configuration mode is 0644. Run with operator-approved installation privileges.
 
 ## Conversational handoff — Core Router
 
