@@ -2,6 +2,12 @@
 
 This is the source-change record for Digit. Dates are source dates, not deployment or acceptance dates. Module versions are independent of Digit's agent release. A GitHub commit, successful compilation, or a module reconnect does not establish qualification or operator acceptance.
 
+## 2026-10-27 — Executable Core unit behavior tests added (source committed, not run)
+
+- Added `tests/test_core_behavior.c` with 20 actual C behavior cases for Digit Root validation and Core policy decisions, including negative and escalation cases, and isolated audit-log verification.
+- Updated `make test` to build and run the C test binary alongside 20 source-contract checks. No production module or service is touched by the test executable.
+- **Remaining:** hotload/rollback failure-injection, Core/module integration, routing concurrency and full revised-Core qualification. A passing 20-case unit run does not replace the complete applicable Core suite. Build and test have not been executed by this assistant.
+
 ## 2026-10-27 — Core regression entrypoint restored (not full qualification)
 
 - Director-authorized correction: added `tests/test_core_contracts.py` with 20 independently named source-contract regression checks covering root, logging, qualification, authorization, hotload and rollback safeguards.
