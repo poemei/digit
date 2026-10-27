@@ -228,29 +228,6 @@ static int version_newer(const observed_t *old,
     return candidate->version_patch > old->patch;
 }
 
-static int qualify_isolated(const char *id,
-                            const stnlabz_module_descriptor_t *descriptor,
-                            stnlabz_module_qualification_result_t *qualification)
-{
-    stnlabz_module_registry_t isolated;
-    const stnlabz_module_record_t *record;
-    stnlabz_module_result_t result;
-
-    stnlabz_module_registry_init(&isolated);
-    result = stnlabz_module_registry_discover(&isolated, descriptor);
-    if (result == STNLABZ_MODULE_OK)
-        result = stnlabz_module_registry_verify(&isolated, id);
-    if (result == STNLABZ_MODULE_OK)
-        result = stnlabz_module_registry_qualify(&isolated, id);
-    if (result == STNLABZ_MODULE_OK) {
-        record = stnlabz_module_registry_find(&isolated, id);
-        if (!record) result = STNLABZ_MODULE_ERR_NOT_FOUND;
-        else *qualification = record->qualification;
-    }
-    stnlabz_module_registry_destroy(&isolated);
-    return result == STNLABZ_MODULE_OK;
-}
-
 static void log_qualification(const char *id, const char *sha,
                               const stnlabz_module_qualification_result_t *q,
                               stnlabz_module_result_t result)
