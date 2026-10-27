@@ -43,6 +43,13 @@
 - IRC and Ollama Makefiles now enforce user/group, compare built and installed bytes, and stage/rename binaries within the watched directory. Source committed; IRC 1.1.0 and Ollama 1.0.4 activation confirmed by operator. Post-install byte-hash and owner receipts were not supplied.
 - Capture `sha256sum`, `stat`, and module activation receipts; then re-run routed IRC tests. Do not infer an installed revision from GitHub source.
 
+### Protected Core hotload correction (2026-10-27)
+
+- Source correction committed: incumbent shared object retained until replacement activation succeeds; rollback attempts reactivate incumbent on candidate activation failure.
+- New and updated module qualification events record test-count and negative-test evidence in `modules.log`.
+- **Critical acceptance gate:** full latest Core qualification (minimum 20/20), module regression tests (minimum 10/10 each), candidate activation-failure injection with incumbent restoration, no stale command handlers, correct loader ownership, and zero-warning target build. Source changes are unverified and not deployed.
+- Director controls activation of the revised Core.
+
 ## Milestone 2 — Transport neutrality and end-to-end delivery
 
 **State: Planned; not authorized by prior source acceptance.**
