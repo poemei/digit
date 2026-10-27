@@ -19,8 +19,13 @@ $(BUILD_DIR)/research.so: $(OBJS)
 $(BUILD_DIR)/test_research: tests/test_research.c src/research_model.c src/research_qualification.c
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ $^
-test: $(BUILD_DIR)/test_research
+$(BUILD_DIR)/test_research_abi: tests/test_research_abi.c $(SOURCES)
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ $^
+
+test: $(BUILD_DIR)/test_research $(BUILD_DIR)/test_research_abi
 	./$(BUILD_DIR)/test_research
+	./$(BUILD_DIR)/test_research_abi
 install: all
 	install -d $(MODULEDIR)
 	install -m 0644 module.conf $(MODULEDIR)/module.conf
