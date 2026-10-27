@@ -146,9 +146,9 @@ These are review items, not permission to enlarge the ABI or rewrite Core.
 2026-10-27 — Director-authorized S2 Cyber Security collection milestone: added native `modules/s2` v1.0.0. Source reads the documented Sentinel JSON `https://api.stn-labz.com/threats`, polls autonomously at 900-second intervals, tracks cases by source ID and content signature, atomically persists the register, and exposes `/s2` aggregate status. Source covers missing severity explicitly; it does not infer compromise. Includes ten internal qualification assertions plus an independent persistence test, and owner-verified staged installation. Dependencies: libcurl, json-c and pthreads. **Source only. Build/test, module qualification, installation, live Sentinel ingestion and operator acceptance NOT yet performed.** Full source evidence/event history, investigative correlation and Ollama-assisted narrative are not yet implemented; do not claim the full S2 mission is restored. No Core or shared ABI touched.
 
 ## Approval
-**Name**: P.Mei
-**Section**: Operations
-**Position**: Founder/CEO
-**Project**: Digit
-**Date/TIme**: 20261027:1830Z
-**Status**: Approved
+- **Name**: P.Mei
+- **Section**: Operations
+- **Position**: Founder/CEO
+- **Project**: Digit
+- **Date/TIme**: 20261027:1830Z
+- **Status**: Approved
