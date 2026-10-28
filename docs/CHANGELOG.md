@@ -177,3 +177,8 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 - Operator's `make -C modules/identity clean all test` compiled and linked, with embedded self-qualification 13/13 and negative 1/1, but standalone test returned FAIL.
 - Cause: the added standalone positive case `what are your general orders?` was not normalized by `identity_question_route`; the parser only stripped `what is` and similar introductions. Corrected the complete `modules/identity/src/identity_model.c` file to recognize `what are ` so the grouped order question resolves to `orders`.
 - No Core, IRC, Ollama, ABI, or General Order contents changed. Re-run pending; PASS is not claimed.
+
+## 2026-10-28 — Identity v1.1.2 response presentation
+
+- Director requested natural first-person responses for General Order questions. Identity now renders each approved order as an `I must` statement, with the original data unchanged.
+- Core, IRC, Ollama and ABI unchanged. Source committed; tests and live verification remain pending.
