@@ -171,3 +171,9 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 - Approved conversation answer copies of all three General Orders are now required fields in Identity's standalone `identity.conf` record; module v1.1.1 responds to direct and natural-language order requests without the failing Core query.
 - Identity answer service and Ollama conversational delegation remain in place. IRC and shared ABI unchanged. Tests expanded to compare all three approved data records and group question classification.
 - Source-only evidence: no compilation, module qualification, installation or live IRC verification claimed.
+
+## 2026-10-28 — Identity v1.1.1 grouped-question parser test correction
+
+- Operator's `make -C modules/identity clean all test` compiled and linked, with embedded self-qualification 13/13 and negative 1/1, but standalone test returned FAIL.
+- Cause: the added standalone positive case `what are your general orders?` was not normalized by `identity_question_route`; the parser only stripped `what is` and similar introductions. Corrected the complete `modules/identity/src/identity_model.c` file to recognize `what are ` so the grouped order question resolves to `orders`.
+- No Core, IRC, Ollama, ABI, or General Order contents changed. Re-run pending; PASS is not claimed.
