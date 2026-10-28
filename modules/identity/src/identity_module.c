@@ -10,16 +10,13 @@ static int command_active,service_active;
 
 static int get_order(unsigned index,char *out,size_t cap)
 {
- digit_root_order_request_t request={index};
- digit_root_order_response_t response={0};
- size_t used=0;
- if (!owner||!owner->invoke_service||!out) return 0;
- if (owner->invoke_service(DIGIT_ROOT_ORDERS_SERVICE,
-         &request,sizeof request,&response,sizeof response,&used)
-     != STNLABZ_MODULE_OK || used!=sizeof response ||
-     !memchr(response.text,0,sizeof response.text)) return 0;
- if (strlen(response.text)+1U>cap) return 0;
- memcpy(out,response.text,strlen(response.text)+1U);
+ size_t n;
+ const char *text;
+ if (!out||index<1U||index>3U) return 0;
+ text=record.orders[index-1U];
+ n=strlen(text);
+ if (!n||n>=cap) return 0;
+ memcpy(out,text,n+1U);
  return 1;
 }
 static int answer(const char *topic,char *output,size_t cap)
@@ -100,7 +97,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *host)
  command_active=1;
  if(!host->register_service(DIGIT_IDENTITY_ANSWER_SERVICE,answer_service,NULL))goto fail;
  service_active=1;
- fprintf(stderr,"[IDENTITY] mission and Core Root orders available read-only\n");
+ fprintf(stderr,"[IDENTITY] mission and General Orders loaded from module data\n");
  return STNLABZ_MODULE_OK;
 fail:
  if(command_active)(void)host->unregister_command("identity",NULL);
@@ -118,7 +115,7 @@ static stnlabz_module_result_t stop(void)
  return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
- "identity","Digit Identity and Mission",1,1,0,
+ "identity","Digit Identity and Mission",1,1,1,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,qualify,start,stop
 };
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){return &descriptor;}
