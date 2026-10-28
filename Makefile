@@ -99,14 +99,14 @@ $(BUILD_DIR)/test_core_hotload: tests/test_core_hotload.c $(HOTLOAD_TEST_SRCS) $
 test-hotload: $(BUILD_DIR)/test_core_hotload $(HOTLOAD_FIXTURES)
 	./$(BUILD_DIR)/test_core_hotload $(HOTLOAD_FIXTURES)
 
-$(BUILD_DIR)/test_core_concurrency: tests/test_core_concurrency.c src/module_host.c
+$(BUILD_DIR)/test_core_concurrency: tests/test_core_concurrency.c src/module_host.c src/agent_root.c src/identity_digit.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -pthread -o $@ $^
 
 test-concurrency: $(BUILD_DIR)/test_core_concurrency
 	./$(BUILD_DIR)/test_core_concurrency
 
-$(BUILD_DIR)/test_core_self_unregister: tests/test_core_self_unregister.c src/module_host.c
+$(BUILD_DIR)/test_core_self_unregister: tests/test_core_self_unregister.c src/module_host.c src/agent_root.c src/identity_digit.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $^
 
