@@ -105,6 +105,7 @@ int identity_question_route(const char *input,char *intent,size_t cap)
  if (!strncmp(p,"what is ",8)) p+=8;
  else if (!strncmp(p,"what's ",7)) p+=7;
  else if (!strncmp(p,"tell me ",8)) p+=8;
+ else if (!strncmp(p,"what are ",9)) p+=9;
  if (!strcmp(p,"your mission")||!strcmp(p,"mission")||
      !strcmp(p,"your assigned mission"))
    return bounded_copy(intent,cap,"mission");
