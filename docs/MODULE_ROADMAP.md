@@ -68,3 +68,11 @@
 
 - Director-authorized: removed routine `PRIVMSG ignored: channel message did not address Digit` logging. Unaddressed channel messages remain silently ignored; routing, security checks, malformed-message diagnostics and failure logging remain unchanged.
 - IRC module patch version raised from 1.1.0 to 1.1.1 to allow qualified hotload. Build, tests, installation and live operator acceptance pending.
+
+## 2026-10-28 — Identity & Mission native module v1.0.0
+
+- Director-authorized native `modules/identity` module added with a read-only approved identity/mission record, internal data model, Core-registered `/identity` controller, 10 qualifying model checks including a negative check, and explicit test/install targets.
+- The `mission` field preserves the Director's exact approved mission statement. `/identity mission` and `/identity who` return deterministic responses without invoking Ollama.
+- **Protected Core boundary:** General Orders remain in Core; no Core or ABI read service currently exposes them to modules. `/identity orders` therefore explicitly declines to invent an answer. No duplicate mutable copy of Core orders was created.
+- **Routing boundary:** Unprefixed natural-language inquiries still default to Ollama's `chat` route; `/identity` is explicitly routed and does not yet intercept arbitrary conversational inquiries. A separate Director-approved solution is required.
+- Module source committed; host build, qualification, activation and operator client acceptance unverified.
