@@ -182,3 +182,17 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 
 - Director requested natural first-person responses for General Order questions. Identity now renders each approved order as an `I must` statement, with the original data unchanged.
 - Core, IRC, Ollama and ABI unchanged. Source committed; tests and live verification remain pending.
+
+
+## 2026-10-28 — Director-authorized Rictus DSD and Ollama transfer to Digit
+
+- Ported the proven Rictus Core DSD diagnostic foundation into Digit Core using Digit-specific naming and source paths.
+- Added bounded in-memory last-request traces per sender/account. Core records the resolved route, registered command owner, command result, reply state, nested service invocations, service owners/results, and a repair-oriented disposition.
+- Added Core registration ownership attribution during module activation so diagnostics derive module ownership from the actual runtime registration path rather than a static module map.
+- Added natural Core diagnostic control request `diagnose my last request`, evaluated before starting a new trace so the diagnostic request does not overwrite the request being inspected.
+- Added dynamic source correlation against the current Digit tree. Default source root is `/home/stnchain/digit`, overridable with `DIGIT_SOURCE_ROOT`; reported locations are repo-relative `Code: file:line` evidence when correlation is provable.
+- Updated Core qualification link sets so tests that compile `module_host.c` or `core_activation.c` also link the new diagnostics/ownership dependencies.
+- Shared ABI 1.5 is unchanged. No SQLite persistence was introduced.
+- Ported the proven Rictus peer-address/action behavior into Digit Ollama and advanced the module from **1.0.5 to 1.0.6**. Digit's authoritative Identity-service delegation remains first in the `chat` controller; only requests that fall through to generation use the peer-action path.
+- Ollama 1.0.6 recognizes the currently proven `say ... to <nick>`, `tell <nick> ...`, and `ask <nick> ...` forms, preserves the exact peer nickname, preserves question intent for `ask`, and sends peer-directed output through Core's existing `send_message` boundary instead of forcing the result back to the conversation origin.
+- Source committed to GitHub only. Core clean build, full `make test`, Ollama build/selftests, installation, activation, end-to-end Digit client verification, and Director acceptance remain pending.
