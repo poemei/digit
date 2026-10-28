@@ -1,4 +1,4 @@
-# Digit Identity & Mission — 1.1.1
+# Digit Identity & Mission — 1.1.2
 
 Director-authorized mission, identity and General Order responses are now owned by the standalone Identity module's installed data file, `/opt/digit/modules/identity/identity.conf`.
 
@@ -19,3 +19,7 @@ make -C modules/identity clean && make -C modules/identity && make -C modules/id
 Rebuild/install under operator control and reactivate Identity v1.1.1. Ollama v1.0.5 can remain unchanged. Test `/identity first general order` and `what is your first general order?`, plus second and third; confirm unrelated chat is still routed to Ollama.
 
 Source committed; local build, actual deployment, qualification, and runtime acceptance have not been verified here.
+
+## Response wording in 1.1.2
+
+The General Orders are rendered in first person, for example: `My first General Order is clear: I must remain at my assigned mission.` The approved records remain unchanged. Rebuild, test and hotload are pending operator verification.
