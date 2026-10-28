@@ -149,6 +149,12 @@ These are review items, not permission to enlarge the ABI or rewrite Core.
 - The Core router continues to perform registered dispatch only. Natural-language identity interpretation stays in modules; no IRC or shared ABI modification was required.
 - Core source and build-test linking updates committed; the **revised Core requires a new clean build, all qualification tests, controlled installation and operator acceptance**. Existing 2026-10-27 Core receipts cannot be reused to qualify this new revision. Module-specific work is recorded in `docs/MODULE_ROADMAP.md`.
 
+
+## 2026-10-28 — Revert experimental Core Root retrieval interface
+
+- Per Director instruction, removed the newly introduced `digit.root.orders.read` service from Core. The protected Core Root identity and General Orders were **not deleted or modified**. Restored the prior Core unit-test linking arrangement. The Identity module now serves operator-approved General Order copies in its own data, with no Core-specific retrieval service.
+- Revised Core source remains subject to the normal operator build/qualification gate. Module-specific changes are tracked separately in `docs/MODULE_ROADMAP.md`.
+
 ## Approval
 - **Name**: P.Mei
 - **Section**: Operations
