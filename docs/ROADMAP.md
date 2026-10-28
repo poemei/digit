@@ -163,3 +163,35 @@ These are review items, not permission to enlarge the ABI or rewrite Core.
 - **Project**: Digit
 - **Date/Time**: 20261027:1830Z
 - **Status**: Approved
+
+
+## 2026-10-28 — Core DSD continuity transfer from Rictus
+
+**State: Source implemented; qualification and operator acceptance pending.**
+
+The Director authorized transferring the proven Rictus Core diagnostic foundation into Digit.
+
+Implemented Core behavior:
+
+- bounded last-request trace per sender/account
+- route and registered command-owner capture
+- nested service owner/result capture
+- reply/action disposition
+- dynamic current-source correlation
+- repo-relative `Code: file:line` evidence when provable
+- default source tree `/home/stnchain/digit`
+- optional `DIGIT_SOURCE_ROOT` override
+- no SQLite dependency
+- no shared ABI 1.5 change
+
+The Core diagnostic control request is:
+
+`diagnose my last request`
+
+It is handled before starting a new trace so it cannot overwrite the request under diagnosis.
+
+Registration ownership is learned from the module activation/registration path rather than maintained in a static module-to-source table. Source correlation is deliberately late-bound so code/file movement does not invalidate the runtime trace model.
+
+**Reopened Core gate:** the prior 2026-10-27 Core qualification receipts do not qualify this new Core revision. Required evidence is a clean Core build, the full configured `make test` suite, controlled installation/startup evidence, applicable runtime diagnostics, and explicit Director acceptance.
+
+No later roadmap milestone is authorized by this source transfer.
