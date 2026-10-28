@@ -11,12 +11,70 @@
 
 #define OLLAMA_VERSION_MAJOR 1U
 #define OLLAMA_VERSION_MINOR 0U
-#define OLLAMA_VERSION_PATCH 5U
+#define OLLAMA_VERSION_PATCH 6U
 
 typedef struct { char *data; size_t used; size_t capacity; } buffer_t;
 static const stnlabz_module_host_t *owner;
 static int service_registered;
 static int command_registered;
+
+static int valid_peer_char(char c)
+{
+ return (c>='A'&&c<='Z')||(c>='a'&&c<='z')||(c>='0'&&c<='9')||
+        c=='_'||c=='-'||c=='['||c==']'||c=='\\'||c=='\`'||c=='^'||
+        c=='{'||c=='}'||c=='|';
+}
+
+static int copy_target_token(const char *p,char *target,size_t target_size)
+{
+ size_t used=0U;
+ while(*p==' '||*p=='\t')++p;
+ while(*p&&valid_peer_char(*p)&&used+1U<target_size)target[used++]=*p++;
+ if(!used)return 0;
+ target[used]='\0';
+ return 1;
+}
+
+static int extract_peer_target(const char *prompt,char *target,size_t target_size)
+{
+ const char *p,*to=NULL;
+ if(!prompt||!target||target_size<2U)return 0;
+ p=prompt;
+ while(*p==' '||*p=='\t')++p;
+
+ if(!strncmp(p,"ask ",4))return copy_target_token(p+4,target,target_size);
+ if(!strncmp(p,"tell ",5))return copy_target_token(p+5,target,target_size);
+
+ if(!strncmp(p,"say ",4)){
+  const char *scan=p+4;
+  while((scan=strstr(scan," to "))!=NULL){to=scan+4;scan+=4;}
+  if(to)return copy_target_token(to,target,target_size);
+ }
+ return 0;
+}
+
+static int ensure_peer_prefix(const char *prompt,char *text,size_t text_size)
+{
+ char target[128],prefixed[sizeof(((digit_llm_response_t *)0)->text)];
+ size_t target_len,text_len;
+ if(!extract_peer_target(prompt,target,sizeof target))return 1;
+ target_len=strlen(target);text_len=strlen(text);
+ if(text_len>target_len&&!strncmp(text,target,target_len)&&text[target_len]==':')
+  return 1;
+ if(snprintf(prefixed,sizeof prefixed,"%s: %s",target,text)>=(int)sizeof prefixed)
+  return 0;
+ if(strlen(prefixed)+1U>text_size)return 0;
+ memcpy(text,prefixed,strlen(prefixed)+1U);
+ return 1;
+}
+
+static stnlabz_module_result_t send_peer_action(const char *text)
+{
+ if(!owner||!owner->send_message||!text||!*text)
+  return STNLABZ_MODULE_ERR_INVALID_STATE;
+ return owner->send_message(text)
+  ? STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
+}
 
 static size_t write_cb(void *contents,size_t size,size_t nmemb,void *ctx)
 {
@@ -82,6 +140,7 @@ static stnlabz_module_result_t chat_controller(
 {
     digit_llm_request_t in;
     digit_llm_response_t out;
+    char peer_target[128];
     size_t used = 0U;
     size_t len;
     stnlabz_module_result_t result;
@@ -118,10 +177,15 @@ static stnlabz_module_result_t chat_controller(
         return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
     memset(&in, 0, sizeof in);
     memset(&out, 0, sizeof out);
+    memset(peer_target, 0, sizeof peer_target);
     memcpy(in.prompt, command->arguments, len + 1U);
     result = generate(&in, sizeof in, &out, sizeof out, &used, NULL);
     if (result != STNLABZ_MODULE_OK) return result;
     if (used != sizeof out) return STNLABZ_MODULE_ERR_INVALID_STATE;
+    if (!ensure_peer_prefix(in.prompt, out.text, sizeof out.text))
+        return STNLABZ_MODULE_ERR_INVALID_STATE;
+    if (extract_peer_target(in.prompt, peer_target, sizeof peer_target))
+        return send_peer_action(out.text);
     return reply(reply_context, out.text)
         ? STNLABZ_MODULE_OK : STNLABZ_MODULE_ERR_INVALID_STATE;
 }
@@ -139,7 +203,8 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
 
 static stnlabz_module_result_t start(const stnlabz_module_host_t *h)
 {
- if(!h||!h->register_service||!h->unregister_service||
+ if(!h||!h->send_message||
+    !h->register_service||!h->unregister_service||
     !h->register_command||!h->unregister_command)
     return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  if(curl_global_init(CURL_GLOBAL_DEFAULT)!=CURLE_OK)
