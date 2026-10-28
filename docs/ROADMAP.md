@@ -143,6 +143,12 @@ These are review items, not permission to enlarge the ABI or rewrite Core.
 - **Module releases and evidence:** maintained separately in `docs/MODULE_ROADMAP.md`; module-level qualification and operation are not Core milestones.
 - **Governance:** operator-provided technical receipts do not silently grant future Core modifications, production changes or blanket milestone acceptance. Existing Roadmap approval block is preserved verbatim below.
 
+## Protected Core Root read-only service — 2026-10-28
+
+- Director specifically authorized exposing the actual General Orders to the Identity module through the existing Core-mediated ABI. Core now answers `digit.root.orders.read` requests by reading and validating the immutable Root descriptor and returning the requested order; modules cannot register over that reserved service or modify the Root through it.
+- The Core router continues to perform registered dispatch only. Natural-language identity interpretation stays in modules; no IRC or shared ABI modification was required.
+- Core source and build-test linking updates committed; the **revised Core requires a new clean build, all qualification tests, controlled installation and operator acceptance**. Existing 2026-10-27 Core receipts cannot be reused to qualify this new revision. Module-specific work is recorded in `docs/MODULE_ROADMAP.md`.
+
 ## Approval
 - **Name**: P.Mei
 - **Section**: Operations
