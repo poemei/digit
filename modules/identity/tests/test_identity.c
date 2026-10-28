@@ -16,6 +16,9 @@ int main(void)
   puts("Identity record load FAIL");
   return 1;
  }
+ if (strcmp(record.orders[0],"Remain at your assigned mission.") ||
+     strcmp(record.orders[1],"Follow established policies and authorized instructions.") ||
+     strcmp(record.orders[2],"Report anything outside your authority to the appropriate next level of authority.")) ok=0;
  if (!identity_reply(&record,"mission",answer,sizeof answer) ||
      strcmp(answer,"Digit's mission is to support STN-LABZ in the pursuit and advancement of its overall mission, objectives, and long-term vision through research, development, engineering, technical analysis, innovation, and operational support."))
   ok=0;
@@ -31,13 +34,12 @@ int main(void)
    {"what is your first general order?", "1"},
    {"what is your second general order?", "2"},
    {"what is your third general order?", "3"},
-   {"what are your general orders?", ""},
+   {"what are your general orders?", "orders"},
   };
   char intent[80];
   size_t i;
   for (i=0;i<sizeof positive/sizeof positive[0];++i) {
-   if (positive[i].expected[0] &&
-       (!identity_question_route(positive[i].question,intent,sizeof intent) ||
+   if ((!identity_question_route(positive[i].question,intent,sizeof intent) ||
         strcmp(intent,positive[i].expected))) ok=0;
   }
   if (identity_question_route("how are you?",intent,sizeof intent)) ok=0;
