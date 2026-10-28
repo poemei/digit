@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,26 +20,41 @@ static int get_order(unsigned index,char *out,size_t cap)
  memcpy(out,text,n+1U);
  return 1;
 }
+/* Render approved imperative orders as first-person statements.
+ * The source record remains untouched; no LLM paraphrasing is involved. */
+static int first_person_order(unsigned index,char *out,size_t cap)
+{
+ char text[256];
+ size_t len;
+ int n;
+ if (!get_order(index,text,sizeof text)) return 0;
+ len=strlen(text);
+ if (len && text[len-1U]=='.') text[--len]=0;
+ if (!len) return 0;
+ text[0]=(char)tolower((unsigned char)text[0]);
+ n=snprintf(out,cap,"I must %s",text);
+ return n>0 && (size_t)n<cap;
+}
 static int answer(const char *topic,char *output,size_t cap)
 {
  unsigned index=0;
- char order[256];
+ char order[300];
  int n;
  if (!topic||!output||cap<2U) return 0;
  if (!strcmp(topic,"orders")||!strcmp(topic,"general orders")) {
-  char a[256],b[256],c[256];
-  if (!get_order(1U,a,sizeof a)||!get_order(2U,b,sizeof b)||
-      !get_order(3U,c,sizeof c)) return 0;
-  n=snprintf(output,cap,"My General Orders: 1. %s 2. %s 3. %s",a,b,c);
+  char a[300],b[300],c[300];
+  if (!first_person_order(1U,a,sizeof a)||!first_person_order(2U,b,sizeof b)||
+      !first_person_order(3U,c,sizeof c)) return 0;
+  n=snprintf(output,cap,"My three General Orders are: %s; %s; and %s.",a,b,c);
   return n>0&&(size_t)n<cap;
  }
  if (!strcmp(topic,"1")||!strcmp(topic,"first general order")) index=1U;
  else if (!strcmp(topic,"2")||!strcmp(topic,"second general order")) index=2U;
  else if (!strcmp(topic,"3")||!strcmp(topic,"third general order")) index=3U;
  if (index) {
-  if (!get_order(index,order,sizeof order)) return 0;
-  n=snprintf(output,cap,"My %s General Order is: %s",
-    index==1U?"First":index==2U?"Second":"Third",order);
+  if (!first_person_order(index,order,sizeof order)) return 0;
+  n=snprintf(output,cap,"My %s General Order is clear: %s.",
+    index==1U?"first":index==2U?"second":"third",order);
   return n>0&&(size_t)n<cap;
  }
  return identity_reply(&record,topic,output,cap);
@@ -115,7 +131,7 @@ static stnlabz_module_result_t stop(void)
  return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
- "identity","Digit Identity and Mission",1,1,1,
+ "identity","Digit Identity and Mission",1,1,2,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,qualify,start,stop
 };
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void){return &descriptor;}
