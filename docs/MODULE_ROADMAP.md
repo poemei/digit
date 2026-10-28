@@ -83,3 +83,10 @@
 - Identity module v1.1.0 now retrieves General Orders from Core, registers a separate deterministic identity-answer service, and recognizes mission, who-are-you, and first/second/third (1st/2nd/3rd) question variants.
 - Ollama v1.0.5 chat controller delegates these questions via Core-mediated Identity service; unrelated questions continue to normal Ollama generation. No IRC or shared ABI changes.
 - Updated Core test linking for Root providers. Source committed; host build, tests, installation, runtime and operator acceptance unverified.
+
+## 2026-10-28 — Identity General Order response repair (v1.1.1)
+
+- Director authorized eliminating the failing new Core lookup mechanism. The added Core order lookup service was removed, while immutable Root identity and existing protected General Orders remain intact.
+- Approved conversation answer copies of all three General Orders are now required fields in Identity's standalone `identity.conf` record; module v1.1.1 responds to direct and natural-language order requests without the failing Core query.
+- Identity answer service and Ollama conversational delegation remain in place. IRC and shared ABI unchanged. Tests expanded to compare all three approved data records and group question classification.
+- Source-only evidence: no compilation, module qualification, installation or live IRC verification claimed.
