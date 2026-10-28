@@ -423,11 +423,14 @@ int digit_diag_render(const char *sender, const char *account,
                  snapshot.service_count))
         return 0;
 
-    for (i = 0U; i < snapshot.service_count; ++i) {
-        if (snapshot.services[i].result != STNLABZ_MODULE_OK) {
-            code_owner = snapshot.services[i].owner;
-            code_identifier = snapshot.services[i].name;
-            code_is_service = 1;
+    if (!snapshot.command_seen ||
+        snapshot.command_result != STNLABZ_MODULE_OK) {
+        for (i = 0U; i < snapshot.service_count; ++i) {
+            if (snapshot.services[i].result != STNLABZ_MODULE_OK) {
+                code_owner = snapshot.services[i].owner;
+                code_identifier = snapshot.services[i].name;
+                code_is_service = 1;
+            }
         }
     }
 
