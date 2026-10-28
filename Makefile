@@ -73,7 +73,7 @@ test-behavior: $(BUILD_DIR)/test_core_behavior
 # Test fixtures are compiled as separate real shared objects. Test staging,
 # module installation and log files remain under a disposable private /tmp tree.
 HOTLOAD_FIXTURES := $(addprefix $(BUILD_DIR)/fixtures/,old.so badqual.so badstart.so good.so)
-HOTLOAD_TEST_SRCS := src/core_hotload.c src/core_activation.c src/core_policy.c src/agent_root.c src/identity_digit.c src/logging.c
+HOTLOAD_TEST_SRCS := src/core_hotload.c src/core_activation.c src/core_policy.c src/agent_root.c src/identity_digit.c src/logging.c src/module_host.c src/core_diagnostics.c
 HOTLOAD_ABI_SRCS := $(addprefix $(ABI_SRC_DIR)/,abi.c module.c module_registry.c loader_linux.c)
 
 $(BUILD_DIR)/fixtures/old.so: tests/fixtures/hotload_fixture.c
@@ -99,14 +99,14 @@ $(BUILD_DIR)/test_core_hotload: tests/test_core_hotload.c $(HOTLOAD_TEST_SRCS) $
 test-hotload: $(BUILD_DIR)/test_core_hotload $(HOTLOAD_FIXTURES)
 	./$(BUILD_DIR)/test_core_hotload $(HOTLOAD_FIXTURES)
 
-$(BUILD_DIR)/test_core_concurrency: tests/test_core_concurrency.c src/module_host.c
+$(BUILD_DIR)/test_core_concurrency: tests/test_core_concurrency.c src/module_host.c src/core_diagnostics.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -pthread -o $@ $^
 
 test-concurrency: $(BUILD_DIR)/test_core_concurrency
 	./$(BUILD_DIR)/test_core_concurrency
 
-$(BUILD_DIR)/test_core_self_unregister: tests/test_core_self_unregister.c src/module_host.c
+$(BUILD_DIR)/test_core_self_unregister: tests/test_core_self_unregister.c src/module_host.c src/core_diagnostics.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $^
 
@@ -117,7 +117,7 @@ $(BUILD_DIR)/fixtures/blocking.so: tests/fixtures/hotload_fixture.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared -DFIXTURE_VERSION=0 -DFIXTURE_REGISTER_SERVICE=1 -o $@ $<
 
-$(BUILD_DIR)/test_core_hotload_inflight: tests/test_core_hotload_inflight.c $(HOTLOAD_TEST_SRCS) src/module_host.c $(HOTLOAD_ABI_SRCS)
+$(BUILD_DIR)/test_core_hotload_inflight: tests/test_core_hotload_inflight.c $(HOTLOAD_TEST_SRCS) $(HOTLOAD_ABI_SRCS)
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -pthread -DDIGIT_HOTLOAD_TEST_STAGE=1 -o $@ $^ $(LDLIBS)
 
