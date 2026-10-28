@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "identity_model.h"
+#include "identity_internal.h"
 
 static int bounded_copy(char *out,size_t cap,const char *s)
 {
@@ -78,6 +79,52 @@ int identity_reply(const identity_record_t *r,const char *query,char *out,size_t
   value="My General Orders are protected by Core. This module has no authorized Core read service for them; I will not invent an answer.";
  } else value="Identity commands: /identity mission, /identity who, /identity orders. General Orders require an authorized Core read interface.";
  return bounded_copy(out,cap,value);
+}
+/* Strict, bounded natural-language intent selection. Never treat unrelated chat
+ * as an identity query; unmatched text goes to the existing chat controller. */
+int identity_question_route(const char *input,char *intent,size_t cap)
+{
+ char text[512];
+ size_t i,n;
+ const char *p;
+ if (!input||!intent||cap<8U) return 0;
+ n=strlen(input);
+ if (!n||n>=sizeof text) return 0;
+ for(i=0;i<n;++i) text[i]=(char)tolower((unsigned char)input[i]);
+ text[n]=0;
+ while(n&&(text[n-1]=='?'||text[n-1]=='.'||text[n-1]=='!'||text[n-1]==' ')) text[--n]=0;
+ p=text;
+ while(*p==' ') ++p;
+ if (!strncmp(p,"digit,",6)||!strncmp(p,"digicat,",8)) {
+   p=strchr(p,',')+1;
+   while(*p==' ') ++p;
+ }
+ if (!strncmp(p,"what is ",8)) p+=8;
+ else if (!strncmp(p,"what's ",7)) p+=7;
+ else if (!strncmp(p,"tell me ",8)) p+=8;
+ if (!strcmp(p,"your mission")||!strcmp(p,"mission")||
+     !strcmp(p,"your assigned mission"))
+   return bounded_copy(intent,cap,"mission");
+ if (!strcmp(p,"who are you")||!strcmp(p,"who you are")||
+     !strcmp(p,"your identity")||!strcmp(p,"identity"))
+   return bounded_copy(intent,cap,"who");
+ if (!strcmp(p,"your general orders")||!strcmp(p,"general orders"))
+   return bounded_copy(intent,cap,"orders");
+ {
+  static const char *forms[][3]={
+   {"1st","first","one"},{"2nd","second","two"},{"3rd","third","three"}
+  };
+  unsigned k,j;
+  for(k=0;k<3;++k) for(j=0;j<3;++j){
+   char expected[80];
+   (void)snprintf(expected,sizeof expected,"your %s general order",forms[k][j]);
+   if (!strcmp(p,expected)) {
+    (void)snprintf(intent,cap,"%u",k+1U);
+    return 1;
+   }
+  }
+ }
+ return 0;
 }
 static void check(int ok,unsigned *e,unsigned *p){++*e;if(ok)++*p;}
 int identity_selftest(unsigned *executed,unsigned *passed,int *negative_executed,int *negative_passed)
