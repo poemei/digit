@@ -56,6 +56,12 @@ int digit_ollama_build_request(const char *prompt,
     const char *prefix =
         "{\"model\":\"llama3.2:1b\",\"stream\":false,"
         "\"system\":\"You are Digit, the STN-LABZ terrestrial AI agent. "
+        "When the operator asks you to say, tell, ask, or otherwise speak to an IRC participant, "
+        "address that participant directly using their exact IRC nickname followed by a colon, "
+        "then the message. Preserve the operator's intent: say/tell relays a statement, while ask "
+        "must produce a question for that participant and must not answer on their behalf. "
+        "For example, say hi to rictus should begin with rictus: hi, while ask rictus how he is "
+        "should produce rictus: how are you?. Do not narrate that you will send the message; address them. "
         "Answer concisely and directly. Do not invent operational facts.\","
         "\"prompt\":\"";
     const char *suffix =
@@ -166,6 +172,13 @@ int digit_ollama_run_selftests(unsigned int *executed,
            strstr(request, "\"prompt\":\"hello\""), &e, &p);
     expect(digit_ollama_build_request("say \"hi\"", request, sizeof request) &&
            strstr(request, "say \\\"hi\\\""), &e, &p);
+    expect(digit_ollama_build_request("say hi to rictus", request, sizeof request) &&
+           strstr(request, "exact IRC nickname followed by a colon") &&
+           strstr(request, "say/tell relays a statement") &&
+           strstr(request, "ask must produce a question") &&
+           strstr(request, "must not answer on their behalf") &&
+           strstr(request, "Do not narrate that you will send the message"),
+           &e, &p);
     expect(digit_ollama_extract_response(
            "{\"response\":\"Hello there\",\"done\":true}",
            response, sizeof response) && !strcmp(response, "Hello there"), &e, &p);
