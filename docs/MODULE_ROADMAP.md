@@ -63,3 +63,8 @@
 - At least 10 module qualification tests including a passing negative test, as applicable under existing project rules.
 - A successful Core suite is not a substitute for testing a specific module. Likewise, passing a module test does not qualify Core.
 - Unfinished S2 investigative functionality remains explicitly open even though ingestion and `/s2` status reporting are operational.
+
+## 2026-10-28 — IRC v1.1.1 ordinary channel traffic log discipline
+
+- Director-authorized: removed routine `PRIVMSG ignored: channel message did not address Digit` logging. Unaddressed channel messages remain silently ignored; routing, security checks, malformed-message diagnostics and failure logging remain unchanged.
+- IRC module patch version raised from 1.1.0 to 1.1.1 to allow qualified hotload. Build, tests, installation and live operator acceptance pending.
