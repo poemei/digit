@@ -144,3 +144,8 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 
 - Corrected `/s2` and `/s2 status` to format the last successful Sentinel collection as UTC (`YYYY-MM-DD HH:MM:SS UTC`) using thread-safe `gmtime_r`; displays `never` when no successful collection exists. No changes to the four-hour poll cadence or automatic IRC noise controls.
 - Revision committed only; compilation, test qualification and installation remain operator-controlled and unverified for v1.0.3.
+
+## 2026-10-28 — IRC v1.1.1 ordinary channel traffic log discipline
+
+- Director-authorized: removed routine `PRIVMSG ignored: channel message did not address Digit` logging. Unaddressed channel messages remain silently ignored; routing, security checks, malformed-message diagnostics and failure logging remain unchanged.
+- IRC module patch version raised from 1.1.0 to 1.1.1 to allow qualified hotload. Build, tests, installation and live operator acceptance pending.
