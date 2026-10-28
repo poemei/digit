@@ -21,7 +21,7 @@
 
 #define IRC_VERSION_MAJOR 1U
 #define IRC_VERSION_MINOR 1U
-#define IRC_VERSION_PATCH 0U
+#define IRC_VERSION_PATCH 1U
 #define IRC_OUTBOUND_MAX 32U
 #define IRC_STARTUP_WAIT_SECONDS 30U
 
@@ -339,7 +339,6 @@ static void handle_conversation_message(const char *line)
         input = message;
     } else if (channel_index(target) >= 0) {
         if (!channel_prompt(message, &input)) {
-            status("PRIVMSG ignored: channel message did not address Digit");
             return;
         }
     } else {
