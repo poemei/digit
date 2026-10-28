@@ -1,27 +1,29 @@
-# Digit Identity & Mission — 1.0.0
+# Digit Identity & Mission — 1.1.0
 
-Native, standalone, read-only Digit module. The Director's approved operational mission is stored in `data/identity.conf` and installed in `/opt/digit/modules/identity/identity.conf`. The module reads the record at start and uses existing ABI command registration; it does not change Core, its Root identity, or the shared ABI.
+Read-only approved identity/mission record and Core-authoritative General Orders. The module is registered through Digit's existing ABI 1.5, without any IRC or shared ABI changes.
 
-## Supported commands
+## Authority
 
-- `/identity mission` — exact Director-approved mission statement, without LLM generation.
-- `/identity who` — read-only record of the operational identity.
-- `/identity orders` — safe explicit notice that Core General Orders require an authorized read interface. No imitation or fabricated orders.
+- Mission and operational identity: installed `/opt/digit/modules/identity/identity.conf` approved record.
+- Three General Orders: fetched from Core's new read-only `digit.root.orders.read` service, which reads the validated Root identity; no duplicate orders or module authority to modify them.
+- Core controls read service, remains the source of truth, and does not classify natural-language text.
+- Identity module classifies questions and returns exact records through `digit.identity.answer`. Ollama's chat controller first invokes that service. Non-identity questions fall through to LLM; identity service errors fail closed.
+- No modification to IRC or the shared ABI. Core modification was separately authorized by the Director for this task.
 
-**Current architectural limit:** Without a Core-exposed read-only Root service, no independent module can retrieve Core's immutable General Orders under the established Core-mediated module interface. Duplicating Core orders into the module would create a competing authority. Core modifications require separate direct Director approval.
+## Supported IRC requests
 
-**Conversational route limit:** Core currently maps plain, unprefixed natural language to the registered `chat` controller. This module registers an explicit `/identity` controller. Questions such as `digicat: what is your mission?` will still reach Ollama unless a separately approved routing mechanism is implemented. Neither Core nor Ollama was modified here.
+`/identity mission`, `/identity who`, `/identity orders`, `/identity first general order`, `/identity second general order`, `/identity third general order`.
 
-## Operator qualification
+Natural-language questions through the usual chat route: `digicat: what is your mission?`, `digicat: who are you?`, `digicat: what is your 1st general order?` and similarly `2nd`, `3rd`, `first`, `second`, `third`. Responses are deterministic and do not invoke Ollama generation.
+
+## Qualification
 
 ```sh
-make -C modules/identity clean
-make -C modules/identity
-make -C modules/identity test
+make clean && make && make test
+make -C modules/identity clean && make -C modules/identity && make -C modules/identity test
+make -C modules/ollama clean && make -C modules/ollama && make -C modules/ollama test
 ```
 
-The native module's self-qualification executes ten model checks including duplicate-field negative validation; the standalone test also reads the approved record and checks the exact mission.
+These commands require the repository's existing external ABI checkout. Install the revised Core **only under Director control** before installing/hotloading Identity v1.1.0 and Ollama v1.0.5. Qualification GREEN, hotload and client behavior are separate acceptance gates. Verify the natural-language questions and ensure unrelated chat still reaches Ollama.
 
-If accepted, the Director may install with `sudo make -C modules/identity install`. Core should perform standard qualification before activation. Verify with `digicat: /identity mission`, `digicat: /identity who`, and `digicat: /identity orders`.
-
-No host build/test, activation, natural-language intent routing, or operator acceptance is claimed by this commit. Treat the `identity.conf` file as operator-controlled: changed mission text requires an explicit Director approval, and runtime changes require a module restart/reload to take effect.
+Source committed; host build, test, activation and live routing have not yet been verified.
