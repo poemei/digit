@@ -1,7 +1,9 @@
 #include <stdatomic.h>
 #include <string.h>
+#include <strings.h>
 
 #include "module_host.h"
+#include "core_diagnostics.h"
 #include "digit_transport.h"
 #include "digit_route.h"
 
@@ -10,6 +12,7 @@
 
 typedef struct {
     char name[STNLABZ_MODULE_SERVICE_NAME_MAX];
+    char owner[STNLABZ_MODULE_ID_MAX];
     stnlabz_module_service_handler_fn handler;
     void *context;
     unsigned int in_flight;
@@ -18,6 +21,7 @@ typedef struct {
 
 typedef struct {
     char name[STNLABZ_MODULE_COMMAND_NAME_MAX];
+    char owner[STNLABZ_MODULE_ID_MAX];
     stnlabz_module_command_handler_fn handler;
     void *context;
     unsigned int in_flight;
@@ -28,6 +32,7 @@ static digit_service_entry_t services[DIGIT_HOST_SERVICE_MAX];
 static digit_command_entry_t commands[DIGIT_HOST_COMMAND_MAX];
 static atomic_flag service_lock = ATOMIC_FLAG_INIT;
 static atomic_flag command_lock = ATOMIC_FLAG_INIT;
+static _Thread_local char registering_module[STNLABZ_MODULE_ID_MAX];
 /* A callback cannot synchronously withdraw itself: its own in_flight
  * reference would make unregister wait forever. Keep a per-thread stack
  * to catch both direct and nested reentrant withdrawal attempts. */
@@ -76,6 +81,21 @@ static void unlock(atomic_flag *flag)
     atomic_flag_clear_explicit(flag, memory_order_release);
 }
 
+void digit_module_host_begin_registration(const char *module_id)
+{
+    size_t length;
+    registering_module[0] = '\0';
+    if (!module_id) return;
+    length = bounded_length(module_id, sizeof registering_module);
+    if (!length || length >= sizeof registering_module) return;
+    memcpy(registering_module, module_id, length + 1U);
+}
+
+void digit_module_host_end_registration(void)
+{
+    registering_module[0] = '\0';
+}
+
 static int register_service(const char *name,
                             stnlabz_module_service_handler_fn handler,
                             void *context)
@@ -103,6 +123,9 @@ static int register_service(const char *name,
     }
 
     memcpy(services[free_slot].name, name, length + 1U);
+    if (registering_module[0])
+        memcpy(services[free_slot].owner, registering_module,
+               strlen(registering_module) + 1U);
     services[free_slot].handler = handler;
     services[free_slot].context = context;
     unlock(&service_lock);
@@ -159,8 +182,10 @@ static stnlabz_module_result_t invoke_service(
     stnlabz_module_service_handler_fn handler = NULL;
     void *context = NULL;
     stnlabz_module_result_t result;
+    char service_owner[STNLABZ_MODULE_ID_MAX];
     size_t i;
 
+    service_owner[0] = '\0';
     if (response_used) *response_used = 0U;
     if (!name || (request_size && !request) || (response_size && !response))
         return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
@@ -182,7 +207,10 @@ static stnlabz_module_result_t invoke_service(
     if (!handler && !strcmp(name, DIGIT_ROUTER_DISPATCH_SERVICE))
         return route_dispatch_service(request, request_size, response,
                                       response_size, response_used, NULL);
-    if (!handler) return STNLABZ_MODULE_ERR_NOT_FOUND;
+    if (!handler) {
+        digit_diag_service(name, "core/unknown", STNLABZ_MODULE_ERR_NOT_FOUND);
+        return STNLABZ_MODULE_ERR_NOT_FOUND;
+    }
 
     {
         digit_service_frame_t frame = {entry, current_service_frame};
@@ -193,8 +221,13 @@ static stnlabz_module_result_t invoke_service(
     }
 
     lock(&service_lock);
+    if (entry->owner[0])
+        memcpy(service_owner, entry->owner, strlen(entry->owner) + 1U);
+    else
+        memcpy(service_owner, "core/unknown", sizeof "core/unknown");
     entry->in_flight--;
     unlock(&service_lock);
+    digit_diag_service(name, service_owner, result);
     return result;
 }
 
@@ -263,6 +296,9 @@ static int register_command(const char *name,
     }
 
     memcpy(commands[free_slot].name, name, length + 1U);
+    if (registering_module[0])
+        memcpy(commands[free_slot].owner, registering_module,
+               strlen(registering_module) + 1U);
     commands[free_slot].handler = handler;
     commands[free_slot].context = context;
     unlock(&command_lock);
@@ -326,7 +362,9 @@ static stnlabz_module_result_t dispatch_command(
     digit_command_entry_t *entry = NULL;
     stnlabz_module_result_t result;
     void *handler_context = NULL;
+    char command_owner[STNLABZ_MODULE_ID_MAX];
     size_t i;
+    command_owner[0] = '\0';
     (void)context;
     if (response_used) *response_used = 0U;
     if (!cmd || request_size != sizeof *cmd || !out ||
@@ -349,7 +387,11 @@ static stnlabz_module_result_t dispatch_command(
         }
     }
     unlock(&command_lock);
-    if (!handler) return STNLABZ_MODULE_ERR_NOT_FOUND;
+    if (!handler) {
+        digit_diag_command(cmd->name, "core/unknown",
+                           STNLABZ_MODULE_ERR_NOT_FOUND, 0);
+        return STNLABZ_MODULE_ERR_NOT_FOUND;
+    }
     {
         digit_command_frame_t frame = {entry, current_command_frame};
         current_command_frame = &frame;
@@ -357,10 +399,15 @@ static stnlabz_module_result_t dispatch_command(
         current_command_frame = frame.previous;
     }
     lock(&command_lock);
+    if (entry->owner[0])
+        memcpy(command_owner, entry->owner, strlen(entry->owner) + 1U);
+    else
+        memcpy(command_owner, "core/unknown", sizeof "core/unknown");
     entry->in_flight--;
     unlock(&command_lock);
     if (result == STNLABZ_MODULE_OK && response_used)
         *response_used = sizeof *out;
+    digit_diag_command(cmd->name, command_owner, result, out->replied);
     return result;
 }
 
@@ -379,9 +426,24 @@ static stnlabz_module_result_t route_dispatch_service(
     if (!in || request_size != sizeof *in ||
         !memchr(in->sender, 0, sizeof in->sender) ||
         !memchr(in->account, 0, sizeof in->account) ||
-        !memchr(in->text, 0, sizeof in->text) || !in->text[0])
+        !memchr(in->text, 0, sizeof in->text) || !in->text[0] ||
+        !response || response_size < sizeof(digit_route_reply_t))
         return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
 
+    if (!strcasecmp(in->text, "diagnose my last request")) {
+        char diagnostic[DIGIT_ROUTE_REPLY_MAX];
+        digit_route_reply_t *out = response;
+        if (!digit_diag_render(in->sender, in->account,
+                               diagnostic, sizeof diagnostic))
+            return STNLABZ_MODULE_ERR_INVALID_STATE;
+        memset(out, 0, sizeof *out);
+        memcpy(out->text, diagnostic, strlen(diagnostic) + 1U);
+        out->replied = 1;
+        if (response_used) *response_used = sizeof *out;
+        return STNLABZ_MODULE_OK;
+    }
+
+    digit_diag_begin(in->sender, in->account, in->text);
     memset(&command, 0, sizeof command);
     memcpy(command.sender, in->sender, sizeof command.sender);
     memcpy(command.account, in->account, sizeof command.account);
@@ -401,6 +463,7 @@ static stnlabz_module_result_t route_dispatch_service(
     } else {
         memcpy(command.name, "chat", sizeof "chat");
     }
+    digit_diag_route(command.name);
     arg_len = bounded_length(cursor, sizeof command.arguments);
     if (arg_len >= sizeof command.arguments)
         return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
