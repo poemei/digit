@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "identity_model.h"
+#include "identity_internal.h"
 int main(void)
 {
  unsigned executed=0,passed=0;
@@ -18,6 +19,30 @@ int main(void)
  if (!identity_reply(&record,"mission",answer,sizeof answer) ||
      strcmp(answer,"Digit's mission is to support STN-LABZ in the pursuit and advancement of its overall mission, objectives, and long-term vision through research, development, engineering, technical analysis, innovation, and operational support."))
   ok=0;
+ {
+  static const struct { const char *question; const char *expected; } positive[] = {
+   {"what is your mission?", "mission"},
+   {"digicat, what is your mission?", "mission"},
+   {"who are you?", "who"},
+   {"digicat, who are you?", "who"},
+   {"what is your 1st general order?", "1"},
+   {"what is your 2nd general order?", "2"},
+   {"what is your 3rd general order?", "3"},
+   {"what is your first general order?", "1"},
+   {"what is your second general order?", "2"},
+   {"what is your third general order?", "3"},
+   {"what are your general orders?", ""},
+  };
+  char intent[80];
+  size_t i;
+  for (i=0;i<sizeof positive/sizeof positive[0];++i) {
+   if (positive[i].expected[0] &&
+       (!identity_question_route(positive[i].question,intent,sizeof intent) ||
+        strcmp(intent,positive[i].expected))) ok=0;
+  }
+  if (identity_question_route("how are you?",intent,sizeof intent)) ok=0;
+  if (identity_question_route("What is your 4th general order?",intent,sizeof intent)) ok=0;
+ }
  puts(ok?"Identity approved mission and qualification PASS":"Identity approved mission / qualification FAIL");
  return ok?0:1;
 }
