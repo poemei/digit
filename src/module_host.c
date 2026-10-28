@@ -4,8 +4,6 @@
 #include "module_host.h"
 #include "digit_transport.h"
 #include "digit_route.h"
-#include "digit_identity.h"
-#include "agent_root.h"
 
 #define DIGIT_HOST_SERVICE_MAX 32U
 #define DIGIT_HOST_COMMAND_MAX 32U
@@ -86,8 +84,7 @@ static int register_service(const char *name,
     size_t free_slot = DIGIT_HOST_SERVICE_MAX;
     size_t length;
 
-    if (!name || !handler || (!strcmp(name, DIGIT_ROUTER_DISPATCH_SERVICE) ||
-        !strcmp(name, DIGIT_ROOT_ORDERS_SERVICE))) return 0;
+    if (!name || !handler || !strcmp(name, DIGIT_ROUTER_DISPATCH_SERVICE)) return 0;
     length = bounded_length(name, STNLABZ_MODULE_SERVICE_NAME_MAX);
     if (!length || length >= STNLABZ_MODULE_SERVICE_NAME_MAX) return 0;
 
@@ -182,25 +179,6 @@ static stnlabz_module_result_t invoke_service(
     }
     unlock(&service_lock);
 
-    if (!handler && !strcmp(name, DIGIT_ROOT_ORDERS_SERVICE)) {
-        const digit_root_order_request_t *in = request;
-        digit_root_order_response_t *out = response;
-        const stnlabz_agent_root_t *root;
-        size_t n;
-        if (!in || request_size != sizeof *in || !out ||
-            response_size < sizeof *out || in->index < 1U ||
-            in->index > STNLABZ_ROOT_ORDER_COUNT)
-            return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
-        root = stnlabz_agent_root_identity();
-        if (!stnlabz_agent_root_validate(root))
-            return STNLABZ_MODULE_ERR_INVALID_STATE;
-        n = strlen(root->orders[in->index - 1U]);
-        if (n >= sizeof out->text) return STNLABZ_MODULE_ERR_INVALID_STATE;
-        memset(out, 0, sizeof *out);
-        memcpy(out->text, root->orders[in->index - 1U], n + 1U);
-        if (response_used) *response_used = sizeof *out;
-        return STNLABZ_MODULE_OK;
-    }
     if (!handler && !strcmp(name, DIGIT_ROUTER_DISPATCH_SERVICE))
         return route_dispatch_service(request, request_size, response,
                                       response_size, response_used, NULL);
