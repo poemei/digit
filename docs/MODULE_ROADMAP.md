@@ -95,3 +95,27 @@
 
 - Director requested natural first-person responses for General Order questions. Identity now renders each approved order as an `I must` statement, with the original data unchanged.
 - Core, IRC, Ollama and ABI unchanged. Source committed; tests and live verification remain pending.
+
+
+## 2026-10-28 — Ollama v1.0.6 peer-action transfer from Rictus
+
+**State: Source implemented; module qualification, activation, end-to-end verification and acceptance pending.**
+
+Director authorized transferring the current proven Rictus peer-address/action behavior into Digit Ollama while preserving Digit-specific identity handling.
+
+Digit Ollama now:
+
+- keeps Core-mediated Identity answers ahead of model generation
+- instructs generated peer speech to use the exact IRC nickname followed by a colon
+- preserves statement intent for `say`/`tell`
+- preserves question intent for `ask` and does not answer on the peer's behalf
+- deterministically restores the peer prefix when generation omits it
+- recognizes the currently proven `say ... to <nick>`, `tell <nick> ...`, and `ask <nick> ...` forms
+- sends recognized peer actions through the existing Core host `send_message` boundary
+- leaves ordinary conversational replies in their original conversation context
+
+Module descriptor advanced from **1.0.5 to 1.0.6**.
+
+Shared ABI, IRC transport implementation, endpoint, model selection, and Digit Identity-service precedence are unchanged.
+
+Required gate: `make -C modules/ollama clean all test`, qualification evidence including the negative test, controlled install/hotload receipt for 1.0.6, live channel peer action, live DM-origin peer action, and explicit Director acceptance.
