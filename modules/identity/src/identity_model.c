@@ -22,6 +22,9 @@ static int set_field(identity_record_t *r,const char *key,const char *value,unsi
  else if (!strcmp(key,"organization")) {bit=2U;ok=bounded_copy(r->organization,sizeof r->organization,value);}
  else if (!strcmp(key,"role")) {bit=4U;ok=bounded_copy(r->role,sizeof r->role,value);}
  else if (!strcmp(key,"mission")) {bit=8U;ok=bounded_copy(r->mission,sizeof r->mission,value);}
+ else if (!strcmp(key,"order1")) {bit=16U;ok=bounded_copy(r->orders[0],sizeof r->orders[0],value);}
+ else if (!strcmp(key,"order2")) {bit=32U;ok=bounded_copy(r->orders[1],sizeof r->orders[1],value);}
+ else if (!strcmp(key,"order3")) {bit=64U;ok=bounded_copy(r->orders[2],sizeof r->orders[2],value);}
  else return 0;
  if (!ok || (*mask & bit)) return 0;
  *mask|=bit;
@@ -50,7 +53,7 @@ int identity_load(const char *path,identity_record_t *out)
   if (!set_field(&result,key,eq,&mask)) goto fail;
  }
  if (ferror(fp) || fclose(fp)!=0) return 0;
- if (mask!=15U) return 0;
+ if (mask!=127U) return 0;
  *out=result;
  return 1;
 fail:
@@ -76,8 +79,8 @@ int identity_reply(const identity_record_t *r,const char *query,char *out,size_t
  } else if (equals_ci(query,"orders")||equals_ci(query,"general orders")||
             equals_ci(query,"first general order")||equals_ci(query,"second general order")||
             equals_ci(query,"third general order")) {
-  value="My General Orders are protected by Core. This module has no authorized Core read service for them; I will not invent an answer.";
- } else value="Identity commands: /identity mission, /identity who, /identity orders. General Orders require an authorized Core read interface.";
+  value="Use /identity orders or request the first, second, or third General Order.";
+ } else value="Identity commands: /identity mission, /identity who, /identity orders. Ask for any of my three General Orders.";
  return bounded_copy(out,cap,value);
 }
 /* Strict, bounded natural-language intent selection. Never treat unrelated chat
@@ -108,7 +111,7 @@ int identity_question_route(const char *input,char *intent,size_t cap)
  if (!strcmp(p,"who are you")||!strcmp(p,"who you are")||
      !strcmp(p,"your identity")||!strcmp(p,"identity"))
    return bounded_copy(intent,cap,"who");
- if (!strcmp(p,"your general orders")||!strcmp(p,"general orders"))
+ if (!strcmp(p,"your general orders")||!strcmp(p,"general orders")||!strcmp(p,"are your general orders"))
    return bounded_copy(intent,cap,"orders");
  {
   static const char *forms[][3]={
@@ -137,16 +140,19 @@ int identity_selftest(unsigned *executed,unsigned *passed,int *negative_executed
  check(set_field(&r,"organization","STN-LABZ",&mask),&e,&p);
  check(set_field(&r,"role","terrestrial AI agent",&mask),&e,&p);
  check(set_field(&r,"mission","Approved mission",&mask),&e,&p);
- check(mask==15U,&e,&p);
+ check(set_field(&r,"order1","Remain at your assigned mission.",&mask),&e,&p);
+ check(set_field(&r,"order2","Follow established policies and authorized instructions.",&mask),&e,&p);
+ check(set_field(&r,"order3","Report anything outside your authority to the appropriate next level of authority.",&mask),&e,&p);
+ check(mask==127U,&e,&p);
  check(identity_reply(&r,"mission",b,sizeof b)&&!strcmp(b,"Approved mission"),&e,&p);
  check(identity_reply(&r,"who",b,sizeof b)&&strstr(b,"Digit")!=NULL,&e,&p);
  check(identity_reply(&r,"MISSION",b,sizeof b)&&!strcmp(b,"Approved mission"),&e,&p);
- check(identity_reply(&r,"orders",b,sizeof b)&&strstr(b,"will not invent")!=NULL,&e,&p);
+ check(identity_reply(&r,"orders",b,sizeof b)&&strstr(b,"/identity orders")!=NULL,&e,&p);
  check(identity_reply(&r,"unknown",b,sizeof b)&&strstr(b,"Identity commands")!=NULL,&e,&p);
  ne=1;np=!set_field(&r,"mission","unauthorized duplicate",&mask);
  if(executed)*executed=e;
  if(passed)*passed=p;
  if(negative_executed)*negative_executed=ne;
  if(negative_passed)*negative_passed=np;
- return e==10U&&p==10U&&ne&&np;
+ return e==13U&&p==13U&&ne&&np;
 }
