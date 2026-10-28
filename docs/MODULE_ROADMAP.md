@@ -76,3 +76,10 @@
 - **Protected Core boundary:** General Orders remain in Core; no Core or ABI read service currently exposes them to modules. `/identity orders` therefore explicitly declines to invent an answer. No duplicate mutable copy of Core orders was created.
 - **Routing boundary:** Unprefixed natural-language inquiries still default to Ollama's `chat` route; `/identity` is explicitly routed and does not yet intercept arbitrary conversational inquiries. A separate Director-approved solution is required.
 - Module source committed; host build, qualification, activation and operator client acceptance unverified.
+
+## 2026-10-28 — Director-authorized authoritative identity question routing
+
+- Added protected Core read-only `digit.root.orders.read` service, returning validated Root General Orders through the existing ABI invocation path without exposing mutation.
+- Identity module v1.1.0 now retrieves General Orders from Core, registers a separate deterministic identity-answer service, and recognizes mission, who-are-you, and first/second/third (1st/2nd/3rd) question variants.
+- Ollama v1.0.5 chat controller delegates these questions via Core-mediated Identity service; unrelated questions continue to normal Ollama generation. No IRC or shared ABI changes.
+- Updated Core test linking for Root providers. Source committed; host build, tests, installation, runtime and operator acceptance unverified.
