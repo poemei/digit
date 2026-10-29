@@ -13,7 +13,6 @@
 #include <unistd.h>
 #include "stnlabz_abi/module.h"
 #include "s2_model.h"
-#include "digit_transport.h"
 #include "s2_public.h"
 #include "digit_llm.h"
 
@@ -37,31 +36,7 @@ static time_t last_success;
 static int initial_report_sent;
 static char latest_public_report[8192];
 static time_t last_publish_attempt;
-
-/* A successful collection produces at most one short, scheduled IRC synopsis.
- * The first successful poll sends a baseline. Later polls send only on change.
- * Failed delivery remains visible in logs; a subsequent material change can retry. */
-static void publish_synopsis(size_t total, size_t opened, size_t changed,
-                             size_t qualifying, int baseline)
-{
-    digit_transport_channel_request_t req = {{0}};
-    size_t used = 0;
-    stnlabz_module_result_t result;
-    if (!owner || !owner->invoke_service) return;
-    (void)snprintf(req.message, sizeof req.message,
-        "[S2] %s | Sentinel records=%zu; new=%zu revised=%zu; "
-        "MEDIUM/HIGH/CRITICAL=%zu. Source records are leads, not confirmed incidents. "
-        "Next check in 4h. /s2 for status.",
-        baseline ? "Baseline intelligence synopsis" : "Intelligence update",
-        total, opened, changed, qualifying);
-    result = owner->invoke_service(DIGIT_TRANSPORT_CHANNEL_SEND_SERVICE,
-        &req, sizeof req, NULL, 0, &used);
-    if (result != STNLABZ_MODULE_OK)
-        fprintf(stderr, "[S2] IRC delivery unavailable result=%d; collection retained\n",
-                (int)result);
-    else
-        fprintf(stderr, "[S2] scheduled synopsis queued to IRC\n");
-}
+static void add_reader_note(char *report, size_t capacity);
 
 static size_t on_bytes(char *data, size_t size, size_t amount, void *ctx)
 {
@@ -88,7 +63,7 @@ static int collect_once(void)
     s2_register_t next = {0};
     int ok = 0;
     int announce = 0, baseline = 0;
-    size_t report_total = 0, report_opened = 0, report_changed = 0, report_qualifying = 0;
+    size_t report_total = 0, report_opened = 0, report_changed = 0;
     if (!curl) return 0;
     curl_easy_setopt(curl, CURLOPT_URL, S2_URL);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0L);
@@ -130,7 +105,6 @@ static int collect_once(void)
     report_total = cases.count;
     report_opened = cases.opened;
     report_changed = cases.changed;
-    report_qualifying = cases.qualifying;
     if (announce) initial_report_sent = 1;
     (void)snprintf(last_result, sizeof last_result,
         "Sentinel source records tracked=%zu; this poll new=%zu revised=%zu unchanged=%zu; "
