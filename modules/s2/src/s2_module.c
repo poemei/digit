@@ -57,10 +57,10 @@ static void publish_synopsis(size_t total, size_t opened, size_t changed,
     result = owner->invoke_service(DIGIT_TRANSPORT_CHANNEL_SEND_SERVICE,
         &req, sizeof req, NULL, 0, &used);
     if (result != STNLABZ_MODULE_OK)
-        fprintf(stderr, "[S2] IRC delivery unavailable result=%d; collection retained\\n",
+        fprintf(stderr, "[S2] IRC delivery unavailable result=%d; collection retained\n",
                 (int)result);
     else
-        fprintf(stderr, "[S2] scheduled synopsis queued to IRC\\n");
+        fprintf(stderr, "[S2] scheduled synopsis queued to IRC\n");
 }
 
 static size_t on_bytes(char *data, size_t size, size_t amount, void *ctx)
@@ -156,7 +156,7 @@ done:
             (void)snprintf(latest_public_report, sizeof latest_public_report, "%s", prepared);
         } else {
             latest_public_report[0] = 0;
-            fprintf(stderr,"[S2] public report withheld: validation failed\\n");
+            fprintf(stderr,"[S2] public report withheld: validation failed\n");
         }
     }
     s2_register_free(&next);
@@ -172,7 +172,7 @@ static void add_reader_note(char *report,size_t capacity)
  digit_llm_response_t response={{0}};
  size_t used=0U,i,n;
  char *marker;
- const char *heading="## A QUICK EXPLANATION FROM DIGIT\\n\\n";
+ const char *heading="## A QUICK EXPLANATION FROM DIGIT\n\n";
  if(!owner||!owner->invoke_service||!report)return;
  (void)snprintf(request.prompt,sizeof request.prompt,
   "Write one friendly, general educational sentence for a nontechnical small-business reader. "
@@ -188,7 +188,7 @@ static void add_reader_note(char *report,size_t capacity)
  for(i=0;i<n;++i){
   unsigned char c=(unsigned char)response.text[i];
   if(c<32||c>126||c=='#'||c=='<'||c=='>'||c=='['||c==']'||
-     c=='{'||c=='}'||c=='/'||c=='\\\\'||(c>='0'&&c<='9'))return;
+     c=='{'||c=='}'||c=='/'||c=='\\'||(c>='0'&&c<='9'))return;
  }
  /* This deliberately rejects incident-specific words. An untrusted model
     cannot author evidence or business-impact conclusions for publication. */
@@ -207,7 +207,7 @@ static void add_reader_note(char *report,size_t capacity)
  if(marker){
   char insert[280];
   size_t pos=(size_t)(marker-report),length=strlen(report),added;
-  int w=snprintf(insert,sizeof insert,"%s%s\\n\\n",heading,response.text);
+  int w=snprintf(insert,sizeof insert,"%s%s\n\n",heading,response.text);
   if(w<=0||(size_t)w>=sizeof insert)return;
   added=(size_t)w;
   if(length+added>=capacity)return;
@@ -225,7 +225,7 @@ static int record_publish_stamp(void)
 {
  FILE *f=fopen(S2_PUBLIC_STAMP,"w");
  if(!f)return 0;
- if(fprintf(f,"S2 sai-dsa published successfully\\n")<0){fclose(f);return 0;}
+ if(fprintf(f,"S2 sai-dsa published successfully\n")<0){fclose(f);return 0;}
  return fclose(f)==0;
 }
 static void *run_collection(void *unused)
@@ -247,9 +247,9 @@ static void *run_collection(void *unused)
    if(s2_public_publish(latest_public_report)){
     if(record_publish_stamp()){
      last_published=now;
-     fprintf(stderr,"[S2] sai-dsa published; six-hour cadence active\\n");
-    }else fprintf(stderr,"[S2] publication accepted but stamp persistence failed\\n");
-   }else fprintf(stderr,"[S2] sai-dsa publishing failed or denied; previous report preserved\\n");
+     fprintf(stderr,"[S2] sai-dsa published; six-hour cadence active\n");
+    }else fprintf(stderr,"[S2] publication accepted but stamp persistence failed\n");
+   }else fprintf(stderr,"[S2] sai-dsa publishing failed or denied; previous report preserved\n");
   }
   {
    struct timespec wait={1,0};
