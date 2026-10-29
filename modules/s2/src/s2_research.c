@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "s2_research.h"
+#define S2_HTTPBL_KEY "/opt/digit/auth/httpbl.key"
 #define S2_HTTPBL_CONF "/opt/digit/modules/s2/httpbl.conf"
 #define S2_MODULE_CONF "/opt/digit/modules/s2/module.conf"
 static int read_key_file(const char *path,char *key,size_t cap)
@@ -20,7 +21,17 @@ static int read_key_file(const char *path,char *key,size_t cap)
   char *s=line,*eq,*end;
   while(*s==' '||*s=='\t')s++;
   if(*s=='#'||*s=='\n'||!*s)continue;
-  eq=strchr(s,'=');if(!eq)continue;
+  eq=strchr(s,'=');
+  if(!eq){
+   /* Root-owned OS file can contain only the plain twelve-character key. */
+   char *end=s+strlen(s);size_t n,i;
+   while(end>s&&(end[-1]=='\\n'||end[-1]=='\\r'||end[-1]==' '))*--end=0;
+   n=strlen(s);
+   if(found||n!=12U||n>=cap)break;
+   for(i=0;i<n;++i)if(s[i]<'a'||s[i]>'z')break;
+   if(i!=n)break;
+   memcpy(key,s,n+1U);found=1;continue;
+  }
   *eq++=0;end=eq+strlen(eq);
   while(end>eq&&(end[-1]=='\n'||end[-1]=='\r'||end[-1]==' '))*--end=0;
   if(!strcmp(s,"httpbl_key")||!strcmp(s,"key")){
@@ -75,7 +86,8 @@ int s2_httpbl_review(const char *json,size_t length,char *out,size_t cap)
  size_t i,n;int written=0;
  if(!out||cap<300||!json||!length||length>8U*1024U*1024U)return 0;
  out[0]=0;
- if(!read_key_file(S2_HTTPBL_CONF,key,sizeof key)&&
+ if(!read_key_file(S2_HTTPBL_KEY,key,sizeof key)&&
+    !read_key_file(S2_HTTPBL_CONF,key,sizeof key)&&
     !read_key_file(S2_MODULE_CONF,key,sizeof key)){
   snprintf(out,cap,"HTTP:BL research was not performed because the approved local access-key configuration is unavailable. No reputation verdict is inferred.");
   return 1;
