@@ -150,7 +150,7 @@ done:
         char prepared[sizeof latest_public_report];
         if (s2_public_render(data.body, data.length, report_total, report_opened,
                              report_changed, time(NULL), prepared, sizeof prepared)) {
-            memcpy(latest_public_report, prepared, sizeof prepared);
+            (void)snprintf(latest_public_report, sizeof latest_public_report, "%s", prepared);
         } else {
             latest_public_report[0] = 0;
             fprintf(stderr,"[S2] public report withheld: validation failed\\n");
