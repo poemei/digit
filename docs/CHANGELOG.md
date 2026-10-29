@@ -214,3 +214,11 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 - Human-readable public report text explains website scanning, what source checks were completed, and limits of attribution. Optional Ollama editorial assistance uses the existing `digit.llm.generate` service for a single general-education sentence only, without exposing source observations. S2 controls final fact and business-effect wording; fallback to static prose.
 - Maintains native S2 and six-hour SAI-DSA publishing cadence. No Core, IRC, ABI, site Core, Python, or separate publisher edits.
 - **Pending:** Compilation, positive/negative qualification, key-file access validation, HTTP:BL resolution behavior, and site publication acceptance. Current S2 source still lacks full Rictus correlation and durable per-case investigative evidence needed to replicate the historical comprehensive report.
+
+## 2026-10-29 — S2 v1.2.0 operator build correction
+
+- Operator build halted because `add_reader_note` was called before its static declaration. Added the forward declaration.
+- Corrected the HTTP:BL public-report `snprintf` placeholder for the prepared research summary, eliminating the extra-format-argument warning and restoring its inclusion in public text.
+- Fixed incorrectly escaped newline and carriage-return character constants in HTTP:BL key parsing.
+- Removed dead IRC synopsis code and an unused report counter to address reported warnings, without modifying Core or IRC; aligned public investigative headings with test assertions.
+- GitHub source corrected; a clean operator build and qualification are still required. No claim of production success.
