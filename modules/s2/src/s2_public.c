@@ -17,6 +17,7 @@ int s2_public_render(const char *source_json, size_t source_size,
  struct tm utc;
  size_t i,n,medium=0,high=0,critical=0,missing=0;
  size_t status_present=0,blocked=0,server_error=0;
+ size_t cms_probes=0,config_probes=0,unclassified=0;
  char when[40];
  int written;
  if(!source_json||!source_size||source_size>8U*1024U*1024U||
@@ -45,6 +46,28 @@ int s2_public_render(const char *source_json, size_t source_size,
   else if(!strcmp(severity,"MEDIUM"))medium++;
   else if(!strcmp(severity,"HIGH"))high++;
   else if(!strcmp(severity,"CRITICAL"))critical++;
+  /* Case-level investigative triage: retain only category counts publicly.
+   * A signature match means a review lead, never actor attribution. */
+  {
+   const char *path=NULL;
+   struct json_object *candidate=NULL;
+   if(json_object_object_get_ex(item,"request",&candidate) &&
+      json_object_is_type(candidate,json_type_string))
+     path=json_object_get_string(candidate);
+   else if(json_object_object_get_ex(item,"path",&candidate) &&
+           json_object_is_type(candidate,json_type_string))
+     path=json_object_get_string(candidate);
+   else if(details &&
+           json_object_object_get_ex(details,"request",&candidate) &&
+           json_object_is_type(candidate,json_type_string))
+     path=json_object_get_string(candidate);
+   if(path&&(strstr(path,"/wp-admin/")||strstr(path,"/wp-login.php")))
+     cms_probes++;
+   else if(path&&(strstr(path,"/.env")||strstr(path,"/config.php")||
+                  strstr(path,"/phpunit/")))
+     config_probes++;
+   else unclassified++;
+  }
   value=NULL;
   if(json_object_object_get_ex(item,"response_status",&value)&&json_object_is_type(value,json_type_int)){
     int status=json_object_get_int(value);
@@ -91,6 +114,14 @@ int s2_public_render(const char *source_json, size_t source_size,
  "**Reporting Window:** Not established; the feed does not provide a validated recent-time filter.\n\n"
  "Newly opened in latest ingestion: %zu. Revised: %zu. "
  "These counts are not assertions of newly occurring attacks.\n\n"
+ "### INVESTIGATIVE TRIAGE OF SOURCE REQUESTS\n\n"
+ "| Review category | Source observations |\n|---|---:|\n"
+ "| Potential CMS login/admin probing | %zu |\n"
+ "| Potential configuration or test-file probing | %zu |\n"
+ "| Not classified from examined request fields | %zu |\n\n"
+ "**Finding:** These are source-request signatures only. Their appearance does not prove malicious intent, access, or exploitation.\n\n"
+ "**Investigative practice:** Verify field roles, timestamp and source host; inspect the corresponding server response and application log; separate shared infrastructure IPs from potential clients; correlate independent evidence before any actor or incident conclusion.\n\n"
+ "**Next Action:** Prioritize qualifying MEDIUM/HIGH/CRITICAL request signatures for server-log corroboration and record the outcome against the original private source ID.\n\n"
  "## 8. HISTORICAL FINDINGS\n\n"
  "Individual historical case identities and source-field values are retained privately. "
  "A public grouping by date or actor is withheld until field roles and chronology are verified.\n\n"
@@ -110,6 +141,7 @@ int s2_public_render(const char *source_json, size_t source_size,
  "customer harm, or financial loss. Confirmation requires application and response logs, uptime "
  "monitoring, investigated incident records, and documented service-owner assessments.\n",
  when,tracked,opened,changed,tracked,medium,high,critical,missing,opened,changed,
+ cms_probes,config_probes,unclassified,
  status_present,blocked,server_error,n-status_present);
  json_object_put(root);json_tokener_free(tok);
  return written>0&&(size_t)written<capacity;
