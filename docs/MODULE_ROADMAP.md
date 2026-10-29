@@ -129,3 +129,11 @@ Required gate: `make -C modules/ollama clean all test`, qualification evidence i
 - New tests check report format and non-disclosure of representative sensitive input.
 - **Known limitation:** Current S2 persists an ID/hash register rather than the full source evidence and does not access Rictus event history; therefore the full per-threat investigative report in the operator's example is not yet produced. No claim of completed cross-source research.
 - Source committed only. Native build, selftest, module qualification, site mission-granted login, publication and live interval are **unverified**. No Core, IRC, website Core or shared ABI edits.
+
+## 2026-10-29 — S2 public-reader research and editorial integration v1.2.0
+
+- Director identified the existing host-only plain-text Project Honey Pot HTTP:BL key path `/opt/digit/auth/httpbl.key`; updated S2 to read it with private-file checks, without copying or logging the secret.
+- S2 now queries HTTP:BL for up to three eligible public IPv4 source addresses in the latest Sentinel JSON, and differentiates search-engine classification from suspicious, email harvesting and comment spam indicators.
+- Human-readable public report text explains website scanning, what source checks were completed, and limits of attribution. Optional Ollama editorial assistance uses the existing `digit.llm.generate` service for a single general-education sentence only, without exposing source observations. S2 controls final fact and business-effect wording; fallback to static prose.
+- Maintains native S2 and six-hour SAI-DSA publishing cadence. No Core, IRC, ABI, site Core, Python, or separate publisher edits.
+- **Pending:** Compilation, positive/negative qualification, key-file access validation, HTTP:BL resolution behavior, and site publication acceptance. Current S2 source still lacks full Rictus correlation and durable per-case investigative evidence needed to replicate the historical comprehensive report.
