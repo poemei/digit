@@ -25,7 +25,7 @@ static int read_key_file(const char *path,char *key,size_t cap)
   if(!eq){
    /* Root-owned OS file can contain only the plain twelve-character key. */
    char *end=s+strlen(s);size_t n,i;
-   while(end>s&&(end[-1]=='\\n'||end[-1]=='\\r'||end[-1]==' '))*--end=0;
+   while(end>s&&(end[-1]=='\n'||end[-1]=='\r'||end[-1]==' '))*--end=0;
    n=strlen(s);
    if(found||n!=12U||n>=cap)break;
    for(i=0;i<n;++i)if(s[i]<'a'||s[i]>'z')break;
