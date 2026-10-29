@@ -41,8 +41,8 @@ int main(void)
             !strstr(report,"## 8. HISTORICAL FINDINGS") ||
             !strstr(report,"## BUSINESS / OPERATIONAL EFFECTS") ||
             !strstr(report,"| HIGH | 1 |") ||
-            !strstr(report,"### INVESTIGATIVE TRIAGE OF SOURCE REQUESTS") ||
-            !strstr(report,"**Investigative practice:**") ||
+            !strstr(report,"### WHAT CAUGHT DIGIT’S ATTENTION") ||
+            !strstr(report,"**How she investigates:**") ||
             strstr(report,"10.44.55.66") ||
             strstr(report,"internal.example") ||
             strstr(report,"SECRET-KEY-123")) ok=0;
