@@ -339,7 +339,7 @@ static stnlabz_module_result_t stop(void)
     return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor = {
-    "s2", "Digit S2 Security Intelligence", 1, 1, 0,
+    "s2", "Digit S2 Security Intelligence", 1, 2, 0,
     STNLABZ_MODULE_API_MAJOR, STNLABZ_MODULE_API_MINOR,
     qualify, start, stop
 };
