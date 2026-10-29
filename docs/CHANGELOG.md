@@ -196,3 +196,13 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 - Ported the proven Rictus peer-address/action behavior into Digit Ollama and advanced the module from **1.0.5 to 1.0.6**. Digit's authoritative Identity-service delegation remains first in the `chat` controller; only requests that fall through to generation use the peer-action path.
 - Ollama 1.0.6 recognizes the currently proven `say ... to <nick>`, `tell <nick> ...`, and `ask <nick> ...` forms, preserves the exact peer nickname, preserves question intent for `ask`, and sends peer-directed output through Core's existing `send_message` boundary instead of forcing the result back to the conversation origin.
 - Source committed to GitHub only. Core clean build, full `make test`, Ollama build/selftests, installation, activation, end-to-end Digit client verification, and Director acceptance remain pending.
+
+## 2026-10-29 — S2 native sai-dsa publication source v1.1.0
+
+- Director specifically requested native publishing **inside Digit S2** rather than external Python scripts or a standalone Publisher module.
+- Introduced S2 public-report model using only source-backed numeric findings and reviewed prose. The public brief includes source severity and response evidence, investigation gaps, conclusions, and a final paragraph on potential business impact; unverified Rictus case correlations are deliberately excluded.
+- Introduced a native libcurl site client for the existing OS-owned Digit credentials, CSRF-protected site login, and Pages update restricted to `sai-dsa`.
+- S2 retains its four-hour Sentinel collection, with separate six-hour publishing opportunity and persisted last-published timestamp. Previously published content is not intentionally replaced on invalid source or failed authentication.
+- New tests check report format and non-disclosure of representative sensitive input.
+- **Known limitation:** Current S2 persists an ID/hash register rather than the full source evidence and does not access Rictus event history; therefore the full per-threat investigative report in the operator's example is not yet produced. No claim of completed cross-source research.
+- Source committed only. Native build, selftest, module qualification, site mission-granted login, publication and live interval are **unverified**. No Core, IRC, website Core or shared ABI edits.
