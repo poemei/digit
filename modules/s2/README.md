@@ -1,4 +1,4 @@
-# Digit S2 — Sentinel Intelligence and sai-dsa Publication v1.1.0
+# Digit S2 — Sentinel Intelligence and sai-dsa Publication v1.2.0
 
 ## Operating scope
 
@@ -37,3 +37,14 @@ After passing module self-qualification, operator activation and authorization:
 - Four-hour Sentinel poll, 8 MiB bounded ingest, source ID/hash register at `/opt/digit/state/s2/sentinel-register.txt`
 - Retain absent records rather than silently closing cases; historical bulk ingestion is not a new attack.
 - `/s2` provides status; quiet IRC synopsis for material changes remains.
+
+## Public storytelling and source research — v1.2.0
+
+- Sentinel's HTTPS JSON feed remains S2's factual basis. The public brief explains observations, the investigations S2 has actually performed, and what is not yet known in plain language suitable for consumers and businesses.
+- S2 can read the operator's **existing** bare-text Project Honey Pot HTTP:BL key at `/opt/digit/auth/httpbl.key`. The secret is not copied into source, reports, logs, or GitHub. It requires regular-file ownership by the running service user (or root for a root-run service), plus private permissions and readable access. Earlier `httpbl.conf` / `module.conf` key-value locations remain fallback paths.
+- HTTP:BL research is limited to three public IPv4 addresses per report preparation. It distinguishes search-engine classification from suspicious visitor, email harvester, and comment-spam indicators. Failure to resolve does not mean an address is safe; a classification does not establish an attack.
+- An optional plain-English reader explanation is requested through the **existing** `digit.llm.generate` service. The request contains no raw source evidence or keys. Output is short, single-sentence, filtered for case-specific claims, and optional. S2's authoritative factual findings, investigative conclusions, and final business paragraph are untouched. Ollama outages do not block publication.
+- No new module, independent scheduler, Core service, IRC change, or external Python process was introduced. Publication cadence remains six hours.
+- **Unverified:** Local compile, qualifications, production key-file accessibility, HTTP:BL service responses, Ollama/editorial behavior, and live SAI-DSA publication. S2 does not yet implement historical HTTP:BL reputation caching, deep Rictus correlation, or the full investigative case history in the sample report.
+
+Operator test: `make -C modules/s2 clean all test`. Activation and end-to-end publication remain under operator control.
