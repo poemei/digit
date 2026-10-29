@@ -4,6 +4,7 @@
 #include <string.h>
 #include <time.h>
 #include "s2_public.h"
+#include "s2_research.h"
 
 /* Public output is assembled exclusively from numeric aggregates and fixed,
  * reviewed prose. No arbitrary source strings, IPs, URLs, domains, internal
@@ -19,6 +20,7 @@ int s2_public_render(const char *source_json, size_t source_size,
  size_t status_present=0,blocked=0,server_error=0;
  size_t cms_probes=0,config_probes=0,unclassified=0;
  char when[40];
+ char provenance[800];
  int written;
  if(!source_json||!source_size||source_size>8U*1024U*1024U||
     !out||capacity<1024U||!gmtime_r(&collected_at,&utc)) return 0;
@@ -78,6 +80,7 @@ int s2_public_render(const char *source_json, size_t source_size,
     }
   }
  }
+ if(!s2_httpbl_review(source_json,source_size,provenance,sizeof provenance))return 0;
  written=snprintf(out,capacity,
  "# STN-LABZ | SECURITY INTELLIGENCE\n\n"
  "## S2 INTELLIGENCE BRIEF\n\n"
@@ -142,7 +145,7 @@ int s2_public_render(const char *source_json, size_t source_size,
  "monitoring, investigated incident records, and documented service-owner assessments.\n",
  when,tracked,opened,changed,tracked,medium,high,critical,missing,opened,changed,
  cms_probes,config_probes,unclassified,
- status_present,blocked,server_error,n-status_present);
+ status_present,blocked,server_error,n-status_present,provenance);
  json_object_put(root);json_tokener_free(tok);
  return written>0&&(size_t)written<capacity;
 fail:
