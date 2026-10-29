@@ -13,12 +13,15 @@
 #include "stnlabz_abi/module.h"
 #include "s2_model.h"
 #include "digit_transport.h"
+#include "s2_public.h"
 
 #define S2_URL "https://api.stn-labz.com/threats"
 #define S2_MAX_BYTES (8U * 1024U * 1024U)
 #define S2_STATE_DIR "/opt/digit/state/s2"
 #define S2_STATE_FILE S2_STATE_DIR "/sentinel-register.txt"
 #define S2_POLL_SECONDS 14400U
+#define S2_PUBLISH_SECONDS 21600U
+#define S2_PUBLIC_STAMP S2_STATE_DIR "/last-published"
 typedef struct { char *body; size_t length; } received_t;
 static pthread_t worker;
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -30,6 +33,8 @@ static char last_result[400] = "No successful Sentinel collection yet.";
 static size_t latest_opened, latest_changed, latest_qualifying;
 static time_t last_success;
 static int initial_report_sent;
+static char latest_public_report[8192];
+static time_t last_publish_attempt;
 
 /* A successful collection produces at most one short, scheduled IRC synopsis.
  * The first successful poll sends a baseline. Later polls send only on change.
@@ -141,23 +146,63 @@ done:
         fprintf(stderr, "[S2] Sentinel collection failed curl=%d http=%ld\n",
                 (int)result, status);
     }
+    if (ok) {
+        char prepared[sizeof latest_public_report];
+        if (s2_public_render(data.body, data.length, report_total, report_opened,
+                             report_changed, time(NULL), prepared, sizeof prepared)) {
+            memcpy(latest_public_report, prepared, sizeof prepared);
+        } else {
+            latest_public_report[0] = 0;
+            fprintf(stderr,"[S2] public report withheld: validation failed\\n");
+        }
+    }
     s2_register_free(&next);
     free(data.body);
     return ok;
 }
+static time_t publish_stamp(void)
+{
+ struct stat st;
+ if(stat(S2_PUBLIC_STAMP,&st)==0&&S_ISREG(st.st_mode))return st.st_mtime;
+ return (time_t)0;
+}
+static int record_publish_stamp(void)
+{
+ FILE *f=fopen(S2_PUBLIC_STAMP,"w");
+ if(!f)return 0;
+ if(fprintf(f,"S2 sai-dsa published successfully\\n")<0){fclose(f);return 0;}
+ return fclose(f)==0;
+}
 static void *run_collection(void *unused)
 {
-    unsigned seconds;
-    (void)unused;
-    while (!atomic_load(&stop_requested)) {
-        (void)collect_once();
-        for (seconds = 0; seconds < S2_POLL_SECONDS && !atomic_load(&stop_requested);
-             ++seconds) {
-            struct timespec wait = {1, 0};
-            (void)nanosleep(&wait, NULL);
-        }
-    }
-    return NULL;
+ unsigned poll_wait=0U;
+ time_t last_published=publish_stamp();
+ (void)unused;
+ while(!atomic_load(&stop_requested)){
+  time_t now=time(NULL);
+  if(poll_wait==0U){
+   (void)collect_once();
+   poll_wait=S2_POLL_SECONDS;
+  }
+  if(latest_public_report[0]&&now>0&&
+     (last_published==0||(now>=last_published&&
+      (unsigned long)(now-last_published)>=S2_PUBLISH_SECONDS))&&
+     (last_publish_attempt==0||now-last_publish_attempt>=3600)){
+   last_publish_attempt=now;
+   if(s2_public_publish(latest_public_report)){
+    if(record_publish_stamp()){
+     last_published=now;
+     fprintf(stderr,"[S2] sai-dsa published; six-hour cadence active\\n");
+    }else fprintf(stderr,"[S2] publication accepted but stamp persistence failed\\n");
+   }else fprintf(stderr,"[S2] sai-dsa publishing failed or denied; previous report preserved\\n");
+  }
+  {
+   struct timespec wait={1,0};
+   (void)nanosleep(&wait,NULL);
+  }
+  if(poll_wait>0U)poll_wait--;
+ }
+ return NULL;
 }
 static stnlabz_module_result_t s2_command(
     const stnlabz_module_command_t *cmd,
@@ -210,6 +255,8 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h)
     }
     owner = h; registered = 1;
     initial_report_sent = 0;
+    latest_public_report[0] = 0;
+    last_publish_attempt = 0;
     atomic_store(&stop_requested, 0);
     if (pthread_create(&worker, NULL, run_collection, NULL)) {
         (void)h->unregister_command("s2", NULL);
@@ -237,7 +284,7 @@ static stnlabz_module_result_t stop(void)
     return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor = {
-    "s2", "Digit S2 Security Intelligence", 1, 0, 3,
+    "s2", "Digit S2 Security Intelligence", 1, 1, 0,
     STNLABZ_MODULE_API_MAJOR, STNLABZ_MODULE_API_MINOR,
     qualify, start, stop
 };
