@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include <curl/curl.h>
+#include <ctype.h>
 #include <errno.h>
 #include <pthread.h>
 #include <stdatomic.h>
@@ -14,6 +15,7 @@
 #include "s2_model.h"
 #include "digit_transport.h"
 #include "s2_public.h"
+#include "digit_llm.h"
 
 #define S2_URL "https://api.stn-labz.com/threats"
 #define S2_MAX_BYTES (8U * 1024U * 1024U)
@@ -150,6 +152,7 @@ done:
         char prepared[sizeof latest_public_report];
         if (s2_public_render(data.body, data.length, report_total, report_opened,
                              report_changed, time(NULL), prepared, sizeof prepared)) {
+            add_reader_note(prepared,sizeof prepared);
             (void)snprintf(latest_public_report, sizeof latest_public_report, "%s", prepared);
         } else {
             latest_public_report[0] = 0;
@@ -159,6 +162,58 @@ done:
     s2_register_free(&next);
     free(data.body);
     return ok;
+}
+/* Ollama is an optional language editor for general reader education only.
+ * It sees no raw Sentinel evidence, customer data, IPs or internal details.
+ * S2 retains final publication authority and rejects unsupported framing. */
+static void add_reader_note(char *report,size_t capacity)
+{
+ digit_llm_request_t request={{0}};
+ digit_llm_response_t response={{0}};
+ size_t used=0U,i,n;
+ char *marker;
+ const char *heading="## A QUICK EXPLANATION FROM DIGIT\\n\\n";
+ if(!owner||!owner->invoke_service||!report)return;
+ (void)snprintf(request.prompt,sizeof request.prompt,
+  "Write one friendly, general educational sentence for a nontechnical small-business reader. "
+  "Explain why bots look for common website login or configuration pages. "
+  "Do not discuss any specific case, investigation, IP, organization, access, success, breach, money or damage. "
+  "Do not add numbers, quotes, names, links, Markdown or claims about what was observed. "
+  "One sentence under 180 characters, plain English only.");
+ if(owner->invoke_service(DIGIT_LLM_GENERATE_SERVICE,&request,sizeof request,
+      &response,sizeof response,&used)!=STNLABZ_MODULE_OK||
+    used!=sizeof response||!memchr(response.text,0,sizeof response.text))return;
+ n=strlen(response.text);
+ if(n<30U||n>180U)return;
+ for(i=0;i<n;++i){
+  unsigned char c=(unsigned char)response.text[i];
+  if(c<32||c>126||c=='#'||c=='<'||c=='>'||c=='['||c==']'||
+     c=='{'||c=='}'||c=='/'||c=='\\\\'||(c>='0'&&c<='9'))return;
+ }
+ /* This deliberately rejects incident-specific words. An untrusted model
+    cannot author evidence or business-impact conclusions for publication. */
+ {
+  static const char *blocked[]={
+   "breach","hacked","stolen","compromis","attacker","exploited",
+   "sentinel","rictus","digit","stn","confirmed","detected","found",
+   "we saw","we investigated","our servers","successful",NULL
+  };
+  char lower[200];
+  for(i=0;i<n;++i)lower[i]=(char)tolower((unsigned char)response.text[i]);
+  lower[n]=0;
+  for(i=0;blocked[i];++i)if(strstr(lower,blocked[i]))return;
+ }
+ marker=strstr(report,"## 9. REPORT CONCLUSION");
+ if(marker){
+  char insert[280];
+  size_t pos=(size_t)(marker-report),length=strlen(report),added;
+  int w=snprintf(insert,sizeof insert,"%s%s\\n\\n",heading,response.text);
+  if(w<=0||(size_t)w>=sizeof insert)return;
+  added=(size_t)w;
+  if(length+added>=capacity)return;
+  memmove(report+pos+added,report+pos,length-pos+1U);
+  memcpy(report+pos,insert,added);
+ }
 }
 static time_t publish_stamp(void)
 {
