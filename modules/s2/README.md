@@ -1,36 +1,39 @@
-# Digit S2 — Sentinel Intelligence Module 1.0.3
+# Digit S2 — Sentinel Intelligence and sai-dsa Publication v1.1.0
 
-## Scope
+## Operating scope
 
-First operational collection milestone for Digit's **Cyber Security** mission: research and engineering of security systems centered on evidence, operator authority, containment and predictable behavior.
+Native C S2 module. Core and shared ABI are unchanged. S2 gathers Sentinel source observations every four hours and, when a valid public report is available, attempts to update the existing STN-LABZ `sai-dsa` filesystem-backed Markdown page on a six-hour cadence.
 
-- Native Digit ABI 1.5 module; **no changes to Core or the shared ABI**.
-- Retrieves the HTTPS Sentinel JSON feed at `https://api.stn-labz.com/threats` every 14,400 seconds (4 hours) on its own worker.
-- Bounded JSON ingest (8 MiB / 10,000 records), case IDs, content signatures, new/revised/unchanged counters.
-- Existing IDs absent from a later feed are **retained, not automatically closed**.
-- Persisted register at `/opt/digit/state/s2/sentinel-register.txt`, written with an atomic rename. Never assume historical bulk import is current activity.
-- A registered `/s2` or `/s2 status` command reports the current observed register and last successful collection. No Publisher or Slack dependencies.
-- MEDIUM/HIGH/CRITICAL are considered qualifying only when source severity is explicitly present (top-level or `details`). The feed can omit severity; missing is reported, not invented.
-- No claim of compromise, malicious attribution, financial loss, or business impact from suspicious URLs, shared IP values, or resolver failures.
-- **Noise control:** one baseline synopsis per successful startup, then a concise IRC channel update only when a later successful poll contains new or revised records. Unchanged four-hour polls remain silent. The /s2 command always remains available.
+The public output is prepared by `src/s2_public.c` from validated Sentinel JSON. It contains the operator-requested headline and numbered investigative sections, source severity counts, available HTTP response evidence, explicit evidence gaps, an investigative assessment, and a **business-effects paragraph as the final section**. It does not export arbitrary source text, IP addresses, credentials, request details, domain identities or internal procedures.
 
-## Build and qualification
+**Evidence limitation:** The source currently owned by S2 is Sentinel plus a persisted case ID/hash register. Rictus event grammar, independent correlation, individual investigative narratives, complete durable case-event history and verified per-case chronology are not available in this module. Consequently the public report explicitly withholds unsubstantiated historical groupings and Rictus matches; the richer example report cannot yet be reproduced. Do not represent the generated brief as a completed cross-source investigation.
 
-Requires development headers/libraries for `libcurl`, `json-c`, and pthreads on the Digit host.
+## Site login and authorization
+
+The native publishing client `src/s2_publish.c` uses libcurl, HTTPS certificate validation, cookies in memory, the current ChAoS MVC login and CSRF forms, and the existing `/admin/page` update endpoint. It reads `/opt/digit/auth/sites/login.conf`, requiring a regular file accessible to the running Digit user and permissions not permitting group/other access. Never place those credentials in GitHub or logs.
+
+Publication is restricted in the client to the existing page `sai-dsa`. Website access is still independently controlled by the server's Level 7 module permission and Mission Control gates. Digit must have explicit active assignment for Pages; login alone is not authorization. Neither the web Core nor the IRC module is modified.
+
+S2 retains the previous published report if source retrieval, report validation, authentication or publishing fails. Publish success is tracked in `/opt/digit/state/s2/last-published`, and attempts are rate limited after failures. **Publication is enabled by this source when the module is installed/activated; inspect and qualify it before installation.** No claim is made that the live page was changed.
+
+## Operator qualification
 
 ```sh
-cd modules/s2
-make clean && make && make test
+make -C modules/s2 clean all test
 ```
 
-Before installing, inspect test output and dependency availability. Module internal qualification requires 10/10 passing and an executed passing negative check.
+After passing module self-qualification, operator activation and authorization:
+- Confirm the page is editable for Digit's assigned role and that the protected login file is readable by the service account.
+- Review S2's prepared public brief against a known Sentinel fixture, including cases containing private IPs, URLs, and secret strings; ensure those fields never appear.
+- Verify actual `sai-dsa` publication and page revision timestamp; verify no other page changes.
+- Verify a 6h interval and retry behavior, plus invalid CSRF, unavailable Sentinel and denied Pages mission conditions.
+- Confirm the last paragraph discusses **potential** business impact, not an invented loss or breach.
 
-Installation, module activation, and live end-to-end acceptance are **not** established by source commits or local build alone. The Director controls installation and subsequent steps.
+**Source committed; local build, module qualification, site authentication and live publication not verified.**
 
-## Current limits
+## Previously established operation
 
-This **first collection milestone** maintains case identities, changed-source signatures, and summary counts. It does NOT yet archive the full original source payload per event, generate case-level investigative narratives, correlate independent log sources, or call Ollama's `digit.llm.generate` service. These are additional requirements of the established S2 mission, not features claimed to be implemented. It also does not establish Sentinel API feed freshness or completeness: those must be verified against live runtime results.
-
-The reporting command displays aggregate evidence only, not an incident verdict. Source timestamp timezone and top-level versus details IP roles remain unresolved until authoritative schema clarification. Avoid deploying for final incident adjudication on this version.
-
-The `/s2` status command renders last successful collection in `YYYY-MM-DD HH:MM:SS UTC`, not Unix epoch seconds. No collection or notification cadence change.
+- Sentinel endpoint: `https://api.stn-labz.com/threats`
+- Four-hour Sentinel poll, 8 MiB bounded ingest, source ID/hash register at `/opt/digit/state/s2/sentinel-register.txt`
+- Retain absent records rather than silently closing cases; historical bulk ingestion is not a new attack.
+- `/s2` provides status; quiet IRC synopsis for material changes remains.
