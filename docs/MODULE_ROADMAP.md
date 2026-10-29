@@ -119,3 +119,13 @@ Module descriptor advanced from **1.0.5 to 1.0.6**.
 Shared ABI, IRC transport implementation, endpoint, model selection, and Digit Identity-service precedence are unchanged.
 
 Required gate: `make -C modules/ollama clean all test`, qualification evidence including the negative test, controlled install/hotload receipt for 1.0.6, live channel peer action, live DM-origin peer action, and explicit Director acceptance.
+
+## 2026-10-29 — S2 native sai-dsa publication source v1.1.0
+
+- Director specifically requested native publishing **inside Digit S2** rather than external Python scripts or a standalone Publisher module.
+- Introduced S2 public-report model using only source-backed numeric findings and reviewed prose. The public brief includes source severity and response evidence, investigation gaps, conclusions, and a final paragraph on potential business impact; unverified Rictus case correlations are deliberately excluded.
+- Introduced a native libcurl site client for the existing OS-owned Digit credentials, CSRF-protected site login, and Pages update restricted to `sai-dsa`.
+- S2 retains its four-hour Sentinel collection, with separate six-hour publishing opportunity and persisted last-published timestamp. Previously published content is not intentionally replaced on invalid source or failed authentication.
+- New tests check report format and non-disclosure of representative sensitive input.
+- **Known limitation:** Current S2 persists an ID/hash register rather than the full source evidence and does not access Rictus event history; therefore the full per-threat investigative report in the operator's example is not yet produced. No claim of completed cross-source research.
+- Source committed only. Native build, selftest, module qualification, site mission-granted login, publication and live interval are **unverified**. No Core, IRC, website Core or shared ABI edits.
