@@ -1,4 +1,4 @@
-# Digit S2 — Sentinel Intelligence and sai-dsa Publication v1.2.1
+# Digit S2 — Sentinel Intelligence and sai-dsa Publication v1.2.2
 
 ## Operating scope
 
@@ -38,7 +38,7 @@ After passing module self-qualification, operator activation and authorization:
 - Retain absent records rather than silently closing cases; historical bulk ingestion is not a new attack.
 - `/s2` provides status; quiet IRC synopsis for material changes remains.
 
-## Public storytelling and source research — v1.2.1
+## Public storytelling and source research — v1.2.2
 
 - Sentinel's HTTPS JSON feed remains S2's factual basis. The public brief explains observations, the investigations S2 has actually performed, and what is not yet known in plain language suitable for consumers and businesses.
 - S2 can read the operator's **existing** bare-text Project Honey Pot HTTP:BL key at `/opt/digit/auth/httpbl.key`. The secret is not copied into source, reports, logs, or GitHub. It requires regular-file ownership by the running service user (or root for a root-run service), plus private permissions and readable access. Earlier `httpbl.conf` / `module.conf` key-value locations remain fallback paths.
@@ -61,10 +61,14 @@ make -C modules/s2 test-live-page
 
 The test reports the first failing stage without revealing credentials. It does not modify other pages, erase existing content, or alter automatic S2 cadence. Run only when the operator intends to make the public change. Authorization is enforced by the existing website permissions; successful login is not assumed to imply Pages access.
 
-## Hourly testing cadence — v1.2.1
+## Hourly testing cadence — v1.2.2
 
 For operator-directed testing, Sentinel collection and public `sai-dsa` publishing are each scheduled at 3,600 seconds. The stored last-successful-publish timestamp still controls the next eligible publication, and the source does not guarantee publication if collection, authentication, authorization or page update fails. This is a source-level cadence change; the installed module must be built and activated under the existing operator workflow. Restore a longer interval when the director ends testing.
 
 ## Pages publishing form repair
 
 S2's scheduled publisher now parses the actual `sai-dsa` Pages editing form, including the page slug, current title, description, existing content and CSRF token. The previous literal HTML check erroneously searched for escaped quotation marks. It preserves page title/description, updates only the fixed `sai-dsa` page, and reads the edit form again to confirm exact Markdown persistence before recording a successful publication. On any missing required form element or verification mismatch, it reports a stage-specific failure and does not claim success. No website Core or ABI changes.
+
+## v1.2.2 hotload qualification
+
+Incremented the native descriptor version to 1.2.2 after the SAI-DSA Pages publishing correction. The hotloader correctly rejects an updated binary at an unchanged or regressed version. The published-source version and `module.conf` are synchronized. Existing security and qualification gates remain in place. Confirm the installed candidate has been compiled from this source and meets the active module's monotonic version requirement before hotloading.
