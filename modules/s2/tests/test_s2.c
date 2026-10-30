@@ -37,14 +37,14 @@ int main(void)
         char report[8192];
         int prepared=s2_public_render(private_source,strlen(private_source),
                                       42U,0U,0U,time(NULL),report,sizeof report);
-        if (!prepared || !strstr(report,"## 1. EXECUTIVE SUMMARY") ||
-            !strstr(report,"## 8. HISTORICAL FINDINGS") ||
+        if (!prepared || !strstr(report,"## BUSINESS DECISION") ||
+            !strstr(report,"## SUPPORTING EVIDENCE") ||
             !strstr(report,"## BUSINESS / OPERATIONAL EFFECTS") ||
-            !strstr(report,"| HIGH | 1 |") ||
+            !strstr(report,"HIGH: 1.") ||
             !strstr(report,"MEDIUM = OBSERVE") ||
-            !strstr(report,"HIGH = ESCALATE; CRITICAL = INVESTIGATE") ||
-            !strstr(report,"### WHAT CAUGHT DIGIT’S ATTENTION") ||
-            !strstr(report,"**How she investigates:**") ||
+            !strstr(report,"HIGH = ASSESS / CRITICAL = INVESTIGATE") ||
+            !strstr(report,"## REMAINING INVESTIGATION") ||
+            !strstr(report,"**Decision:**") ||
             strstr(report,"10.44.55.66") ||
             strstr(report,"internal.example") ||
             strstr(report,"SECRET-KEY-123")) ok=0;
