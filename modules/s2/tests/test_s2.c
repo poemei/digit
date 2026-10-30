@@ -37,17 +37,20 @@ int main(void)
         char report[8192];
         int prepared=s2_public_render(private_source,strlen(private_source),
                                       42U,0U,0U,time(NULL),report,sizeof report);
-        if (!prepared || !strstr(report,"## BUSINESS DECISION") ||
-            !strstr(report,"## SUPPORTING EVIDENCE") ||
+        if (!prepared || !strstr(report,"## DECISION") ||
+            !strstr(report,"## WHAT DIGIT VERIFIED FROM AVAILABLE RECORDS") ||
             !strstr(report,"## BUSINESS / OPERATIONAL EFFECTS") ||
-            !strstr(report,"HIGH: 1.") ||
-            !strstr(report,"MEDIUM = OBSERVE") ||
-            !strstr(report,"HIGH = ASSESS / CRITICAL = INVESTIGATE") ||
-            !strstr(report,"## REMAINING INVESTIGATION") ||
-            !strstr(report,"**Decision:**") ||
+            !strstr(report,"1 HIGH") ||
+            !strstr(report,"MEDIUM — OBSERVE") ||
+            !strstr(report,"HIGH — ASSESS / CRITICAL — INVESTIGATE") ||
+            !strstr(report,"## HIGH / CRITICAL CASE ASSESSMENTS") ||
+            !strstr(report,"**Business decision:**") ||
             strstr(report,"10.44.55.66") ||
             strstr(report,"internal.example") ||
             strstr(report,"SECRET-KEY-123")) ok=0;
+        if (!strstr(report,"**Case 1 — HIGH:**") ||
+            !strstr(report,"reported denial") &&
+            !strstr(report,"Reported denial")) ok=0;
         if(s2_public_render("not-json",8U,42U,0U,0U,time(NULL),
                             report,sizeof report))ok=0;
         if(s2_public_render(private_source,strlen(private_source),
