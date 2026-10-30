@@ -2,7 +2,7 @@
 
 ## Operating scope
 
-Native C S2 module. Core and shared ABI are unchanged. S2 gathers Sentinel source observations every hour during testing and, when a valid public report is available, attempts to update the existing STN-LABZ `sai-dsa` filesystem-backed Markdown page on a one-hour testing cadence.
+Native C S2 module. Core and shared ABI are unchanged. S2 gathers Sentinel source observations every six hours and, when a valid public report is available, attempts to update the existing STN-LABZ `sai-dsa` filesystem-backed Markdown page on a six-hour cadence.
 
 The public output is prepared by `src/s2_public.c` from validated Sentinel JSON. It contains the operator-requested headline and numbered investigative sections, source severity counts, available HTTP response evidence, explicit evidence gaps, an investigative assessment, and a **business-effects paragraph as the final section**. It does not export arbitrary source text, IP addresses, credentials, request details, domain identities or internal procedures.
 
@@ -44,7 +44,7 @@ After passing module self-qualification, operator activation and authorization:
 - S2 can read the operator's **existing** bare-text Project Honey Pot HTTP:BL key at `/opt/digit/auth/httpbl.key`. The secret is not copied into source, reports, logs, or GitHub. It requires regular-file ownership by the running service user (or root for a root-run service), plus private permissions and readable access. Earlier `httpbl.conf` / `module.conf` key-value locations remain fallback paths.
 - HTTP:BL research is limited to three public IPv4 addresses per report preparation. It distinguishes search-engine classification from suspicious visitor, email harvester, and comment-spam indicators. Failure to resolve does not mean an address is safe; a classification does not establish an attack.
 - An optional plain-English reader explanation is requested through the **existing** `digit.llm.generate` service. The request contains no raw source evidence or keys. Output is short, single-sentence, filtered for case-specific claims, and optional. S2's authoritative factual findings, investigative conclusions, and final business paragraph are untouched. Ollama outages do not block publication.
-- No new module, independent scheduler, Core service, IRC change, or external Python process was introduced. Publication cadence remains one hour during testing.
+- No new module, independent scheduler, Core service, IRC change, or external Python process was introduced. Publication cadence is six hours.
 - **Unverified:** Local compile, qualifications, production key-file accessibility, HTTP:BL service responses, Ollama/editorial behavior, and live SAI-DSA publication. S2 does not yet implement historical HTTP:BL reputation caching, deep Rictus correlation, or the full investigative case history in the sample report.
 
 Operator test: `make -C modules/s2 clean all test`. Activation and end-to-end publication remain under operator control.
@@ -85,10 +85,14 @@ Incremented the native descriptor version to 1.2.2 after the SAI-DSA Pages publi
 
 On each report render, S2 reads the final 4 MiB of `/var/log/rictus/rictus.log` (if readable by service user) and counts unique Sentinel record IDs also present in Rictus `INTELLIGENCE CANDIDATE` entries. These matches show candidate audit provenance only; they are not independent confirmation of an incident. Reports do not disclose source IDs or raw log content. When unavailable, the report explicitly says so. MEDIUM remains AMBER/OBSERVE, HIGH is flagged for RED escalation assessment, CRITICAL for RED investigation. A classification alone does not prove any human escalation happened.
 
-After successful Pages write verification **and successful publication timestamp persistence**, S2 sends an IRC channel message using the pre-existing module host `send_message` callback: `[S2] DSA has been updated: https://stn-labz.com/sai-dsa`. No announcement on failed or unverified publication. Failed IRC delivery is logged without retroactively invalidating verified publication. The test cadence is still hourly; release qualification and hotload are operator controlled.
+After successful Pages write verification **and successful publication timestamp persistence**, S2 sends an IRC channel message using the pre-existing module host `send_message` callback: `[S2] DSA has been updated: https://stn-labz.com/sai-dsa`. No announcement on failed or unverified publication. Failed IRC delivery is logged without retroactively invalidating verified publication. The current cadence is six hours; release qualification and hotload are operator controlled.
 
 ## v1.3.0 operator-directed investigative reporting
 
-The S2 public report now builds case-level HIGH/CRITICAL assessments from nested Sentinel request path/response status and exact Rictus candidate-ID matching. It also compares the text of Rictus `observed=` timestamps with source `created_at` timestamps, without treating a text match as an independent witness or validated timezone. The report keeps record IDs, IPs and raw URLs private and outputs evidence-driven decisions for businesses. The module reports only what its available sources establish. No generic Ollama editorial insert is used because its insertion marker is absent. Collection and reporting remain hourly during operator testing. The existing verified Pages publisher and IRC notification are preserved.
+The S2 public report now builds case-level HIGH/CRITICAL assessments from nested Sentinel request path/response status and exact Rictus candidate-ID matching. It also compares the text of Rictus `observed=` timestamps with source `created_at` timestamps, without treating a text match as an independent witness or validated timezone. The report keeps record IDs, IPs and raw URLs private and outputs evidence-driven decisions for businesses. The module reports only what its available sources establish. No generic Ollama editorial insert is used because its insertion marker is absent. Collection and reporting occur every six hours. The existing verified Pages publisher and IRC notification are preserved.
 
 Source changes and qualification fixtures are committed; compilation and real-host investigative outcome are not yet proven. Operator build: `make -C modules/s2 clean all test`, followed by authorized hotload and end-to-end SAI-DSA review.
+
+## Six-hour operating cadence — v1.3.2
+
+Sentinel collection, report regeneration, and successful SAI-DSA publication operate on six-hour intervals (21,600 seconds). The prior one-hour testing cadence has ended. An unsuccessful publishing attempt can be retried after one hour, but successful publication is still gated by the six-hour last-published timestamp. Existing publishing verification and IRC notification remain unchanged. Build and activate under operator control.
