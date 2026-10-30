@@ -6,6 +6,7 @@
 #include <string.h>
 #include <time.h>
 #include "s2_public.h"
+#include "s2_research.h"
 
 #define S2_RICTUS_PATH "/var/log/rictus/rictus.log"
 #define S2_RICTUS_LIMIT 4194304L
@@ -142,7 +143,7 @@ int s2_public_render(const char *source_json,size_t source_size,
  struct json_tokener *tok=NULL;
  finding_t *cases=NULL;
  struct tm utc;
- char when[40];
+ char when[40],reputation[900];
  size_t i,n,used=0,medium=0,high=0,critical=0;
  size_t admin=0,config=0,other=0,blocked=0,server_errors=0,status_known=0;
  size_t linked=0,time_linked=0,red_linked=0,red_blocked=0,red_unknown=0;
@@ -324,6 +325,9 @@ int s2_public_render(const char *source_json,size_t source_size,
   if(!groups&&!add(out,capacity,&used,
    "No repeated address value on one source date was found.\n\n"))goto done;
  }
+ if(!s2_httpbl_review(source_json,source_size,reputation,sizeof reputation))
+  snprintf(reputation,sizeof reputation,"Reputation research unavailable.");
+ if(!add(out,capacity,&used,"## REPUTATION RESEARCH\n\n%s\n\n",reputation))goto done;
  if(!add(out,capacity,&used,
   "## BUSINESS / OPERATIONAL EFFECTS\n\n"
   "Current response evidence: %zu valid statuses from %zu records, including "
