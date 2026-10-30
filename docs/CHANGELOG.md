@@ -222,3 +222,10 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 - Fixed incorrectly escaped newline and carriage-return character constants in HTTP:BL key parsing.
 - Removed dead IRC synopsis code and an unused report counter to address reported warnings, without modifying Core or IRC; aligned public investigative headings with test assertions.
 - GitHub source corrected; a clean operator build and qualification are still required. No claim of production success.
+
+## 2026-10-30 — S2 operator-triggered live sai-dsa publishing test
+
+- Added native C `modules/s2/tests/test_sai_dsa_live.c` and explicit `make -C modules/s2 test-live-page` target; separate from automatic `make test` and normal hotload operation.
+- Intended action: prove the service can read the OS-protected website credential file, obtain login CSRF, authenticate, locate the actual `sai-dsa` edit form, preserve the existing Markdown and page metadata, append a timestamped test message, submit it, then verify exact content on read-back.
+- Diagnostic messages name the failing stage without displaying secrets. Explicit operator invocation is required because the test makes a visible live-page edit.
+- **Verification:** GitHub source committed. No claim that the live site was edited, or that this host-only integration target has compiled or passed. Normal S2 publishing remains unverified.
