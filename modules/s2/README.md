@@ -48,3 +48,15 @@ After passing module self-qualification, operator activation and authorization:
 - **Unverified:** Local compile, qualifications, production key-file accessibility, HTTP:BL service responses, Ollama/editorial behavior, and live SAI-DSA publication. S2 does not yet implement historical HTTP:BL reputation caching, deep Rictus correlation, or the full investigative case history in the sample report.
 
 Operator test: `make -C modules/s2 clean all test`. Activation and end-to-end publication remain under operator control.
+
+## Operator-controlled live Pages integration check
+
+Run from the Digit repository on the authorized host:
+
+```sh
+make -C modules/s2 test-live-page
+```
+
+**This command deliberately changes the live public page once.** The separate native C test (`tests/test_sai_dsa_live.c`) reads existing OS-owned website credentials without printing them; checks the login form and CSRF; authenticates; loads the `sai-dsa` editing page; preserves its existing title, description and full Markdown content; appends one visible UTC-dated publishing-connectivity test marker; submits the edit through the existing protected Pages endpoint; then reopens the edit form and compares the persisted text with the requested text. No test is run by `make test`, `make all`, hotload, or the automatic S2 worker. An actual run is required for proof; a successful redirect alone is not proof of saved content.
+
+The test reports the first failing stage without revealing credentials. It does not modify other pages, erase existing content, or alter automatic S2 cadence. Run only when the operator intends to make the public change. Authorization is enforced by the existing website permissions; successful login is not assumed to imply Pages access.
