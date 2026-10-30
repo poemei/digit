@@ -1,8 +1,8 @@
-# Digit S2 — Sentinel Intelligence and sai-dsa Publication v1.2.0
+# Digit S2 — Sentinel Intelligence and sai-dsa Publication v1.2.1
 
 ## Operating scope
 
-Native C S2 module. Core and shared ABI are unchanged. S2 gathers Sentinel source observations every four hours and, when a valid public report is available, attempts to update the existing STN-LABZ `sai-dsa` filesystem-backed Markdown page on a six-hour cadence.
+Native C S2 module. Core and shared ABI are unchanged. S2 gathers Sentinel source observations every hour during testing and, when a valid public report is available, attempts to update the existing STN-LABZ `sai-dsa` filesystem-backed Markdown page on a one-hour testing cadence.
 
 The public output is prepared by `src/s2_public.c` from validated Sentinel JSON. It contains the operator-requested headline and numbered investigative sections, source severity counts, available HTTP response evidence, explicit evidence gaps, an investigative assessment, and a **business-effects paragraph as the final section**. It does not export arbitrary source text, IP addresses, credentials, request details, domain identities or internal procedures.
 
@@ -38,13 +38,13 @@ After passing module self-qualification, operator activation and authorization:
 - Retain absent records rather than silently closing cases; historical bulk ingestion is not a new attack.
 - `/s2` provides status; quiet IRC synopsis for material changes remains.
 
-## Public storytelling and source research — v1.2.0
+## Public storytelling and source research — v1.2.1
 
 - Sentinel's HTTPS JSON feed remains S2's factual basis. The public brief explains observations, the investigations S2 has actually performed, and what is not yet known in plain language suitable for consumers and businesses.
 - S2 can read the operator's **existing** bare-text Project Honey Pot HTTP:BL key at `/opt/digit/auth/httpbl.key`. The secret is not copied into source, reports, logs, or GitHub. It requires regular-file ownership by the running service user (or root for a root-run service), plus private permissions and readable access. Earlier `httpbl.conf` / `module.conf` key-value locations remain fallback paths.
 - HTTP:BL research is limited to three public IPv4 addresses per report preparation. It distinguishes search-engine classification from suspicious visitor, email harvester, and comment-spam indicators. Failure to resolve does not mean an address is safe; a classification does not establish an attack.
 - An optional plain-English reader explanation is requested through the **existing** `digit.llm.generate` service. The request contains no raw source evidence or keys. Output is short, single-sentence, filtered for case-specific claims, and optional. S2's authoritative factual findings, investigative conclusions, and final business paragraph are untouched. Ollama outages do not block publication.
-- No new module, independent scheduler, Core service, IRC change, or external Python process was introduced. Publication cadence remains six hours.
+- No new module, independent scheduler, Core service, IRC change, or external Python process was introduced. Publication cadence remains one hour during testing.
 - **Unverified:** Local compile, qualifications, production key-file accessibility, HTTP:BL service responses, Ollama/editorial behavior, and live SAI-DSA publication. S2 does not yet implement historical HTTP:BL reputation caching, deep Rictus correlation, or the full investigative case history in the sample report.
 
 Operator test: `make -C modules/s2 clean all test`. Activation and end-to-end publication remain under operator control.
@@ -60,3 +60,7 @@ make -C modules/s2 test-live-page
 **This command deliberately changes the live public page once.** The separate native C test (`tests/test_sai_dsa_live.c`) reads existing OS-owned website credentials without printing them; checks the login form and CSRF; authenticates; loads the `sai-dsa` editing page; preserves its existing title, description and full Markdown content; appends one visible UTC-dated publishing-connectivity test marker; submits the edit through the existing protected Pages endpoint; then reopens the edit form and compares the persisted text with the requested text. No test is run by `make test`, `make all`, hotload, or the automatic S2 worker. An actual run is required for proof; a successful redirect alone is not proof of saved content.
 
 The test reports the first failing stage without revealing credentials. It does not modify other pages, erase existing content, or alter automatic S2 cadence. Run only when the operator intends to make the public change. Authorization is enforced by the existing website permissions; successful login is not assumed to imply Pages access.
+
+## Hourly testing cadence — v1.2.1
+
+For operator-directed testing, Sentinel collection and public `sai-dsa` publishing are each scheduled at 3,600 seconds. The stored last-successful-publish timestamp still controls the next eligible publication, and the source does not guarantee publication if collection, authentication, authorization or page update fails. This is a source-level cadence change; the installed module must be built and activated under the existing operator workflow. Restore a longer interval when the director ends testing.
