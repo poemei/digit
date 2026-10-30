@@ -183,6 +183,7 @@ int s2_public_render(const char *source_json,size_t source_size,
   if(!path)path=field_both(item,d,"path");
   snprintf(cases[i].category,sizeof cases[i].category,"%s",classify(path));
   safe_text(cases[i].path,sizeof cases[i].path,path);
+  {char *q=strchr(cases[i].path,'?');if(q)*q=0;}
   if(!strcmp(cases[i].category,"CMS administration/login path"))++admin;
   else if(!strcmp(cases[i].category,"configuration or test-file path"))++config;
   else ++other;
