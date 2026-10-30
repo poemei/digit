@@ -9,13 +9,14 @@ MODULE := s2
 BUILD := build
 TARGET := $(BUILD)/s2.so
 TEST := $(BUILD)/test_s2
+LIVE_TEST := $(BUILD)/test_sai_dsa_live
 PREFIX ?= /opt/digit
 MODULEDIR := $(PREFIX)/modules/s2
 MODULE_USER ?= digit
 MODULE_GROUP ?= digit
 SOURCES := src/s2_model.c src/s2_public.c src/s2_research.c src/s2_publish.c src/s2_module.c
 OBJS := $(patsubst src/%.c,$(BUILD)/%.o,$(SOURCES))
-.PHONY: all test install clean
+.PHONY: all test test-live-page install clean
 all: $(TARGET)
 $(BUILD)/%.o: src/%.c
 	@mkdir -p $(dir $@)
@@ -27,6 +28,11 @@ $(TEST): tests/test_s2.c src/s2_model.c src/s2_public.c src/s2_research.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ $^ -ljson-c
 test: $(TEST)
 	./$(TEST)
+$(LIVE_TEST): tests/test_sai_dsa_live.c src/s2_publish.c include/s2_public.h
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ tests/test_sai_dsa_live.c -lcurl
+test-live-page: $(LIVE_TEST)
+	./$(LIVE_TEST) --confirm-live-sai-dsa-update
 install: $(TARGET)
 	@id -u "$(MODULE_USER)" >/dev/null 2>&1 || { echo "missing module owner"; exit 1; }
 	@getent group "$(MODULE_GROUP)" >/dev/null 2>&1 || { echo "missing module group"; exit 1; }
