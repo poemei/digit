@@ -256,3 +256,9 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 - Enforced MEDIUM/AMBER/OBSERVE, HIGH/RED/ESCALATE, CRITICAL/RED/INVESTIGATE in the public report and adjusted misleading blanket investigation language.
 - Recognized nested Sentinel `details.request_url` and `details.response_status` for evidence counts.
 - Incremented S2 native descriptor and module configuration to v1.2.3 for guarded hotload. Rictus correlation remains unimplemented; runtime activation/testing not yet confirmed.
+
+## 2026-10-30 — S2 v1.2.4 Rictus candidate log and IRC notice
+
+- Bounded read of local Rictus candidate entries and unique ID matching against current Sentinel records. Public report differentiates audit-log linkage from independent corroboration and avoids claiming an escalation merely from a HIGH label.
+- Following verified Pages write plus successful publish-stamp persistence, S2 announces `DSA has been updated` to IRC via the existing module host callback. No Core or ABI changes.
+- Bumped native module descriptor and module.conf to v1.2.4. Live deployment, log read permissions, and IRC delivery have not been verified.
