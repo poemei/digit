@@ -229,3 +229,11 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 - Intended action: prove the service can read the OS-protected website credential file, obtain login CSRF, authenticate, locate the actual `sai-dsa` edit form, preserve the existing Markdown and page metadata, append a timestamped test message, submit it, then verify exact content on read-back.
 - Diagnostic messages name the failing stage without displaying secrets. Explicit operator invocation is required because the test makes a visible live-page edit.
 - **Verification:** GitHub source committed. No claim that the live site was edited, or that this host-only integration target has compiled or passed. Normal S2 publishing remains unverified.
+
+## 2026-10-30 — S2 Pages diagnostic and HTTP method correction
+
+- Operator confirmed the protected login credential file was readable when running as `digit`, and an independent GET of `https://stn-labz.com/auth/login` returned HTTP 200 with a CSRF token in the expected HTML form.
+- Corrected S2's libcurl GET setup: clear POST payload first and set `CURLOPT_HTTPGET` last; the former ordering could change GET back to POST. Native publisher and explicit live-page test share this corrected helper.
+- Added nonsecret HTTP status/byte-count diagnostics and separated login GET, login CSRF, authenticated Pages GET and page form checks. Redirect status is treated as expected for authenticated POST.
+- Removed `snprintf` truncation warning in the live test using a verified-length append.
+- **Pending:** The operator must rebuild and rerun the manual live-page target as the `digit` service user. No claim of successful authentication or public page update.
