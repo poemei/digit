@@ -41,6 +41,8 @@ int main(void)
             !strstr(report,"## 8. HISTORICAL FINDINGS") ||
             !strstr(report,"## BUSINESS / OPERATIONAL EFFECTS") ||
             !strstr(report,"| HIGH | 1 |") ||
+            !strstr(report,"MEDIUM = OBSERVE") ||
+            !strstr(report,"HIGH = ESCALATE; CRITICAL = INVESTIGATE") ||
             !strstr(report,"### WHAT CAUGHT DIGIT’S ATTENTION") ||
             !strstr(report,"**How she investigates:**") ||
             strstr(report,"10.44.55.66") ||
