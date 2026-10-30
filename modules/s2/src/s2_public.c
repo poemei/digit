@@ -171,6 +171,12 @@ int s2_public_render(const char *source_json,size_t source_size,
   safe_text(cases[i].kind,sizeof cases[i].kind,field_both(item,d,"type"));
   safe_text(cases[i].relevance,sizeof cases[i].relevance,field_both(item,d,"relevance"));
   safe_text(cases[i].domain,sizeof cases[i].domain,field_both(item,d,"domain"));
+  {size_t len=strlen(cases[i].domain);
+   if(!strchr(cases[i].domain,'.')||strstr(cases[i].domain,".example")||
+      strstr(cases[i].domain,".local")||
+      (len>=9&&!strcmp(cases[i].domain+len-9,"localhost")))
+    cases[i].domain[0]=0;
+  }
   safe_text(cases[i].primary_ip,sizeof cases[i].primary_ip,string_field(item,"ip"));
   safe_text(cases[i].details_ip,sizeof cases[i].details_ip,string_field(d,"ip_address"));
   severity=field_both(item,d,"severity");
