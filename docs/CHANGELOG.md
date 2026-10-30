@@ -250,3 +250,9 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 - Found scheduled publisher's source searched for backslash-escaped quote characters instead of the actual `name="original_slug"` HTML field returned by the Pages editor; manual test used the correct form.
 - Replaced scheduled publisher flow with complete form extraction, preservation of current title and description, and exact saved Markdown read-back validation.
 - The change is isolated to Digit S2; no website Core, credential store, shared ABI, or IRC changes. GitHub source committed; local build and live recurring publication remain unverified.
+
+## 2026-10-30 — S2 v1.2.3 severity policy
+
+- Enforced MEDIUM/AMBER/OBSERVE, HIGH/RED/ESCALATE, CRITICAL/RED/INVESTIGATE in the public report and adjusted misleading blanket investigation language.
+- Recognized nested Sentinel `details.request_url` and `details.response_status` for evidence counts.
+- Incremented S2 native descriptor and module configuration to v1.2.3 for guarded hotload. Rictus correlation remains unimplemented; runtime activation/testing not yet confirmed.
