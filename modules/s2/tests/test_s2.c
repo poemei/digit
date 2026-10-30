@@ -51,6 +51,22 @@ int main(void)
         if (!strstr(report,"**Case 1 — HIGH:**") ||
             !strstr(report,"reported denial") &&
             !strstr(report,"Reported denial")) ok=0;
+        {
+            const char *nested="{\"threats\":[{\"id\":\"t_6ae374ed1453f\","
+                "\"severity\":\"MEDIUM\",\"created_at\":\"2026-10-29 16:31:41\","
+                "\"details\":{\"request_url\":\"/wp-admin/\",\"response_status\":403}},"
+                "{\"id\":\"t_high_case\",\"severity\":\"HIGH\","
+                "\"details\":{\"request_url\":\"/config.php\",\"response_status\":403}}]}";
+            if(!s2_public_render(nested,strlen(nested),2U,0U,0U,
+                                 time(NULL),report,sizeof report)||
+               !strstr(report,"1 CMS admin/login")||
+               !strstr(report,"1 configuration/test-file")||
+               !strstr(report,"2 reported 403/429")||
+               !strstr(report,"**Case 1 — HIGH:**")||
+               !strstr(report,"(403)")||
+               strstr(report,"t_6ae374ed1453f")||
+               strstr(report,"/wp-admin/"))ok=0;
+        }
         if(s2_public_render("not-json",8U,42U,0U,0U,time(NULL),
                             report,sizeof report))ok=0;
         if(s2_public_render(private_source,strlen(private_source),
