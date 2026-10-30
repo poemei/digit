@@ -105,8 +105,12 @@ int main(int argc,char **argv)
  curl_easy_setopt(curl,CURLOPT_TIMEOUT,25L);
  curl_easy_setopt(curl,CURLOPT_WRITEFUNCTION,sink);
  curl_easy_setopt(curl,CURLOPT_WRITEDATA,page);
- if(!request(curl,S2_SITE "/auth/login",NULL,page)||!csrf(page,token,sizeof token)){
-  fputs("FAIL: login form or CSRF token unavailable\n",stderr);goto done;
+ if(!request(curl,S2_SITE "/auth/login",NULL,page)){
+  fputs("FAIL: login GET response; see S2 HTTP diagnostic\n",stderr);goto done;
+ }
+ fprintf(stderr,"PASS: login GET HTTP 200 bytes=%zu\n",page->length);
+ if(!csrf(page,token,sizeof token)){
+  fprintf(stderr,"FAIL: login CSRF missing from %zu HTML bytes\n",page->length);goto done;
  }
  fprintf(stderr,"PASS: login form found\n");
  {
@@ -147,7 +151,8 @@ int main(int argc,char **argv)
  if(snprintf(stamp,sizeof stamp,"\n\n*S2 publishing connectivity test — %ld UTC; verified page access.*\n",
              (long)now)>=(int)sizeof stamp)goto done;
  if(strlen(original)+strlen(stamp)+1U>=capacity)goto done;
- snprintf(changed,capacity,"%s%s",original,stamp);
+ memcpy(changed,original,strlen(original));
+ memcpy(changed+strlen(original),stamp,strlen(stamp)+1U);
  if(!form_post(curl,page,token,changed,title,description)){
   fputs("FAIL: page update was rejected; original content should remain\n",stderr);goto done;
  }
