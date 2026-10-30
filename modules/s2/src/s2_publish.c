@@ -118,22 +118,91 @@ static int append_form(CURL *curl,char *out,size_t cap,size_t *used,const char *
  *used+=(size_t)written;
  return 1;
 }
+
+/* HTML values come from the site editing form, not from a public web page. */
+static int html_text(const char *begin,size_t n,char *out,size_t cap)
+{
+ size_t i=0,j=0;
+ while(i<n){
+  if(j+1>=cap)return 0;
+  if(begin[i]=='&'){
+   static const struct {const char *entity;char character;} substitutions[]={
+    {"&amp;",'&'},{"&lt;",'<'},{"&gt;",'>'},{"&quot;",'"'},
+    {"&#039;",39},{"&#39;",39},{"&apos;",39}
+   };
+   size_t k;int found=0;
+   for(k=0;k<sizeof substitutions/sizeof substitutions[0];++k){
+    size_t t=strlen(substitutions[k].entity);
+    if(t<=n-i&&!memcmp(begin+i,substitutions[k].entity,t)){
+     out[j++]=substitutions[k].character;i+=t;found=1;break;
+    }
+   }
+   if(!found)return 0;
+  }else out[j++]=begin[i++];
+ }
+ out[j]=0;return 1;
+}
+static int input_value(const body_t *body,const char *id,char *out,size_t cap)
+{
+ char needle[100];const char *p,*tag,*value,*end,*close;
+ if(snprintf(needle,sizeof needle,"id=\"%s\"",id)>=(int)sizeof needle)return 0;
+ p=strstr(body->data,needle);if(!p)return 0;
+ tag=p;
+ while(tag>body->data&&*tag!='<')--tag;
+ close=strchr(p,'>');if(!close||strncmp(tag,"<input",6))return 0;
+ value=strstr(tag,"value=\"");if(!value||value>=close)return 0;
+ value+=7;end=strchr(value,'"');
+ if(!end||end>close)return 0;
+ return html_text(value,(size_t)(end-value),out,cap);
+}
+static int textarea_value(const body_t *body,const char *id,char *out,size_t cap)
+{
+ char needle[100];const char *p,*start,*end,*tag;
+ if(snprintf(needle,sizeof needle,"id=\"%s\"",id)>=(int)sizeof needle)return 0;
+ p=strstr(body->data,needle);if(!p)return 0;
+ tag=p;while(tag>body->data&&*tag!='<')--tag;
+ if(strncmp(tag,"<textarea",9))return 0;
+ start=strchr(p,'>');if(!start)return 0;
+ ++start;end=strstr(start,"</textarea>");
+ if(!end)return 0;
+ return html_text(start,(size_t)(end-start),out,cap);
+}
+static int edit_page(const body_t *body,char *csrf_token,size_t csrf_size,
+                     char *title,size_t title_size,
+                     char *description,size_t description_size,
+                     char *content,size_t content_size)
+{
+ char slug[80];
+ /* The test-proven form uses an editable page title and textareas.
+  * Never mistake the page-list delete form for the editor. */
+ if(!strstr(body->data,"name=\"original_slug\"")||
+    !input_value(body,"page-slug",slug,sizeof slug)||
+    strcmp(slug,"sai-dsa")||
+    !input_value(body,"page-title",title,title_size)||
+    !textarea_value(body,"page-description",description,description_size)||
+    !textarea_value(body,"page-content",content,content_size)||
+    !csrf(body,csrf_token,csrf_size))return 0;
+ return title[0]!=0;
+}
+
 int s2_public_publish(const char *report)
 {
  CURL *curl=NULL;
  body_t *page=NULL;
- char user[128],pass[512],token[256],*form=NULL;
- size_t used=0U,cap;
+ char user[128]={0},pass[512]={0},token[256]={0},title[256]={0};
+ char description[4096]={0},*previous=NULL,*verified=NULL,*form=NULL;
+ size_t used=0,cap=0,limit=128U*1024U;
  int ok=0;
  if(!report||strlen(report)<400U||strlen(report)>60000U||
     !strstr(report,"# STN-LABZ | SECURITY INTELLIGENCE")||
     !strstr(report,"## BUSINESS / OPERATIONAL EFFECTS"))return 0;
  if(!credentials(user,sizeof user,pass,sizeof pass)){
-  fputs("[S2] site credentials unavailable to service user\\n",stderr);return 0;
+  fputs("[S2] site credentials unavailable to service user\n",stderr);return 0;
  }
- page=malloc(sizeof *page);
+ page=calloc(1,sizeof *page);
+ previous=calloc(limit,1);verified=calloc(limit,1);
  curl=curl_easy_init();
- if(!curl||!page)goto done;
+ if(!curl||!page||!previous||!verified)goto done;
  curl_easy_setopt(curl,CURLOPT_COOKIEFILE,"");
  curl_easy_setopt(curl,CURLOPT_FOLLOWLOCATION,0L);
  curl_easy_setopt(curl,CURLOPT_SSL_VERIFYPEER,1L);
@@ -141,68 +210,68 @@ int s2_public_publish(const char *report)
  curl_easy_setopt(curl,CURLOPT_CONNECTTIMEOUT,5L);
  curl_easy_setopt(curl,CURLOPT_TIMEOUT,25L);
  curl_easy_setopt(curl,CURLOPT_WRITEFUNCTION,sink);
- curl_easy_setopt(curl,CURLOPT_USERAGENT,"Digit-S2/1.1");
+ curl_easy_setopt(curl,CURLOPT_USERAGENT,"Digit-S2/1.2");
  if(!request(curl,S2_SITE "/auth/login",NULL,page)){
-  fputs("[S2] site login form GET failed\\n",stderr);goto done;
+  fputs("[S2] login form unavailable\n",stderr);goto done;
  }
  if(!csrf(page,token,sizeof token)){
-  fprintf(stderr,"[S2] site login CSRF missing bytes=%zu\\n",page->length);goto done;
+  fputs("[S2] login CSRF unavailable\n",stderr);goto done;
  }
- cap=2048U;form=calloc(cap,1);
+ cap=2048;form=calloc(cap,1);
  if(!form)goto done;
  if(!append_form(curl,form,cap,&used,"csrf_token",token)||
     !append_form(curl,form,cap,&used,"username",user)||
     !append_form(curl,form,cap,&used,"password",pass))goto done;
  memset(pass,0,sizeof pass);
  if(!request(curl,S2_SITE "/auth/login",form,page)){
-  /* successful login is expected to redirect, not return HTTP 200. */
-  long code=0;
-  curl_easy_getinfo(curl,CURLINFO_RESPONSE_CODE,&code);
-  if(code!=302L&&code!=303L){
-   fprintf(stderr,"[S2] site login rejected HTTP=%ld\\n",code);goto done;
-  }
+  fputs("[S2] website login rejected\n",stderr);goto done;
  }
  memset(form,0,cap);free(form);form=NULL;
  if(!request(curl,S2_SITE "/admin/page?edit=sai-dsa",NULL,page)){
-  fputs("[S2] sai-dsa edit form GET failed or denied\\n",stderr);goto done;
+  fputs("[S2] sai-dsa editor unavailable or not authorized\n",stderr);goto done;
  }
- if(!strstr(page->data,"name=\\\"original_slug\\\"")||
-    !strstr(page->data,"sai-dsa")||!csrf(page,token,sizeof token)){
-  fprintf(stderr,"[S2] sai-dsa edit form fields unavailable bytes=%zu\\n",page->length);
+ if(!edit_page(page,token,sizeof token,title,sizeof title,
+               description,sizeof description,previous,limit)){
+  fprintf(stderr,"[S2] sai-dsa editing form invalid (bytes=%zu)\n",page->length);
   goto done;
  }
- cap=strlen(report)*3U+4096U;
- form=calloc(cap,1);
- if(!form)goto done;
- used=0U;
+ cap=3U*strlen(report)+3U*strlen(description)+3U*strlen(title)+4096U;
+ form=calloc(cap,1);if(!form)goto done;
+ used=0;
  if(!append_form(curl,form,cap,&used,"csrf_token",token)||
     !append_form(curl,form,cap,&used,"action","update")||
     !append_form(curl,form,cap,&used,"original_slug","sai-dsa")||
     !append_form(curl,form,cap,&used,"slug","sai-dsa")||
-    !append_form(curl,form,cap,&used,"title","sai-dsa")||
+    !append_form(curl,form,cap,&used,"title",title)||
+    !append_form(curl,form,cap,&used,"description",description)||
     !append_form(curl,form,cap,&used,"status","published")||
     !append_form(curl,form,cap,&used,"content_file","main.md")||
-    !append_form(curl,form,cap,&used,"description","STN-LABZ S2 public security intelligence brief.")||
-    !append_form(curl,form,cap,&used,"content",report))goto done;
- /* Only accept the normal post-update redirect. */
+    !append_form(curl,form,cap,&used,"content",report)){
+  fputs("[S2] sai-dsa form encoding failed\n",stderr);goto done;
+ }
+ if(!request(curl,S2_SITE "/admin/page",form,page)){
+  fputs("[S2] sai-dsa update submission rejected\n",stderr);goto done;
+ }
+ memset(form,0,cap);free(form);form=NULL;
+ if(!request(curl,S2_SITE "/admin/page?edit=sai-dsa",NULL,page)){
+  fputs("[S2] sai-dsa read-back failed\n",stderr);goto done;
+ }
  {
-  long code=0;
-  memset(page,0,sizeof *page);
-  curl_easy_setopt(curl,CURLOPT_URL,S2_SITE "/admin/page");
-  curl_easy_setopt(curl,CURLOPT_POST,1L);
-  curl_easy_setopt(curl,CURLOPT_POSTFIELDS,form);
-  curl_easy_setopt(curl,CURLOPT_POSTFIELDSIZE,(long)strlen(form));
-  if(curl_easy_perform(curl)!=CURLE_OK)goto done;
-  curl_easy_getinfo(curl,CURLINFO_RESPONSE_CODE,&code);
-  if(code!=302L&&code!=303L){
-   fprintf(stderr,"[S2] sai-dsa update rejected HTTP=%ld\\n",code);goto done;
+  char new_title[256],new_desc[4096],new_token[256];
+  if(!edit_page(page,new_token,sizeof new_token,new_title,sizeof new_title,
+                new_desc,sizeof new_desc,verified,limit)||
+     strcmp(verified,report)||strcmp(new_title,title)||
+     strcmp(new_desc,description)){
+   fputs("[S2] sai-dsa read-back differs from submitted content; not verified\n",stderr);
+   goto done;
   }
  }
+ fputs("[S2] sai-dsa content saved and verified by exact read-back\n",stderr);
  ok=1;
 done:
  memset(pass,0,sizeof pass);
  if(form){memset(form,0,cap);free(form);}
  if(curl)curl_easy_cleanup(curl);
- free(page);
+ free(page);free(previous);free(verified);
  return ok;
 }
