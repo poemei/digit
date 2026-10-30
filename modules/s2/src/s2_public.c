@@ -21,7 +21,7 @@ static size_t rictus_candidate_matches(struct json_object *rows, size_t n, int *
  if(fseek(file,0,SEEK_END)!=0||(end=ftell(file))<0){fclose(file);return 0;}
  if(end>4194304L){
   if(fseek(file,end-4194304L,SEEK_SET)!=0){fclose(file);return 0;}
-  if(!fgets(line,sizeof line,file)){free(NULL);fclose(file);return 0;}
+  if(!fgets(line,sizeof line,file)){fclose(file);return 0;}
  }else rewind(file);
  seen=calloc(n?n:1U,1);
  if(!seen){fclose(file);return 0;}
