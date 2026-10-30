@@ -137,3 +137,10 @@ Required gate: `make -C modules/ollama clean all test`, qualification evidence i
 - Human-readable public report text explains website scanning, what source checks were completed, and limits of attribution. Optional Ollama editorial assistance uses the existing `digit.llm.generate` service for a single general-education sentence only, without exposing source observations. S2 controls final fact and business-effect wording; fallback to static prose.
 - Maintains native S2 and six-hour SAI-DSA publishing cadence. No Core, IRC, ABI, site Core, Python, or separate publisher edits.
 - **Pending:** Compilation, positive/negative qualification, key-file access validation, HTTP:BL resolution behavior, and site publication acceptance. Current S2 source still lacks full Rictus correlation and durable per-case investigative evidence needed to replicate the historical comprehensive report.
+
+## 2026-10-30 — S2 v1.2.1 hourly operator test cadence
+
+- By operator direction, changed the native S2 Sentinel polling interval from 14,400 to 3,600 seconds and the SAI-DSA publishing eligibility interval from 21,600 to 3,600 seconds for testing.
+- Updated module descriptor and module.conf to 1.2.1; no Digit Core, IRC, credentials, or website source changes.
+- Existing last-published stamp continues to govern eligibility; a collection or publishing failure may prevent an hourly public update. Configuration values document the compiled intervals and are not dynamically loaded by S2.
+- Source committed; installed runtime activation and live hourly publications are not verified.
