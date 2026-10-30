@@ -244,3 +244,9 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 - Updated module descriptor and module.conf to 1.2.1; no Digit Core, IRC, credentials, or website source changes.
 - Existing last-published stamp continues to govern eligibility; a collection or publishing failure may prevent an hourly public update. Configuration values document the compiled intervals and are not dynamically loaded by S2.
 - Source committed; installed runtime activation and live hourly publications are not verified.
+
+## 2026-10-30 — S2 Pages form correction
+
+- Found scheduled publisher's source searched for backslash-escaped quote characters instead of the actual `name="original_slug"` HTML field returned by the Pages editor; manual test used the correct form.
+- Replaced scheduled publisher flow with complete form extraction, preservation of current title and description, and exact saved Markdown read-back validation.
+- The change is isolated to Digit S2; no website Core, credential store, shared ABI, or IRC changes. GitHub source committed; local build and live recurring publication remain unverified.
