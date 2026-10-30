@@ -60,6 +60,10 @@ int s2_public_render(const char *source_json, size_t source_size,
            json_object_is_type(candidate,json_type_string))
      path=json_object_get_string(candidate);
    else if(details &&
+           json_object_object_get_ex(details,"request_url",&candidate) &&
+           json_object_is_type(candidate,json_type_string))
+     path=json_object_get_string(candidate);
+   else if(details &&
            json_object_object_get_ex(details,"request",&candidate) &&
            json_object_is_type(candidate,json_type_string))
      path=json_object_get_string(candidate);
@@ -71,7 +75,8 @@ int s2_public_render(const char *source_json, size_t source_size,
    else unclassified++;
   }
   value=NULL;
-  if(json_object_object_get_ex(item,"response_status",&value)&&json_object_is_type(value,json_type_int)){
+  if((json_object_object_get_ex(item,"response_status",&value)&&json_object_is_type(value,json_type_int))||
+     (details&&json_object_object_get_ex(details,"response_status",&value)&&json_object_is_type(value,json_type_int))){
     int status=json_object_get_int(value);
     if(status>=100&&status<=599){
       status_present++;
@@ -86,18 +91,18 @@ int s2_public_render(const char *source_json, size_t source_size,
  "## S2 INTELLIGENCE BRIEF\n\n"
  "**Report Generated:** %s\n\n---\n\n"
  "## 1. EXECUTIVE SUMMARY\n\n"
- "**Status:** {color:red}MEDIUM / HIGH / CRITICAL{/color} — Under Investigation\n\n"
+ "**Status:** {color:amber}MEDIUM — OBSERVE{/color}; {color:red}HIGH — ESCALATE / CRITICAL — INVESTIGATE{/color}\n\n"
  "Sentinel source observations are investigative leads, not confirmed compromises. "
  "Rictus corroboration was not performed in this collection.\n\n"
  "**Case Register:** %zu source-record cases.\n\n"
  "**Latest Poll:** %zu opened; %zu revised.\n\n---\n\n"
- "## 2. ACTIVE INVESTIGATIONS\n\n"
+ "## 2. TRIAGE AND INVESTIGATION\n\n"
  "**Tracked Cases:** %zu source-record cases.\n\n"
  "S2 retained source record identifiers and change signatures. "
  "Investigators must corroborate any material revisions against source logs before classifying incidents. "
  "Historical bulk ingestion is not evidence of newly occurring attacks.\n\n---\n\n"
  "## 3. THREAT INTELLIGENCE OVERVIEW\n\n"
- "**Investigation Threshold:** {color:red}MEDIUM / HIGH / CRITICAL{/color}\n\n"
+ "**Triage:** {color:amber}MEDIUM = OBSERVE{/color}; {color:red}HIGH = ESCALATE; CRITICAL = INVESTIGATE{/color}\n\n"
  "| Source severity | Records in current Sentinel snapshot |\n"
  "|---|---:|\n| MEDIUM | %zu |\n| HIGH | %zu |\n| CRITICAL | %zu |\n"
  "| Severity not supplied | %zu |\n\n"
@@ -110,7 +115,7 @@ int s2_public_render(const char *source_json, size_t source_size,
  "validated event chronology, attribution, exploitation outcomes, and confirmed incident impacts "
  "remain unestablished by this ingestion.\n\n---\n\n"
  "## 6. FINAL ASSESSMENT\n\n"
- "Prioritize MEDIUM, HIGH and CRITICAL records for evidence review. Verify source context, "
+ "Prioritize CRITICAL for investigation and HIGH for assessment. MEDIUM remains observation. Verify source context, "
  "response outcomes and timelines before escalation. No breach or downtime is inferred from severity alone.\n\n---\n\n"
  "# INVESTIGATION FINDINGS\n\n"
  "## 7. RECENT FINDINGS\n\n"
@@ -136,7 +141,7 @@ int s2_public_render(const char *source_json, size_t source_size,
  "%s\n\n"
  "An HTTP:BL listing is a reason to investigate, not proof of an attack.\n\n"
  "## 9. REPORT CONCLUSION\n\n"
- "**Overall Assessment:** Active investigation; compromise unconfirmed.\n\n"
+ "**Overall Assessment:** MEDIUM observations monitored; HIGH escalated for assessment; CRITICAL warrants investigation. Compromise unconfirmed.\n\n"
  "Preserve source evidence and corroborate before attribution.\n\n"
  "**STN-LABZ — S2 Security Intelligence**\n\n"
  "*Evidence before attribution. Investigation before conclusion.*\n\n---\n\n"
