@@ -237,3 +237,10 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 - Added nonsecret HTTP status/byte-count diagnostics and separated login GET, login CSRF, authenticated Pages GET and page form checks. Redirect status is treated as expected for authenticated POST.
 - Removed `snprintf` truncation warning in the live test using a verified-length append.
 - **Pending:** The operator must rebuild and rerun the manual live-page target as the `digit` service user. No claim of successful authentication or public page update.
+
+## 2026-10-30 — S2 v1.2.1 hourly operator test cadence
+
+- By operator direction, changed the native S2 Sentinel polling interval from 14,400 to 3,600 seconds and the SAI-DSA publishing eligibility interval from 21,600 to 3,600 seconds for testing.
+- Updated module descriptor and module.conf to 1.2.1; no Digit Core, IRC, credentials, or website source changes.
+- Existing last-published stamp continues to govern eligibility; a collection or publishing failure may prevent an hourly public update. Configuration values document the compiled intervals and are not dynamically loaded by S2.
+- Source committed; installed runtime activation and live hourly publications are not verified.
