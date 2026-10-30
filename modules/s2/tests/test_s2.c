@@ -34,7 +34,7 @@ int main(void)
             "{\"threats\":[{\"id\":\"t_secret\",\"severity\":\"HIGH\","
             "\"ip\":\"10.44.55.66\",\"domain\":\"internal.example\","
             "\"response_status\":403,\"details\":{\"token\":\"SECRET-KEY-123\"}}]}";
-        char report[8192];
+        char report[32768];
         int prepared=s2_public_render(private_source,strlen(private_source),
                                       42U,0U,0U,time(NULL),report,sizeof report);
         if (!prepared || !strstr(report,"## DECISION") ||
@@ -43,14 +43,14 @@ int main(void)
             !strstr(report,"1 HIGH") ||
             !strstr(report,"MEDIUM — OBSERVE") ||
             !strstr(report,"HIGH — ASSESS / CRITICAL — INVESTIGATE") ||
-            !strstr(report,"## HIGH / CRITICAL CASE ASSESSMENTS") ||
+            !strstr(report,"## INDIVIDUAL HIGH / CRITICAL INVESTIGATIONS") ||
             !strstr(report,"**Business decision:**") ||
             strstr(report,"10.44.55.66") ||
             strstr(report,"internal.example") ||
             strstr(report,"SECRET-KEY-123")) ok=0;
-        if (!strstr(report,"**Case 1 — HIGH:**") ||
-            !strstr(report,"reported denial") &&
-            !strstr(report,"Reported denial")) ok=0;
+        if (!strstr(report,"**Investigation 1 — HIGH**") ||
+            !strstr(report,"access was denied") &&
+            !strstr(report,"access was denied")) ok=0;
         {
             const char *nested="{\"threats\":[{\"id\":\"t_6ae374ed1453f\","
                 "\"severity\":\"MEDIUM\",\"created_at\":\"2026-10-29 16:31:41\","
@@ -62,8 +62,8 @@ int main(void)
                !strstr(report,"1 CMS admin/login")||
                !strstr(report,"1 configuration/test-file")||
                !strstr(report,"2 reported 403/429")||
-               !strstr(report,"**Case 1 — HIGH:**")||
-               !strstr(report,"(403)")||
+               !strstr(report,"**Investigation 1 — HIGH**")||
+               !strstr(report,"access was denied")||
                strstr(report,"t_6ae374ed1453f")||
                strstr(report,"/wp-admin/"))ok=0;
         }
