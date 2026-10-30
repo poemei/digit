@@ -221,7 +221,7 @@ static void *run_collection(void *unused)
    if(s2_public_publish(latest_public_report)){
     if(record_publish_stamp()){
      last_published=now;
-     fprintf(stderr,"[S2] sai-dsa published; six-hour cadence active\n");
+     fprintf(stderr,"[S2] sai-dsa published; hourly testing cadence active\n");
     }else fprintf(stderr,"[S2] publication accepted but stamp persistence failed\n");
    }else fprintf(stderr,"[S2] sai-dsa publishing failed or denied; previous report preserved\n");
   }
@@ -313,7 +313,7 @@ static stnlabz_module_result_t stop(void)
     return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor = {
-    "s2", "Digit S2 Security Intelligence", 1, 2, 1,
+    "s2", "Digit S2 Security Intelligence", 1, 2, 2,
     STNLABZ_MODULE_API_MAJOR, STNLABZ_MODULE_API_MINOR,
     qualify, start, stop
 };
