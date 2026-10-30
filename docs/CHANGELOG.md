@@ -262,3 +262,10 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 - Bounded read of local Rictus candidate entries and unique ID matching against current Sentinel records. Public report differentiates audit-log linkage from independent corroboration and avoids claiming an escalation merely from a HIGH label.
 - Following verified Pages write plus successful publish-stamp persistence, S2 announces `DSA has been updated` to IRC via the existing module host callback. No Core or ABI changes.
 - Bumped native module descriptor and module.conf to v1.2.4. Live deployment, log read permissions, and IRC delivery have not been verified.
+
+## 2026-10-30 — S2 v1.3.0 case evidence engine
+
+- Replaced the aggregate-only S2 public report with evidence-derived HIGH/CRITICAL case assessments, source response outcomes, bounded Rictus candidate-ID and timestamp-text correlation, and concrete business decisions.
+- Kept source IDs, IP addresses, raw request URLs, and private log contents out of public output.
+- Added nested Sentinel fixture and classification/non-disclosure test coverage; retained existing Pages read-back verification and IRC update notice.
+- Native descriptor and module.conf version 1.3.0. Source syntax was checked; actual C build/tests, live Rictus access, and deployed reporting remain operator-verification gates.
