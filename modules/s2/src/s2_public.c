@@ -14,6 +14,8 @@ typedef struct {
  char id[96];
  char observed[20];
  char category[48];
+ char kind[48],relevance[24],domain[96],path[120];
+ char primary_ip[64],details_ip[64];
  int severity;
  int status;
  int rictus;
@@ -36,6 +38,21 @@ static const char *field_both(struct json_object *o,struct json_object *d,const 
  const char *v=string_field(o,key);
  return v?v:string_field(d,key);
 }
+static void safe_text(char *out,size_t cap,const char *src)
+{
+ size_t i=0;
+ if(!cap)return;
+ if(!src){out[0]=0;return;}
+ while(*src&&i+1<cap){
+  unsigned char c=(unsigned char)*src++;
+  if((c>='a'&&c<='z')||(c>='A'&&c<='Z')||
+     (c>='0'&&c<='9')||c=='.'||c=='-'||c=='_'||
+     c=='/'||c==':'||c=='?'||c=='='||c=='&'||c=='%'||
+     c=='+'||c=='~')out[i++]=(char)c;
+ }
+ out[i]=0;
+}
+static const char *display_text(const char *s){return s&&s[0]?s:"not supplied";}
 static int status_both(struct json_object *o,struct json_object *d)
 {
  struct json_object *v=NULL;
@@ -150,6 +167,11 @@ int s2_public_render(const char *source_json,size_t source_size,
   d=details_of(item);id=string_field(item,"id");
   if(!id||strlen(id)>=sizeof cases[i].id||strncmp(id,"t_",2))goto done;
   snprintf(cases[i].id,sizeof cases[i].id,"%s",id);
+  safe_text(cases[i].kind,sizeof cases[i].kind,field_both(item,d,"type"));
+  safe_text(cases[i].relevance,sizeof cases[i].relevance,field_both(item,d,"relevance"));
+  safe_text(cases[i].domain,sizeof cases[i].domain,field_both(item,d,"domain"));
+  safe_text(cases[i].primary_ip,sizeof cases[i].primary_ip,string_field(item,"ip"));
+  safe_text(cases[i].details_ip,sizeof cases[i].details_ip,string_field(d,"ip_address"));
   severity=field_both(item,d,"severity");
   cases[i].severity=sev(severity);
   if(cases[i].severity==1)++medium;
@@ -160,6 +182,7 @@ int s2_public_render(const char *source_json,size_t source_size,
   if(!path)path=field_both(item,d,"request");
   if(!path)path=field_both(item,d,"path");
   snprintf(cases[i].category,sizeof cases[i].category,"%s",classify(path));
+  safe_text(cases[i].path,sizeof cases[i].path,path);
   if(!strcmp(cases[i].category,"CMS administration/login path"))++admin;
   else if(!strcmp(cases[i].category,"configuration or test-file path"))++config;
   else ++other;
@@ -224,47 +247,91 @@ int s2_public_render(const char *source_json,size_t source_size,
    "- Rictus candidate log: unavailable to S2; no correlation claimed.\n\n"))goto done;
  }
  if(!add(out,capacity,&used,
-  "A Rictus candidate entry provides an audit link, not an independent witness of an HTTP request. "
-  "Neither a severity label nor a 403 response establishes a compromise or definitive protection.\n\n"
-  "## HIGH / CRITICAL CASE ASSESSMENTS\n\n"))goto done;
- for(i=0;i<n&&shown<6;++i){
+  "Rictus is an audit link, not independent proof of an attack.\n\n"
+  "## INDIVIDUAL HIGH / CRITICAL INVESTIGATIONS\n\n"))goto done;
+ for(i=0;i<n&&shown<12;++i){
   const finding_t *c=&cases[i];
+  const char *outcome;
   if(c->severity<2)continue;
   ++shown;
+  if(c->status==403)outcome="The source reports access was denied.";
+  else if(c->status==429)outcome="The source reports rate limiting.";
+  else if(c->status>=200&&c->status<400)
+   outcome="The source reports an HTTP success, not proof of successful authentication.";
+  else if(c->status>=500)
+   outcome="The source reports a server error; service impact is not confirmed.";
+  else outcome="No response outcome is supplied; successful access cannot be established.";
   if(!add(out,capacity,&used,
-   "**Case %zu — %s:** %s; recorded response %s",
-   shown,c->severity==3?"CRITICAL":"HIGH",c->category,
-   c->status?"available":"unavailable"))goto done;
-  if(c->status){
-   if(!add(out,capacity,&used," (%d)",c->status))goto done;
-  }
-  if(!add(out,capacity,&used,
-   "; Rictus candidate ID %s%s. ",
-   c->rictus?"matched":"not matched",
-   c->chronology?" with matching timestamp text":""))goto done;
-  if(c->status==403||c->status==429){
-   if(!add(out,capacity,&used,
-    "Reported denial/rate-limiting supports a blocked-request assessment, "
-    "subject to independent web-log verification.\n\n"))goto done;
-  }else if(c->status>=200&&c->status<400){
-   if(!add(out,capacity,&used,
-    "A successful HTTP status alone cannot establish unauthorized access; "
-    "review authentication and application logs.\n\n"))goto done;
-  }else{
-   if(!add(out,capacity,&used,
-    "Access outcome remains unresolved; examine the corresponding server response and authentication log.\n\n"))goto done;
-  }
+   "**Investigation %zu — %s**\n\n"
+   "Recorded: %s (source timezone unconfirmed). Event: %s. Importance: %s. "
+   "Site: %s. Request: %s.\n\n"
+   "**Finding:** %s. %s Rictus candidate record %s%s.\n\n",
+   shown,c->severity==3?"CRITICAL":"HIGH",
+   display_text(c->observed),display_text(c->kind),
+   display_text(c->relevance),display_text(c->domain),display_text(c->path),
+   c->category,outcome,
+   c->rictus?"matches the Sentinel ID":"does not match the Sentinel ID",
+   c->chronology?" and recorded time":""))goto done;
  }
- if(!shown){
-  if(!add(out,capacity,&used,
-   "No HIGH or CRITICAL cases were classified in this snapshot.\n\n"))goto done;
+ if(!shown&&!add(out,capacity,&used,
+   "No HIGH or CRITICAL cases in this snapshot.\n\n"))goto done;
+ if(!add(out,capacity,&used,"## REPEATED INDICATORS AND PATTERNS\n\n"))goto done;
+ {
+  size_t groups=0,j,k;
+  unsigned char *visited_primary=calloc(n?n:1,1),*visited_detail=calloc(n?n:1,1);
+  if(!visited_primary||!visited_detail){
+   free(visited_primary);free(visited_detail);goto done;
+  }
+  for(i=0;i<n&&groups<8;++i){
+   for(k=0;k<2&&groups<8;++k){
+    const char *value=k?cases[i].details_ip:cases[i].primary_ip;
+    unsigned char *visited=k?visited_detail:visited_primary;
+    size_t matches=0,highest=0;
+    const finding_t *example=NULL;
+    char first[20]={0},last[20]={0};
+    if(!value[0]||!cases[i].observed[0]||visited[i])continue;
+    for(j=i;j<n;++j){
+     const char *other=k?cases[j].details_ip:cases[j].primary_ip;
+     if(other[0]&&!strcmp(value,other)&&
+        !strncmp(cases[i].observed,cases[j].observed,10)){
+      visited[j]=1;matches++;example=&cases[j];
+      if((size_t)cases[j].severity>highest)highest=(size_t)cases[j].severity;
+      if(!first[0]||strcmp(cases[j].observed,first)<0)
+       snprintf(first,sizeof first,"%s",cases[j].observed);
+      if(!last[0]||strcmp(cases[j].observed,last)>0)
+       snprintf(last,sizeof last,"%s",cases[j].observed);
+     }
+    }
+    if(matches<2)continue;
+    ++groups;
+    if(!add(out,capacity,&used,
+     "**Pattern %zu — %zu related records**\n\n"
+     "Shared %s on source date %.10s. Window: %s to %s (timezone unconfirmed). "
+     "Highest classification: %s. Example site: %s; request: %s.\n\n"
+     "**Assessment:** Shared field values indicate a pattern worth examining, "
+     "not proof that the requests came from the same person or caused a breach.\n\n",
+     groups,matches,k?"secondary address field":"primary address field",
+     cases[i].observed,first,last,
+     highest==3?"CRITICAL":highest==2?"HIGH":highest==1?"MEDIUM":"not supplied",
+     display_text(example?example->domain:NULL),
+     display_text(example?example->path:NULL))){
+     free(visited_primary);free(visited_detail);goto done;
+    }
+   }
+  }
+  free(visited_primary);free(visited_detail);
+  if(!groups&&!add(out,capacity,&used,
+   "No repeated address value on one source date was found.\n\n"))goto done;
  }
  if(!add(out,capacity,&used,
   "## BUSINESS / OPERATIONAL EFFECTS\n\n"
-  "The evidence above supports targeted verification of RED-classified records, "
-  "not an assertion of successful compromise. Assess customer or service impact only "
-  "when independently recorded access outcomes, authentication events, and service-health "
-  "evidence justify it. Preserve case IDs privately for audit and incident follow-up.\n"))goto done;
+  "Current response evidence: %zu valid statuses from %zu records, including "
+  "%zu reported denials/rate limits and %zu reported server errors.\n\n"
+  "Continue to observe MEDIUM activity. Assess HIGH findings and investigate CRITICAL cases "
+  "against independent site and authentication records before making incident claims. "
+  "The available evidence does not establish downtime, unauthorized access, "
+  "customer information exposure or financial loss.\n",
+  status_known,n,blocked,server_errors))goto done;
  ok=1;
 done:
  free(cases);
