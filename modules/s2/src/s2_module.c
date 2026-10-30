@@ -20,8 +20,8 @@
 #define S2_MAX_BYTES (8U * 1024U * 1024U)
 #define S2_STATE_DIR "/opt/digit/state/s2"
 #define S2_STATE_FILE S2_STATE_DIR "/sentinel-register.txt"
-#define S2_POLL_SECONDS 3600U
-#define S2_PUBLISH_SECONDS 3600U
+#define S2_POLL_SECONDS 21600U
+#define S2_PUBLISH_SECONDS 21600U
 #define S2_PUBLIC_STAMP S2_STATE_DIR "/last-published"
 typedef struct { char *body; size_t length; } received_t;
 static pthread_t worker;
@@ -221,7 +221,7 @@ static void *run_collection(void *unused)
    if(s2_public_publish(latest_public_report)){
     if(record_publish_stamp()){
      last_published=now;
-     fprintf(stderr,"[S2] sai-dsa published; hourly testing cadence active\n");
+     fprintf(stderr,"[S2] sai-dsa published; six-hour cadence active\n");
      if(owner&&owner->send_message){
       if(!owner->send_message("[S2] DSA has been updated: https://stn-labz.com/sai-dsa"))
        fputs("[S2] IRC DSA update notification failed\n",stderr);
@@ -317,7 +317,7 @@ static stnlabz_module_result_t stop(void)
     return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor = {
-    "s2", "Digit S2 Security Intelligence", 1, 3, 1,
+    "s2", "Digit S2 Security Intelligence", 1, 3, 2,
     STNLABZ_MODULE_API_MAJOR, STNLABZ_MODULE_API_MINOR,
     qualify, start, stop
 };
