@@ -83,17 +83,29 @@ static int csrf(const body_t *page,char *token,size_t capacity)
 static int request(CURL *curl,const char *url,const char *post,body_t *result)
 {
  CURLcode rc;long status=0;
+ if(!curl||!url||!result)return 0;
  memset(result,0,sizeof *result);
  curl_easy_setopt(curl,CURLOPT_URL,url);
- curl_easy_setopt(curl,CURLOPT_HTTPGET,post?0L:1L);
- curl_easy_setopt(curl,CURLOPT_POST,post?1L:0L);
- curl_easy_setopt(curl,CURLOPT_POSTFIELDS,post);
- curl_easy_setopt(curl,CURLOPT_POSTFIELDSIZE,post?(long)strlen(post):0L);
  curl_easy_setopt(curl,CURLOPT_WRITEDATA,result);
+ if(post){
+  curl_easy_setopt(curl,CURLOPT_POSTFIELDS,post);
+  curl_easy_setopt(curl,CURLOPT_POSTFIELDSIZE,(long)strlen(post));
+  curl_easy_setopt(curl,CURLOPT_POST,1L);
+ }else{
+  /* CURLOPT_POSTFIELDS, even when set to NULL, can select POST.
+   * Make HTTPGET the FINAL method-setting option. */
+  curl_easy_setopt(curl,CURLOPT_POSTFIELDS,NULL);
+  curl_easy_setopt(curl,CURLOPT_POSTFIELDSIZE,0L);
+  curl_easy_setopt(curl,CURLOPT_HTTPGET,1L);
+ }
  rc=curl_easy_perform(curl);
- if(rc!=CURLE_OK)return 0;
- if(curl_easy_getinfo(curl,CURLINFO_RESPONSE_CODE,&status)!=CURLE_OK)return 0;
- return status==200L;
+ if(rc==CURLE_OK)(void)curl_easy_getinfo(curl,CURLINFO_RESPONSE_CODE,&status);
+ if(rc!=CURLE_OK||status!=200L){
+  fprintf(stderr,"[S2] site request stage=%s HTTP=%ld curl=%d bytes=%zu\\n",
+          post?"POST":"GET",status,(int)rc,result->length);
+  return 0;
+ }
+ return 1;
 }
 static int append_form(CURL *curl,char *out,size_t cap,size_t *used,const char *key,const char *value)
 {
@@ -116,7 +128,9 @@ int s2_public_publish(const char *report)
  if(!report||strlen(report)<400U||strlen(report)>60000U||
     !strstr(report,"# STN-LABZ | SECURITY INTELLIGENCE")||
     !strstr(report,"## BUSINESS / OPERATIONAL EFFECTS"))return 0;
- if(!credentials(user,sizeof user,pass,sizeof pass))return 0;
+ if(!credentials(user,sizeof user,pass,sizeof pass)){
+  fputs("[S2] site credentials unavailable to service user\\n",stderr);return 0;
+ }
  page=malloc(sizeof *page);
  curl=curl_easy_init();
  if(!curl||!page)goto done;
@@ -128,7 +142,12 @@ int s2_public_publish(const char *report)
  curl_easy_setopt(curl,CURLOPT_TIMEOUT,25L);
  curl_easy_setopt(curl,CURLOPT_WRITEFUNCTION,sink);
  curl_easy_setopt(curl,CURLOPT_USERAGENT,"Digit-S2/1.1");
- if(!request(curl,S2_SITE "/auth/login",NULL,page)||!csrf(page,token,sizeof token))goto done;
+ if(!request(curl,S2_SITE "/auth/login",NULL,page)){
+  fputs("[S2] site login form GET failed\\n",stderr);goto done;
+ }
+ if(!csrf(page,token,sizeof token)){
+  fprintf(stderr,"[S2] site login CSRF missing bytes=%zu\\n",page->length);goto done;
+ }
  cap=2048U;form=calloc(cap,1);
  if(!form)goto done;
  if(!append_form(curl,form,cap,&used,"csrf_token",token)||
@@ -139,7 +158,9 @@ int s2_public_publish(const char *report)
   /* successful login is expected to redirect, not return HTTP 200. */
   long code=0;
   curl_easy_getinfo(curl,CURLINFO_RESPONSE_CODE,&code);
-  if(code!=302L&&code!=303L)goto done;
+  if(code!=302L&&code!=303L){
+   fprintf(stderr,"[S2] site login rejected HTTP=%ld\\n",code);goto done;
+  }
  }
  memset(form,0,cap);free(form);form=NULL;
  if(!request(curl,S2_SITE "/admin/page?edit=sai-dsa",NULL,page)||
@@ -169,7 +190,9 @@ int s2_public_publish(const char *report)
   curl_easy_setopt(curl,CURLOPT_POSTFIELDSIZE,(long)strlen(form));
   if(curl_easy_perform(curl)!=CURLE_OK)goto done;
   curl_easy_getinfo(curl,CURLINFO_RESPONSE_CODE,&code);
-  if(code!=302L&&code!=303L)goto done;
+  if(code!=302L&&code!=303L){
+   fprintf(stderr,"[S2] sai-dsa update rejected HTTP=%ld\\n",code);goto done;
+  }
  }
  ok=1;
 done:
