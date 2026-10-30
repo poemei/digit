@@ -21,7 +21,7 @@ static size_t rictus_candidate_matches(struct json_object *rows, size_t n, int *
  if(fseek(file,0,SEEK_END)!=0||(end=ftell(file))<0){fclose(file);return 0;}
  if(end>4194304L){
   if(fseek(file,end-4194304L,SEEK_SET)!=0){fclose(file);return 0;}
-  (void)fgets(line,sizeof line,file);
+  if(!fgets(line,sizeof line,file)){free(NULL);fclose(file);return 0;}
  }else rewind(file);
  seen=calloc(n?n:1U,1);
  if(!seen){fclose(file);return 0;}
@@ -181,7 +181,7 @@ int s2_public_render(const char *source_json, size_t source_size,
  "| Not classified from examined request fields | %zu |\n\n"
  "**Finding:** These are source-request signatures only. Their appearance does not prove malicious intent, access, or exploitation.\n\n"
  "**How she investigates:** Verify field roles, timestamp and source host; inspect the corresponding server response and application log; separate shared infrastructure IPs from potential clients; correlate independent evidence before any actor or incident conclusion.\n\n"
- **Next Action:** Observe MEDIUM records; assess HIGH records for escalation; investigate CRITICAL records. Correlate source IDs with local Rictus candidate records and seek independent confirmation before incident conclusions.\n\n"
+ "**Next Action:** Observe MEDIUM records; assess HIGH records for escalation; investigate CRITICAL records. Correlate source IDs with local Rictus candidate records and seek independent confirmation before incident conclusions.\n\n"
  "## 8. HISTORICAL FINDINGS\n\n"
  "Individual historical case identities and source-field values are retained privately. "
  "A public grouping by date or actor is withheld until field roles and chronology are verified.\n\n"
@@ -193,7 +193,7 @@ int s2_public_render(const char *source_json, size_t source_size,
  "%s\n\n"
  "An HTTP:BL listing is a reason to investigate, not proof of an attack.\n\n"
  "## 9. REPORT CONCLUSION\n\n"
- **Overall Assessment:** MEDIUM designated for observation; HIGH flagged for escalation assessment; CRITICAL designated for investigation. A label does not establish that an escalation or investigation was completed. Compromise unconfirmed.\n\n"
+ "**Overall Assessment:** MEDIUM designated for observation; HIGH flagged for escalation assessment; CRITICAL designated for investigation. A label does not establish that an escalation or investigation was completed. Compromise unconfirmed.\n\n"
  "Preserve source evidence and corroborate before attribution.\n\n"
  "**STN-LABZ — S2 Security Intelligence**\n\n"
  "*Evidence before attribution. Investigation before conclusion.*\n\n---\n\n"
