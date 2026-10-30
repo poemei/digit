@@ -64,3 +64,7 @@ The test reports the first failing stage without revealing credentials. It does 
 ## Hourly testing cadence — v1.2.1
 
 For operator-directed testing, Sentinel collection and public `sai-dsa` publishing are each scheduled at 3,600 seconds. The stored last-successful-publish timestamp still controls the next eligible publication, and the source does not guarantee publication if collection, authentication, authorization or page update fails. This is a source-level cadence change; the installed module must be built and activated under the existing operator workflow. Restore a longer interval when the director ends testing.
+
+## Pages publishing form repair
+
+S2's scheduled publisher now parses the actual `sai-dsa` Pages editing form, including the page slug, current title, description, existing content and CSRF token. The previous literal HTML check erroneously searched for escaped quotation marks. It preserves page title/description, updates only the fixed `sai-dsa` page, and reads the edit form again to confirm exact Markdown persistence before recording a successful publication. On any missing required form element or verification mismatch, it reports a stage-specific failure and does not claim success. No website Core or ABI changes.
