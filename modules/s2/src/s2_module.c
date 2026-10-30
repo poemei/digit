@@ -34,7 +34,7 @@ static char last_result[400] = "No successful Sentinel collection yet.";
 static size_t latest_opened, latest_changed, latest_qualifying;
 static time_t last_success;
 static int initial_report_sent;
-static char latest_public_report[8192];
+static char latest_public_report[32768];
 static time_t last_publish_attempt;
 static void add_reader_note(char *report, size_t capacity);
 
