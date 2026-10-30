@@ -126,9 +126,9 @@ int s2_public_render(const char *source_json,size_t source_size,
  finding_t *cases=NULL;
  struct tm utc;
  char when[40];
- size_t i,n,used=0,medium=0,high=0,critical=0,unknown=0;
+ size_t i,n,used=0,medium=0,high=0,critical=0;
  size_t admin=0,config=0,other=0,blocked=0,server_errors=0,status_known=0;
- size_t linked=0,time_linked=0,red_linked=0,red_blocked=0,red_unknown=0,red_errors=0;
+ size_t linked=0,time_linked=0,red_linked=0,red_blocked=0,red_unknown=0;
  size_t shown=0;int log_access=0,ok=0;
  if(!source_json||!source_size||source_size>8U*1024U*1024U||
     !out||capacity<1024||!gmtime_r(&collected_at,&utc))return 0;
@@ -155,7 +155,7 @@ int s2_public_render(const char *source_json,size_t source_size,
   if(cases[i].severity==1)++medium;
   else if(cases[i].severity==2)++high;
   else if(cases[i].severity==3)++critical;
-  else ++unknown;
+
   path=field_both(item,d,"request_url");
   if(!path)path=field_both(item,d,"request");
   if(!path)path=field_both(item,d,"path");
@@ -179,7 +179,7 @@ int s2_public_render(const char *source_json,size_t source_size,
   if(cases[i].severity>=2){
    if(status==403||status==429)++red_blocked;
    if(!status)++red_unknown;
-   if(status>=500)++red_errors;
+
   }
  }
  linked=correlate(cases,n,&log_access,&time_linked);
@@ -241,7 +241,7 @@ int s2_public_render(const char *source_json,size_t source_size,
   if(!add(out,capacity,&used,
    "; Rictus candidate ID %s%s. ",
    c->rictus?"matched":"not matched",
-   c->chronology?" with matching observed time":""))goto done;
+   c->chronology?" with matching timestamp text":""))goto done;
   if(c->status==403||c->status==429){
    if(!add(out,capacity,&used,
     "Reported denial/rate-limiting supports a blocked-request assessment, "
