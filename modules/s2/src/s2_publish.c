@@ -100,7 +100,7 @@ static int request(CURL *curl,const char *url,const char *post,body_t *result)
  }
  rc=curl_easy_perform(curl);
  if(rc==CURLE_OK)(void)curl_easy_getinfo(curl,CURLINFO_RESPONSE_CODE,&status);
- if(rc!=CURLE_OK||status!=200L){
+ if(rc!=CURLE_OK||(post?(status!=302L&&status!=303L):(status!=200L))){
   fprintf(stderr,"[S2] site request stage=%s HTTP=%ld curl=%d bytes=%zu\\n",
           post?"POST":"GET",status,(int)rc,result->length);
   return 0;
@@ -163,10 +163,14 @@ int s2_public_publish(const char *report)
   }
  }
  memset(form,0,cap);free(form);form=NULL;
- if(!request(curl,S2_SITE "/admin/page?edit=sai-dsa",NULL,page)||
-    !strstr(page->data,"name=\"original_slug\"")||
-    !strstr(page->data,"sai-dsa")||
-    !csrf(page,token,sizeof token))goto done;
+ if(!request(curl,S2_SITE "/admin/page?edit=sai-dsa",NULL,page)){
+  fputs("[S2] sai-dsa edit form GET failed or denied\\n",stderr);goto done;
+ }
+ if(!strstr(page->data,"name=\\\"original_slug\\\"")||
+    !strstr(page->data,"sai-dsa")||!csrf(page,token,sizeof token)){
+  fprintf(stderr,"[S2] sai-dsa edit form fields unavailable bytes=%zu\\n",page->length);
+  goto done;
+ }
  cap=strlen(report)*3U+4096U;
  form=calloc(cap,1);
  if(!form)goto done;
