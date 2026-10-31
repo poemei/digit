@@ -118,6 +118,9 @@ int main(void)
   CHECK(strstr(found.hit[0].title,"Patriots")!=NULL);
   CHECK(research_parse_rss(short_title,
    "when is the next SpaceX rocket launch?",&found)==0);
+  /* One generic query word must not make an unrelated result relevant. */
+  CHECK(research_parse_rss(short_title,
+   "when is the next rocket launch schedule?",&found)==0);
  }
  /* [End AI:GPT-6] */
  CHECK(research_terms("learn Golang",terms,sizeof terms));
