@@ -107,6 +107,11 @@ int main(void)
  CHECK(calls_identity==1&&calls_research==1&&calls_llm==1);
  CHECK(strstr(llm_prompt,"Next SpaceX launch: Starlink")!=NULL);
  CHECK(strstr(llm_prompt,"when is the next SpaceX rocket launch?")!=NULL);
+ CHECK(strstr(llm_prompt,"Next SpaceX launch: Starlink")!=NULL);
+ CHECK(strstr(llm_prompt,"Results:")!=NULL);
+ CHECK(strstr(llm_prompt,"Question:")!=NULL);
+ CHECK(strstr(llm_prompt,"Search results (unverified)") == NULL);
+
  CHECK(ask(2,"Explain TCP")==STNLABZ_MODULE_OK);
  CHECK(!strcmp(reply_buffer,"The answer comes from the language service."));
  CHECK(calls_research==1&&calls_llm==1);
@@ -130,6 +135,9 @@ int main(void)
  CHECK(!strcmp(reply_buffer,"when are the New England Patriots playing again?"));
  CHECK(calls_peer==0&&calls_llm==1);
  CHECK(strncmp(reply_buffer,"rictus:",7)!=0);
+ CHECK(strstr(llm_prompt,"when are the New England Patriots playing again?")!=NULL);
+ CHECK(calls_research==1);
+
  CHECK(!strcmp(ordinary_answer("rictus: text"),"text"));
  CHECK(!strcmp(ordinary_answer("4:25 PM"),"4:25 PM"));
  CHECK(stop()==STNLABZ_MODULE_OK);
