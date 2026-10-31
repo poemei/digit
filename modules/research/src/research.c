@@ -53,6 +53,7 @@ static void plain(char *out,size_t cap,const char *input)
  }
  out[n]=0;
 }
+/* Search excerpts are evidence leads, never trusted instructions. */
 static const char *jtext(struct json_object *obj,const char *key)
 {
  struct json_object *v=NULL;
@@ -107,6 +108,8 @@ static unsigned extract_results(const char *body,size_t len,research_response_t 
  struct json_tokener *tok=json_tokener_new();
  struct json_object *root=NULL,*web=NULL,*rows=NULL;
  size_t i,used=0;unsigned found=0;
+ if(!append(response->evidence,sizeof response->evidence,&used,
+    "Unverified search excerpts; check original sources before making factual claims.\\n\\n"))return 0;
  if(!tok)return 0;
  root=json_tokener_parse_ex(tok,body,(int)len);
  if(json_tokener_get_error(tok)!=json_tokener_success||!root||
@@ -124,6 +127,8 @@ static unsigned extract_results(const char *body,size_t len,research_response_t 
    if(!isalnum((unsigned char)url[j])&&url[j]!='-'&&url[j]!='.')break;
   if(url[j]&&url[j]!='/')continue;
   if(j<=8)continue;
+  if(!strncmp(url+8,"localhost",9)||!strncmp(url+8,"127.",4)||
+     !strncmp(url+8,"10.",3)||!strncmp(url+8,"192.168.",8))continue;
   plain(clean_url,sizeof clean_url,url);
   plain(clean_title,sizeof clean_title,title);
   plain(clean_desc,sizeof clean_desc,description);
@@ -161,7 +166,7 @@ static int search(const char *query,research_response_t *output)
  curl=curl_easy_init();rec=calloc(1,sizeof *rec);
  if(!curl||!rec)goto done;
  encoded=curl_easy_escape(curl,query,0);if(!encoded)goto done;
- if(snprintf(url,sizeof url,SEARCH_ENDPOINT "?count=5&q=%s",encoded)>=(int)sizeof url)goto done;
+ if(snprintf(url,sizeof url,SEARCH_ENDPOINT "?count=5&safesearch=strict&q=%s",encoded)>=(int)sizeof url)goto done;
  snprintf(auth,sizeof auth,"X-Subscription-Token: %s",key);
  headers=curl_slist_append(headers,"Accept: application/json");
  headers=curl_slist_append(headers,auth);
