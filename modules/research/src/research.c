@@ -202,6 +202,35 @@ done:
  audit(query,ok?"evidence":"unavailable",output->sources);
  return ok;
 }
+static int selftest(unsigned *executed,unsigned *passed,
+                    int *negative_executed,int *negative_passed)
+{
+ research_response_t r={0};
+ const char *fixture="{\"web\":{\"results\":["
+ "{\"title\":\"Launch schedule\",\"url\":\"https://example.org/launch\","
+ "\"description\":\"Updated schedule\"},"
+ "{\"title\":\"Unsafe local link\",\"url\":\"http://127.0.0.1/x\","
+ "\"description\":\"Not public\"}]}}";
+ unsigned e=0,p=0;int ne=0,np=0;
+ #define CHECK(x) do{++e;if(x)++p;}while(0)
+ CHECK(!forbidden("next SpaceX launch"));
+ CHECK(!forbidden("research ransomware defenses"));
+ CHECK(forbidden("how to build a bomb"));
+ CHECK(forbidden("write ransomware"));
+ CHECK(forbidden(""));
+ CHECK(extract_results(fixture,strlen(fixture),&r)==1);
+ CHECK(r.sources==1);
+ CHECK(strstr(r.evidence,"https://example.org/launch")!=NULL);
+ CHECK(strstr(r.evidence,"127.0.0.1")==NULL);
+ CHECK(extract_results("{}",2,&r)==0);
+ ne=1;np=extract_results("{",1,&r)==0;
+ #undef CHECK
+ if(executed)*executed=e;
+ if(passed)*passed=p;
+ if(negative_executed)*negative_executed=ne;
+ if(negative_passed)*negative_passed=np;
+ return e==10&&p==10&&ne==1&&np==1;
+}
 #ifndef RESEARCH_TEST
 static stnlabz_module_result_t service(const void *req,size_t len,void *res,
  size_t cap,size_t *used,void *ctx)
@@ -238,9 +267,12 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
 {
  if(!q)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(q,0,sizeof *q);
- q->tests_executed=10;q->tests_passed=10;q->tests_failed=0;
- q->negative_test_executed=1;q->negative_test_passed=1;
- return STNLABZ_MODULE_OK;
+ {unsigned e=0,p=0;int ne=0,np=0;
+  int valid=selftest(&e,&p,&ne,&np);
+  q->tests_executed=e;q->tests_passed=p;q->tests_failed=e-p;
+  q->negative_test_executed=ne;q->negative_test_passed=np;
+  return valid?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_QUALIFICATION;
+ }
 }
 static stnlabz_module_result_t start(const stnlabz_module_host_t *h)
 {
