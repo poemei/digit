@@ -60,9 +60,9 @@ int main(void)
  size_t used=0;
  CHECK(research_claims("when is the next SpaceX launch?"));
  CHECK(research_claims("current weather in Seattle"));
- CHECK(!research_claims("Explain TCP"));
+ CHECK(!research_claims("hello Digit"));
  CHECK(!research_claims("tell rictus hi"));
- snprintf(question.query,sizeof question.query,"%s","Explain TCP");
+ snprintf(question.query,sizeof question.query,"%s","hello Digit");
  CHECK(answer_service(&question,sizeof question,&answer,sizeof answer,&used,NULL)==STNLABZ_MODULE_OK);
  CHECK(answer.status==RESEARCH_NOT_APPLICABLE);
  CHECK(used==sizeof answer);
