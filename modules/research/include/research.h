@@ -1,7 +1,7 @@
 #ifndef DIGIT_RESEARCH_H
 #define DIGIT_RESEARCH_H
 #include "stnlabz_abi/module.h"
-#define RESEARCH_QUERY_MAX 256
+#define RESEARCH_QUERY_MAX 512
 #define RESEARCH_EVIDENCE_MAX 8192
 #define RESEARCH_NOT_APPLICABLE 0
 #define DIGIT_RESEARCH_ANSWER_SERVICE "digit.research.answer.v1"
