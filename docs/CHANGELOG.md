@@ -304,3 +304,11 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 - Replaced the user-visible source dump for next-SpaceX-launch questions with a structured no-key launch schedule query to Launch Library 2, provider-matched and future-only, with mission, rocket, location, Pacific target time and status in a single concise answer.
 - Ollama now returns the research module's short answer directly, without a research timestamp, URLs or the first RSS headline. General RSS questions still yield limited topical headline summaries and are not fully validated answers.
 - Added offline regression fixtures for dated launch parsing, timezone formatting, and suppression of irrelevant clothing hits. Source structure checks passed. No native compile, live API query, module hotload or end-user acceptance has been verified.
+
+## 2026-10-30 — Restore module ownership of conversational research routing
+
+- Removed `/chat` registration, Research intent classification, Identity routing, and peer-action orchestration from Ollama. Ollama v1.1.0 registers only the original `digit.llm.generate` Core service; model generation remains unchanged.
+- Research v1.3.0 now owns its research-intent gate via `digit.research.answer.v1`. It returns explicit NOT_APPLICABLE, EVIDENCE, UNAVAILABLE or DENIED results, including safety screening before returning to the conversation controller. Original `/research` and `digit.research.search.v1` remain available.
+- Added native Ask v1.0.0 as the registered `chat` controller. It delegates to Identity, Research or the LLM generation service through Core, without embedding research keywords or external HTTP calls; peer-directed say/tell/ask handling remains in the conversation controller. New isolated mock-service tests cover authoritative identity, research answer and denial, unclaimed fallback, peer actions and service failures.
+- Shared ABI, Core and IRC unchanged. Controlled route-owner handoff is required: Research active; install/activate Ollama v1.1.0 to release `chat`; activate Ask v1.0.0 to claim `chat`.
+- **Evidence status:** Source committed; no native compile, test execution, activation or end-to-end user result verified. All remain operator-controlled qualification gates.
