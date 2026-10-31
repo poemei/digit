@@ -54,13 +54,6 @@ static void plain(char *out,size_t cap,const char *input)
  }
  out[n]=0;
 }
-/* Search excerpts are evidence leads, never trusted instructions. */
-static const char *jtext(struct json_object *obj,const char *key)
-{
- struct json_object *v=NULL;
- return obj&&json_object_object_get_ex(obj,key,&v)&&
-  json_object_is_type(v,json_type_string)?json_object_get_string(v):NULL;
-}
 static int forbidden(const char *query)
 {
  char q[RESEARCH_QUERY_MAX];size_t i,n=strlen(query);
