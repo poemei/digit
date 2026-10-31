@@ -20,6 +20,15 @@ typedef struct {char body[MAX_HTTP+1];size_t length;} received_t;
 static const stnlabz_module_host_t *host;
 #ifndef RESEARCH_TEST
 static int command_registered,service_registered,answer_registered;
+static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q);
+static stnlabz_module_result_t start(const stnlabz_module_host_t *h);
+static stnlabz_module_result_t stop(void);
+/* Operator rule: module descriptor belongs at the top of the primary C file. */
+static const stnlabz_module_descriptor_t descriptor={
+ "research","Digit Live Research",1,4,4,
+ STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
+ qualify,start,stop
+};
 #endif
 static pthread_mutex_t rate_mutex=PTHREAD_MUTEX_INITIALIZER;
 static time_t rate_window;
@@ -735,13 +744,6 @@ static stnlabz_module_result_t stop(void)
  host=NULL;command_registered=service_registered=answer_registered=0;
  curl_global_cleanup();return STNLABZ_MODULE_OK;
 }
-static const stnlabz_module_descriptor_t descriptor={
- /* AI version progression: 1.4.0 -> 1.4.1 (approved revision arithmetic). */
- /* AI Learn that a modules descriptor belongs at the top of the modules primary .c file, not at the bottom */
- "research","Digit Live Research",1,4,4,
- STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
- qualify,start,stop
-};
 const stnlabz_module_descriptor_t *stnlabz_module_get_descriptor(void)
 {return &descriptor;}
 #endif
