@@ -160,3 +160,7 @@ No protected Core or other module was changed. Natural-language DSD integration 
 ## Live question routing — Ollama v1.0.7
 
 **State: source committed; operator build/qualification/hotload/integration verification pending.** `chat` now dispatches time-sensitive factual requests to the existing Core-mediated `digit.research.search.v1` service, refuses unsupported offline generation on missing/failed evidence, and returns attributed live search leads. Existing Core and IRC remain untouched. A primary-source schedule verifier is still required before Digit can confidently assert the next launch date/time.
+
+## Silent research chat correction — 2026-10-30
+
+**Source corrected, not yet deployed or qualified.** Core's route reply capacity is 512 bytes; previous research result messages could exceed it and vanish before IRC delivery. Ollama v1.0.8 and Research v1.1.1 constrain replies to 380-byte arrays. No Core/IRC modification. Requires operator build, controlled install and a live chat response test.
