@@ -1,4 +1,4 @@
-# Digit Research — native module v1.4.1
+# Digit Research — native module v1.4.2
 
 Research is a **general-purpose, subject-independent information acquisition module**. Search terms come from the user's question or learning directive, not from a programmed subject list.
 
@@ -18,6 +18,7 @@ The existing structured SpaceX launch provider remains a successful specialized 
 - `/research`, `digit.research.search.v1` and `digit.research.answer.v1` remain registered. Core, shared ABI, IRC, Ask and Ollama code are unchanged.
 - No paid API key, credentials, new provider, or additional general-purpose module is required.
 - Read-only HTTPS; TLS verification, socket-level checks against private/reserved destinations, no redirects or proxies, bounded response sizes, per-call timeouts and an existing 12-per-minute research gate.
+- Module-owned diagnostic events append to Digit's existing `/opt/digit/logs/digit.log` without storing queries or source content.
 - No execution of retrieved instructions or code. The limited harmful-intent gate remains in Research.
 - Retrieval, extraction and answer selection work independently of Ollama. Ollama does **not** own research, choose sources, classify research intent or become a dependency of the Research module.
 - **Limits:** Bing RSS is an unofficial source and may be sparse, unavailable, stale or incomplete. Relevance and date checks cannot fully establish truth, source authority, schedule freshness, semantic contradictions or comprehensive factual answers. A short source excerpt may lack the complete answer; in that case Research should decline rather than invent one. This is a functioning general *search and reading workflow*, **not** full ChatGPT-grade research reasoning or an autonomous learning/knowledge-storage system.
