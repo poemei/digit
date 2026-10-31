@@ -420,6 +420,7 @@ static int date_evidence(const char *text)
 {
  /* Accept ISO calendar dates as well as written month/day expressions. */
  for(const char *p=text;p&&*p;p++){
+  if(strlen(p)<10)break;
   if(isdigit((unsigned char)p[0])&&isdigit((unsigned char)p[1])&&
      isdigit((unsigned char)p[2])&&isdigit((unsigned char)p[3])&&
      p[4]=='-'&&isdigit((unsigned char)p[5])&&
@@ -454,7 +455,7 @@ int research_choose_fact(const char *question,const research_hits_t *hits,
   const research_hit_t *h=&hits->hit[i];
   int has_date;
   if(!h->title[0]&&!h->excerpt[0])continue;
-  if(strncmp(h->url,"https://",8))continue;
+  if(h->url[0]&&strncmp(h->url,"https://",8))continue;
   has_date=date_evidence(h->excerpt)||date_evidence(h->title)||
            date_evidence(h->date);
   research_runtime_log("HIT",
