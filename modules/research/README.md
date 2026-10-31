@@ -1,4 +1,4 @@
-# Digit Research — 1.5.4 (Unreleased)
+# Digit Research — 1.5.5 (Unreleased)
 
 Research searches the supplied text once and returns source results. It does
 not answer the question, rewrite the query, add search directives, fetch the
@@ -62,3 +62,20 @@ The Ask-facing service formats up to 1699 bytes of source results so Ask can pas
 ## 1.5.4 — General-purpose safe research admission
 
 Removed the conversational `research_claims()` keyword list and the corresponding skip path. Any nonempty safe request reaching Research through the existing Ask-mediated service now receives the same DuckDuckGo search attempt regardless of wording or subject. The explicitly prohibited-request safety gate remains. Identity and peer-directed messages are still handled by Ask before Research. No Core, shared ABI, DuckDuckGo parser, or language provider change. This admits routine conversational text as well as questions; rate limits and source-evidence limitations still apply. Source change only; native qualification and live acceptance are pending.
+
+## 1.5.5 — Rebuilt search evidence presentation
+
+The existing one-request DuckDuckGo search path is unchanged: no result-page
+fetching, added provider, paid API, search-topic allowlist, or Core change.
+The Ask-facing formatter now prioritizes source titles and substantive
+result excerpts with complete URLs retained as provenance. Responses carry
+source-associated excerpts instead of a mostly undifferentiated inventory
+of links, preserving provider order, the existing safety gate, rate limit,
+and research service ABI. The command-facing compact result view is retained.
+
+A regression fixture asserts that a factual event time in an HTML result
+snippet survives parsing and formatted evidence. This tests information
+handoff, not the factual reliability of live search results or the inference
+provider. If a single search returns no useful factual snippet, Research
+cannot establish the missing fact without another source. Native compilation,
+qualification, activation and operator end-to-end acceptance are outstanding.
