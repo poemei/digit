@@ -13,7 +13,7 @@
 #include <time.h>
 #include "research_engine.h"
 
-#define RESEARCH_SEARCH "https://www.bing.com/search"
+#define RESEARCH_SEARCH "https://lite.duckduckgo.com/lite/"
 #define RESEARCH_HTTP_LIMIT (512U * 1024U)
 #define RESEARCH_TEXT_LIMIT 1200U
 #define RESEARCH_MAX_SEARCHES 3U
@@ -446,6 +446,120 @@ int research_choose_fact(const char *question,const research_hits_t *hits,
  if(sources)*sources=hits->count;
  return 1;
 }
+
+/* [AI:GPT-6 | 2026-10-31] General-purpose HTML search result parser.
+ * A result is evidence only when its title/snippet matches the user's
+ * subject. The third-party HTML is untrusted; never execute its contents. */
+static int result_class(const char *start,const char *end,const char *name)
+{
+ const char *p=start;
+ size_t n=strlen(name);
+ while((p=strstr(p,name))&&p<end){
+  if((p==start||!isalnum((unsigned char)p[-1]))&&
+     p+n<=end&&!isalnum((unsigned char)p[n]))return 1;
+  p+=n;
+ }
+ return 0;
+}
+static int link_attribute(const char *start,const char *end,
+                          char *out,size_t cap)
+{
+ const char *p=start;
+ while((p=strstr(p,"href"))&&p<end){
+  const char *q=p+4,*v;
+  char quote=0;
+  size_t n=0;
+  while(q<end&&isspace((unsigned char)*q))q++;
+  if(q>=end||*q!='='){p+=4;continue;}
+  q++;
+  while(q<end&&isspace((unsigned char)*q))q++;
+  if(q>=end)return 0;
+  if(*q=='"'||*q==39){quote=*q;q++;}
+  v=q;
+  while(q<end&&(quote?*q!=quote:!isspace((unsigned char)*q)&&*q!='>'))q++;
+  if(q<=v)return 0;
+  n=(size_t)(q-v);
+  if(n>=cap)return 0;
+  memcpy(out,v,n);out[n]=0;
+  return 1;
+ }
+ return 0;
+}
+static int decode_search_link(const char *raw,char *out,size_t cap)
+{
+ const char *p=raw;
+ size_t n=0;
+ /* DuckDuckGo may use a tracking redirect. Extract its destination
+  * rather than fetching the redirect or weakening safe_url(). */
+ const char *ud=strstr(raw,"uddg=");
+ if(ud&&(strstr(raw,"duckduckgo.com/")||strstr(raw,"duckduckgo.com%2F")))
+  p=ud+5;
+ while(*p&&n+1<cap){
+  unsigned char c=(unsigned char)*p++;
+  if(c=='%'&&isxdigit((unsigned char)p[0])&&
+     isxdigit((unsigned char)p[1])){
+   unsigned char a=(unsigned char)tolower(p[0]),b=(unsigned char)tolower(p[1]);
+   a=(unsigned char)(isdigit(a)?a-'0':a-'a'+10);
+   b=(unsigned char)(isdigit(b)?b-'0':b-'a'+10);
+   c=(unsigned char)(a*16+b);p+=2;
+  }else if(c=='&'&&!strncmp(p,"amp;",4)){p+=4;c='&';}
+  if(c<' '||c==127)return 0;
+  out[n++]=(char)c;
+ }
+ out[n]=0;
+ return *p==0&&safe_url(out);
+}
+unsigned research_parse_web_html(const char *html,const char *question,
+                                 research_hits_t *hits)
+{
+ const char *cursor,*end;
+ if(!html||!question||!hits)return 0;
+ memset(hits,0,sizeof *hits);
+ cursor=html;end=html+strlen(html);
+ for(unsigned scanned=0;scanned<60&&hits->count<6;scanned++){
+  const char *a=strstr(cursor,"<a"),*gt,*close,*next;
+  research_hit_t hit={0};char link[700];
+  if(!a||a>=end)break;
+  gt=strchr(a,'>');if(!gt||gt>=end)break;
+  cursor=gt+1;
+  if(!result_class(a,gt,"result-link")&&
+     !result_class(a,gt,"result__a"))continue;
+  close=strstr(gt+1,"</a>");
+  if(!close||close>end)continue;
+  next=close+4;
+  if(!link_attribute(a,gt,link,sizeof link)||
+     !decode_search_link(link,hit.url,sizeof hit.url))continue;
+  strip_markup(gt+1,(size_t)(close-gt-1),hit.title,sizeof hit.title);
+  if(!hit.title[0])continue;
+  /* Match the snippet belonging to this result, not the next result.
+   * Both DDG Lite and DDG HTML provide a distinct snippet class. */
+  {
+   const char *scan=next,*limit=next+4000;
+   if(limit>end)limit=end;
+   while((scan=strchr(scan,'<'))&&scan<limit){
+    const char *tagend=strchr(scan,'>');
+    if(!tagend||tagend>=limit)break;
+    if(result_class(scan,tagend,"result-link")||
+       result_class(scan,tagend,"result__a"))break;
+    if(result_class(scan,tagend,"result-snippet")||
+       result_class(scan,tagend,"result__snippet")){
+     const char *finish=strchr(tagend+1,'<');
+     if(finish&&finish<=limit)
+      strip_markup(tagend+1,(size_t)(finish-tagend-1),
+                   hit.excerpt,sizeof hit.excerpt);
+     break;
+    }
+    scan=tagend+1;
+   }
+  }
+  hit.relevance=score(question,&hit);
+  if(!hit.relevance)continue;
+  hits->hit[hits->count++]=hit;
+ }
+ return hits->count;
+}
+/* [End AI:GPT-6] */
+
 static int search_once(const char *terms,const char *question,
                        research_hits_t *hits)
 {
@@ -457,17 +571,17 @@ static int search_once(const char *terms,const char *question,
  if(!curl)return 0;
  url=curl_easy_escape(curl,terms,0);
  if(!url||snprintf(address,sizeof address,
-     RESEARCH_SEARCH "?format=rss&q=%s",url)>=(int)sizeof address)goto done;
+     RESEARCH_SEARCH "?q=%s",url)>=(int)sizeof address)goto done;
  body=calloc(RESEARCH_HTTP_LIMIT+1,1);
  if(!body)goto done;
  if(!https_get(address,body,RESEARCH_HTTP_LIMIT+1,&length)){
   research_runtime_log("SEARCH_FETCH","outcome=failed");
   goto done;
  }
- ok=research_parse_rss(body,question,hits)>0;
+ ok=research_parse_web_html(body,question,hits)>0;
  if(!ok)
-  research_runtime_log("RSS_FILTER","outcome=empty_or_rejected bytes=%zu rss=%d items=%d",
-          length,strstr(body,"<rss")!=NULL,strstr(body,"<item>")!=NULL);
+  research_runtime_log("WEB_FILTER","outcome=empty_or_rejected bytes=%zu links=%d",
+          length,strstr(body,"result-link")!=NULL||strstr(body,"result__a")!=NULL);
 done:
  if(url)curl_free(url);
  curl_easy_cleanup(curl);
