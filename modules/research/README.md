@@ -1,4 +1,4 @@
-# Digit Research — native module v1.4.6
+# Digit Research — native module v1.4.7
 
 Research is a **general-purpose, subject-independent information acquisition module**. Search terms come from the user's question or learning directive, not from a programmed subject list.
 
@@ -8,8 +8,8 @@ Research is a **general-purpose, subject-independent information acquisition mod
 2. Research extracts significant terms from the question. It retains subjects such as `New England Patriots`, `PHP`, `Native C`, `C#`, `C++`, `Go`, `Rust`, and anything else encountered. **These examples are not a subject allowlist.**
 3. It queries an keyless HTTPS web-search page. It rejects results that do not match the actual subject, deduplicates leads, and makes up to three searches with generic schedule, learning or explanatory refinements when initial coverage is sparse.
 4. It fetches up to two HTTPS source pages discovered through search, extracts readable text without executing scripts, and considers that material when the search excerpt lacks a needed date.
-5. Research itself selects a relevant factual excerpt as a concise answer. Time-oriented questions need explicit date/time evidence; otherwise they receive a brief inability-to-verify response. **No module-to-module-to-module response chain is required.**
-6. The final `/chat` or `/research` reply contains the selected information, not URLs, research timestamps, source listings or raw multi-result dumps.
+5. Research returns a source-attributed excerpt or, if facts are incomplete, an explicitly identified source lead. Time-oriented questions distinguish source-reported dates from results lacking a date. Where a date cannot be established, Research returns the relevant lead explicitly marked as unconfirmed rather than suppressing it. **No module-to-module-to-module response chain is required.**
+6. The final `/chat` or `/research` reply contains a bounded, source-attributed excerpt or an explicitly unconfirmed lead, including its source URL when it fits the transport reply.
 
 The existing structured SpaceX launch provider remains a successful specialized **optimization**, with the same general search fallback when it does not produce a result. This is not a SpaceX-only system.
 
@@ -46,3 +46,7 @@ Research removes leading conversational addressees from interrogative queries an
 ### Search construction diagnostics (v1.4.6)
 
 For each general search attempt, Research appends `RESEARCH SEARCH_QUERY terms=<constructed terms>` and `RESEARCH SEARCH_REQUEST url=<exact HTTPS URL>` to `/opt/digit/logs/digit.log` before the network request. If URL encoding or length prevents construction, `RESEARCH SEARCH_BUILD outcome=...` records the failure. These entries intentionally expose the actual search text to the operator; access to Digit's log must remain restricted. This instrumentation does not assert that the requested URL returned useful results.
+
+### Evidence-preserving result handling (v1.4.7)
+
+When the search returns relevant results but no dated statement suitable for a scheduling answer, Research returns a clearly identified source lead rather than an empty result. Source statements are attributed, and uncertainty is not concealed. The Research log records each considered hit with its title, excerpt, URL, and whether a recognized date appeared. Schedule query variations no longer repeat `schedule`. The original host-level binary compilation, full test suite, live source-date interpretation, and operator acceptance remain unverified.
