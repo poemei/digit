@@ -1,10 +1,10 @@
-# Digit Ask — native conversation controller 1.0.1
+# Digit Ask — native conversation controller 1.0.2
 
 Ask owns the registered `chat` route (ordinary directed conversation). It does not directly call external networks, classify research intent, access Corpus tables, or generate language.
 
 - Authoritative Identity first through Core service `digit.identity.answer`.
 - Research's `digit.research.answer.v1` service next; **Research alone owns research intent** and either returns a complete answer, an unavailable/denied status, or NOT_APPLICABLE.
-- Ollama's `digit.llm.generate` service only for requests Research does not claim.
+- The replaceable `digit.llm.generate` service supports both unclaimed questions and evidence-grounded responses to research questions.
 - Peer-directed messages maintain the previous Ask/Tell/Say-to participant behavior.
 - Every output stays within Core's 512-byte routed-reply limit.
 - Core/IRC/shared ABI unchanged.
@@ -26,3 +26,5 @@ These source changes are not automatically installed or qualified. The operator 
 **State:** Source committed; compilation, qualification, actual activation and operator acceptance pending.
 
 Ask v1.0.1 relays Research-owned unavailable evidence instead of replacing it with a generic verification refusal. Service-call success remains distinct from verified research.
+
+Ask 1.0.2 removes the early return that treated unverified search listings as the user's final answer. Bounded source evidence is provided as context to language inference. Safety-denied requests remain denied. Provider or search failures are explained using actual failure context, without pretending live facts were verified. No Core, ABI or transport changes; build, qualification, activation and operator testing remain outstanding.
