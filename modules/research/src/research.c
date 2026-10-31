@@ -365,8 +365,15 @@ static unsigned launch_answer(const char *data,size_t bytes,
   const char *full=json_string(config,"full_name");
   const char *padname=json_string(location,"name");
   const char *state_name=json_string(state,"name");
+  const char *precision=json_string(json_child(chosen,"net_precision"),"name");
   const char *divider=name?strstr(name," | "):NULL;
   if(!name||!format_pacific(best,chosen_y,when,sizeof when))goto done;
+  if(precision&&(!strcmp(precision,"Day")||!strcmp(precision,"Month")||
+                 !strcmp(precision,"Year")||!strcmp(precision,"Week"))){
+   char *at=strstr(when," at ");
+   if(at)*at=0;
+   if(strlen(when)+16<sizeof when)strcat(when," (time TBD)");
+  }
   if(divider)short_text(mission,sizeof mission,divider+3);
   else short_text(mission,sizeof mission,name);
   short_text(rocket,sizeof rocket,full?full:"Rocket unspecified");
