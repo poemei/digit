@@ -1,4 +1,4 @@
-# Digit Research — native module v1.4.4
+# Digit Research — native module v1.4.5
 
 Research is a **general-purpose, subject-independent information acquisition module**. Search terms come from the user's question or learning directive, not from a programmed subject list.
 
@@ -39,4 +39,6 @@ make -C modules/research clean all test
 sudo make -C modules/research install
 ```
 
-**Status:** Source and module version updated to 1.4.1; native build and retest after this version correction, installed activation, live retrieval, and operator acceptance remain unverified.
+**Status:** Source and module version updated to 1.4.5; native build and retest after this version correction, installed activation, live retrieval, and operator acceptance remain unverified.
+
+Research removes leading conversational addressees from interrogative queries and supports `when are` schedule phrasing. Unavailable evidence distinguishes provider retrieval failure, zero relevant results, and insufficient factual detail. Live success remains unverified.
