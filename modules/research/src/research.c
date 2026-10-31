@@ -276,7 +276,9 @@ static int research_claims(const char *question)
   "when do","when are","when does","where can","what time",
   "how much is","as of now","opening hours","learn ","study ",
   "research ","investigate ","look up ","find out","find information",
-  "teach me","read about","tell me about","search for",NULL
+  "teach me","read about","tell me about","search for",
+  "what is ","what are ","who is ","how does ","how do ",
+  "explain ","describe ",NULL
  };
  if(!question)return 0;
  n=strlen(question);
