@@ -16,7 +16,7 @@
 
 #define RESEARCH_SEARCH "https://lite.duckduckgo.com/lite/"
 #define RESEARCH_HTTP_LIMIT (4U * 1024U * 1024U)
-#define RESEARCH_TEXT_LIMIT (96U * 1024U)
+#define RESEARCH_TEXT_LIMIT (512U * 1024U)
 #define RESEARCH_MAX_SEARCHES 3U
 #define RESEARCH_MAX_READS 2U
 
@@ -448,6 +448,74 @@ static int date_evidence(const char *text)
  for(size_t i=0;words[i];i++)if(has_word(text,words[i]))return 1;
  return 0;
 }
+/* Extract dated evidence from source pages rather than discarding it.
+ * Scheduled WEEK rows are recognized by their published event date/time.
+ * All other subjects retain generic, question-matching dated contexts. */
+static int scheduled_row(const char *text,char *out,size_t cap)
+{
+ time_t now=time(NULL);struct tm utc={0};
+ const char *p=text;int best=99999999,year,month,day;
+ if(now==(time_t)-1||!gmtime_r(&now,&utc))return 0;
+ year=utc.tm_year+1900;month=utc.tm_mon+1;day=utc.tm_mday;
+ while((p=strstr(p,"WEEK "))!=NULL){
+  const char *next=strstr(p+5,"WEEK ");
+  size_t n=next?(size_t)(next-p):strlen(p);
+  char piece[301];
+  if(n>300)n=300;
+  memcpy(piece,p,n);piece[n]=0;
+  if(!strstr(piece,"FINAL")&&!strstr(piece,"TBD")){
+   for(size_t i=0;i+4<n;i++){
+    if(isdigit((unsigned char)piece[i])&&
+       isdigit((unsigned char)piece[i+1])&&piece[i+2]=='/'&&
+       isdigit((unsigned char)piece[i+3])&&
+       isdigit((unsigned char)piece[i+4])){
+     int mm=(piece[i]-'0')*10+piece[i+1]-'0';
+     int dd=(piece[i+3]-'0')*10+piece[i+4]-'0';
+     int key=year*10000+mm*100+dd;
+     if(mm>=1&&mm<=12&&dd>=1&&dd<=31&&
+        key>=year*10000+month*100+day&&key<best&&
+        strchr(piece,':')&&
+        (strstr(piece," AM")||strstr(piece," PM"))){
+      best=key;snprintf(out,cap,"%.220s",piece);
+     }
+     break;
+    }
+   }
+  }
+  p+=5;
+ }
+ return best!=99999999;
+}
+int research_extract_page_fact(const char *text,const char *question,
+                               char *excerpt,size_t cap)
+{
+ char terms[300],word[48];unsigned best=0;
+ if(!text||!question||!excerpt||cap<64)return 0;
+ excerpt[0]=0;
+ if(!research_terms(question,terms,sizeof terms))return 0;
+ if(temporal_question(question)&&scheduled_row(text,excerpt,cap))return 1;
+ for(size_t offset=0,len=strlen(text);offset<len;offset+=220){
+  char window[481];size_t take=len-offset;unsigned matches=0;
+  const char *p=terms;
+  if(take>480)take=480;
+  memcpy(window,text+offset,take);window[take]=0;
+  if(!date_evidence(window))continue;
+  while(*p){
+   size_t n=0;
+   while(*p==' ')p++;
+   if(!*p)break;
+   while(p[n]&&p[n]!=' '&&n+1<sizeof word){word[n]=p[n];n++;}
+   word[n]=0;p+=n;
+   if(n>=3&&has_word(window,word))matches++;
+  }
+  if(matches>best){
+   best=matches;
+   snprintf(excerpt,cap,"%.*s",(int)(take<cap-1?take:cap-1),window);
+  }
+ }
+ return best>0;
+}
+
 /* Research must not discard acquired evidence because a snippet is
  * short or lacks the date asked for. An answer and a source lead are
  * different outcomes; label the source lead and its uncertainty. */
@@ -699,17 +767,38 @@ done:
  free(body);
  return ok;
 }
+static unsigned hit_quality(const research_hit_t *hit)
+{
+ return hit->relevance+
+  (date_evidence(hit->excerpt)||date_evidence(hit->title)?200U:0U)+
+  (strlen(hit->excerpt)>60?10U:0U);
+}
 static int combine_hits(research_hits_t *dest,const research_hits_t *source)
 {
  int added=0;
- for(unsigned i=0;i<source->count&&dest->count<6;i++){
-  int duplicate=0;
+ for(unsigned i=0;i<source->count;i++){
+  const research_hit_t *candidate=&source->hit[i];
+  int duplicate=-1,weakest=-1;unsigned low=0;
   for(unsigned j=0;j<dest->count;j++){
-   if(!strcmp(source->hit[i].url,dest->hit[j].url)){duplicate=1;break;}
+   unsigned q=hit_quality(&dest->hit[j]);
+   if(!strcmp(candidate->url,dest->hit[j].url)){duplicate=(int)j;break;}
+   if(weakest<0||q<low){weakest=(int)j;low=q;}
   }
-  if(!duplicate){dest->hit[dest->count++]=source->hit[i];added++;}
+  if(duplicate>=0){
+   if(hit_quality(candidate)>hit_quality(&dest->hit[duplicate]))
+    dest->hit[duplicate]=*candidate;
+  }else if(dest->count<6){dest->hit[dest->count++]=*candidate;added++;}
+  else if(weakest>=0&&hit_quality(candidate)>low){
+   dest->hit[weakest]=*candidate;added++;
+  }
  }
  return added;
+}
+static int has_dated_hit(const research_hits_t *hits)
+{
+ for(unsigned i=0;i<hits->count;i++)
+  if(date_evidence(hits->hit[i].excerpt))return 1;
+ return 0;
 }
 static int make_variation(const char *terms,const char *question,
                           unsigned attempt,char *out,size_t cap)
@@ -746,7 +835,9 @@ int research_general_answer(const char *question,const stnlabz_module_host_t *ho
   result=search_once(variant,question,&batch);
   if(result>0)combine_hits(&combined,&batch);
   else if(result<0)provider_failures++;
-  if(combined.count>=3&&attempt>=1)break;
+  if(temporal_question(question)){
+   if(has_dated_hit(&combined))break;
+  }else if(combined.count>=3&&attempt>=1)break;
  }
  if(!combined.count){
   research_runtime_log("SEARCH","outcome=no_accepted_hits attempts=%u provider_failures=%u",
@@ -764,14 +855,16 @@ int research_general_answer(const char *question,const stnlabz_module_host_t *ho
   if(!body||!plain){free(body);free(plain);continue;}
   if(https_get(combined.hit[i].url,body,RESEARCH_HTTP_LIMIT+1,&received)&&
      research_html_text(body,plain,RESEARCH_TEXT_LIMIT+1)){
-   /* Search excerpt remains attributed to its result; scraped page
-    * text is not promoted over it without subject/date corroboration. */
-   if(!date_evidence(combined.hit[i].excerpt)&&date_evidence(plain)){
-    /* Avoid replacing an on-topic search excerpt with unrelated
-     * page boilerplate. The source text is retained for diagnosis. */
-    research_runtime_log("SOURCE_READ",
-      "index=%u page_date=%d snippet_date=0 bytes=%zu",
-      i,1,received);
+   if(!date_evidence(combined.hit[i].excerpt)){
+    char extracted[650]={0};
+    if(research_extract_page_fact(plain,question,extracted,sizeof extracted)){
+     snprintf(combined.hit[i].excerpt,sizeof combined.hit[i].excerpt,
+              "%s",extracted);
+     research_runtime_log("SOURCE_READ",
+       "index=%u outcome=dated_context bytes=%zu excerpt=%.300s",
+       i,received,extracted);
+    }else research_runtime_log("SOURCE_READ",
+       "index=%u outcome=no_relevant_dated_context bytes=%zu",i,received);
    }
   }
   free(body);free(plain);
