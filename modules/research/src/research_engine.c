@@ -360,7 +360,7 @@ static int build_prompt(const char *question,const research_hits_t *hits,
  for(unsigned i=0;i<hits->count&&i<4;i++){
   const research_hit_t *h=&hits->hit[i];
   snprintf(fragment,sizeof fragment,
-    "%u. %s. %s. Published: %s\n",
+    "%u. %.110s. %.310s. Published: %.32s\n",
     i+1,h->title,h->excerpt,h->date[0]?h->date:"not stated");
   if(!add_prompt(prompt,cap,fragment))break;
   added++;
@@ -461,11 +461,11 @@ int research_general_answer(const char *question,const stnlabz_module_host_t *ho
   if(!body||!plain){free(body);free(plain);continue;}
   if(https_get(combined.hit[i].url,body,RESEARCH_HTTP_LIMIT+1,&received)&&
      research_html_text(body,plain,RESEARCH_TEXT_LIMIT+1)){
-   char additional[350];
-   snprintf(additional,sizeof additional," %.320s",plain);
-   if(strlen(combined.hit[i].excerpt)+strlen(additional)+1<
-      sizeof combined.hit[i].excerpt)
-    strcat(combined.hit[i].excerpt,additional);
+   char combined_text[650];
+   snprintf(combined_text,sizeof combined_text,
+     "%.145s. Source page: %.390s",combined.hit[i].excerpt,plain);
+   snprintf(combined.hit[i].excerpt,sizeof combined.hit[i].excerpt,
+     "%s",combined_text);
   }
   free(body);free(plain);
  }
