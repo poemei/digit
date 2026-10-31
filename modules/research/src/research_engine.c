@@ -10,7 +10,7 @@
 #include "research_engine.h"
 
 #define RESEARCH_SEARCH "https://www.bing.com/search"
-#define RESEARCH_HTTP_LIMIT 131072U
+#define RESEARCH_HTTP_LIMIT (512U * 1024U)
 #define RESEARCH_TEXT_LIMIT 1200U
 #define RESEARCH_MAX_SEARCHES 3U
 #define RESEARCH_MAX_READS 2U
