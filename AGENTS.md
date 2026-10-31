@@ -47,3 +47,5 @@ An Agent is not allowed to guess
 an agent must address an issue from its root
 Competency is always the Watchword of the Day
 Competency is demonstrated. Root causes are corrected.
+Github Branches are DENIED
+GitHub Workflows are DENIED
