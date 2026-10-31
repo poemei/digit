@@ -1,29 +1,25 @@
-# Digit Live Research — native module v1.0.0
+# Digit Live Research — native module v1.1.0
 
-Provides a Core-mediated `digit.research.search.v1` read-only research service and `/research <question>` command. No Core, Router, IRC, Ollama, or DSD module changes.
+**No subscription, payment account, or API key is required.**
+
+The module provides a Core-mediated `digit.research.search.v1` read-only research service and a `/research <question>` command.
 
 ## Operation
 
-Search is performed only against the fixed Brave Search HTTPS API host with certificate and hostname validation, redirects prohibited, proxies disabled, 10-second request timeout, 64 KiB body limit, at most five returned source links, strict provider SafeSearch, and a shared 12-requests-per-minute budget. Untrusted source excerpts are returned as evidence, not instructions or verified facts. No arbitrary sites are fetched or programs downloaded.
+Research uses a fixed HTTPS public Bing RSS search endpoint with no credentials. It reads at most 64 KiB, accepts up to five cited headlines per search, forbids redirects and proxy use, validates HTTPS links, limits requests to 12 per minute, and audits a query hash and outcome without logging queries.
 
-The service request and response ABI are declared in `include/research.h`. Request: `research_request_t.query` (NUL-terminated, at most 255 bytes). Response: `research_response_t`, containing `status`, `sources`, `retrieved_utc`, and bounded `evidence`. Status is EVIDENCE, UNAVAILABLE, or DENIED. No results or credential failures explicitly fail closed instead of fabricating an answer.
+**This is an unofficial public RSS interface.** Availability, provider terms, search coverage, and response format are not guaranteed; treat results as unverified search leads rather than authenticated facts. Some questions require primary-source verification beyond this implementation. If the feed is unavailable or inconsistent, Digit must say it cannot verify the answer; it must not use old Ollama knowledge as a substitute.
 
-Safety: local intent-denial rules reject specified high-risk actionable requests; they **are not a comprehensive legal or content classification engine**. Defensive research remains allowed. Operator review and better policy classification are required before broad untrusted public access. Source excerpts may still be false, manipulated or harmful; consumers must treat them as untrusted data. Do not let source text dictate Digit instructions.
+The deterministic intent-denial gate is a limited safeguard, **not** a complete content moderation policy. Do not enable untrusted public querying without additional review. This module fetches only the hardcoded provider endpoint, not arbitrary requested pages, and cannot download executables. Source content is untrusted data, not instructions.
 
-## Credential provisioning (operator only)
-
-Obtain a Brave Search API key from its vendor, then create `/opt/digit/auth/research/brave.key` as a single line with mode 0600, owned by the Digit service user or root. Do not commit keys, place them in `module.conf`, or reveal them in IRC or logs. Without the key the module reports live research unavailable; it never substitutes Ollama memory.
-
-## Qualification and deployment
+## Build, qualification, and integration
 
 ```sh
 make -C modules/research clean all test
 ```
 
-Static module qualification executes ten positive checks and a negative malformed-response check. Build and tests have not yet been executed against this GitHub revision. Installation, hotload, activation, credential configuration and operator client acceptance have **not** been performed.
+No credentials need to be provisioned. Build and live runtime results are not yet verified. The operator controls installation and activation.
 
-Operator check after authorized installation: `/research when is the next SpaceX launch?`; expect dated search excerpts with HTTPS source links, **not** a confident schedule generated from old model knowledge. Negative checks: unsafe actionable prompt should be denied; with absent key, research should be unavailable, not invented; exceeding budget should produce a rate limit.
+**Still separate:** Free-form requests such as “Digicat, when is the next SpaceX launch?” need the existing conversational/DSD module to call `digit.research.search.v1` and evaluate source freshness. This change does not modify protected Core or the conversational module.
 
-**Integration boundary:** Ordinary natural-language conversation still needs its owning conversational module to invoke `digit.research.search.v1` and validate those sources; this module does not change the DSD, Core, or Ollama routing and does not claim to repair free-form questions by itself.
-
-**State: source implemented, builds/tests and operator qualification pending.**
+**Status:** Source changed to keyless research, pending compile, validation, operator acceptance.
