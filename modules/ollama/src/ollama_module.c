@@ -7,11 +7,12 @@
 #include "stnlabz_abi/module.h"
 #include "digit_llm.h"
 #include "digit_identity.h"
+#include "research.h"
 #include "ollama_internal.h"
 
 #define OLLAMA_VERSION_MAJOR 1U
 #define OLLAMA_VERSION_MINOR 0U
-#define OLLAMA_VERSION_PATCH 6U
+#define OLLAMA_VERSION_PATCH 7U
 
 typedef struct { char *data; size_t used; size_t capacity; } buffer_t;
 static const stnlabz_module_host_t *owner;
@@ -171,6 +172,54 @@ static stnlabz_module_result_t chat_controller(
         }
         if (identity_result != STNLABZ_MODULE_ERR_NOT_FOUND)
             return STNLABZ_MODULE_ERR_INVALID_STATE;
+    }
+    /* Time-dependent questions require live evidence before any LLM fallback.
+     * If the service is absent or research failed, fail closed. Do not
+     * ask an offline model to invent a date, price, schedule or outcome. */
+    if (digit_ollama_requires_research(command->arguments)) {
+        research_request_t request = {{0}};
+        research_response_t *evidence;
+        stnlabz_module_result_t researched;
+        size_t received_size = 0U;
+        char summary[850];
+        size_t question_length = strlen(command->arguments);
+        if (question_length >= sizeof request.query)
+            return reply(reply_context,
+                "Live research request exceeds the supported question length.")
+                ? STNLABZ_MODULE_OK : STNLABZ_MODULE_ERR_INVALID_STATE;
+        if (!owner || !owner->invoke_service)
+            return reply(reply_context,"Live research is unavailable; I cannot verify a current answer.")
+                ? STNLABZ_MODULE_OK : STNLABZ_MODULE_ERR_INVALID_STATE;
+        evidence = calloc(1,sizeof *evidence);
+        if (!evidence)
+            return STNLABZ_MODULE_ERR_START_FAILED;
+        memcpy(request.query,command->arguments,question_length+1U);
+        researched = owner->invoke_service("digit.research.search.v1",
+                     &request,sizeof request,evidence,sizeof *evidence,
+                     &received_size);
+        if (researched != STNLABZ_MODULE_OK ||
+            received_size != sizeof *evidence ||
+            !memchr(evidence->evidence,0,sizeof evidence->evidence) ||
+            evidence->status != RESEARCH_EVIDENCE ||
+            evidence->sources == 0U) {
+            const char *failure="Live research could not verify an answer; no offline guess will be used.";
+            if (researched == STNLABZ_MODULE_OK &&
+                received_size == sizeof *evidence &&
+                evidence->status == RESEARCH_DENIED)
+                failure="Research request was denied by the safety policy.";
+            free(evidence);
+            return reply(reply_context,failure)
+                ? STNLABZ_MODULE_OK : STNLABZ_MODULE_ERR_INVALID_STATE;
+        }
+        /* Sources are search leads, not verified first-hand schedules. Keep
+         * the first citation intact; avoid asking Ollama to hallucinate. */
+        snprintf(summary,sizeof summary,
+                 "Live research (%s): %.650s",
+                 evidence->retrieved_utc[0] ? evidence->retrieved_utc : "time unavailable",
+                 evidence->evidence);
+        free(evidence);
+        return reply(reply_context,summary)
+            ? STNLABZ_MODULE_OK : STNLABZ_MODULE_ERR_INVALID_STATE;
     }
     len = strlen(command->arguments);
     if (!len || len >= sizeof in.prompt)
