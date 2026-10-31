@@ -14,8 +14,8 @@
 #include "research_engine.h"
 
 #define RESEARCH_SEARCH "https://lite.duckduckgo.com/lite/"
-#define RESEARCH_HTTP_LIMIT (512U * 1024U)
-#define RESEARCH_TEXT_LIMIT 12000U
+#define RESEARCH_HTTP_LIMIT (4U * 1024U * 1024U)
+#define RESEARCH_TEXT_LIMIT (96U * 1024U)
 #define RESEARCH_MAX_SEARCHES 3U
 #define RESEARCH_MAX_READS 2U
 
@@ -151,8 +151,8 @@ static int https_get(const char *url,char *body,size_t capacity,
  /* Report the transport failure without logging request URLs or content.
   * HTTP, TLS, DNS and connection failures require different repairs. */
  if(!ok)
-  research_runtime_log("HTTP","result=%d http=%ld bytes=%zu",
-          (int)result,status,document.length);
+  research_runtime_log("HTTP","result=%d http=%ld bytes=%zu limit=%zu",
+          (int)result,status,document.length,document.max);
  curl_easy_cleanup(curl);
  if(length)*length=document.length;
  return ok;
@@ -583,6 +583,25 @@ static int decode_search_link(const char *raw,char *out,size_t cap)
  out[n]=0;
  return safe_url(out);
 }
+
+/* A result snippet often contains <b> or <strong> tags.
+ * Extract through the corresponding closing element, not the first '<'. */
+static int snippet_text(const char *start,const char *tagend,
+                        const char *limit,char *out,size_t cap)
+{
+ const char *name=start+1,*p=name,*closing;
+ char endtag[40];size_t length;
+ while(p<tagend&&isalnum((unsigned char)*p))p++;
+ length=(size_t)(p-name);
+ if(!length||length>20)return 0;
+ if(snprintf(endtag,sizeof endtag,"</%.*s>",(int)length,name)
+    >=(int)sizeof endtag)return 0;
+ closing=strstr(tagend+1,endtag);
+ if(!closing||closing>=limit)return 0;
+ strip_markup(tagend+1,(size_t)(closing-tagend-1),out,cap);
+ return out[0]!=0;
+}
+
 unsigned research_parse_web_html(const char *html,const char *question,
                                  research_hits_t *hits)
 {
@@ -617,10 +636,8 @@ unsigned research_parse_web_html(const char *html,const char *question,
        result_class(scan,tagend,"result__a"))break;
     if(result_class(scan,tagend,"result-snippet")||
        result_class(scan,tagend,"result__snippet")){
-     const char *finish=strchr(tagend+1,'<');
-     if(finish&&finish<=limit)
-      strip_markup(tagend+1,(size_t)(finish-tagend-1),
-                   hit.excerpt,sizeof hit.excerpt);
+     (void)snippet_text(scan,tagend,limit,
+                        hit.excerpt,sizeof hit.excerpt);
      break;
     }
     scan=tagend+1;
