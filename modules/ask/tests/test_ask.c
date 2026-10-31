@@ -32,12 +32,17 @@ static stnlabz_module_result_t mocked_service(
   if(!request||request_size!=sizeof(research_request_t)||!out||
      response_size<sizeof *out)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
   memset(out,0,sizeof *out);
-  out->status=scenario==1?RESEARCH_EVIDENCE:
+  out->status=(scenario==1||scenario==11)?RESEARCH_EVIDENCE:
     scenario==3?RESEARCH_UNAVAILABLE:
     scenario==4?RESEARCH_DENIED:RESEARCH_NOT_APPLICABLE;
   if(scenario==1){
    out->sources=1;
    strcpy(out->evidence,"Next SpaceX launch: Starlink. Rocket: Falcon 9.");
+  }else if(scenario==11){
+   out->sources=2;
+   strcpy(out->retrieved_utc,"2026-10-31 00:00:00 UTC");
+   memset(out->evidence,'x',1450U);
+   strcpy(out->evidence+1450U," FINAL_FACT: 7:15 PM");
   }else if(scenario==3){
    strcpy(out->evidence,"Search completed but returned no relevant sources.");
   }
@@ -107,7 +112,6 @@ int main(void)
  CHECK(calls_identity==1&&calls_research==1&&calls_llm==1);
  CHECK(strstr(llm_prompt,"Next SpaceX launch: Starlink")!=NULL);
  CHECK(strstr(llm_prompt,"when is the next SpaceX rocket launch?")!=NULL);
- CHECK(strstr(llm_prompt,"Next SpaceX launch: Starlink")!=NULL);
  CHECK(strstr(llm_prompt,"Results:")!=NULL);
  CHECK(strstr(llm_prompt,"Question:")!=NULL);
  CHECK(strstr(llm_prompt,"Search results (unverified)") == NULL);
@@ -140,6 +144,10 @@ int main(void)
 
  CHECK(!strcmp(ordinary_answer("rictus: text"),"text"));
  CHECK(!strcmp(ordinary_answer("4:25 PM"),"4:25 PM"));
+ CHECK(ask(11,"when does the event start?")==STNLABZ_MODULE_OK);
+ CHECK(calls_llm==1&&calls_research==1&&calls_peer==0);
+ CHECK(strstr(llm_prompt,"FINAL_FACT: 7:15 PM")!=NULL);
+ CHECK(strstr(llm_prompt,"Retrieved: 2026-10-31")!=NULL);
  CHECK(stop()==STNLABZ_MODULE_OK);
  printf("Ask controller: %d/%d checks passed\n",checks-failures,checks);
  return failures?1:0;
