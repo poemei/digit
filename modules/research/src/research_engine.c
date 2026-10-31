@@ -120,6 +120,11 @@ static int https_get(const char *url,char *body,size_t capacity,
   curl_easy_getinfo(curl,CURLINFO_RESPONSE_CODE,&status);
   ok=status==200&&document.length>20;
  }
+ /* Report the transport failure without logging request URLs or content.
+  * HTTP, TLS, DNS and connection failures require different repairs. */
+ if(!ok)
+  fprintf(stderr,"[RESEARCH_ENGINE] stage=http result=%d http=%ld bytes=%zu\n",
+          (int)result,status,document.length);
  curl_easy_cleanup(curl);
  if(length)*length=document.length;
  return ok;
@@ -427,8 +432,14 @@ static int search_once(const char *terms,const char *question,
      RESEARCH_SEARCH "?format=rss&q=%s",url)>=(int)sizeof address)goto done;
  body=calloc(RESEARCH_HTTP_LIMIT+1,1);
  if(!body)goto done;
- if(!https_get(address,body,RESEARCH_HTTP_LIMIT+1,&length))goto done;
+ if(!https_get(address,body,RESEARCH_HTTP_LIMIT+1,&length)){
+  fprintf(stderr,"[RESEARCH_ENGINE] stage=search_fetch outcome=failed\n");
+  goto done;
+ }
  ok=research_parse_rss(body,question,hits)>0;
+ if(!ok)
+  fprintf(stderr,"[RESEARCH_ENGINE] stage=rss_filter outcome=empty_or_rejected bytes=%zu rss=%d items=%d\n",
+          length,strstr(body,"<rss")!=NULL,strstr(body,"<item>")!=NULL);
 done:
  if(url)curl_free(url);
  curl_easy_cleanup(curl);
@@ -479,7 +490,12 @@ int research_general_answer(const char *question,const stnlabz_module_host_t *ho
   if(search_once(variant,question,&batch))combine_hits(&combined,&batch);
   if(combined.count>=3&&attempt>=1)break;
  }
- if(!combined.count)return 0;
+ if(!combined.count){
+  fprintf(stderr,"[RESEARCH_ENGINE] stage=search outcome=no_accepted_hits attempts=%u\n",
+          RESEARCH_MAX_SEARCHES);
+  return 0;
+ }
+ fprintf(stderr,"[RESEARCH_ENGINE] stage=search outcome=accepted hits=%u\n",combined.count);
  for(unsigned i=0;i<combined.count&&i<RESEARCH_MAX_READS;i++){
   char *body=calloc(RESEARCH_HTTP_LIMIT+1,1);
   char *plain=calloc(RESEARCH_TEXT_LIMIT+1,1);
@@ -496,5 +512,11 @@ int research_general_answer(const char *question,const stnlabz_module_host_t *ho
   }
   free(body);free(plain);
  }
- return research_choose_fact(question,&combined,answer,cap,sources);
+ {
+  int chosen=research_choose_fact(question,&combined,answer,cap,sources);
+  fprintf(stderr,"[RESEARCH_ENGINE] stage=answer outcome=%s hits=%u temporal=%d\n",
+          chosen?"evidence":"no_qualified_fact",combined.count,
+          temporal_question(question));
+  return chosen;
+ }
 }
