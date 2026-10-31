@@ -151,6 +151,27 @@ int main(void)
   CHECK(strstr(found.hit[0].title,"Patriots")!=NULL);
   CHECK(strstr(found.hit[0].excerpt,"November 1")!=NULL);
   CHECK(research_parse_web_html(html,"when is SpaceX launch?",&found)==0);
+  /* Real DuckDuckGo Lite redirect forms: root-relative, scheme-relative,
+   * trailing tracking attributes, and percent-encoded destination. */
+  {
+   const char *lite="<html><body>"
+     "<a class='result-link' href='/l/?uddg=https%3A%2F%2Fwww.patriots.com%2Fschedule%2F&amp;rut=tracking'>"
+     "New England Patriots Schedule</a>"
+     "<td class='result-snippet'>New England Patriots face Miami on November 1, 2026 at 4:25 PM ET.</td>"
+     "</body></html>";
+   const char *lite_protocol="<a class='result-link' "
+     "href='//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.php.net%2Fmanual%2Fen%2F&rut=tracking'>"
+     "PHP Manual</a><td class='result-snippet'>PHP official manual documentation covers PHP syntax and functions.</td>";
+   const char *bad="<a class='result-link' "
+     "href='/l/?uddg=http%3A%2F%2F127.0.0.1%2Fprivate&rut=tracking'>"
+     "Patriots Schedule</a><td class='result-snippet'>Patriots play on November 1 at 4 PM ET.</td>";
+   CHECK(research_parse_web_html(lite,
+    "when are the New England Patriots playing again?",&found)==1);
+   CHECK(!strcmp(found.hit[0].url,"https://www.patriots.com/schedule/"));
+   CHECK(research_parse_web_html(lite_protocol,"learn PHP",&found)==1);
+   CHECK(!strcmp(found.hit[0].url,"https://www.php.net/manual/en/"));
+   CHECK(research_parse_web_html(bad,"Patriots schedule",&found)==0);
+  }
   CHECK(research_parse_web_html(dev,"learn PHP",&found)==1);
   CHECK(strstr(found.hit[0].excerpt,"functions")!=NULL);
   CHECK(research_parse_web_html(
