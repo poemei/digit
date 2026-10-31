@@ -1,6 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
 #include <curl/curl.h>
-#include <json-c/json.h>
 #include <pthread.h>
 #include <ctype.h>
 #include <errno.h>
@@ -9,13 +8,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 #include "research.h"
 
-#define SEARCH_ENDPOINT "https://api.search.brave.com/res/v1/web/search"
-#define KEY_FILE "/opt/digit/auth/research/brave.key"
+#define SEARCH_ENDPOINT "https://www.bing.com/search"
 #define MAX_HTTP 65536U
 typedef struct {char body[MAX_HTTP+1];size_t length;} received_t;
 static const stnlabz_module_host_t *host;
@@ -82,21 +79,6 @@ static int forbidden(const char *query)
  }
  return 0;
 }
-static int read_key(char *key,size_t cap)
-{
- struct stat st;FILE *f;size_t n,i;
- if(stat(KEY_FILE,&st)||!S_ISREG(st.st_mode)||(st.st_mode&077)||
-    (st.st_uid!=geteuid()&&st.st_uid!=0))return 0;
- f=fopen(KEY_FILE,"r");if(!f)return 0;
- if(!fgets(key,(int)cap,f)){fclose(f);return 0;}
- if(!feof(f)){char tail[2];if(fgets(tail,sizeof tail,f)){fclose(f);return 0;}}
- fclose(f);
- n=strcspn(key,"\r\n");key[n]=0;
- if(n<12||n>200)return 0;
- for(i=0;i<n;++i)if(!isalnum((unsigned char)key[i])&&
-  key[i]!='-'&&key[i]!='_')return 0;
- return 1;
-}
 static int permitted_rate(void)
 {
  time_t now=time(NULL);int allowed=0;
@@ -116,84 +98,124 @@ static void audit(const char *query,const char *status,unsigned sources)
  fprintf(stderr,"[RESEARCH] query_hash=%016llx disposition=%s sources=%u\n",
   (unsigned long long)h,status,sources);
 }
-/* Provider material is untrusted data. Distinct HTTPS URLs are cited; neither
- * model instructions nor external HTTP actions are accepted from results. */
+/* Bounded RSS parser for a fixed, keyless, HTTPS search endpoint.
+ * Search snippets are UNVERIFIED leads. No arbitrary URL is fetched. */
+static int unescape_xml(char *dest,size_t cap,const char *first,size_t len)
+{
+ size_t i=0,j=0;int in_tag=0;
+ while(i<len&&j+1<cap){
+  if(first[i]=='<'){in_tag=1;i++;continue;}
+  if(first[i]=='>'){in_tag=0;i++;continue;}
+  if(in_tag){i++;continue;}
+  if(first[i]=='&'){
+   static const struct {const char *entity;char replacement;} entities[]={
+    {"&amp;",'&'},{"&quot;",'"'},{"&apos;",39},
+    {"&lt;",'<'},{"&gt;",'>'},{"&#39;",39}
+   };
+   size_t k;int found=0;
+   for(k=0;k<sizeof entities/sizeof entities[0];k++){
+    size_t n=strlen(entities[k].entity);
+    if(n<=len-i&&!memcmp(first+i,entities[k].entity,n)){
+     dest[j++]=entities[k].replacement;i+=n;found=1;break;
+    }
+   }
+   if(!found){i++;dest[j++]=' ';}continue;
+  }
+  if((unsigned char)first[i]>=32&&first[i]!='{'&&first[i]!='}'&&
+      first[i]!='#')dest[j++]=first[i];
+  else dest[j++]=' ';
+  i++;
+ }
+ dest[j]=0;return j>0;
+}
+static int item_value(const char *first,const char *last,
+                      const char *tag,char *dest,size_t cap)
+{
+ char open[64],close[64];const char *p,*end;
+ if(snprintf(open,sizeof open,"<%s>",tag)>=(int)sizeof open||
+    snprintf(close,sizeof close,"</%s>",tag)>=(int)sizeof close)return 0;
+ p=strstr(first,open);
+ if(!p||p>=last)return 0;
+ p+=strlen(open);
+ end=strstr(p,close);
+ if(!end||end>last)return 0;
+ return unescape_xml(dest,cap,p,(size_t)(end-p));
+}
+static int safe_source_url(const char *url)
+{
+ const char *p;size_t host_len;
+ if(strncmp(url,"https://",8))return 0;
+ p=url+8;
+ while(*p&&*p!='/'&&*p!='?'&&*p!='#')p++;
+ host_len=(size_t)(p-(url+8));
+ if(host_len<4||host_len>128||!memchr(url+8,'.',host_len))return 0;
+ if(strchr(url,'@')||strchr(url,'\\')||strchr(url,'#'))return 0;
+ if(!strncmp(url+8,"localhost",9)||!strncmp(url+8,"127.",4)||
+    !strncmp(url+8,"10.",3)||!strncmp(url+8,"192.168.",8)||
+    !strncmp(url+8,"169.254.",8)||!strncmp(url+8,"172.16.",7))return 0;
+ for(size_t i=8;i<8+host_len;i++){
+  unsigned char c=(unsigned char)url[i];
+  if(!isalnum(c)&&c!='.'&&c!='-')return 0;
+ }
+ return 1;
+}
 static unsigned extract_results(const char *body,size_t len,research_response_t *response)
 {
- struct json_tokener *tok=json_tokener_new();
- struct json_object *root=NULL,*web=NULL,*rows=NULL;
- size_t i,used=0;unsigned found=0;
+ size_t used=0;unsigned found=0;
+ const char *cursor,*end;
+ if(!body||len<20||len>MAX_HTTP)return 0;
+ if(!strstr(body,"<rss")&&!strstr(body,"<feed"))return 0;
  if(!append(response->evidence,sizeof response->evidence,&used,
-    "Unverified search excerpts; check original sources before making factual claims.\\n\\n"))return 0;
- if(!tok)return 0;
- root=json_tokener_parse_ex(tok,body,(int)len);
- if(json_tokener_get_error(tok)!=json_tokener_success||!root||
-    !json_object_object_get_ex(root,"web",&web)||
-    !json_object_object_get_ex(web,"results",&rows)||
-    !json_object_is_type(rows,json_type_array))goto done;
- for(i=0;i<json_object_array_length(rows)&&found<5;++i){
-  struct json_object *record=json_object_array_get_idx(rows,i);
-  const char *url=jtext(record,"url"),*title=jtext(record,"title");
-  const char *description=jtext(record,"description");
-  char clean_title[180],clean_desc[320],clean_url[460];size_t j;
-  if(!url||strncmp(url,"https://",8)||!title)continue;
-  if(strlen(url)>440||strchr(url,'@')||strchr(url,'#'))continue;
-  for(j=8;url[j]&&url[j]!='/';++j)
-   if(!isalnum((unsigned char)url[j])&&url[j]!='-'&&url[j]!='.')break;
-  if(url[j]&&url[j]!='/')continue;
-  if(j<=8)continue;
-  if(!strncmp(url+8,"localhost",9)||!strncmp(url+8,"127.",4)||
-     !strncmp(url+8,"10.",3)||!strncmp(url+8,"192.168.",8))continue;
-  plain(clean_url,sizeof clean_url,url);
-  plain(clean_title,sizeof clean_title,title);
-  plain(clean_desc,sizeof clean_desc,description);
-  if(!clean_title[0]||!clean_url[0])continue;
+  "Live search headlines are leads, not independently verified facts.\n\n"))return 0;
+ cursor=body;end=body+len;
+ while(found<5){
+  const char *start=strstr(cursor,"<item>");
+  const char *finish;
+  char title[180]={0},link[480]={0},summary[320]={0},date[96]={0};
+  if(!start||start>=end)break;
+  finish=strstr(start,"</item>");
+  if(!finish||finish>=end)break;
+  cursor=finish+7;
+  if(!item_value(start,finish,"title",title,sizeof title)||
+     !item_value(start,finish,"link",link,sizeof link)||
+     !safe_source_url(link))continue;
+  (void)item_value(start,finish,"description",summary,sizeof summary);
+  (void)item_value(start,finish,"pubDate",date,sizeof date);
   if(!append(response->evidence,sizeof response->evidence,&used,
-     "[%u] %s\nSource: %s\nExcerpt: %s\n\n",
-     found+1,clean_title,clean_url,clean_desc))break;
-  ++found;
+    "[%u] %s\nLink: %s\nPublished (feed): %s\nSummary: %s\n\n",
+    found+1,title,link,date[0]?date:"not supplied",
+    summary[0]?summary:"not supplied"))break;
+  found++;
  }
-done:
- if(root)json_object_put(root);
- json_tokener_free(tok);
  response->sources=found;
  return found;
 }
 static int search(const char *query,research_response_t *output)
 {
- CURL *curl=NULL;struct curl_slist *headers=NULL;
- received_t *rec=NULL;char key[256]={0},auth[320],url[1400];
- char *encoded=NULL;CURLcode rc;long status=0;time_t now=time(NULL);
+ CURL *curl=NULL;received_t *rec=NULL;
+ char url[1400];char *encoded=NULL;
+ CURLcode rc;long status=0;time_t now=time(NULL);
  struct tm utc;int ok=0;
  memset(output,0,sizeof *output);
  if(forbidden(query)){
   output->status=RESEARCH_DENIED;
   snprintf(output->evidence,sizeof output->evidence,
-   "Request denied by the research safety gate.");
+    "Request denied by the research safety gate.");
   audit(query,"denied",0);return 0;
  }
  if(!permitted_rate()){
   output->status=RESEARCH_UNAVAILABLE;
   snprintf(output->evidence,sizeof output->evidence,
-   "Live research rate limit reached; try another request later.");
+    "Live research rate limit reached.");
   audit(query,"rate-limited",0);return 0;
- }
- if(!read_key(key,sizeof key)){
-  output->status=RESEARCH_UNAVAILABLE;
-  snprintf(output->evidence,sizeof output->evidence,
-   "Live research unavailable: approved search credentials are not configured.");
-  audit(query,"unavailable",0);return 0;
  }
  curl=curl_easy_init();rec=calloc(1,sizeof *rec);
  if(!curl||!rec)goto done;
- encoded=curl_easy_escape(curl,query,0);if(!encoded)goto done;
- if(snprintf(url,sizeof url,SEARCH_ENDPOINT "?count=5&safesearch=strict&q=%s",encoded)>=(int)sizeof url)goto done;
- snprintf(auth,sizeof auth,"X-Subscription-Token: %s",key);
- headers=curl_slist_append(headers,"Accept: application/json");
- headers=curl_slist_append(headers,auth);
- if(!headers)goto done;
+ encoded=curl_easy_escape(curl,query,0);
+ if(!encoded)goto done;
+ if(snprintf(url,sizeof url,SEARCH_ENDPOINT "?format=rss&q=%s",encoded)
+    >=(int)sizeof url)goto done;
  curl_easy_setopt(curl,CURLOPT_URL,url);
- curl_easy_setopt(curl,CURLOPT_HTTPHEADER,headers);
  curl_easy_setopt(curl,CURLOPT_FOLLOWLOCATION,0L);
  curl_easy_setopt(curl,CURLOPT_PROTOCOLS_STR,"https");
  curl_easy_setopt(curl,CURLOPT_SSL_VERIFYPEER,1L);
@@ -203,7 +225,7 @@ static int search(const char *query,research_response_t *output)
  curl_easy_setopt(curl,CURLOPT_TIMEOUT,10L);
  curl_easy_setopt(curl,CURLOPT_WRITEFUNCTION,receive);
  curl_easy_setopt(curl,CURLOPT_WRITEDATA,rec);
- curl_easy_setopt(curl,CURLOPT_USERAGENT,"Digit-Research/1.0");
+ curl_easy_setopt(curl,CURLOPT_USERAGENT,"Digit-Research/1.1");
  rc=curl_easy_perform(curl);
  if(rc!=CURLE_OK)goto done;
  curl_easy_getinfo(curl,CURLINFO_RESPONSE_CODE,&status);
@@ -215,15 +237,13 @@ static int search(const char *query,research_response_t *output)
            "%Y-%m-%d %H:%M:%S UTC",&utc);
  ok=1;
 done:
- memset(key,0,sizeof key);memset(auth,0,sizeof auth);
  if(encoded)curl_free(encoded);
- if(headers)curl_slist_free_all(headers);
  if(curl)curl_easy_cleanup(curl);
  free(rec);
  if(!ok){
   output->status=RESEARCH_UNAVAILABLE;
   snprintf(output->evidence,sizeof output->evidence,
-   "No verified live search evidence is available. Do not invent an answer.");
+   "Live search evidence unavailable. Do not invent an answer.");
  }
  audit(query,ok?"evidence":"unavailable",output->sources);
  return ok;
@@ -232,11 +252,12 @@ static int selftest(unsigned *executed,unsigned *passed,
                     int *negative_executed,int *negative_passed)
 {
  research_response_t r={0};
- const char *fixture="{\"web\":{\"results\":["
- "{\"title\":\"Launch schedule\",\"url\":\"https://example.org/launch\","
- "\"description\":\"Updated schedule\"},"
- "{\"title\":\"Unsafe local link\",\"url\":\"http://127.0.0.1/x\","
- "\"description\":\"Not public\"}]}}";
+ const char *fixture="<?xml version=\"1.0\"?><rss><channel><item>"
+ "<title>Launch schedule</title><link>https://example.org/launch</link>"
+ "<pubDate>Fri, 30 Oct 2026 12:00:00 GMT</pubDate>"
+ "<description>Schedule &amp; updates</description></item>"
+ "<item><title>Bad</title><link>http://127.0.0.1/x</link></item>"
+ "</channel></rss>";
  unsigned e=0,p=0;int ne=0,np=0;
  #define CHECK(x) do{++e;if(x)++p;}while(0)
  CHECK(!forbidden("next SpaceX launch"));
@@ -249,10 +270,9 @@ static int selftest(unsigned *executed,unsigned *passed,
  CHECK(strstr(r.evidence,"https://example.org/launch")!=NULL);
  CHECK(strstr(r.evidence,"127.0.0.1")==NULL);
  CHECK(extract_results("{}",2,&r)==0);
- ne=1;np=extract_results("{",1,&r)==0;
+ ne=1;np=extract_results("<rss><item>",11,&r)==0;
  #undef CHECK
- if(executed)*executed=e;
- if(passed)*passed=p;
+ if(executed)*executed=e;if(passed)*passed=p;
  if(negative_executed)*negative_executed=ne;
  if(negative_passed)*negative_passed=np;
  return e==10&&p==10&&ne==1&&np==1;
@@ -328,7 +348,7 @@ static stnlabz_module_result_t stop(void)
  curl_global_cleanup();return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
- "research","Digit Live Research",1,0,0,
+ "research","Digit Live Research",1,1,0,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
