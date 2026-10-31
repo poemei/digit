@@ -330,6 +330,12 @@ int main(void)
    CHECK(research_extract_page_fact(today,"Example schedule",
      page_answer,sizeof page_answer));
    CHECK(strstr(page_answer,long_date)!=NULL);
+   CHECK(!research_extract_page_fact(
+     "Player Maye 178 4:25 PM ET, no game date was supplied",
+     "when are these teams playing again?",page_answer,sizeof page_answer));
+   CHECK(!research_extract_page_fact(
+     "SCHEDULE 2026 2026 2025 2024 4:25 PM ET navigation",
+     "when are these teams playing again?",page_answer,sizeof page_answer));
   }
  }
  printf("Research qualification: %d/%d passed\n",checks-fails,checks);
