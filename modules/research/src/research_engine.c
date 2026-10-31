@@ -236,7 +236,7 @@ static int element(const char *start,const char *end,const char *tag,
 }
 static unsigned score(const char *question,const research_hit_t *hit)
 {
- char terms[256],compound[1100],word[48];
+ char terms[256],compound[1100],word[48],seen[256]={0};
  const char *p;
  /* [AI:GPT-6 | 2026-10-31 16:39:00 UTC] */
  unsigned matches=0,unique=0,distinctive=0;
@@ -250,6 +250,9 @@ static unsigned score(const char *question,const research_hit_t *hit)
   while(p[i]&&p[i]!=' '&&i+1<sizeof word){word[i]=p[i];i++;}
   word[i]=0;p+=i;
   if(i<2&&strcmp(word,"c")!=0)continue;
+  /* Repeated query words are not independent relevance evidence. */
+  if(has_word(seen,word))continue;
+  if(!append_word(seen,sizeof seen,word))return 0;
   unique++;
   if(has_word(compound,word)){
    matches++;
