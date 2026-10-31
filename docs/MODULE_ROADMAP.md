@@ -164,3 +164,7 @@ No protected Core or other module was changed. Natural-language DSD integration 
 ## Silent research chat correction — 2026-10-30
 
 **Source corrected, not yet deployed or qualified.** Core's route reply capacity is 512 bytes; previous research result messages could exceed it and vanish before IRC delivery. Ollama v1.0.8 and Research v1.1.1 constrain replies to 380-byte arrays. No Core/IRC modification. Requires operator build, controlled install and a live chat response test.
+
+## Research v1.1.2 — launch question false-positive fix
+
+**Source committed; live qualification pending.** A real operator report exposed a complete semantic failure: a query for SpaceX's next launch produced a fashion-retailer result. Native Research now strips stopwords and enforces subject terms in results before treating the RSS item as an evidence lead. The offending retailer is part of the regression fixture. Compilation, search quality, installed activation and final schedule verification remain separate operator gates.
