@@ -38,22 +38,6 @@ static int append(char *out,size_t cap,size_t *used,const char *fmt,...)
  if(n<0||(size_t)n>=cap-*used)return 0;
  *used+=(size_t)n;return 1;
 }
-static void plain(char *out,size_t cap,const char *input)
-{
- size_t n=0;int space=0;
- if(!cap)return;
- if(!input){out[0]=0;return;}
- for(;*input&&n+1<cap;++input){
-  unsigned char c=(unsigned char)*input;
-  if(c=='<'||c=='>'){space=1;continue;}
-  if(c<32||c==127||c=='#'||c=='{'||c=='}'){space=1;continue;}
-  if(isspace(c)){space=1;continue;}
-  if(space&&n&&n+1<cap)out[n++]=' ';
-  space=0;
-  out[n++]=(char)c;
- }
- out[n]=0;
-}
 static int forbidden(const char *query)
 {
  char q[RESEARCH_QUERY_MAX];size_t i,n=strlen(query);
