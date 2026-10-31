@@ -475,6 +475,10 @@ static int next_calendar_event(const char *text,char *out,size_t cap)
   "jan","feb","mar","apr","may","jun",
   "jul","aug","sep","oct","nov","dec"
  };
+ static const char *const full_months[]={
+  "january","february","march","april","may","june",
+  "july","august","september","october","november","december"
+ };
  time_t now=time(NULL);struct tm utc={0};
  int today,best=99999999;
  const char *start=text;
@@ -491,7 +495,16 @@ static int next_calendar_event(const char *text,char *out,size_t cap)
     if(j!=3)continue;
     const char *q=p+3;
     while(isalpha((unsigned char)*q))q++;
-    if(!isspace((unsigned char)*q))continue;
+    size_t wordlen=(size_t)(q-p);
+    size_t full_len=strlen(full_months[m]);
+    int valid_month=(wordlen==3);
+    if(wordlen==full_len){
+     size_t n=0;
+     while(n<full_len&&tolower((unsigned char)p[n])==
+           (unsigned char)full_months[m][n])n++;
+     valid_month=(n==full_len);
+    }
+    if(!valid_month||!isspace((unsigned char)*q))continue;
     while(isspace((unsigned char)*q))q++;
     if(!isdigit((unsigned char)*q))continue;
     day=*q++-'0';
