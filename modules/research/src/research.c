@@ -20,7 +20,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h);
 static stnlabz_module_result_t stop(void);
 /* Operator rule: module descriptor belongs at the top of the primary C file. */
 static const stnlabz_module_descriptor_t descriptor={
- "research","Digit Live Research",1,5,5,
+ "research","Digit Live Research",1,5,6,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
@@ -156,7 +156,7 @@ static stnlabz_module_result_t handle_service(const void *req,size_t len,
     !memchr(request->query,0,sizeof request->query))
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(out,0,sizeof *out);*used=sizeof *out;
- search(request->query,out,conversational?1700:sizeof out->evidence);
+ search(request->query,out,conversational?440:sizeof out->evidence);
  return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t service(const void *req,size_t len,
