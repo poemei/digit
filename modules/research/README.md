@@ -1,37 +1,37 @@
-# Digit Live Research — native module v1.2.0
+# Digit Live Research — v1.3.0
 
-The native C module provides a Core-mediated `digit.research.search.v1` service and `/research <question>` command. **No paid service, search subscription, or API key is required.** It does not change Core, Router, IRC, or module ABI 1.5.
+Research owns the interpretation, safety screening, evidence collection and construction of responses for **live research requests**. It does not own the general `chat` route, IRC transport, Ollama generation, or protected Core.
 
-## Answer contract
+## Registered capabilities
 
-Research happens internally. The human receives the requested answer, in plain English. It does not expose URLs, search snippets, timestamps of retrieval, or commentary about how research works.
+- `/research <question>`: explicitly requested research.
+- `digit.research.search.v1`: existing explicit search service (preserved).
+- `digit.research.answer.v1`: new conversational research boundary, invoked by Ask via Core ABI 1.5.
 
-For `when is the next SpaceX rocket launch?`, Research uses The Space Devs Launch Library 2 upcoming-launch JSON endpoint, filters strictly for SpaceX, disregards past launches and completed/failed flights, chooses the earliest future target, and returns the mission, rocket, launch site, Pacific local date/time, and schedule status. It uses **live response data**, not a hardcoded launch date. Example format:
+The answer service returns `RESEARCH_NOT_APPLICABLE` for an ordinary non-research conversation. Ask can then invoke an appropriate different model. When Research claims a question, it either produces an evidence-grounded answer or a brief inability-to-verify/denied status. **It never passes a claimed question to Ollama for invented knowledge.** Classification rules are entirely within the Research module; Ask contains no research keywords or search logic.
 
-`Next SpaceX launch: Starlink Group 15-18. Rocket: Falcon 9 Block 5. Launch site: Vandenberg SFB. Target: Oct 30, 2026 at 9:02 PM Pacific. Status: Go for Launch.`
+## Live-source behavior
 
-The example is a fixed regression fixture, **not** an assertion about the current launch at runtime. If the structured feed fails, the module gives a brief inability-to-verify response instead of inventing an answer.
+For `when is the next SpaceX rocket launch?`, Research queries an unauthenticated HTTPS Launch Library 2 upcoming-launch data source, validates that the operator is SpaceX, excludes past/completed launches, and formats the next mission, rocket, location, target Pacific time and schedule status. Source content and provider endpoint do not appear in the response. This requires live access to the provider and is not a hardcoded launch timetable.
 
-Other time-sensitive questions use a keyless HTTPS public RSS search source, retaining semantic subject checks but returning short headline/summary leads rather than URLs. **Those leads are not authoritative answers.** Further subject-specific extraction is necessary for reliable factual answers beyond the supported structured launch query.
+Other time-sensitive questions are currently not fully supported by structured evidence and are **declined briefly**, rather than returning raw RSS headlines or guessing. Explicit `/research` remains available for source discovery, but its generic RSS results are unverified leads and are not a substitute for a factual answer.
 
-## Boundaries
+Search uses fixed HTTPS destinations, no proxies or redirects, TLS verification, 512 KiB bounded responses, 10-second timeout, a 12-queries-per-minute limit, and hashed query disposition logging without plaintext query logging. The local safety gate denies certain actionable harmful requests, including before ordinary chat fallback. This is not comprehensive content-policy classification.
 
-- Read-only HTTPS requests to fixed public destinations only; TLS validation enabled, no redirects or proxies.
-- Bounded response size (512 KiB), timeout (10 seconds), twelve research requests per minute, query-hash auditing without plaintext queries.
-- A simple deterministic harmful-intent gate exists but is **not** a complete legal/safety classifier. Broader untrusted public access requires additional safeguards.
-- The public Launch Library 2 free API has provider rate limits, schedule uncertainty, and availability constraints. A reported target time is a *scheduled* time, not proof the launch occurred or is guaranteed.
-- Caller validates service status and returns the result without sending untrusted source content to Ollama.
+No paid provider, credentials or API key required. The public structured launch data source has availability/rate limitations. Dates and launch states may change.
 
-## Build and operator acceptance
+## Validation and install
 
 ```sh
 git pull
 make -C modules/research clean all test
 make -C modules/ollama clean all test
+make -C modules/ask clean all test
 sudo make -C modules/research install
 sudo make -C modules/ollama install
+sudo make -C modules/ask install
 ```
 
-Modules should be installed and activated under operator control and tested through the actual Digit client. Verify a SpaceX launch question produces a complete single plain-English response, and a missing/unavailable research service responds briefly without hallucinating. Test ordinary chat and an unrelated live query for regressions.
+Operator must verify the actual activated versions and final routed behavior, not just file copies. Ollama v1.1.0 relinquishes `chat`; Ask v1.0.0 then owns it. Research remains independent, with its `/research` route and named services. Core and IRC are unchanged.
 
-**Source committed; build, module qualification, live provider availability, activation, and end-to-end acceptance are not independently verified.**
+**State: source implemented, compilation/qualification/activation/operator acceptance unverified.**
