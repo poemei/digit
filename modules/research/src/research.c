@@ -3,16 +3,15 @@
 #define _XOPEN_SOURCE 700
 #include <ctype.h>
 #include <curl/curl.h>
-#include <libxml/HTMLparser.h>
-#include <libxml/xpath.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <time.h>
 #include "research.h"
 
-/* [AI:GPT-6 | 2026-10-31 21:40:00 UTC]
+/* [AI:GPT-6 | 2026-10-31 UTC]
  * Research owns web acquisition only. It has no topic rules or LLM dependency.
  * Search provider: DuckDuckGo's public HTML search endpoint (no paid API).
  * HTML is untrusted; all returned material is treated as external evidence.
@@ -111,31 +110,111 @@ static void normalize(char *s)
     s[w] = 0;
 }
 
-static void node_text(xmlNodePtr node, char *dest, size_t capacity)
+/* Small bounded HTML text extractor: no additional runtime dependencies. */
+static int attr_value(const char *start, const char *end, const char *name,
+                      char *out, size_t cap)
 {
-    xmlChar *text;
-    if (!dest || !capacity) return;
-    dest[0] = 0;
-    if (!node) return;
-    text = xmlNodeGetContent(node);
-    if (!text) return;
-    snprintf(dest, capacity, "%s", (const char *)text);
-    xmlFree(text);
-    normalize(dest);
+    const char *p = start;
+    size_t key = strlen(name);
+    if (!out || !cap) return 0;
+    out[0] = 0;
+    while (p < end) {
+        const char *begin, *value;
+        char quote = 0;
+        size_t len;
+        while (p < end && (isspace((unsigned char)*p) || *p == '/' )) ++p;
+        begin = p;
+        while (p < end && (isalnum((unsigned char)*p) || *p == '-' || *p == '_')) ++p;
+        if (p == begin) { ++p; continue; }
+        len = (size_t)(p - begin);
+        while (p < end && isspace((unsigned char)*p)) ++p;
+        if (p == end || *p != '=') continue;
+        ++p;
+        while (p < end && isspace((unsigned char)*p)) ++p;
+        if (p < end && (*p == '"' || *p == '\'')) quote = *p++;
+        value = p;
+        while (p < end && ((quote && *p != quote) ||
+                             (!quote && !isspace((unsigned char)*p) && *p != '>'))) ++p;
+        if (len == key && !strncasecmp(begin, name, key)) {
+            size_t n = (size_t)(p - value);
+            if (!n || n >= cap) return 0;
+            memcpy(out, value, n);
+            out[n] = 0;
+            return 1;
+        }
+        if (quote && p < end) ++p;
+    }
+    return 0;
 }
-
-static xmlXPathObjectPtr select_nodes(xmlDocPtr doc, const char *expr)
+static unsigned utf8_add(char *out, size_t *used, size_t cap, unsigned codepoint)
 {
-    xmlXPathContextPtr context;
-    xmlXPathObjectPtr result;
-    if (!doc) return NULL;
-    context = xmlXPathNewContext(doc);
-    if (!context) return NULL;
-    result = xmlXPathEvalExpression((const xmlChar *)expr, context);
-    xmlXPathFreeContext(context);
-    return result;
+    if (codepoint < 128 && *used + 1 < cap) { out[(*used)++] = (char)codepoint; return 1; }
+    if (codepoint < 2048 && *used + 2 < cap) {
+        out[(*used)++] = (char)(192 | (codepoint >> 6));
+        out[(*used)++] = (char)(128 | (codepoint & 63));
+        return 1;
+    }
+    if (codepoint < 65536 && *used + 3 < cap) {
+        out[(*used)++] = (char)(224 | (codepoint >> 12));
+        out[(*used)++] = (char)(128 | ((codepoint >> 6) & 63));
+        out[(*used)++] = (char)(128 | (codepoint & 63));
+        return 1;
+    }
+    return 0;
 }
-
+static void html_text(const char *start, const char *end, char *out, size_t cap)
+{
+    const char *p = start;
+    size_t used = 0;
+    int in_tag = 0;
+    if (!out || !cap) return;
+    while (p < end && used + 4 < cap) {
+        if (*p == '<') { in_tag = 1; if (used && out[used-1] != ' ') out[used++] = ' '; ++p; continue; }
+        if (*p == '>') { in_tag = 0; ++p; continue; }
+        if (in_tag) { ++p; continue; }
+        if (*p == '&') {
+            const char *semi = memchr(p, ';', (size_t)(end-p) < 12 ? (size_t)(end-p) : 12);
+            if (semi) {
+                unsigned code = 0;
+                size_t n = (size_t)(semi - p);
+                if (n == 4 && !strncmp(p, "&amp", 4)) code = '&';
+                else if (n == 3 && !strncmp(p, "&lt", 3)) code = '<';
+                else if (n == 3 && !strncmp(p, "&gt", 3)) code = '>';
+                else if (n == 5 && !strncmp(p, "&quot", 5)) code = '"';
+                else if (n == 5 && !strncmp(p, "&nbsp", 5)) code = ' ';
+                else if (n == 5 && !strncmp(p, "&#39", 5)) code = '\'';
+                else if (p[1] == '#') {
+                    char number[12] = {0};
+                    char *tail;
+                    unsigned long value;
+                    if (n > 2 && n < sizeof number) {
+                        memcpy(number, p+2, n-2);
+                        value = strtoul(number, &tail, (number[0] == 'x' || number[0] == 'X') ? 16 : 10);
+                        if (tail != number && !*tail && value > 0 && value < 0xD800UL)
+                            code = (unsigned)value;
+                    }
+                }
+                if (code && utf8_add(out, &used, cap, code)) { p = semi + 1; continue; }
+            }
+        }
+        out[used++] = isspace((unsigned char)*p) ? ' ' : *p;
+        ++p;
+    }
+    out[used] = 0;
+    normalize(out);
+}
+static const char *tag_end(const char *start)
+{
+    char quote = 0;
+    const char *p = start;
+    while (*p) {
+        if (quote) { if (*p == quote) quote = 0; }
+        else if (*p == '"' || *p == '\'') quote = *p;
+        else if (*p == '>') return p;
+        ++p;
+    }
+    return NULL;
+}
 static int absolute_url(const char *raw, char *out, size_t capacity)
 {
     const char *encoded = strstr(raw, "uddg=");
@@ -145,67 +224,45 @@ static int absolute_url(const char *raw, char *out, size_t capacity)
         while (*p && *p != '&' && n + 1 < capacity) {
             unsigned int byte;
             if (*p == '%' && isxdigit((unsigned char)p[1]) &&
-                isxdigit((unsigned char)p[2]) && sscanf(p + 1, "%2x", &byte) == 1) {
-                out[n++] = (char)byte;
-                p += 3;
+                isxdigit((unsigned char)p[2]) && sscanf(p+1, "%2x", &byte) == 1) {
+                out[n++] = (char)byte; p += 3;
             } else out[n++] = *p++;
         }
         out[n] = 0;
     } else snprintf(out, capacity, "%s", raw);
     return safe_url(out);
 }
-
 static size_t parse_results(const char *html, hit_t *hits, size_t capacity)
 {
-    xmlDocPtr doc;
-    xmlXPathObjectPtr nodes;
+    const char *p = html;
     size_t count = 0;
-    int i;
-    if (!html || !hits) return 0;
-    doc = htmlReadMemory(html, (int)strlen(html), NULL, "UTF-8",
-                         HTML_PARSE_RECOVER | HTML_PARSE_NOERROR | HTML_PARSE_NOWARNING | HTML_PARSE_NONET);
-    if (!doc) return 0;
-    nodes = select_nodes(doc, "//a[contains(concat(' ',normalize-space(@class),' '),' result__a ')] | //a[contains(concat(' ',normalize-space(@class),' '),' result-link ')]");
-    if (nodes && nodes->nodesetval) for (i = 0; i < nodes->nodesetval->nodeNr && count < capacity; ++i) {
-        xmlNodePtr node = nodes->nodesetval->nodeTab[i];
-        xmlChar *href = xmlGetProp(node, (const xmlChar *)"href");
-        xmlNodePtr parent = node->parent;
-        xmlChar *classes;
-        xmlXPathObjectPtr snippets = NULL;
-        if (!href || !absolute_url((const char *)href, hits[count].url, sizeof hits[count].url)) {
-            if (href) xmlFree(href);
-            continue;
-        }
-        xmlFree(href);
-        node_text(node, hits[count].title, sizeof hits[count].title);
-        if (!hits[count].title[0]) continue;
+    if (!p || !hits) return 0;
+    while ((p = strstr(p, "<a")) != NULL && count < capacity) {
+        const char *end = tag_end(p), *close;
+        char cls[256], href[1600];
+        if (!end) break;
+        if (!attr_value(p+2, end, "class", cls, sizeof cls) ||
+            (!strstr(cls, "result__a") && !strstr(cls, "result-link")) ||
+            !attr_value(p+2, end, "href", href, sizeof href) ||
+            !absolute_url(href, hits[count].url, sizeof hits[count].url)) { p=end+1; continue; }
+        close = strstr(end+1, "</a>");
+        if (!close) { p=end+1; continue; }
+        html_text(end+1, close, hits[count].title, sizeof hits[count].title);
+        if (!hits[count].title[0]) { p=close+4; continue; }
         hits[count].snippet[0] = 0;
-        /* The standard DDG HTML layout places the snippet within the result container. */
-        while (parent && parent->type == XML_ELEMENT_NODE) {
-            classes = xmlGetProp(parent, (const xmlChar *)"class");
-            if (classes && (strstr((const char *)classes, "result ") ||
-                            strstr((const char *)classes, "result--"))) {
-                xmlXPathContextPtr ctx = xmlXPathNewContext(doc);
-                if (ctx) {
-                    ctx->node = parent;
-                    snippets = xmlXPathEvalExpression((const xmlChar *)
-                        ".//*[contains(@class,'result__snippet')]", ctx);
-                    xmlXPathFreeContext(ctx);
-                }
-                xmlFree(classes);
-                break;
+        {
+            const char *next = strstr(close+4, "result__a");
+            const char *s = strstr(close+4, "result__snippet");
+            if (s && (!next || s < next)) {
+                const char *start = strchr(s, '>');
+                const char *finish = start ? strchr(start+1, '<') : NULL;
+                if (start && finish && (size_t)(finish - start) < 2500)
+                    html_text(start+1, finish, hits[count].snippet, sizeof hits[count].snippet);
             }
-            if (classes) xmlFree(classes);
-            parent = parent->parent;
         }
-        if (snippets && snippets->nodesetval && snippets->nodesetval->nodeNr)
-            node_text(snippets->nodesetval->nodeTab[0], hits[count].snippet,
-                      sizeof hits[count].snippet);
-        if (snippets) xmlXPathFreeObject(snippets);
         ++count;
+        p=close+4;
     }
-    if (nodes) xmlXPathFreeObject(nodes);
-    xmlFreeDoc(doc);
     return count;
 }
 
@@ -275,18 +332,29 @@ static int upcoming(const char *question)
 static void best_passage(const char *html, const char *question, const char *url,
                          const char *title, time_t now, passage_t *best)
 {
-    xmlDocPtr doc;
-    xmlXPathObjectPtr nodes;
-    int i;
-    if (!html || !best) return;
-    doc = htmlReadMemory(html, (int)strlen(html), NULL, "UTF-8",
-                         HTML_PARSE_RECOVER | HTML_PARSE_NOERROR | HTML_PARSE_NOWARNING | HTML_PARSE_NONET);
-    if (!doc) return;
-    nodes = select_nodes(doc, "//main//p | //main//li | //article//p | //article//li | //body//p | //body//li | //tr");
-    if (nodes && nodes->nodesetval) for (i = 0; i < nodes->nodesetval->nodeNr; ++i) {
+    const char *p = html;
+    if (!p || !best) return;
+    while ((p = strchr(p, '<')) != NULL) {
+        const char *end, *close;
+        char tag[8] = {0}, closing[16];
+        size_t k = 0;
         passage_t candidate = {0};
         size_t len;
-        node_text(nodes->nodesetval->nodeTab[i], candidate.text, sizeof candidate.text);
+        ++p;
+        if (*p == '/') continue;
+        while (k + 1 < sizeof tag && isalpha((unsigned char)p[k])) {
+            tag[k] = (char)tolower((unsigned char)p[k]); ++k;
+        }
+        if (strcmp(tag,"p") && strcmp(tag,"li") && strcmp(tag,"tr") &&
+            strcmp(tag,"h1") && strcmp(tag,"h2") && strcmp(tag,"h3")) continue;
+        if (p[k] != '>' && p[k] != ' ' && p[k] != '\t' && p[k] != '\n') continue;
+        end = tag_end(p);
+        if (!end) break;
+        snprintf(closing, sizeof closing, "</%s>", tag);
+        close = strcasestr(end+1, closing);
+        if (!close) { p = end+1; continue; }
+        html_text(end+1, close, candidate.text, sizeof candidate.text);
+        p = close + strlen(closing);
         len = strlen(candidate.text);
         if (len < 30 || len >= sizeof candidate.text - 1) continue;
         candidate.score = relevance(question, candidate.text);
@@ -294,7 +362,6 @@ static void best_passage(const char *html, const char *question, const char *url
         if (!candidate.score && candidate.when && relevance(question, title) > 0)
             candidate.score = 1;
         if (!candidate.score) continue;
-        /* For next-event questions, require an explicit future date; choose the earliest. */
         if (upcoming(question)) {
             if (!candidate.when) continue;
             if (best->when && candidate.when > best->when) continue;
@@ -303,8 +370,6 @@ static void best_passage(const char *html, const char *question, const char *url
         snprintf(candidate.url, sizeof candidate.url, "%s", url);
         *best = candidate;
     }
-    if (nodes) xmlXPathFreeObject(nodes);
-    xmlFreeDoc(doc);
 }
 
 static int build_reply(const char *question, const hit_t *hits, size_t count,
