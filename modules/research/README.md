@@ -1,4 +1,4 @@
-# Digit Research — 1.5.3 (Unreleased)
+# Digit Research — 1.5.4 (Unreleased)
 
 Research searches the supplied text once and returns source results. It does
 not answer the question, rewrite the query, add search directives, fetch the
@@ -7,8 +7,8 @@ result pages, specialize by subject, or claim that retrieved content is true.
 ## Request path
 
 - `/research <search terms>` and `digit.research.search.v1` explicitly search.
-- `digit.research.answer.v1` retains the existing conversational claim gate
-  used by Ask, then uses the same search implementation.
+- `digit.research.answer.v1` searches any nonempty permitted conversational query,
+  without a keyword or subject allowlist. The existing safety and rate gates remain.
 - The engine URL-encodes the exact supplied text for the existing DuckDuckGo
   Lite HTTPS endpoint. Case, punctuation, operators and word order survive.
 - Up to six distinct HTTPS results retain provider order, titles, URLs and
@@ -58,3 +58,7 @@ The existing 1.5.1 formatter allocated all remaining reply space to each result 
 ## 1.5.3 — Evidence for language inference
 
 The Ask-facing service formats up to 1699 bytes of source results so Ask can pass bounded evidence to the existing replaceable language inference provider. Retrieval remains subject-independent, preserving titles, snippets, URLs and DuckDuckGo provider order. No topic-specific answer rules or new search dependency have been introduced. Live factual answer extraction, build qualification, installation and operator acceptance remain unverified.
+
+## 1.5.4 — General-purpose safe research admission
+
+Removed the conversational `research_claims()` keyword list and the corresponding skip path. Any nonempty safe request reaching Research through the existing Ask-mediated service now receives the same DuckDuckGo search attempt regardless of wording or subject. The explicitly prohibited-request safety gate remains. Identity and peer-directed messages are still handled by Ask before Research. No Core, shared ABI, DuckDuckGo parser, or language provider change. This admits routine conversational text as well as questions; rate limits and source-evidence limitations still apply. Source change only; native qualification and live acceptance are pending.
