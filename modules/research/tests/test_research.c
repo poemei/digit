@@ -53,6 +53,24 @@ int main(void)
  CHECK(strstr(response.evidence,"9:02 PM Pacific")!=NULL);
  CHECK(strstr(response.evidence,"http")==NULL);
  }
+
+ {
+ research_request_t question={{0}};
+ research_response_t answer={0};
+ size_t used=0;
+ CHECK(research_claims("when is the next SpaceX launch?"));
+ CHECK(research_claims("current weather in Seattle"));
+ CHECK(!research_claims("Explain TCP"));
+ CHECK(!research_claims("tell rictus hi"));
+ snprintf(question.query,sizeof question.query,"%s","Explain TCP");
+ CHECK(answer_service(&question,sizeof question,&answer,sizeof answer,&used,NULL)==STNLABZ_MODULE_OK);
+ CHECK(answer.status==RESEARCH_NOT_APPLICABLE);
+ CHECK(used==sizeof answer);
+ snprintf(question.query,sizeof question.query,"%s","current weather in Seattle");
+ CHECK(answer_service(&question,sizeof question,&answer,sizeof answer,&used,NULL)==STNLABZ_MODULE_OK);
+ CHECK(answer.status==RESEARCH_UNAVAILABLE);
+ CHECK(strstr(answer.evidence,"cannot verify")!=NULL);
+ }
  printf("Research qualification: %d/%d passed\n",checks-fails,checks);
  return fails?1:0;
 }
