@@ -112,7 +112,7 @@ int main(void)
  CHECK(!strcmp(reply_buffer,"The answer comes from the language service.")&&calls_llm==1);
  CHECK(strstr(llm_prompt,"no relevant sources")!=NULL);
  CHECK(ask(4,"prohibited query")==STNLABZ_MODULE_OK);
- CHECK(strstr(reply_buffer,"can't help")!=NULL&&calls_llm==0);
+ CHECK(strstr(reply_buffer,"safety gate")!=NULL&&calls_llm==0);
  CHECK(ask(5,"what is your name?")==STNLABZ_MODULE_OK);
  CHECK(!strcmp(reply_buffer,"I am Digit.")&&calls_research==0&&calls_llm==0);
  CHECK(ask(6,"ask rictus how are you")==STNLABZ_MODULE_OK);
@@ -121,7 +121,7 @@ int main(void)
  CHECK(ask(7,"hello")==STNLABZ_MODULE_OK);
  CHECK(strstr(reply_buffer,"identity service")!=NULL&&calls_llm==0);
  CHECK(ask(8,"hello")==STNLABZ_MODULE_OK);
- CHECK(strstr(reply_buffer,"can't answer")!=NULL);
+ CHECK(strstr(reply_buffer,"Language inference failed")!=NULL);
  CHECK(ask(9,"hello")==STNLABZ_MODULE_OK);
  CHECK(calls_llm==1&&strstr(llm_prompt,"could not be reached")!=NULL);
  CHECK(stop()==STNLABZ_MODULE_OK);
