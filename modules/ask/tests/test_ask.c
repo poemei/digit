@@ -4,7 +4,7 @@
 
 static int calls_identity,calls_research,calls_llm,calls_peer,failures,checks;
 static int scenario;
-static char reply_buffer[1024],peer_buffer[1024];
+static char reply_buffer[1024],peer_buffer[1024],llm_prompt[2048];
 #define CHECK(x) do {++checks;if(!(x)){++failures;fprintf(stderr,"FAIL line %d\n",__LINE__);}}while(0)
 
 static stnlabz_module_result_t mocked_service(
@@ -50,6 +50,7 @@ static stnlabz_module_result_t mocked_service(
   if(!request||request_size!=sizeof(digit_llm_request_t)||!out||
      response_size<sizeof *out)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
   memset(out,0,sizeof *out);
+  snprintf(llm_prompt,sizeof llm_prompt,"%s",((const digit_llm_request_t *)request)->prompt);
   strcpy(out->text,scenario==6?"hello":"The answer comes from the language service.");
   *response_used=sizeof *out;
   return STNLABZ_MODULE_OK;
@@ -88,7 +89,7 @@ static stnlabz_module_result_t ask(int selected,const char *text)
 {
  stnlabz_module_command_t cmd={0};
  scenario=selected;calls_identity=calls_research=calls_llm=calls_peer=0;
- reply_buffer[0]=peer_buffer[0]=0;
+ reply_buffer[0]=peer_buffer[0]=llm_prompt[0]=0;
  snprintf(cmd.arguments,sizeof cmd.arguments,"%s",text);
  return controller(&cmd,mocked_reply,NULL,NULL);
 }
@@ -100,13 +101,16 @@ int main(void)
  CHECK(q.negative_test_executed==1&&q.negative_test_passed==1);
  CHECK(start(&mock_host)==STNLABZ_MODULE_OK);
  CHECK(ask(1,"when is the next SpaceX rocket launch?")==STNLABZ_MODULE_OK);
- CHECK(!strcmp(reply_buffer,"Next SpaceX launch: Starlink. Rocket: Falcon 9."));
- CHECK(calls_identity==1&&calls_research==1&&calls_llm==0);
+ CHECK(!strcmp(reply_buffer,"The answer comes from the language service."));
+ CHECK(calls_identity==1&&calls_research==1&&calls_llm==1);
+ CHECK(strstr(llm_prompt,"Next SpaceX launch: Starlink")!=NULL);
+ CHECK(strstr(llm_prompt,"when is the next SpaceX rocket launch?")!=NULL);
  CHECK(ask(2,"Explain TCP")==STNLABZ_MODULE_OK);
  CHECK(!strcmp(reply_buffer,"The answer comes from the language service."));
  CHECK(calls_research==1&&calls_llm==1);
  CHECK(ask(3,"current stock price")==STNLABZ_MODULE_OK);
- CHECK(!strcmp(reply_buffer,"Search completed but returned no relevant sources.")&&calls_llm==0);
+ CHECK(!strcmp(reply_buffer,"The answer comes from the language service.")&&calls_llm==1);
+ CHECK(strstr(llm_prompt,"no relevant sources")!=NULL);
  CHECK(ask(4,"prohibited query")==STNLABZ_MODULE_OK);
  CHECK(strstr(reply_buffer,"can't help")!=NULL&&calls_llm==0);
  CHECK(ask(5,"what is your name?")==STNLABZ_MODULE_OK);
@@ -119,7 +123,7 @@ int main(void)
  CHECK(ask(8,"hello")==STNLABZ_MODULE_OK);
  CHECK(strstr(reply_buffer,"can't answer")!=NULL);
  CHECK(ask(9,"hello")==STNLABZ_MODULE_OK);
- CHECK(calls_llm==0&&strstr(reply_buffer,"Research is temporarily unavailable")!=NULL);
+ CHECK(calls_llm==1&&strstr(llm_prompt,"could not be reached")!=NULL);
  CHECK(stop()==STNLABZ_MODULE_OK);
  printf("Ask controller: %d/%d checks passed\n",checks-failures,checks);
  return failures?1:0;
