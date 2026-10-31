@@ -484,7 +484,7 @@ static int next_calendar_event(const char *text,char *out,size_t cap)
   int month=0,day=0,year=utc.tm_year+1900,valid=0;
   size_t consumed=0;
   if((p==start||!isalnum((unsigned char)p[-1]))&&
-     isalpha((unsigned char)p[0])&&strlen(p)>=5){
+     isalpha((unsigned char)p[0])&&p[1]&&p[2]&&p[3]&&p[4]){
    for(int m=0;m<12;m++){
     size_t j=0;
     while(j<3&&tolower((unsigned char)p[j])==months[m][j])j++;
@@ -532,6 +532,19 @@ static int next_calendar_event(const char *text,char *out,size_t cap)
  }
  return best!=99999999;
 }
+static int schedule_request(const char *question)
+{
+ char q[512];size_t n;
+ if(!question)return 0;
+ n=strlen(question);
+ if(n>=sizeof q)return 0;
+ for(size_t i=0;i<n;i++)
+  q[i]=(char)tolower((unsigned char)question[i]);
+ q[n]=0;
+ return strstr(q,"playing")||strstr(q,"schedule")||
+        strstr(q,"next game")||strstr(q,"play again")||
+        strstr(q,"game again");
+}
 /* Extract dated evidence from source pages rather than discarding it.
  * Scheduled WEEK rows are recognized by their published event date/time.
  * All other subjects retain generic, question-matching dated contexts. */
@@ -578,10 +591,7 @@ int research_extract_page_fact(const char *text,const char *question,
  if(!text||!question||!excerpt||cap<64)return 0;
  excerpt[0]=0;
  if(!research_terms(question,terms,sizeof terms))return 0;
- if(temporal_question(question)&&
-    (strstr(question,"schedule")||strstr(question,"playing")||
-     strstr(question,"when are")||strstr(question,"when do")||
-     strstr(question,"next game"))){
+ if(temporal_question(question)&&schedule_request(question)){
   if(scheduled_row(text,excerpt,cap))return 1;
   if(next_calendar_event(text,excerpt,cap))return 1;
   return 0;
@@ -633,10 +643,23 @@ int research_choose_fact(const char *question,const research_hits_t *hits,
   if(selected<0||h->relevance>best){selected=(int)i;best=h->relevance;}
   if(h->excerpt[0]&&(!temporal||has_date)&&
      (qualified<0||h->relevance>qualified_score)){
+   if(temporal&&schedule_request(question)){
+    char event[256]={0};
+    if(!scheduled_row(h->excerpt,event,sizeof event)&&
+       !next_calendar_event(h->excerpt,event,sizeof event))
+     continue;
+   }
    qualified=(int)i;qualified_score=h->relevance;
   }
  }
  if(selected<0)return 0;
+ /* A directory page or historical list is not an answer to the next
+  * scheduled event. Do not promote it to an evidence status. */
+ if(temporal&&schedule_request(question)&&qualified<0){
+  research_runtime_log("ANSWER_DETAIL",
+   "outcome=no_upcoming_event hits=%u",hits->count);
+  return 0;
+ }
  if(sources)*sources=hits->count;
  if(qualified>=0){
   const research_hit_t *h=&hits->hit[qualified];
