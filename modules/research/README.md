@@ -7,7 +7,7 @@ Research is a **general-purpose, subject-independent information acquisition mod
 1. The existing `digit.research.answer.v1` service claims factual, current-information, investigation and learning requests. Ordinary conversation remains unclaimed.
 2. Research extracts significant terms from the question. It retains subjects such as `New England Patriots`, `PHP`, `Native C`, `C#`, `C++`, `Go`, `Rust`, and anything else encountered. **These examples are not a subject allowlist.**
 3. It queries an keyless HTTPS web-search page. It submits the user's question as provided (excluding a leading assistant addressee) and retains only search hits relevant to that question. Research does not add search terms or perform rewritten follow-up searches.
-4. It fetches up to two HTTPS source pages discovered through search, extracts readable text without executing scripts, and considers that material when the search excerpt lacks a needed date.
+4. It fetches up to four HTTPS source pages discovered through search, extracts readable text without executing scripts, and looks for the requested event details in those pages when search excerpts lack them.
 5. Research returns source-attributed material. For a question about the next scheduled game or event, a listing or navigation page does not qualify as an answer: a future-dated event and time must be present in the retrieved evidence, or the answer is reported as unverified. **No module-to-module-to-module response chain is required.**
 6. The final `/chat` or `/research` reply contains an attributable excerpt when the requested fact is established. For an unverified upcoming event, Research reports that no next event was established, not an arbitrary directory excerpt.
 
