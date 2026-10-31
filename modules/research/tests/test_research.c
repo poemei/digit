@@ -283,9 +283,10 @@ int main(void)
     "WEEK 8 Sun %s 4:25 PM EST AT Visiting Opponent "
     "WEEK 9 Sun 12/31 4:25 PM EST VS Later Opponent",date);
    CHECK(research_extract_page_fact(page,
-     "when is the next Example game?",page_answer,sizeof page_answer));
+     "when are Example teams playing again?",page_answer,sizeof page_answer));
    CHECK(strstr(page_answer,date)!=NULL);
    CHECK(strstr(page_answer,"Visiting Opponent")!=NULL);
+   CHECK(strstr(page_answer,"WEEK 8")!=NULL);
    {
     char markup[500],plain[500]={0};
     snprintf(markup,sizeof markup,
@@ -294,7 +295,7 @@ int main(void)
      "<p>AT Visiting Opponent</p></section></main>",date);
     CHECK(research_html_text(markup,plain,sizeof plain));
     CHECK(research_extract_page_fact(plain,
-      "when is the next Example game?",page_answer,sizeof page_answer));
+      "when are Example teams playing again?",page_answer,sizeof page_answer));
     CHECK(strstr(page_answer,date)!=NULL);
    }
    snprintf(today,sizeof today,
