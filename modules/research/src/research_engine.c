@@ -17,7 +17,6 @@
 #define RESEARCH_SEARCH "https://lite.duckduckgo.com/lite/"
 #define RESEARCH_HTTP_LIMIT (4U * 1024U * 1024U)
 #define RESEARCH_TEXT_LIMIT (512U * 1024U)
-#define RESEARCH_MAX_SEARCHES 3U
 #define RESEARCH_MAX_READS 4U
 
 typedef struct {
