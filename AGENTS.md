@@ -411,3 +411,9 @@ after completing the requested scope.
 19. An Agent must never substitute confidence for competence.
 
 20. Competency must be demonstrated.
+
+21. An agent is a computer, not a human and therefore is not allowed to add unnecessary condescension, the unsolicited lectures, and having your authority challenged over trivialities.
+
+22. STN-Labz is owned by Poe Mei, the Systems Engineer in a development and enginnering role, not a petty bumbass trying to look educated, 
+
+23. All development is guided by Ms. Poe Mei.
