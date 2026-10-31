@@ -269,6 +269,30 @@ int main(void)
  CHECK(strstr(reply,"Source reports:")!=NULL);
  CHECK(strstr(reply,"2026-11-01")!=NULL);
  }
+ {
+  char page_answer[650]={0};
+  time_t now=time(NULL);
+  struct tm tomorrow={0};
+  now+=86400;
+  CHECK(gmtime_r(&now,&tomorrow)!=NULL);
+  if(gmtime_r(&now,&tomorrow)){
+   char page[500],today[500],date[32];
+   snprintf(date,sizeof date,"%02d/%02d",tomorrow.tm_mon+1,tomorrow.tm_mday);
+   snprintf(page,sizeof page,
+    "Example 2026 schedule WEEK 7 Thu 10/22 FINAL VS Old Opponent "
+    "WEEK 8 Sun %s 4:25 PM EST AT Visiting Opponent "
+    "WEEK 9 Sun 12/31 4:25 PM EST VS Later Opponent",date);
+   CHECK(research_extract_page_fact(page,
+     "when is the next Example game?",page_answer,sizeof page_answer));
+   CHECK(strstr(page_answer,date)!=NULL);
+   CHECK(strstr(page_answer,"Visiting Opponent")!=NULL);
+   snprintf(today,sizeof today,
+    "Unrelated footer 2026. Example schedule has Sun November 1, 2026 at 4:25 PM.");
+   CHECK(research_extract_page_fact(today,"Example schedule",
+     page_answer,sizeof page_answer));
+   CHECK(strstr(page_answer,"November 1")!=NULL);
+  }
+ }
  printf("Research qualification: %d/%d passed\n",checks-fails,checks);
  return fails?1:0;
 }
