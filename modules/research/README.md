@@ -1,4 +1,4 @@
-# Digit Research — native module v1.4.0
+# Digit Research — native module v1.4.1
 
 Research is a **general-purpose, subject-independent information acquisition module**. Search terms come from the user's question or learning directive, not from a programmed subject list.
 
@@ -38,4 +38,4 @@ make -C modules/research clean all test
 sudo make -C modules/research install
 ```
 
-**Status:** Source committed; native build, test execution, active runtime and client acceptance have not been independently established.
+**Status:** Source and module version updated to 1.4.1; native build and retest after this version correction, installed activation, live retrieval, and operator acceptance remain unverified.
