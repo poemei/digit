@@ -4,7 +4,7 @@ CPPFLAGS ?=
 CPPFLAGS += -Iinclude -I$(ROOT)/include
 CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Wpedantic
 LDFLAGS ?=
-LDLIBS ?= -lcurl -ljson-c -lpthread
+LDLIBS ?= -lcurl -lpthread
 
 MODULE := research
 BUILD := build
@@ -24,7 +24,7 @@ $(TARGET): src/research.c src/research_engine.c src/research_engine.h include/re
 
 $(TEST): tests/test_research.c src/research.c src/research_engine.c src/research_engine.h include/research.h
 	@mkdir -p $(BUILD)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ tests/test_research.c src/research_engine.c $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -DRESEARCH_TEST -o $@ tests/test_research.c src/research_engine.c $(LDLIBS)
 
 test: $(TEST)
 	./$(TEST)

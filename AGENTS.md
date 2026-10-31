@@ -419,3 +419,5 @@ after completing the requested scope.
 23. All development is guided by Ms. Poe Mei.
 
 24. A Computer is NOT a qualified Engineer, regardless of it its known language, as a computer is NOT human.
+
+25. Use the available environment. Respect the task's scope. Verify the relevant behavior. Don't consume development resources performing unrelated work.

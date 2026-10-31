@@ -1,33 +1,14 @@
 #ifndef DIGIT_RESEARCH_ENGINE_H
 #define DIGIT_RESEARCH_ENGINE_H
 #include <stddef.h>
-#include "stnlabz_abi/module.h"
-
-/* No network in these helpers: deterministic tests use fixture RSS/HTML. */
 typedef struct {
  char title[180];
  char url[480];
  char excerpt[650];
- char date[90];
- unsigned relevance;
 } research_hit_t;
-typedef struct {
- research_hit_t hit[6];
- unsigned count;
-} research_hits_t;
-
+typedef struct {research_hit_t hit[6];unsigned count;} research_hits_t;
 void research_runtime_log(const char *event,const char *fmt,...);
-int research_terms(const char *question,char *query,size_t cap);
-unsigned research_parse_rss(const char *rss,const char *question,
-                            research_hits_t *hits);
-unsigned research_parse_web_html(const char *html,const char *question,
-                                 research_hits_t *hits);
-int research_html_text(const char *html,char *text,size_t cap);
-int research_grounded(const char *answer,const char *evidence);
-int research_extract_page_fact(const char *text,const char *question,
-                               char *excerpt,size_t cap);
-int research_choose_fact(const char *question,const research_hits_t *hits,
-                         char *answer,size_t cap,unsigned *sources);
-int research_general_answer(const char *question,const stnlabz_module_host_t *host,
-                            char *answer,size_t cap,unsigned *sources);
+unsigned research_parse_web_html(const char *html,research_hits_t *hits);
+/* 1: results, 0: provider explicitly reported none, -1: acquisition failure. */
+int research_search(const char *query,research_hits_t *hits);
 #endif
