@@ -3,6 +3,7 @@
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <fcntl.h>
+#include <errno.h>
 #include <stdarg.h>
 #include <unistd.h>
 #include "logging.h"
@@ -44,7 +45,15 @@ void research_runtime_log(const char *event,const char *fmt,...)
  if(n<0||(size_t)n>=sizeof line)return;
  fd=open(STNLABZ_LOG_PATH,O_WRONLY|O_APPEND|O_CLOEXEC|O_NOFOLLOW);
  if(fd<0)return;
- (void)write(fd,line,(size_t)n);
+ {
+  size_t offset=0;
+  while(offset<(size_t)n){
+   ssize_t written=write(fd,line+offset,(size_t)n-offset);
+   if(written<0&&errno==EINTR)continue;
+   if(written<=0)break;
+   offset+=(size_t)written;
+  }
+ }
  (void)close(fd);
 }
 
