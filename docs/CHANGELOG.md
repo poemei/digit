@@ -312,3 +312,9 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 - Added native Ask v1.0.0 as the registered `chat` controller. It delegates to Identity, Research or the LLM generation service through Core, without embedding research keywords or external HTTP calls; peer-directed say/tell/ask handling remains in the conversation controller. New isolated mock-service tests cover authoritative identity, research answer and denial, unclaimed fallback, peer actions and service failures.
 - Shared ABI, Core and IRC unchanged. Controlled route-owner handoff is required: Research active; install/activate Ollama v1.1.0 to release `chat`; activate Ask v1.0.0 to claim `chat`.
 - **Evidence status:** Source committed; no native compile, test execution, activation or end-to-end user result verified. All remain operator-controlled qualification gates.
+
+## 2026-10-31 — Research 1.3.1 compilation regression corrected
+
+- Operator compile exposed the unit target calling `answer_service` while its definition was hidden behind `#ifndef RESEARCH_TEST`. Moved the guard below the service definitions so both the real module and isolated tests exercise the same callable controller.
+- Corrected misleading one-line control-flow indentation and bounded failed-research message formatting. Runtime registration state is excluded in test builds; test target now exercises module selftest and invalid service input.
+- Source descriptor and module.conf updated to 1.3.1. No claim of a completed local build or operator activation; rerun the exact `make -C modules/research clean all test` gate.
