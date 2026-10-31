@@ -190,6 +190,22 @@ int main(void)
       "https://www.php.net/manual/en/?a=1&b=2"));
    }
   }
+  /* Regression for DDG Lite snippets with inline highlight markup. */
+  {
+   const char *highlighted=
+    "<a class='result-link' href='https://www.patriots.com/schedule/'>"
+    "New England Patriots Schedule</a>"
+    "<td class='result-snippet'>THE <b>New England Patriots</b> "
+    "play the <strong>Miami Dolphins</strong> on November 1, 2026 "
+    "at 4:25 PM ET.</td>";
+   CHECK(research_parse_web_html(highlighted,
+     "when are the New England Patriots playing again?",&found)==1);
+   CHECK(strstr(found.hit[0].excerpt,"Miami Dolphins")!=NULL);
+   CHECK(strstr(found.hit[0].excerpt,"November 1, 2026")!=NULL);
+   CHECK(research_choose_fact("when are the Patriots playing again?",
+     &found,html,sizeof html,NULL));
+   CHECK(strstr(html,"November 1")!=NULL);
+  }
   CHECK(research_parse_web_html(dev,"learn PHP",&found)==1);
   CHECK(strstr(found.hit[0].excerpt,"functions")!=NULL);
   CHECK(research_parse_web_html(
