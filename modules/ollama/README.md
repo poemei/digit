@@ -68,3 +68,11 @@ transport. Ordinary conversation still replies to its originating context.
 
 Core routing, shared ABI 1.5, Digit identity-service precedence, model selection,
 and endpoint are unchanged by the Ollama update.
+
+## v1.0.7 — Live factual routing through Digit Research
+
+The `chat` controller now detects time-sensitive factual questions and requests the installed `digit.research.search.v1` service through the existing Core-mediated ABI 1.5. A question such as "when is the next SpaceX rocket launch?" no longer falls through to offline Ollama generation. A successful research lookup returns timestamped, attributed search leads; no answer is fabricated from model knowledge. When the module is unavailable, the feed cannot be retrieved or evidence is insufficient, chat explicitly reports failure instead of inventing a launch schedule.
+
+Identity authority takes precedence. General chat and peer commands retain their existing route. No IRC, Core, or shared ABI modifications. Classifier tests cover date-dependent questions and unaffected peer/general conversation.
+
+Note: Search feed excerpts are not primary-source verification of the actual launch schedule. Further source-specific verification would be needed to state a confirmed next launch and launch time. Source implementation is committed; native build, installed module versions, hotload, live service invocation and operator acceptance remain unverified.
