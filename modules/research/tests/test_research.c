@@ -24,7 +24,8 @@ int main(void)
  CHECK(extract_results(fixture,strlen(fixture),&topic,&response)==1);
  CHECK(response.sources==1);
  CHECK(strstr(response.evidence,"SpaceX rocket launch schedule")!=NULL);
- CHECK(strstr(response.evidence,"https://example.org/launch")!=NULL);
+ CHECK(strstr(response.evidence,"SpaceX rocket launch schedule")!=NULL);
+ CHECK(strstr(response.evidence,"https://")==NULL);
  CHECK(strstr(response.evidence,"Schedule & updates")!=NULL || strstr(response.evidence,"schedule & updates")!=NULL);
  CHECK(strstr(response.evidence,"next.us")==NULL);
  CHECK(strstr(response.evidence,"127.0.0.1")==NULL);
@@ -33,6 +34,25 @@ int main(void)
  CHECK(safe_source_url("https://example.org/launch"));
  CHECK(!safe_source_url("http://example.org"));
  CHECK(!safe_source_url("https://localhost/private"));
+
+ {
+ const char *launch_fixture="{\"results\":["
+ "{\"name\":\"Falcon 9 | Starlink Group 15-18\","
+ "\"net\":\"2026-10-31T04:02:00Z\","
+ "\"launch_service_provider\":{\"name\":\"SpaceX\"},"
+ "\"rocket\":{\"configuration\":{\"full_name\":\"Falcon 9 Block 5\"}},"
+ "\"pad\":{\"location\":{\"name\":\"Vandenberg SFB\"}},"
+ "\"status\":{\"name\":\"Go for Launch\"}}]}";
+ memset(&response,0,sizeof response);
+ CHECK(launch_question("When is the next SpaceX rocket launch?"));
+ CHECK(!launch_question("What is TCP?"));
+ CHECK(launch_answer(launch_fixture,strlen(launch_fixture),0,&response)==1);
+ CHECK(strstr(response.evidence,"Starlink Group 15-18")!=NULL);
+ CHECK(strstr(response.evidence,"Falcon 9 Block 5")!=NULL);
+ CHECK(strstr(response.evidence,"Vandenberg SFB")!=NULL);
+ CHECK(strstr(response.evidence,"9:02 PM Pacific")!=NULL);
+ CHECK(strstr(response.evidence,"http")==NULL);
+ }
  printf("Research qualification: %d/%d passed\n",checks-fails,checks);
  return fails?1:0;
 }
