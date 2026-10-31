@@ -129,7 +129,9 @@ static stnlabz_module_result_t controller(
     return reply_text(reply,ctx,message)?
      STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
    }
-  }else if(rc!=STNLABZ_MODULE_ERR_NOT_FOUND){
+  }else{
+   /* An absent Research provider is NOT the same as a declared
+    * NOT_APPLICABLE result. Never guess with an offline generator. */
    free(research_out);
    return reply_text(reply,ctx,"Research is temporarily unavailable.")?
     STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
