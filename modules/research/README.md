@@ -1,4 +1,4 @@
-# Digit Live Research — native module v1.1.0
+# Digit Live Research — native module v1.1.2
 
 **No subscription, payment account, or API key is required.**
 
@@ -23,3 +23,9 @@ No credentials need to be provisioned. Build and live runtime results are not ye
 **Still separate:** Free-form requests such as “Digicat, when is the next SpaceX launch?” need the existing conversational/DSD module to call `digit.research.search.v1` and evaluate source freshness. This change does not modify protected Core or the conversational module.
 
 **Status:** Source changed to keyless research, pending compile, validation, operator acceptance.
+
+## v1.1.2 — Relevance correction (2026-10-30)
+
+The former search passed the full conversational question into Bing RSS and blindly accepted the earliest result; the phrase “next” matched an unrelated clothing retailer. Search now extracts significant subject terms (e.g. `spacex launch`), adds upcoming schedule context for next-launch queries, and refuses RSS entries without matching subject terms. A regression fixture places the exact unrelated Next clothing retailer before a SpaceX item to verify rejection.
+
+Filtered headlines remain **leads**, not confirmed launch dates; a live schedule needs cross-checking against an authoritative source. Source changed in GitHub; build and runtime qualification pending.
