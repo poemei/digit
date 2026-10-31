@@ -2,7 +2,7 @@ CC ?= cc
 ROOT ?= ../..
 CPPFLAGS += -Iinclude -I$(ROOT)/include
 CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Wpedantic
-LDLIBS ?= -lcurl -ljson-c
+LDLIBS ?= -lcurl -ljson-c -lpthread
 .PHONY: all test clean
 all: build/research.so
 build/research.so: src/research.c include/research.h
