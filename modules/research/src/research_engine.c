@@ -199,8 +199,23 @@ static int append_word(char *dest,size_t cap,const char *word)
 int research_terms(const char *question,char *query,size_t cap)
 {
  size_t count=0,removed=0;
- const unsigned char *p=(const unsigned char *)question;
+ const unsigned char *p;
  if(!question||!query||cap<16)return 0;
+ p=(const unsigned char *)question;
+ /* Ignore an addressed bot name preceding an interrogative. */
+ {
+  const char *comma=strchr(question,',');
+  if(comma&&comma>question&&comma-question<48){
+   const unsigned char *after=(const unsigned char *)(comma+1);
+   static const char *const starters[]={"when","what","where","who","why","how","which",NULL};
+   while(*after&&isspace(*after))after++;
+   for(size_t i=0;starters[i];i++){
+    size_t n=strlen(starters[i]),j=0;
+    while(j<n&&after[j]&&tolower(after[j])==starters[i][j])j++;
+    if(j==n&&isspace(after[j])){p=after;break;}
+   }
+  }
+ }
  query[0]=0;
  while(*p&&count<14){
   char word[48];size_t n=0;
@@ -219,7 +234,9 @@ int research_terms(const char *question,char *query,size_t cap)
  /* The question supplies intent, while subject terms stay topic-neutral. */
  if((strstr(question,"next")||strstr(question,"Next")||
      strstr(question,"when do")||strstr(question,"When do")||
-     strstr(question,"when is")||strstr(question,"When is"))&&count<13)
+     strstr(question,"when is")||strstr(question,"When is")||
+      strstr(question,"when are")||strstr(question,"When are")||
+      strstr(question,"when does")||strstr(question,"When does"))&&count<13)
   (void)append_word(query,cap,"upcoming schedule");
  else if(strstr(question,"learn ")||strstr(question,"Learn ")||
          strstr(question,"study ")||strstr(question,"Study "))
@@ -597,7 +614,7 @@ static int search_once(const char *terms,const char *question,
  char address[1600];
  size_t length=0;
  int ok=0;
- if(!curl)return 0;
+ if(!curl)return -1;
  url=curl_easy_escape(curl,terms,0);
  if(!url||snprintf(address,sizeof address,
      RESEARCH_SEARCH "?q=%s",url)>=(int)sizeof address)goto done;
@@ -605,7 +622,7 @@ static int search_once(const char *terms,const char *question,
  if(!body)goto done;
  if(!https_get(address,body,RESEARCH_HTTP_LIMIT+1,&length)){
   research_runtime_log("SEARCH_FETCH","outcome=failed");
-  goto done;
+  ok=-1;goto done;
  }
  ok=research_parse_web_html(body,question,hits)>0;
  if(!ok)
@@ -649,6 +666,7 @@ int research_general_answer(const char *question,const stnlabz_module_host_t *ho
 {
  research_hits_t combined={0},batch={0};
  char query[300],variant[340];
+ unsigned provider_failures=0,attempts=0;
  (void)host;
  if(answer&&cap)answer[0]=0;
  if(sources)*sources=0;
@@ -657,13 +675,20 @@ int research_general_answer(const char *question,const stnlabz_module_host_t *ho
  for(unsigned attempt=0;attempt<RESEARCH_MAX_SEARCHES;attempt++){
   if(attempt==0)snprintf(variant,sizeof variant,"%s",query);
   else if(!make_variation(query,question,attempt,variant,sizeof variant))break;
+  int result;
   memset(&batch,0,sizeof batch);
-  if(search_once(variant,question,&batch))combine_hits(&combined,&batch);
+  attempts++;
+  result=search_once(variant,question,&batch);
+  if(result>0)combine_hits(&combined,&batch);
+  else if(result<0)provider_failures++;
   if(combined.count>=3&&attempt>=1)break;
  }
  if(!combined.count){
-  research_runtime_log("SEARCH","outcome=no_accepted_hits attempts=%u",
-          RESEARCH_MAX_SEARCHES);
+  research_runtime_log("SEARCH","outcome=no_accepted_hits attempts=%u provider_failures=%u",
+          attempts,provider_failures);
+  snprintf(answer,cap,"%s",provider_failures==attempts?
+   "Research could not reach the search provider.":
+   "Search completed but returned no relevant sources.");
   return 0;
  }
  research_runtime_log("SEARCH","outcome=accepted hits=%u",combined.count);
@@ -688,6 +713,8 @@ int research_general_answer(const char *question,const stnlabz_module_host_t *ho
   research_runtime_log("ANSWER","outcome=%s hits=%u temporal=%d",
           chosen?"evidence":"no_qualified_fact",combined.count,
           temporal_question(question));
+  if(!chosen)snprintf(answer,cap,"%s",
+   "Relevant sources were found, but the requested fact could not be verified.");
   return chosen;
  }
 }
