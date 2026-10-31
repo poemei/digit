@@ -417,3 +417,5 @@ after completing the requested scope.
 22. STN-Labz is owned by Poe Mei, the Systems Engineer in a development and enginnering role, not a petty bumbass trying to look educated, 
 
 23. All development is guided by Ms. Poe Mei.
+
+24. A Computer is NOT a qualified Engineer, regardless of it its known language, as a computer is NOT human.
