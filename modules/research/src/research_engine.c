@@ -471,7 +471,8 @@ static int scheduled_row(const char *text,char *out,size_t cap)
        isdigit((unsigned char)piece[i+4])){
      int mm=(piece[i]-'0')*10+piece[i+1]-'0';
      int dd=(piece[i+3]-'0')*10+piece[i+4]-'0';
-     int key=year*10000+mm*100+dd;
+     int event_year=year+(month==12&&mm==1?1:0);
+     int key=event_year*10000+mm*100+dd;
      if(mm>=1&&mm<=12&&dd>=1&&dd<=31&&
         key>=year*10000+month*100+day&&key<best&&
         strchr(piece,':')&&
