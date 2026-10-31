@@ -88,6 +88,20 @@ int main(void)
  CHECK(!research_parse_web_html(NULL,&hits));
  CHECK(!research_parse_web_html(fixture,NULL));
  CHECK(!format_results(&hits,small,1));
+ /* The evidence view must preserve substantive facts, not merely links. */
+ {
+  char detailed[1700];
+  const char *factual=
+   "<a class='result-link' href='https://example.org/event'>Public event notice</a>"
+   "<td class='result-snippet'>The event starts Sunday at 4:25 PM Eastern, at the south venue.</td>";
+  CHECK(research_parse_web_html(factual,&hits)==1);
+  CHECK(format_results(&hits,detailed,sizeof detailed)==1);
+  CHECK(strstr(detailed,"Sunday at 4:25 PM Eastern")!=NULL);
+  CHECK(strstr(detailed,"Public event notice")!=NULL);
+  CHECK(strstr(detailed,"https://example.org/event")!=NULL);
+  CHECK(strstr(detailed,"Excerpt:")!=NULL);
+ }
+
  page=fixture;
  const char *queries[]={"C++ & C#", "Go", "R", "when are the Patriots playing again?",
   "next rocket launch", "SpaceX launch", "soil pH", "\"exact phrase\" -excluded site:example.org", "alpha, what is beta?", "learn PHP",NULL};
@@ -158,7 +172,7 @@ int main(void)
  CHECK(service(&request,sizeof request,&response,sizeof response,NULL,NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT);
  CHECK(qualify(&qualification)==STNLABZ_MODULE_OK);
  CHECK(qualification.tests_executed>=10&&qualification.tests_failed==0&&qualification.negative_test_passed);
- CHECK(descriptor.version_major==1&&descriptor.version_minor==5&&descriptor.version_patch==4);
+ CHECK(descriptor.version_major==1&&descriptor.version_minor==5&&descriptor.version_patch==5);
  h.register_command=register_command;h.unregister_command=unregister_any;
  h.register_service=register_service;h.unregister_service=unregister_any;
  CHECK(start(NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT);
