@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include <curl/curl.h>
 #include <json-c/json.h>
+#include <pthread.h>
 #include <ctype.h>
 #include <errno.h>
 #include <stdarg.h>
@@ -19,6 +20,9 @@
 typedef struct {char body[MAX_HTTP+1];size_t length;} received_t;
 static const stnlabz_module_host_t *host;
 static int command_registered,service_registered;
+static pthread_mutex_t rate_mutex=PTHREAD_MUTEX_INITIALIZER;
+static time_t rate_window;
+static unsigned rate_used;
 static size_t receive(char *ptr,size_t size,size_t count,void *context)
 {
  received_t *r=context;size_t n;
@@ -93,6 +97,17 @@ static int read_key(char *key,size_t cap)
   key[i]!='-'&&key[i]!='_')return 0;
  return 1;
 }
+static int permitted_rate(void)
+{
+ time_t now=time(NULL);int allowed=0;
+ pthread_mutex_lock(&rate_mutex);
+ if(rate_window==0||now<rate_window||now-rate_window>=60){
+  rate_window=now;rate_used=0;
+ }
+ if(rate_used<12){++rate_used;allowed=1;}
+ pthread_mutex_unlock(&rate_mutex);
+ return allowed;
+}
 static void audit(const char *query,const char *status,unsigned sources)
 {
  uint64_t h=UINT64_C(14695981039346656037);
@@ -156,6 +171,12 @@ static int search(const char *query,research_response_t *output)
   snprintf(output->evidence,sizeof output->evidence,
    "Request denied by the research safety gate.");
   audit(query,"denied",0);return 0;
+ }
+ if(!permitted_rate()){
+  output->status=RESEARCH_UNAVAILABLE;
+  snprintf(output->evidence,sizeof output->evidence,
+   "Live research rate limit reached; try another request later.");
+  audit(query,"rate-limited",0);return 0;
  }
  if(!read_key(key,sizeof key)){
   output->status=RESEARCH_UNAVAILABLE;
