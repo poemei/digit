@@ -467,6 +467,71 @@ static int date_evidence(const char *text)
  for(size_t i=0;words[i];i++)if(has_word(text,words[i]))return 1;
  return 0;
 }
+/* A dated schedule event must be in the future and include a kickoff
+ * time. Navigation years and historical results are not event evidence. */
+static int next_calendar_event(const char *text,char *out,size_t cap)
+{
+ static const char *const months[]={
+  "jan","feb","mar","apr","may","jun",
+  "jul","aug","sep","oct","nov","dec"
+ };
+ time_t now=time(NULL);struct tm utc={0};
+ int today,best=99999999;
+ const char *start=text;
+ if(!text||!out||cap<64||now==(time_t)-1||!gmtime_r(&now,&utc))return 0;
+ today=(utc.tm_year+1900)*10000+(utc.tm_mon+1)*100+utc.tm_mday;
+ for(const char *p=start;*p;p++){
+  int month=0,day=0,year=utc.tm_year+1900,valid=0;
+  size_t consumed=0;
+  if((p==start||!isalnum((unsigned char)p[-1]))&&
+     isalpha((unsigned char)p[0])&&strlen(p)>=5){
+   for(int m=0;m<12;m++){
+    size_t j=0;
+    while(j<3&&tolower((unsigned char)p[j])==months[m][j])j++;
+    if(j!=3)continue;
+    const char *q=p+3;
+    while(isalpha((unsigned char)*q))q++;
+    if(!isspace((unsigned char)*q))continue;
+    while(isspace((unsigned char)*q))q++;
+    if(!isdigit((unsigned char)*q))continue;
+    day=*q++-'0';
+    if(isdigit((unsigned char)*q))day=day*10+(*q++-'0');
+    month=m+1;consumed=(size_t)(q-p);valid=1;break;
+   }
+  }
+  if(!valid&&isdigit((unsigned char)*p)&&
+     (p==start||!isdigit((unsigned char)p[-1]))){
+   const char *q=p;int v=*q++-'0';
+   if(isdigit((unsigned char)*q))v=v*10+(*q++-'0');
+   if(*q=='/'){
+    q++;if(isdigit((unsigned char)*q)){
+     day=*q++-'0';
+     if(isdigit((unsigned char)*q))day=day*10+(*q++-'0');
+     month=v;consumed=(size_t)(q-p);valid=1;
+    }
+   }
+  }
+  if(!valid||month<1||month>12||day<1||day>31)continue;
+  if(month==1&&utc.tm_mon==11)year++;
+  int key=year*10000+month*100+day;
+  if(key<today||key>=best||key>today+10000)continue;
+  /* The time must be located near this event, not in another game row. */
+  const char *end=p+consumed;
+  size_t range=0;
+  while(end[range]&&range<110)range++;
+  char segment[150];size_t left=(size_t)(p-start);
+  const char *begin=left>20?p-20:start;
+  size_t n=(size_t)(p-begin)+range;
+  if(n>sizeof segment-1)n=sizeof segment-1;
+  memcpy(segment,begin,n);segment[n]=0;
+  if(strstr(segment,"FINAL")||strstr(segment,"Final"))continue;
+  if(!strchr(segment,':')||(!strstr(segment," AM")&&!strstr(segment," PM")&&
+                         !strstr(segment," ET")&&!strstr(segment," PT")))continue;
+  best=key;
+  snprintf(out,cap,"%s",segment);
+ }
+ return best!=99999999;
+}
 /* Extract dated evidence from source pages rather than discarding it.
  * Scheduled WEEK rows are recognized by their published event date/time.
  * All other subjects retain generic, question-matching dated contexts. */
@@ -516,8 +581,11 @@ int research_extract_page_fact(const char *text,const char *question,
  if(temporal_question(question)&&
     (strstr(question,"schedule")||strstr(question,"playing")||
      strstr(question,"when are")||strstr(question,"when do")||
-     strstr(question,"next game"))&&
-    scheduled_row(text,excerpt,cap))return 1;
+     strstr(question,"next game"))){
+  if(scheduled_row(text,excerpt,cap))return 1;
+  if(next_calendar_event(text,excerpt,cap))return 1;
+  return 0;
+ }
  for(size_t offset=0,len=strlen(text);offset<len;offset+=220){
   char window[481];size_t take=len-offset;unsigned matches=0;
   const char *p=terms;
