@@ -269,3 +269,9 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 - Kept source IDs, IP addresses, raw request URLs, and private log contents out of public output.
 - Added nested Sentinel fixture and classification/non-disclosure test coverage; retained existing Pages read-back verification and IRC update notice.
 - Native descriptor and module.conf version 1.3.0. Source syntax was checked; actual C build/tests, live Rictus access, and deployed reporting remain operator-verification gates.
+
+## 2026-10-30 — Digit Live Research v1.0.0 (source)
+
+- Added an independent C module at `modules/research`: bounded Brave Search HTTPS source retrieval, strict provider SafeSearch, fixed network destination, no redirects or arbitrary-page requests, credential mode checks, operator-visible `/research`, Core-mediated `digit.research.search.v1` service, resource rate limiting, deterministic intent safeguards, and hashed request disposition audit.
+- Evidence reports include source citations and UTC retrieval time. Absence of evidence fails closed; the module does not fabricate launch schedules.
+- Qualification now executes deterministic checks; operator compilation, live API credentials, DSD service integration, activation, and end-to-end testing are pending. Source edits do not modify Core or another module.
