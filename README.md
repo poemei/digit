@@ -22,7 +22,7 @@ views == optional and only used when required
 ## DIGIT IS
 An Intelligent Autonomous Engineering and Management Asset
  - She has a Chat Function
- - She **DOES** utilize Ollama for Interference and assistance.
+ - She **DOES** utilize Ollama for Inference and assistance.
  - Her Observations, Her environment and her corpus are her Knowledge Base.
  
  ## DIGIT IS NOT
