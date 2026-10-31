@@ -106,6 +106,20 @@ int main(void)
  CHECK(strstr(found.hit[0].title,"Patriots")!=NULL);
  CHECK(strstr(found.hit[0].excerpt,"Dolphins")!=NULL);
  CHECK(research_parse_rss(sports,"next SpaceX launch",&found)==0);
+ /* [AI:GPT-6 | 2026-10-31 16:39:00 UTC] */
+ {
+  const char *short_title="<?xml version=\"1.0\"?><rss><channel>"
+   "<item><title>Patriots vs Dolphins game schedule</title>"
+   "<link>https://sports.example.com/patriots</link>"
+   "<description>Patriots vs Dolphins Sunday November 1 at 4:25 PM ET</description>"
+   "</item></channel></rss>";
+  CHECK(research_parse_rss(short_title,
+   "when are the New England Patriots playing again?",&found)==1);
+  CHECK(strstr(found.hit[0].title,"Patriots")!=NULL);
+  CHECK(research_parse_rss(short_title,
+   "when is the next SpaceX rocket launch?",&found)==0);
+ }
+ /* [End AI:GPT-6] */
  CHECK(research_terms("learn Golang",terms,sizeof terms));
  CHECK(research_terms("learn Go",terms,sizeof terms)&&strstr(terms,"go")!=NULL);
  CHECK(research_terms("learn Native C",terms,sizeof terms)&&strstr(terms," c ")!=NULL);
