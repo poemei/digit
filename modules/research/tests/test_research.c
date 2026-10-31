@@ -122,6 +122,28 @@ int main(void)
     "Patriots play Miami on November 1"));
  CHECK(!research_grounded("https://sports.example.com","evidence"));
  }
+
+ {
+ research_hits_t facts={0};
+ char reply[448];unsigned count=0;
+ facts.count=1;
+ facts.hit[0].relevance=41;
+ snprintf(facts.hit[0].excerpt,sizeof facts.hit[0].excerpt,
+  "The New England Patriots face the Miami Dolphins on Sunday November 1 at 4:25 PM ET.");
+ CHECK(research_choose_fact("when do the Patriots play again?",&facts,
+   reply,sizeof reply,&count));
+ CHECK(strstr(reply,"Miami Dolphins")!=NULL);
+ CHECK(strstr(reply,"November 1")!=NULL);
+ CHECK(count==1);
+ snprintf(facts.hit[0].excerpt,sizeof facts.hit[0].excerpt,
+  "The PHP programming manual documents language syntax, functions and examples.");
+ CHECK(research_choose_fact("learn PHP",&facts,reply,sizeof reply,&count));
+ CHECK(strstr(reply,"PHP programming manual")!=NULL);
+ snprintf(facts.hit[0].excerpt,sizeof facts.hit[0].excerpt,
+  "There is a news article concerning a football game but its time is not confirmed.");
+ CHECK(!research_choose_fact("when is the next game?",&facts,
+   reply,sizeof reply,&count));
+ }
  printf("Research qualification: %d/%d passed\n",checks-fails,checks);
  return fails?1:0;
 }
