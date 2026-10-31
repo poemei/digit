@@ -4,7 +4,7 @@ CPPFLAGS ?=
 CPPFLAGS += -Iinclude -I$(ROOT)/include
 CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Wpedantic
 LDFLAGS ?=
-LDLIBS ?= -lcurl -lpthread
+LDLIBS ?= -lcurl -ljson-c -lpthread
 
 MODULE := research
 BUILD := build
