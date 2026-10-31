@@ -1,4 +1,4 @@
-# Digit Research — native module v1.4.5
+# Digit Research — native module v1.4.6
 
 Research is a **general-purpose, subject-independent information acquisition module**. Search terms come from the user's question or learning directive, not from a programmed subject list.
 
@@ -39,6 +39,10 @@ make -C modules/research clean all test
 sudo make -C modules/research install
 ```
 
-**Status:** Source and module version updated to 1.4.5; native build and retest after this version correction, installed activation, live retrieval, and operator acceptance remain unverified.
+**Status:** Source and module version updated to 1.4.6; native build and retest after this version correction, installed activation, live retrieval, and operator acceptance remain unverified.
 
 Research removes leading conversational addressees from interrogative queries and supports `when are` schedule phrasing. Unavailable evidence distinguishes provider retrieval failure, zero relevant results, and insufficient factual detail. Live success remains unverified.
+
+### Search construction diagnostics (v1.4.6)
+
+For each general search attempt, Research appends `RESEARCH SEARCH_QUERY terms=<constructed terms>` and `RESEARCH SEARCH_REQUEST url=<exact HTTPS URL>` to `/opt/digit/logs/digit.log` before the network request. If URL encoding or length prevents construction, `RESEARCH SEARCH_BUILD outcome=...` records the failure. These entries intentionally expose the actual search text to the operator; access to Digit's log must remain restricted. This instrumentation does not assert that the requested URL returned useful results.
