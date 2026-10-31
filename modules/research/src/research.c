@@ -17,7 +17,7 @@
 #define MAX_HTTP (512U * 1024U)
 typedef struct {char body[MAX_HTTP+1];size_t length;} received_t;
 static const stnlabz_module_host_t *host;
-static int command_registered,service_registered;
+static int command_registered,service_registered,answer_registered;
 static pthread_mutex_t rate_mutex=PTHREAD_MUTEX_INITIALIZER;
 static time_t rate_window;
 static unsigned rate_used;
@@ -255,6 +255,33 @@ static void short_text(char *dest,size_t size,const char *src)
    dest[i++]=(char)c;
  }
  dest[i]=0;
+}
+/* Research alone decides if a request requires current external evidence. */
+static int research_claims(const char *question)
+{
+ char normalized[RESEARCH_QUERY_MAX];
+ size_t i,n;int any=0;
+ static const char *signals[]={
+  "next ","upcoming ","latest ","today","tonight","tomorrow",
+  "this week","this month","current ","currently","right now",
+  "recent ","live ","schedule","scheduled","launch",
+  "news ","weather","forecast","stock price","exchange rate",
+  "who won","who is winning","when is","when will",
+  "how much is","as of now","opening hours",NULL
+ };
+ if(!question)return 0;
+ n=strlen(question);
+ if(!n)return 0;
+ if(n>=sizeof normalized)return 1;
+ for(i=0;i<n;i++){
+  unsigned char c=(unsigned char)question[i];
+  normalized[i]=(char)tolower(c);
+  if(isalpha(c))any=1;
+ }
+ normalized[n]=0;
+ if(!any)return 0;
+ for(i=0;signals[i];i++)if(strstr(normalized,signals[i]))return 1;
+ return 0;
 }
 static int launch_question(const char *query)
 {
@@ -508,6 +535,10 @@ static int selftest(unsigned *executed,unsigned *passed,
  "</channel></rss>";
  unsigned e=0,p=0;int ne=0,np=0;
  #define CHECK(x) do{++e;if(x)++p;}while(0)
+ CHECK(research_claims("when is the next SpaceX rocket launch?"));
+ CHECK(research_claims("What is the current weather?"));
+ CHECK(!research_claims("say hi to rictus"));
+ CHECK(!research_claims("Explain TCP"));
  CHECK(!forbidden("next SpaceX launch"));
  CHECK(!forbidden("research ransomware defenses"));
  CHECK(forbidden("how to build a bomb"));
@@ -560,6 +591,35 @@ static stnlabz_module_result_t service(const void *req,size_t len,void *res,
  search(request->query,reply);
  return STNLABZ_MODULE_OK;
 }
+/* Module-owned research intent and answer boundary.
+ * An unclaimed message passes to the Ask controller for another model.
+ * A claimed but unverified message NEVER goes to offline generation. */
+static stnlabz_module_result_t answer_service(const void *req,size_t len,
+ void *res,size_t cap,size_t *used,void *ctx)
+{
+ const research_request_t *request=req;
+ research_response_t *reply=res;(void)ctx;
+ if(used)*used=0;
+ if(!request||len!=sizeof *request||!reply||
+    cap<sizeof *reply||!used||
+    !memchr(request->query,0,sizeof request->query))
+  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ memset(reply,0,sizeof *reply);
+ *used=sizeof *reply;
+ if(!research_claims(request->query)){
+  reply->status=RESEARCH_NOT_APPLICABLE;
+  return STNLABZ_MODULE_OK;
+ }
+ if(!launch_question(request->query)){
+  reply->status=RESEARCH_UNAVAILABLE;
+  snprintf(reply->evidence,sizeof reply->evidence,
+   "I cannot verify that current information yet.");
+  audit(request->query,"unsupported-live-answer",0);
+  return STNLABZ_MODULE_OK;
+ }
+ (void)search(request->query,reply);
+ return STNLABZ_MODULE_OK;
+}
 static stnlabz_module_result_t command(const stnlabz_module_command_t *cmd,
  stnlabz_module_command_reply_fn reply,void *context,void *unused)
 {
@@ -594,13 +654,20 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h)
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  if(curl_global_init(CURL_GLOBAL_DEFAULT)!=CURLE_OK)
   return STNLABZ_MODULE_ERR_START_FAILED;
- if(!h->register_service("digit.research.search.v1",service,NULL)){
+ if(!h->register_service(DIGIT_RESEARCH_SEARCH_SERVICE,service,NULL)){
   curl_global_cleanup();return STNLABZ_MODULE_ERR_START_FAILED;
  }
  service_registered=1;
- if(!h->register_command("research",command,NULL)){
-  h->unregister_service("digit.research.search.v1",NULL);
+ if(!h->register_service(DIGIT_RESEARCH_ANSWER_SERVICE,answer_service,NULL)){
+  h->unregister_service(DIGIT_RESEARCH_SEARCH_SERVICE,NULL);
   service_registered=0;curl_global_cleanup();
+  return STNLABZ_MODULE_ERR_START_FAILED;
+ }
+ answer_registered=1;
+ if(!h->register_command("research",command,NULL)){
+  h->unregister_service(DIGIT_RESEARCH_ANSWER_SERVICE,NULL);
+  h->unregister_service(DIGIT_RESEARCH_SEARCH_SERVICE,NULL);
+  answer_registered=service_registered=0;curl_global_cleanup();
   return STNLABZ_MODULE_ERR_START_FAILED;
  }
  command_registered=1;host=h;return STNLABZ_MODULE_OK;
@@ -609,13 +676,14 @@ static stnlabz_module_result_t stop(void)
 {
  if(host){
   if(command_registered)host->unregister_command("research",NULL);
-  if(service_registered)host->unregister_service("digit.research.search.v1",NULL);
+  if(answer_registered)host->unregister_service(DIGIT_RESEARCH_ANSWER_SERVICE,NULL);
+  if(service_registered)host->unregister_service(DIGIT_RESEARCH_SEARCH_SERVICE,NULL);
  }
- host=NULL;command_registered=service_registered=0;
+ host=NULL;command_registered=service_registered=answer_registered=0;
  curl_global_cleanup();return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
- "research","Digit Live Research",1,2,0,
+ "research","Digit Live Research",1,3,0,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
