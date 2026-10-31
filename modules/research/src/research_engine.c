@@ -145,9 +145,9 @@ static int stop(const char *w)
 {
  static const char *const words[]={
   "a","about","again","all","am","an","and","are","as","ask","at",
-  "be","can","could","do","does","for","from","get","give","go",
+  "be","can","could","do","does","for","from","get","give",
   "have","how","i","in","into","is","it","its","know","learn",
-  "me","my","next","of","on","or","our","please","show","tell",
+  "latest","me","my","next","of","on","or","our","please","show","tell",
   "the","their","then","there","this","to","us","want","what",
   "when","where","which","who","will","with","would","you","your",
   NULL
@@ -180,7 +180,7 @@ int research_terms(const char *question,char *query,size_t cap)
   }
   if(!n)continue;
   word[n]=0;
-  if(n<2||stop(word)){removed++;continue;}
+  if((n<2&&strcmp(word,"c"))||stop(word)){removed++;continue;}
   if(!append_word(query,cap,word))break;
   count++;
  }
@@ -245,7 +245,8 @@ static unsigned score(const char *question,const research_hit_t *hit)
   if(!*p)break;
   while(p[i]&&p[i]!=' '&&i+1<sizeof word){word[i]=p[i];i++;}
   word[i]=0;p+=i;
-  if(i<2)continue;
+  if(i<2&&!strcmp(word,"c")!=0)continue;
+  if(unique==0&&!has_word(compound,word))return 0;
   unique++;
   if(has_word(compound,word))matches++;
  }
