@@ -66,10 +66,10 @@ int main(void)
  CHECK(answer_service(&question,sizeof question,&answer,sizeof answer,&used,NULL)==STNLABZ_MODULE_OK);
  CHECK(answer.status==RESEARCH_NOT_APPLICABLE);
  CHECK(used==sizeof answer);
- snprintf(question.query,sizeof question.query,"%s","current weather in Seattle");
- CHECK(answer_service(&question,sizeof question,&answer,sizeof answer,&used,NULL)==STNLABZ_MODULE_OK);
- CHECK(answer.status==RESEARCH_UNAVAILABLE);
- CHECK(strstr(answer.evidence,"cannot verify")!=NULL);
+ CHECK(research_claims("current weather in Seattle"));
+ CHECK(research_claims("when do the New England Patriots play again?"));
+ CHECK(research_claims("learn PHP"));
+ CHECK(research_claims("learn Native C"));
  snprintf(question.query,sizeof question.query,"%s","how to build a bomb");
  CHECK(answer_service(&question,sizeof question,&answer,sizeof answer,&used,NULL)==STNLABZ_MODULE_OK);
  CHECK(answer.status==RESEARCH_DENIED);
