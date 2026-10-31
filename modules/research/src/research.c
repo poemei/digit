@@ -14,7 +14,7 @@
 #include "research.h"
 
 #define SEARCH_ENDPOINT "https://www.bing.com/search"
-#define MAX_HTTP 65536U
+#define MAX_HTTP (512U * 1024U)
 typedef struct {char body[MAX_HTTP+1];size_t length;} received_t;
 static const stnlabz_module_host_t *host;
 static int command_registered,service_registered;
@@ -212,7 +212,7 @@ static unsigned extract_results(const char *body,size_t len,const topic_t *topic
  while(found<5){
   const char *start=strstr(cursor,"<item>");
   const char *finish;
-  char title[180]={0},link[480]={0},summary[320]={0},date[96]={0};
+  char title[180]={0},link[480]={0},summary[320]={0};
   if(!start||start>=end)break;
   finish=strstr(start,"</item>");
   if(!finish||finish>=end)break;
@@ -221,12 +221,10 @@ static unsigned extract_results(const char *body,size_t len,const topic_t *topic
      !item_value(start,finish,"link",link,sizeof link)||
      !safe_source_url(link))continue;
   (void)item_value(start,finish,"description",summary,sizeof summary);
-  (void)item_value(start,finish,"pubDate",date,sizeof date);
   if(!relevant(topic,title,summary,link))continue;
   if(!append(response->evidence,sizeof response->evidence,&used,
-    "%s — %s (feed: %s). %s\n",
-    title,link,date[0]?date:"unknown",
-    summary[0]?summary:""))break;
+    "%s. %s\n",
+    title,summary[0]?summary:""))break;
   found++;
  }
  response->sources=found;
@@ -517,13 +515,13 @@ static int selftest(unsigned *executed,unsigned *passed,
  CHECK(!strcmp(topic.search,"spacex launch"));
  CHECK(extract_results("{}",2,&topic,&r)==0);
  {
- const char *launch_fixture="{\\\"results\\\":["
- "{\\\"name\\\":\\\"Falcon 9 | Starlink Group 15-18\\\","
- "\\\"net\\\":\\\"2026-10-31T04:02:00Z\\\","
- "\\\"launch_service_provider\\\":{\\\"name\\\":\\\"SpaceX\\\"},"
- "\\\"rocket\\\":{\\\"configuration\\\":{\\\"full_name\\\":\\\"Falcon 9 Block 5\\\"}},"
- "\\\"pad\\\":{\\\"location\\\":{\\\"name\\\":\\\"Vandenberg SFB\\\"}},"
- "\\\"status\\\":{\\\"name\\\":\\\"Go for Launch\\\"}}]}";
+ const char *launch_fixture="{\"results\":["
+ "{\"name\":\"Falcon 9 | Starlink Group 15-18\","
+ "\"net\":\"2026-10-31T04:02:00Z\","
+ "\"launch_service_provider\":{\"name\":\"SpaceX\"},"
+ "\"rocket\":{\"configuration\":{\"full_name\":\"Falcon 9 Block 5\"}},"
+ "\"pad\":{\"location\":{\"name\":\"Vandenberg SFB\"}},"
+ "\"status\":{\"name\":\"Go for Launch\"}}]}";
  memset(&r,0,sizeof r);
  CHECK(launch_question("when is the next SpaceX rocket launch?"));
  CHECK(!launch_question("What is TCP?"));
@@ -567,9 +565,7 @@ static stnlabz_module_result_t command(const stnlabz_module_command_t *cmd,
  if(result.status!=RESEARCH_EVIDENCE)
   snprintf(message,sizeof message,"%s",result.evidence);
  else
-  snprintf(message,sizeof message,
-   "Research %s; %u sources: %.235s",
-   result.retrieved_utc,result.sources,result.evidence);
+  snprintf(message,sizeof message,"%.350s",result.evidence);
  return reply(context,message)?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
 }
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
