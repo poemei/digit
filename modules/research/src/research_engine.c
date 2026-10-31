@@ -2,6 +2,10 @@
 #include <curl/curl.h>
 #include <arpa/inet.h>
 #include <ctype.h>
+#include <fcntl.h>
+#include <stdarg.h>
+#include <unistd.h>
+#include "logging.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,6 +24,30 @@ typedef struct {
  size_t length;
  size_t max;
 } document_t;
+
+/* Module ABI 1.5 does not expose Core's logger. Append redacted stage
+ * events to Digit's existing log, without creating another log file. */
+void research_runtime_log(const char *event,const char *fmt,...)
+{
+ char detail[320],line[512],stamp[32];
+ struct tm utc; time_t now; va_list ap;
+ int fd,n;
+ if(!event||!fmt)return;
+ va_start(ap,fmt);
+ n=vsnprintf(detail,sizeof detail,fmt,ap);
+ va_end(ap);
+ if(n<0||(size_t)n>=sizeof detail)return;
+ now=time(NULL);
+ if(now==(time_t)-1||!gmtime_r(&now,&utc)||
+    !strftime(stamp,sizeof stamp,"%Y-%m-%dT%H:%M:%SZ",&utc))return;
+ n=snprintf(line,sizeof line,"%s RESEARCH %s %s\n",stamp,event,detail);
+ if(n<0||(size_t)n>=sizeof line)return;
+ fd=open(STNLABZ_LOG_PATH,O_WRONLY|O_APPEND|O_CLOEXEC|O_NOFOLLOW);
+ if(fd<0)return;
+ (void)write(fd,line,(size_t)n);
+ (void)close(fd);
+}
+
 
 static size_t receive_body(char *ptr,size_t size,size_t count,void *ctx)
 {
@@ -123,7 +151,7 @@ static int https_get(const char *url,char *body,size_t capacity,
  /* Report the transport failure without logging request URLs or content.
   * HTTP, TLS, DNS and connection failures require different repairs. */
  if(!ok)
-  fprintf(stderr,"[RESEARCH_ENGINE] stage=http result=%d http=%ld bytes=%zu\n",
+  research_runtime_log("HTTP","result=%d http=%ld bytes=%zu",
           (int)result,status,document.length);
  curl_easy_cleanup(curl);
  if(length)*length=document.length;
@@ -433,12 +461,12 @@ static int search_once(const char *terms,const char *question,
  body=calloc(RESEARCH_HTTP_LIMIT+1,1);
  if(!body)goto done;
  if(!https_get(address,body,RESEARCH_HTTP_LIMIT+1,&length)){
-  fprintf(stderr,"[RESEARCH_ENGINE] stage=search_fetch outcome=failed\n");
+  research_runtime_log("SEARCH_FETCH","outcome=failed");
   goto done;
  }
  ok=research_parse_rss(body,question,hits)>0;
  if(!ok)
-  fprintf(stderr,"[RESEARCH_ENGINE] stage=rss_filter outcome=empty_or_rejected bytes=%zu rss=%d items=%d\n",
+  research_runtime_log("RSS_FILTER","outcome=empty_or_rejected bytes=%zu rss=%d items=%d",
           length,strstr(body,"<rss")!=NULL,strstr(body,"<item>")!=NULL);
 done:
  if(url)curl_free(url);
@@ -491,11 +519,11 @@ int research_general_answer(const char *question,const stnlabz_module_host_t *ho
   if(combined.count>=3&&attempt>=1)break;
  }
  if(!combined.count){
-  fprintf(stderr,"[RESEARCH_ENGINE] stage=search outcome=no_accepted_hits attempts=%u\n",
+  research_runtime_log("SEARCH","outcome=no_accepted_hits attempts=%u",
           RESEARCH_MAX_SEARCHES);
   return 0;
  }
- fprintf(stderr,"[RESEARCH_ENGINE] stage=search outcome=accepted hits=%u\n",combined.count);
+ research_runtime_log("SEARCH","outcome=accepted hits=%u",combined.count);
  for(unsigned i=0;i<combined.count&&i<RESEARCH_MAX_READS;i++){
   char *body=calloc(RESEARCH_HTTP_LIMIT+1,1);
   char *plain=calloc(RESEARCH_TEXT_LIMIT+1,1);
@@ -514,7 +542,7 @@ int research_general_answer(const char *question,const stnlabz_module_host_t *ho
  }
  {
   int chosen=research_choose_fact(question,&combined,answer,cap,sources);
-  fprintf(stderr,"[RESEARCH_ENGINE] stage=answer outcome=%s hits=%u temporal=%d\n",
+  research_runtime_log("ANSWER","outcome=%s hits=%u temporal=%d",
           chosen?"evidence":"no_qualified_fact",combined.count,
           temporal_question(question));
   return chosen;
