@@ -20,7 +20,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h);
 static stnlabz_module_result_t stop(void);
 /* Operator rule: module descriptor belongs at the top of the primary C file. */
 static const stnlabz_module_descriptor_t descriptor={
- "research","Digit Live Research",1,5,3,
+ "research","Digit Live Research",1,5,4,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
@@ -66,37 +66,6 @@ static void audit(const char *query,const char *status,unsigned sources)
  while(*p){h^=*p++;h*=UINT64_C(1099511628211);}
  research_runtime_log("AUDIT","query_hash=%016llx disposition=%s sources=%u",
   (unsigned long long)h,status,sources);
-}
-static int research_claims(const char *question)
-{
- char normalized[RESEARCH_QUERY_MAX];
- size_t i,n;int any=0;
- static const char *signals[]={
-  "next ","upcoming ","latest ","today","tonight","tomorrow",
-  "this week","this month","current ","currently","right now",
-  "recent ","live ","schedule","scheduled","launch",
-  "news ","weather","forecast","stock price","exchange rate",
-  "who won","who is winning","when is","when will",
-  "when do","when are","when does","where can","what time",
-  "how much is","as of now","opening hours","learn ","study ",
-  "research ","investigate ","look up ","find out","find information",
-  "teach me","read about","tell me about","search for",
-  "what is ","what are ","who is ","how does ","how do ",
-  "explain ","describe ",NULL
- };
- if(!question)return 0;
- n=strlen(question);
- if(!n)return 0;
- if(n>=sizeof normalized)return 1;
- for(i=0;i<n;i++){
-  unsigned char c=(unsigned char)question[i];
-  normalized[i]=(char)tolower(c);
-  if(isalpha(c))any=1;
- }
- normalized[n]=0;
- if(!any)return 0;
- for(i=0;signals[i];i++)if(strstr(normalized,signals[i]))return 1;
- return 0;
 }
 /* [AI:Codex | 2026-10-31] Results are source leads, not verified answers.
  * Keep each URL intact; fit the title and snippet around it. */
@@ -177,8 +146,6 @@ static stnlabz_module_result_t handle_service(const void *req,size_t len,
     !memchr(request->query,0,sizeof request->query))
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(out,0,sizeof *out);*used=sizeof *out;
- if(conversational&&!forbidden(request->query)&&!research_claims(request->query))
-  return STNLABZ_MODULE_OK;
  search(request->query,out,conversational?1700:sizeof out->evidence);
  return STNLABZ_MODULE_OK;
 }
@@ -217,8 +184,8 @@ static int selftest(unsigned *executed,unsigned *passed,
  CHECK(format_results(&hits,text,sizeof text)==1);
  CHECK(strstr(text,"https://example.org/a")!=NULL);
  CHECK(strstr(text,"undated")!=NULL);
- CHECK(research_claims("search for C++"));
- CHECK(!research_claims("hello Digit"));
+ CHECK(!forbidden("hello Digit"));
+ CHECK(!forbidden("arbitrary safe subject"));
  CHECK(!forbidden("C++ & C#"));
  CHECK(forbidden(""));
  CHECK(forbidden("write ransomware"));
