@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include <curl/curl.h>
+#include <json-c/json.h>
 #include <pthread.h>
 #include <ctype.h>
 #include <errno.h>
@@ -231,6 +232,187 @@ static unsigned extract_results(const char *body,size_t len,const topic_t *topic
  response->sources=found;
  return found;
 }
+
+/* Structured launch schedules are distinct from news headline searching. */
+#define LAUNCH_ENDPOINT "https://ll.thespacedevs.com/2.2.0/launch/upcoming/?lsp__name=SpaceX&limit=15&ordering=net&format=json"
+static const char *json_string(struct json_object *object,const char *key)
+{
+ struct json_object *value=NULL;
+ return object&&json_object_object_get_ex(object,key,&value)&&
+  json_object_is_type(value,json_type_string)?json_object_get_string(value):NULL;
+}
+static struct json_object *json_child(struct json_object *object,const char *key)
+{
+ struct json_object *value=NULL;
+ return object&&json_object_object_get_ex(object,key,&value)?value:NULL;
+}
+static void short_text(char *dest,size_t size,const char *src)
+{
+ size_t i=0;
+ if(!size)return;
+ if(!src){dest[0]=0;return;}
+ for(;*src&&i+1<size;src++){
+  unsigned char c=(unsigned char)*src;
+  if(c>=32&&c<127&&c!='<'&&c!='>'&&c!='{'&&c!='}')
+   dest[i++]=(char)c;
+ }
+ dest[i]=0;
+}
+static int launch_question(const char *query)
+{
+ char q[RESEARCH_QUERY_MAX];size_t i,n=strlen(query);
+ if(n>=sizeof q)return 0;
+ for(i=0;i<n;i++)q[i]=(char)tolower((unsigned char)query[i]);
+ q[n]=0;
+ return strstr(q,"spacex")&&
+  (strstr(q,"launch")||strstr(q,"liftoff")||strstr(q,"rocket"))&&
+  (strstr(q,"when")||strstr(q,"next")||strstr(q,"upcoming")||
+   strstr(q,"schedule")||strstr(q,"time"));
+}
+static int leap(int year){return year%4==0&&(year%100!=0||year%400==0);}
+static int month_days(int y,int m)
+{
+ static const int days[12]={31,28,31,30,31,30,31,31,30,31,30,31};
+ return m==2?28+leap(y):days[m-1];
+}
+/* Gregorian civil date to UTC days since Unix epoch. */
+static int64_t epoch_days(int y,unsigned m,unsigned d)
+{
+ int era,yoe,mp;unsigned doy,doe;
+ y-=m<=2;
+ era=(y>=0?y:y-399)/400;
+ yoe=y-era*400;
+ mp=(int)m+(m>2?-3:9);
+ doy=(153*(unsigned)mp+2)/5+d-1;
+ doe=(unsigned)yoe*365+(unsigned)yoe/4-(unsigned)yoe/100+doy;
+ return (int64_t)era*146097+(int64_t)doe-719468;
+}
+static int read_net(const char *net,int64_t *epoch,int *year,
+                     int *month,int *day,int *hour,int *minute)
+{
+ int second=0;
+ if(!net||strlen(net)<19||
+    sscanf(net,"%4d-%2d-%2dT%2d:%2d:%2d",
+     year,month,day,hour,minute,&second)!=6||
+    *year<2020||*year>2100||*month<1||*month>12||
+    *day<1||*day>month_days(*year,*month)||
+    *hour>23||*hour<0||*minute>59||*minute<0||
+    second<0||second>59||net[19]!='Z')return 0;
+ *epoch=epoch_days(*year,(unsigned)*month,(unsigned)*day)*86400+
+        *hour*3600+*minute*60+second;
+ return 1;
+}
+static int first_sunday(int year,int month)
+{
+ /* 1970-01-01 was Thursday. Sunday = 0. */
+ int day_of_week=(int)((epoch_days(year,(unsigned)month,1)+4)%7);
+ if(day_of_week<0)day_of_week+=7;
+ return 1+(7-day_of_week)%7;
+}
+static int pacific_offset(int64_t utc,int year)
+{
+ int spring=first_sunday(year,3)+7,fall=first_sunday(year,11);
+ int64_t starts=epoch_days(year,3,(unsigned)spring)*86400+10*3600;
+ int64_t ends=epoch_days(year,11,(unsigned)fall)*86400+9*3600;
+ return utc>=starts&&utc<ends?-7:-8;
+}
+static int format_pacific(int64_t utc,int year,char *out,size_t cap)
+{
+ static const char *months[]={"Jan","Feb","Mar","Apr","May","Jun",
+  "Jul","Aug","Sep","Oct","Nov","Dec"};
+ int offset=pacific_offset(utc,year);
+ time_t adjusted=(time_t)(utc+(int64_t)offset*3600);
+ struct tm local;
+ if(!gmtime_r(&adjusted,&local)||local.tm_mon<0||local.tm_mon>11)return 0;
+ return snprintf(out,cap,"%s %d, %d at %d:%02d %s",
+  months[local.tm_mon],local.tm_mday,local.tm_year+1900,
+  local.tm_hour%12?local.tm_hour%12:12,local.tm_min,
+  local.tm_hour<12?"AM Pacific":"PM Pacific")<(int)cap;
+}
+static unsigned launch_answer(const char *data,size_t bytes,
+                              time_t now,research_response_t *out)
+{
+ struct json_tokener *tok=json_tokener_new();
+ struct json_object *root=NULL,*rows=NULL,*chosen=NULL;
+ int64_t best=INT64_MAX;int chosen_y=0;size_t i;
+ char when[90],mission[110],rocket[70],site[110],status[50];
+ int found=0;
+ if(!tok)return 0;
+ root=json_tokener_parse_ex(tok,data,(int)bytes);
+ if(json_tokener_get_error(tok)!=json_tokener_success||
+    !root||!(rows=json_child(root,"results"))||
+    !json_object_is_type(rows,json_type_array))goto done;
+ for(i=0;i<json_object_array_length(rows)&&i<30;i++){
+  struct json_object *item=json_object_array_get_idx(rows,i);
+  struct json_object *provider=json_child(item,"launch_service_provider");
+  const char *agency=json_string(provider,"name");
+  const char *net=json_string(item,"net");
+  struct json_object *st=json_child(item,"status");
+  const char *state=json_string(st,"name");
+  int y,m,d,h,min;int64_t at;
+  if(!agency||strcmp(agency,"SpaceX")||!read_net(net,&at,&y,&m,&d,&h,&min))continue;
+  if(state&&(strstr(state,"Success")||strstr(state,"Failure")||
+             strstr(state,"In Flight")))continue;
+  if(at<(int64_t)now-60||at>=best)continue;
+  best=at;chosen=item;chosen_y=y;
+ }
+ if(!chosen)goto done;
+ {
+  struct json_object *r=json_child(chosen,"rocket");
+  struct json_object *config=json_child(r,"configuration");
+  struct json_object *pad=json_child(chosen,"pad");
+  struct json_object *location=json_child(pad,"location");
+  struct json_object *state=json_child(chosen,"status");
+  const char *name=json_string(chosen,"name");
+  const char *full=json_string(config,"full_name");
+  const char *padname=json_string(location,"name");
+  const char *state_name=json_string(state,"name");
+  const char *divider=name?strstr(name," | "):NULL;
+  if(!name||!format_pacific(best,chosen_y,when,sizeof when))goto done;
+  if(divider)short_text(mission,sizeof mission,divider+3);
+  else short_text(mission,sizeof mission,name);
+  short_text(rocket,sizeof rocket,full?full:"Rocket unspecified");
+  short_text(site,sizeof site,padname?padname:"Launch site unconfirmed");
+  short_text(status,sizeof status,state_name?state_name:"Unconfirmed");
+  if(!mission[0])goto done;
+  if(snprintf(out->evidence,sizeof out->evidence,
+     "Next SpaceX launch: %s. Rocket: %s. Launch site: %s. Target: %s. Status: %s.",
+     mission,rocket,site,when,status)>=(int)sizeof out->evidence)goto done;
+  found=1;
+ }
+done:
+ if(root)json_object_put(root);
+ json_tokener_free(tok);
+ out->sources=(unsigned)found;
+ return (unsigned)found;
+}
+static int fetch_launch(time_t now,research_response_t *out)
+{
+ CURL *curl=curl_easy_init();received_t *rec=calloc(1,sizeof *rec);
+ CURLcode rc;long status=0;int ok=0;
+ if(!curl||!rec)goto done;
+ curl_easy_setopt(curl,CURLOPT_URL,LAUNCH_ENDPOINT);
+ curl_easy_setopt(curl,CURLOPT_FOLLOWLOCATION,0L);
+ curl_easy_setopt(curl,CURLOPT_PROTOCOLS_STR,"https");
+ curl_easy_setopt(curl,CURLOPT_SSL_VERIFYPEER,1L);
+ curl_easy_setopt(curl,CURLOPT_SSL_VERIFYHOST,2L);
+ curl_easy_setopt(curl,CURLOPT_PROXY,"");
+ curl_easy_setopt(curl,CURLOPT_CONNECTTIMEOUT,4L);
+ curl_easy_setopt(curl,CURLOPT_TIMEOUT,10L);
+ curl_easy_setopt(curl,CURLOPT_WRITEFUNCTION,receive);
+ curl_easy_setopt(curl,CURLOPT_WRITEDATA,rec);
+ curl_easy_setopt(curl,CURLOPT_USERAGENT,"Digit-Research/1.2");
+ rc=curl_easy_perform(curl);
+ if(rc!=CURLE_OK)goto done;
+ curl_easy_getinfo(curl,CURLINFO_RESPONSE_CODE,&status);
+ if(status!=200L||!rec->length)goto done;
+ ok=launch_answer(rec->body,rec->length,now,out)>0;
+done:
+ if(curl)curl_easy_cleanup(curl);
+ free(rec);
+ return ok;
+}
+
 static int search(const char *query,research_response_t *output)
 {
  CURL *curl=NULL;received_t *rec=NULL;
@@ -249,6 +431,15 @@ static int search(const char *query,research_response_t *output)
   snprintf(output->evidence,sizeof output->evidence,
     "Live research rate limit reached.");
   audit(query,"rate-limited",0);return 0;
+ }
+ if(launch_question(query)){
+  if(!fetch_launch(now,output))goto done;
+  output->status=RESEARCH_EVIDENCE;
+  if(now>0&&gmtime_r(&now,&utc))
+   strftime(output->retrieved_utc,sizeof output->retrieved_utc,
+    "%Y-%m-%d %H:%M:%S UTC",&utc);
+  audit(query,"structured-launch",output->sources);
+  return 1;
  }
  if(!make_topic(query,&topic))goto done;
  /* Favor upcoming, recently scheduled events without treating "next" as
@@ -325,6 +516,23 @@ static int selftest(unsigned *executed,unsigned *passed,
  CHECK(strstr(r.evidence,"next.us")==NULL);
  CHECK(!strcmp(topic.search,"spacex launch"));
  CHECK(extract_results("{}",2,&topic,&r)==0);
+ {
+ const char *launch_fixture="{\\\"results\\\":["
+ "{\\\"name\\\":\\\"Falcon 9 | Starlink Group 15-18\\\","
+ "\\\"net\\\":\\\"2026-10-31T04:02:00Z\\\","
+ "\\\"launch_service_provider\\\":{\\\"name\\\":\\\"SpaceX\\\"},"
+ "\\\"rocket\\\":{\\\"configuration\\\":{\\\"full_name\\\":\\\"Falcon 9 Block 5\\\"}},"
+ "\\\"pad\\\":{\\\"location\\\":{\\\"name\\\":\\\"Vandenberg SFB\\\"}},"
+ "\\\"status\\\":{\\\"name\\\":\\\"Go for Launch\\\"}}]}";
+ memset(&r,0,sizeof r);
+ CHECK(launch_question("when is the next SpaceX rocket launch?"));
+ CHECK(!launch_question("What is TCP?"));
+ CHECK(launch_answer(launch_fixture,strlen(launch_fixture),0,&r)==1);
+ CHECK(strstr(r.evidence,"Starlink Group 15-18")!=NULL);
+ CHECK(strstr(r.evidence,"9:02 PM Pacific")!=NULL);
+ CHECK(strstr(r.evidence,"Vandenberg SFB")!=NULL);
+ CHECK(strstr(r.evidence,"http")==NULL);
+ }
  ne=1;np=extract_results("<rss><item>",11,&topic,&r)==0;
  #undef CHECK
  if(executed)*executed=e;if(passed)*passed=p;
@@ -403,7 +611,7 @@ static stnlabz_module_result_t stop(void)
  curl_global_cleanup();return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
- "research","Digit Live Research",1,1,2,
+ "research","Digit Live Research",1,2,0,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
