@@ -1,4 +1,4 @@
-# Digit Ask — native conversation controller 1.0.4
+# Digit Ask — native conversation controller 1.0.5
 
 Ask owns the registered `chat` route (ordinary directed conversation). It does not directly call external networks, classify research intent, access Corpus tables, or generate language.
 
@@ -47,3 +47,7 @@ identity routing and safety denials retain their existing boundaries.
 Qualification and live question-answer behavior remain pending. When
 search-result titles and excerpts omit a requested fact, inference cannot
 reliably supply it from the evidence alone.
+
+## 1.0.5 — Direct search results to IRC
+
+Operator-approved KISS path: incoming ordinary question → Research service → one DuckDuckGo search → formatted search results → ordinary IRC response. Ask no longer sends research results to the language inference service, asks the model to infer dates or locations, or manufactures an answer from result snippets. The user's exact question is passed unchanged to Research. Research unavailable, empty and denied statuses return directly without invoking language inference. The pre-existing authoritative Identity response and explicitly addressed peer messages keep their previous handling. Tests cover exact query handoff, verbatim results, no inference, denial, unavailability, identity and explicit peer routing. No Core, IRC transport or shared contract changes; native qualification and live operation remain unverified.
