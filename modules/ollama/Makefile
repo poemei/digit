@@ -17,7 +17,7 @@ MODULEDIR ?= $(PREFIX)/modules/$(MODULE_NAME)
 MODULE_USER ?= digit
 MODULE_GROUP ?= digit
 
-CPPFLAGS += -I$(INCLUDE_DIR) -I$(ABI_INCLUDE_DIR) -I../research/include
+CPPFLAGS += -I$(INCLUDE_DIR) -I$(ABI_INCLUDE_DIR)
 MODULE_CFLAGS := $(CFLAGS) -fPIC
 MODULE_SRCS := src/ollama_module.c src/ollama_protocol.c
 MODULE_OBJS := $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(MODULE_SRCS))
