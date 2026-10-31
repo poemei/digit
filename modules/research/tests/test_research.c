@@ -39,8 +39,22 @@ static int unregister_any(const char *name,void *ctx)
 {(void)name;(void)ctx;unregistrations++;return 1;}
 static void reset(void)
 {rate_window=0;rate_used=0;fetches=0;fetch_ok=1;requested[0]=0;}
+static const char *expected_terms(const char *original,char *out,size_t cap)
+{
+ time_t now=time(NULL);struct tm utc;char date[16];
+ const char *subject=NULL;
+ if(!strcmp(original,"when are the Patriots playing again?"))subject="Patriots";
+ if(!strcmp(original,"when are the New England Patriots playing again?"))subject="New England Patriots";
+ if(!subject)return original;
+ if(now==(time_t)-1||!gmtime_r(&now,&utc)||
+    !strftime(date,sizeof date,"%Y-%m-%d",&utc))return original;
+ snprintf(out,cap,"%s next schedule after %s date time location",subject,date);
+ return out;
+}
 static void query_is(const char *expected)
 {
+ char rewritten[800];
+ expected=expected_terms(expected,rewritten,sizeof rewritten);
  const char *q=strstr(requested,"?q=");
  CHECK(q!=NULL);
  if(q){
@@ -102,6 +116,43 @@ int main(void)
   CHECK(strstr(detailed,"Excerpt:")!=NULL);
  }
 
+ /* An ad disclosure is not a search result. */
+ CHECK(research_parse_web_html(
+   "<a class='result-link' href='https://duckduckgo.com/duckduckgo-help-pages/company/ads-by-microsoft-on-duckduckgo-private-search/'>more info</a>"
+   "<a class='result-link' href='https://example.org/real'>Real event</a>"
+   "<td class='result-snippet'>Verified event listing.</td>",&hits)==1);
+ CHECK(!strcmp(hits.hit[0].title,"Real event"));
+ /* The nearest future-dated result wins, independent of provider order.
+  * Use calendar-relative fixtures so this remains a general-purpose test. */
+ {
+  time_t now=time(NULL);struct tm utc;char tomorrow[16],later[16],html[2200];
+  time_t soon=now+86400,week=now+7*86400;
+  CHECK(gmtime_r(&soon,&utc)!=NULL);
+  CHECK(strftime(tomorrow,sizeof tomorrow,"%Y-%m-%d",&utc)>0);
+  CHECK(gmtime_r(&week,&utc)!=NULL);
+  CHECK(strftime(later,sizeof later,"%Y-%m-%d",&utc)>0);
+  snprintf(html,sizeof html,
+   "<a class='result-link' href='https://example.org/later'>Later event</a>"
+   "<td class='result-snippet'>On %s at 5:00 PM in Hall B.</td>"
+   "<a class='result-link' href='https://example.org/soon'>Next event</a>"
+   "<td class='result-snippet'>On %s at 4:25 PM in Hall A, televised on WXYZ.</td>",
+   later,tomorrow);
+  page=html;
+  reset();strcpy(request.query,"when are the New England Patriots playing again?");
+  CHECK(answer_service(&request,sizeof request,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK);
+  CHECK(response.status==RESEARCH_EVIDENCE&&response.sources==1);
+  CHECK(strstr(response.evidence,tomorrow)!=NULL);
+  CHECK(strstr(response.evidence,"https://example.org/soon")!=NULL);
+  CHECK(strstr(response.evidence,"https://example.org/later")==NULL);
+  CHECK(strstr(response.evidence,"4:25 PM")!=NULL);
+  CHECK(strstr(response.evidence,"WXYZ")!=NULL);
+  CHECK(fetches==1);query_is(request.query);
+  /* An ordinary query retains provider order instead of applying dates. */
+  reset();strcpy(request.query,"conference venue details");
+  CHECK(answer_service(&request,sizeof request,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK);
+  CHECK(strstr(response.evidence,"https://example.org/later")!=NULL);
+  CHECK(fetches==1);query_is(request.query);
+ }
  page=fixture;
  const char *queries[]={"C++ & C#", "Go", "R", "when are the Patriots playing again?",
   "next rocket launch", "SpaceX launch", "soil pH", "\"exact phrase\" -excluded site:example.org", "alpha, what is beta?", "learn PHP",NULL};
@@ -172,7 +223,7 @@ int main(void)
  CHECK(service(&request,sizeof request,&response,sizeof response,NULL,NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT);
  CHECK(qualify(&qualification)==STNLABZ_MODULE_OK);
  CHECK(qualification.tests_executed>=10&&qualification.tests_failed==0&&qualification.negative_test_passed);
- CHECK(descriptor.version_major==1&&descriptor.version_minor==5&&descriptor.version_patch==6);
+ CHECK(descriptor.version_major==1&&descriptor.version_minor==5&&descriptor.version_patch==7);
  h.register_command=register_command;h.unregister_command=unregister_any;
  h.register_service=register_service;h.unregister_service=unregister_any;
  CHECK(start(NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT);
