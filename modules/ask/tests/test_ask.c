@@ -117,7 +117,7 @@ int main(void)
  CHECK(ask(8,"hello")==STNLABZ_MODULE_OK);
  CHECK(strstr(reply_buffer,"can't answer")!=NULL);
  CHECK(ask(9,"hello")==STNLABZ_MODULE_OK);
- CHECK(calls_llm==1);
+ CHECK(calls_llm==0&&strstr(reply_buffer,"Research is temporarily unavailable")!=NULL);
  CHECK(stop()==STNLABZ_MODULE_OK);
  printf("Ask controller: %d/%d checks passed\n",checks-failures,checks);
  return failures?1:0;
