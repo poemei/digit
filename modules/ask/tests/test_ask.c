@@ -38,6 +38,8 @@ static stnlabz_module_result_t mocked_service(
   if(scenario==1){
    out->sources=1;
    strcpy(out->evidence,"Next SpaceX launch: Starlink. Rocket: Falcon 9.");
+  }else if(scenario==3){
+   strcpy(out->evidence,"Search completed but returned no relevant sources.");
   }
   *response_used=sizeof *out;return STNLABZ_MODULE_OK;
  }
@@ -104,7 +106,7 @@ int main(void)
  CHECK(!strcmp(reply_buffer,"The answer comes from the language service."));
  CHECK(calls_research==1&&calls_llm==1);
  CHECK(ask(3,"current stock price")==STNLABZ_MODULE_OK);
- CHECK(strstr(reply_buffer,"couldn't verify")!=NULL&&calls_llm==0);
+ CHECK(!strcmp(reply_buffer,"Search completed but returned no relevant sources.")&&calls_llm==0);
  CHECK(ask(4,"prohibited query")==STNLABZ_MODULE_OK);
  CHECK(strstr(reply_buffer,"can't help")!=NULL&&calls_llm==0);
  CHECK(ask(5,"what is your name?")==STNLABZ_MODULE_OK);
