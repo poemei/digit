@@ -18,13 +18,13 @@ MODULE_GROUP ?= digit
 .PHONY: all test install clean
 all: $(TARGET)
 
-$(TARGET): src/research.c include/research.h
+$(TARGET): src/research.c src/research_engine.c src/research_engine.h include/research.h $(ROOT)/include/digit_llm.h
 	@mkdir -p $(BUILD)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared $(LDFLAGS) -o $@ src/research.c $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared $(LDFLAGS) -o $@ src/research.c src/research_engine.c $(LDLIBS)
 
-$(TEST): tests/test_research.c src/research.c include/research.h
+$(TEST): tests/test_research.c src/research.c src/research_engine.c src/research_engine.h include/research.h $(ROOT)/include/digit_llm.h
 	@mkdir -p $(BUILD)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ tests/test_research.c $(LDLIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ tests/test_research.c src/research_engine.c $(LDLIBS)
 
 test: $(TEST)
 	./$(TEST)
