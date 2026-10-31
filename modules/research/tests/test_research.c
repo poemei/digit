@@ -132,6 +132,34 @@ int main(void)
  CHECK(research_terms("learn C#",terms,sizeof terms)&&strstr(terms,"c#")!=NULL);
  CHECK(research_terms("learn PHP",terms,sizeof terms));
  CHECK(research_parse_rss(programming,"learn Go language",&found)==1);
+ /* [AI:GPT-6 | 2026-10-31] Independent general-purpose search fixtures. */
+ {
+  const char *html="<html><body>"
+    "<a class='result-link' href='https://www.patriots.com/schedule/'>"
+    "New England Patriots Schedule</a>"
+    "<td class='result-snippet'>New England Patriots face Miami on "
+    "November 1, 2026 at 4:25 PM ET.</td>"
+    "<a class='result-link' href='https://shop.example.com/fashion'>"
+    "Fashion and clothing</a><td class='result-snippet'>Clothing and bags</td>"
+    "</body></html>";
+  const char *dev="<a class=\"result__a\" href=\"https://www.php.net/manual/en/\">"
+    "PHP Manual</a><a class=\"result__snippet\">"
+    "PHP official programming language documentation, functions and syntax."
+    "</a>";
+  CHECK(research_parse_web_html(html,
+   "when are the New England Patriots playing again?",&found)==1);
+  CHECK(strstr(found.hit[0].title,"Patriots")!=NULL);
+  CHECK(strstr(found.hit[0].excerpt,"November 1")!=NULL);
+  CHECK(research_parse_web_html(html,"when is SpaceX launch?",&found)==0);
+  CHECK(research_parse_web_html(dev,"learn PHP",&found)==1);
+  CHECK(strstr(found.hit[0].excerpt,"functions")!=NULL);
+  CHECK(research_parse_web_html(
+   "<a class='result-link' href='http://127.0.0.1/private'>"
+   "Patriots</a><td class='result-snippet'>Patriots schedule</td>",
+   "Patriots schedule",&found)==0);
+ }
+ /* [End AI:GPT-6] */
+
  CHECK(research_html_text("<html><script>malicious()</script><p>Real PHP documentation "
     "covers functions and modern programming tools.</p></html>",html,sizeof html));
  CHECK(strstr(html,"malicious")==NULL);
