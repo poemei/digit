@@ -1,8 +1,8 @@
 CC ?= cc
 ROOT ?= ../..
-CPPFLAGS += -Iinclude -I$(ROOT)/include $(shell pkg-config --cflags libxml-2.0)
+CPPFLAGS += -Iinclude -I$(ROOT)/include
 CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Wpedantic
-LDLIBS += -lcurl $(shell pkg-config --libs libxml-2.0)
+LDLIBS += -lcurl
 BUILD := build
 TARGET := $(BUILD)/research.so
 TEST := $(BUILD)/test_research
