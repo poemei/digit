@@ -76,3 +76,9 @@ The `chat` controller now detects time-sensitive factual questions and requests 
 Identity authority takes precedence. General chat and peer commands retain their existing route. No IRC, Core, or shared ABI modifications. Classifier tests cover date-dependent questions and unaffected peer/general conversation.
 
 Note: Search feed excerpts are not primary-source verification of the actual launch schedule. Further source-specific verification would be needed to state a confirmed next launch and launch time. Source implementation is committed; native build, installed module versions, hotload, live service invocation and operator acceptance remain unverified.
+
+## v1.0.9 — End-user answer, not research dump
+
+For recognized live factual questions, the controller invokes `digit.research.search.v1` via Core. On successful research, it returns the module's answer verbatim in the 380-byte reply contract. Removed the `Research <timestamp>` wrapper, citations, and raw source excerpts from the conversation. An unavailable research service fails closed with a short message rather than an outdated generated answer.
+
+The Research module v1.2.0 provides a structured next-SpaceX-launch answer; other topical RSS responses are still headline leads. Core and IRC remain unchanged; operator build, qualification, activation and end-to-end validation are pending.
