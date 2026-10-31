@@ -88,7 +88,7 @@ static int earliest_date(const char *src,int today)
  for(const char *p=src;*p;p++){
   int y=0,m=0,d=0,date=0;
   if(p>src&&isalnum((unsigned char)p[-1]))continue;
-  if(isdigit((unsigned char)p[0])&&isdigit((unsigned char)p[1])&&
+  if(strlen(p)>=10U&&isdigit((unsigned char)p[0])&&isdigit((unsigned char)p[1])&&
      isdigit((unsigned char)p[2])&&isdigit((unsigned char)p[3])&&
      p[4]=='-'&&isdigit((unsigned char)p[5])&&
      isdigit((unsigned char)p[6])&&p[7]=='-'&&
@@ -113,7 +113,7 @@ static int earliest_date(const char *src,int today)
    if(isdigit((unsigned char)*q))d=d*10+(*q++-'0');
    if(*q==',')q++;
    while(*q==' ')q++;
-   if(isdigit((unsigned char)q[0])&&isdigit((unsigned char)q[1])&&
+   if(strlen(q)>=4U&&isdigit((unsigned char)q[0])&&isdigit((unsigned char)q[1])&&
       isdigit((unsigned char)q[2])&&isdigit((unsigned char)q[3])&&
       !isdigit((unsigned char)q[4])){
     y=(q[0]-'0')*1000+(q[1]-'0')*100+(q[2]-'0')*10+q[3]-'0';
@@ -178,8 +178,6 @@ static unsigned format_results(const research_hits_t *hits,char *out,size_t cap)
  int conversational=cap>512U;
  if(!hits||!out||cap<2U)return 0;
  out[0]=0;
- /* Temporal questions prefer the nearest explicitly dated future result. */
- if(cap<=512U&&format_next_event(hits,out,cap))return 1;
  for(unsigned i=0;i<hits->count&&i<6U;i++){
   const research_hit_t *h=&hits->hit[i];
   size_t remaining=cap-used;
@@ -216,6 +214,18 @@ static unsigned format_results(const research_hits_t *hits,char *out,size_t cap)
  }
  return count;
 }
+static int wants_next_event(const char *query)
+{
+ char lower[RESEARCH_QUERY_MAX];size_t n;
+ if(!query||strncasecmp(query,"when ",5))return 0;
+ n=strlen(query);
+ if(n>=sizeof lower)return 0;
+ for(size_t i=0;i<n;i++)lower[i]=(char)tolower((unsigned char)query[i]);
+ lower[n]=0;
+ return strstr(lower," again")!=NULL||
+        strstr(lower," next ")!=NULL||
+        strstr(lower," upcoming ")!=NULL;
+}
 static void search(const char *query,research_response_t *out,size_t text_cap)
 {
  research_hits_t hits={0};
@@ -233,7 +243,11 @@ static void search(const char *query,research_response_t *out,size_t text_cap)
   return;
  }
  result=research_search(query,&hits);
- out->sources=format_results(&hits,out->evidence,text_cap);
+ if(result>0&&text_cap<=512U&&wants_next_event(query)&&
+    format_next_event(&hits,out->evidence,text_cap))
+  out->sources=1;
+ else
+  out->sources=format_results(&hits,out->evidence,text_cap);
  out->status=result>0&&out->sources?RESEARCH_EVIDENCE:RESEARCH_UNAVAILABLE;
  if(out->status==RESEARCH_UNAVAILABLE)
   snprintf(out->evidence,sizeof out->evidence,"%s",result<0?
