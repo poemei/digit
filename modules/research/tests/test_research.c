@@ -171,6 +171,16 @@ int main(void)
    CHECK(research_parse_web_html(lite_protocol,"learn PHP",&found)==1);
    CHECK(!strcmp(found.hit[0].url,"https://www.php.net/manual/en/"));
    CHECK(research_parse_web_html(bad,"Patriots schedule",&found)==0);
+   /* Direct HTTPS result URLs retain their original URL escapes. */
+   {
+    const char *direct="<a class='result-link' "
+      "href='https://www.php.net/manual/en/?a=1&amp;b=2'>"
+      "PHP manual</a><td class='result-snippet'>"
+      "PHP official documentation for PHP functions and syntax.</td>";
+    CHECK(research_parse_web_html(direct,"learn PHP",&found)==1);
+    CHECK(!strcmp(found.hit[0].url,
+      "https://www.php.net/manual/en/?a=1&b=2"));
+   }
   }
   CHECK(research_parse_web_html(dev,"learn PHP",&found)==1);
   CHECK(strstr(found.hit[0].excerpt,"functions")!=NULL);
