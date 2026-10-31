@@ -1,4 +1,4 @@
-# Digit Research — 1.5.1 (Unreleased)
+# Digit Research — 1.5.2 (Unreleased)
 
 Research searches the supplied text once and returns source results. It does
 not answer the question, rewrite the query, add search directives, fetch the
@@ -17,7 +17,7 @@ result pages, specialize by subject, or claim that retrieved content is true.
 - The search service returns the results within its existing 8192-byte field.
   `/research` and the Ask-facing service return as many complete result URLs
   as fit their existing short reply boundary (349 and 439 bytes respectively),
-  bounding titles/snippets around those URLs. `sources` counts displayed
+  budgeting a bounded share of space per result so a lengthy first snippet cannot hide later complete URLs. `sources` counts displayed
   results. Long URLs that cannot fit are reported as a reply-size limitation.
 - `RESEARCH_EVIDENCE` preserves the existing ABI value and means retrieved
   search results, not independently verified facts or demonstrated learning.
@@ -50,3 +50,7 @@ runs deterministic positive and negative checks without network access.
 Validation receipts and remaining limitations are recorded in
 `docs/MODULE_ROADMAP.md`. Installation, live Digit routing and operator
 acceptance are separate from source build and test results.
+
+## Result-budget correction — 1.5.2
+
+The existing 1.5.1 formatter allocated all remaining reply space to each result in sequence, allowing a verbose first snippet to crowd out additional retrieved URLs in the 349/439-byte command/Ask replies. The short formatter now budgets at most 170 bytes per result while preserving whole HTTPS URLs and provider order. Full search service responses use a larger per-result budget. A regression fixture uses a deliberately long first description and verifies that the second complete URL survives in a 350-byte result. No query rewriting, source-page summarization, Core or Ask changes were introduced. Native build/test and live operation are not yet verified.
