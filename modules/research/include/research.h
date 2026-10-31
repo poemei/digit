@@ -3,6 +3,9 @@
 #include "stnlabz_abi/module.h"
 #define RESEARCH_QUERY_MAX 256
 #define RESEARCH_EVIDENCE_MAX 8192
+#define RESEARCH_NOT_APPLICABLE 0
+#define DIGIT_RESEARCH_ANSWER_SERVICE "digit.research.answer.v1"
+#define DIGIT_RESEARCH_SEARCH_SERVICE "digit.research.search.v1"
 #define RESEARCH_DENIED 1
 #define RESEARCH_UNAVAILABLE 2
 #define RESEARCH_EVIDENCE 3
