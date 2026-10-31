@@ -271,7 +271,7 @@ static stnlabz_module_result_t service(const void *req,size_t len,void *res,
 static stnlabz_module_result_t command(const stnlabz_module_command_t *cmd,
  stnlabz_module_command_reply_fn reply,void *context,void *unused)
 {
- research_response_t result;char message[900];
+ research_response_t result;char message[380];
  (void)unused;
  if(!cmd||!reply)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  if(!cmd->arguments[0])
@@ -282,7 +282,7 @@ static stnlabz_module_result_t command(const stnlabz_module_command_t *cmd,
   snprintf(message,sizeof message,"%s",result.evidence);
  else
   snprintf(message,sizeof message,
-   "Live research %s; %u attributed sources. %.620s",
+   "Research %s; %u sources: %.235s",
    result.retrieved_utc,result.sources,result.evidence);
  return reply(context,message)?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
 }
@@ -325,7 +325,7 @@ static stnlabz_module_result_t stop(void)
  curl_global_cleanup();return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
- "research","Digit Live Research",1,1,0,
+ "research","Digit Live Research",1,1,1,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
