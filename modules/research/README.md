@@ -1,4 +1,4 @@
-# Digit Research — native module v1.4.10
+# Digit Research — native module v1.5.0
 
 Research is a **general-purpose, subject-independent information acquisition module**. Search terms come from the user's question or learning directive, not from a programmed subject list.
 
@@ -6,10 +6,10 @@ Research is a **general-purpose, subject-independent information acquisition mod
 
 1. The existing `digit.research.answer.v1` service claims factual, current-information, investigation and learning requests. Ordinary conversation remains unclaimed.
 2. Research extracts significant terms from the question. It retains subjects such as `New England Patriots`, `PHP`, `Native C`, `C#`, `C++`, `Go`, `Rust`, and anything else encountered. **These examples are not a subject allowlist.**
-3. It queries an keyless HTTPS web-search page. It rejects results that do not match the actual subject, deduplicates leads, and makes up to three searches with generic schedule, learning or explanatory refinements when initial coverage is sparse.
+3. It queries an keyless HTTPS web-search page. It submits the user's question as provided (excluding a leading assistant addressee) and retains only search hits relevant to that question. Research does not add search terms or perform rewritten follow-up searches.
 4. It fetches up to two HTTPS source pages discovered through search, extracts readable text without executing scripts, and considers that material when the search excerpt lacks a needed date.
-5. Research returns a source-attributed excerpt or, if facts are incomplete, an explicitly identified source lead. Time-oriented questions distinguish source-reported dates from results lacking a date. Where a date cannot be established, Research returns the relevant lead explicitly marked as unconfirmed rather than suppressing it. **No module-to-module-to-module response chain is required.**
-6. The final `/chat` or `/research` reply contains a bounded, source-attributed excerpt or an explicitly unconfirmed lead, including its source URL when it fits the transport reply.
+5. Research returns source-attributed material. For a question about the next scheduled game or event, a listing or navigation page does not qualify as an answer: a future-dated event and time must be present in the retrieved evidence, or the answer is reported as unverified. **No module-to-module-to-module response chain is required.**
+6. The final `/chat` or `/research` reply contains an attributable excerpt when the requested fact is established. For an unverified upcoming event, Research reports that no next event was established, not an arbitrary directory excerpt.
 
 The existing structured SpaceX launch provider remains a successful specialized **optimization**, with the same general search fallback when it does not produce a result. This is not a SpaceX-only system.
 
@@ -39,7 +39,7 @@ make -C modules/research clean all test
 sudo make -C modules/research install
 ```
 
-**Status:** Source and module version updated to 1.4.10; native build and retest after this version correction, installed activation, live retrieval, and operator acceptance remain unverified.
+**Status:** Source and module version updated to 1.5.0; native build and retest after this version correction, installed activation, live retrieval, and operator acceptance remain unverified.
 
 Research removes leading conversational addressees from interrogative queries and supports `when are` schedule phrasing. Unavailable evidence distinguishes provider retrieval failure, zero relevant results, and insufficient factual detail. Live success remains unverified.
 
@@ -64,3 +64,7 @@ The v1.4.8 nested-highlight regression test mistakenly supplied a shadowing `con
 Source-page text is now used to supply dated, source-attributed excerpts to Research's answer selector. Previously it was fetched but discarded. Dated schedule rows are recognized without a team allowlist; unrelated subjects continue through generic dated-context matching. Time-sensitive searches continue refining until a dated hit is found (or three attempts are exhausted), and new dated results can replace weaker leads even when all six slots are occupied. Diagnostics report whether each fetched page supplied a dated passage. The source reader remains bounded; structured content hidden in scripts may not be captured. The presence of a date alone does not establish complete chronological accuracy. Build, full regression tests and live operation are not yet verified.
 
 The reader attempts up to four evidence-bearing source pages (rather than always fetching only hit indexes 0 and 1), skipping those with already-dated excerpts. It records which indexes supplied readable content. The structured WEEK-row optimization is invoked only for schedule-like questions, preserving ordinary temporal research behavior for unrelated requests.
+
+### Search authority and schedule-answer precision (v1.5.0)
+
+Research submits the user's original question to the HTTPS search endpoint, preserving words, order, case and punctuation after removing only a leading assistant addressee such as `digicat,`. It does not add `official`, `upcoming schedule`, `date time`, or other search directives. Search remains a single request rather than automatic reformulations. Internal relevance scoring may tokenize the user's question but must not alter the outgoing query. For next-game/event questions, navigation year lists and general schedule directories cannot qualify as an answer. Page extraction looks for future dated events with a nearby kickoff time, and the selector requires a concrete event before claiming research evidence. The source must still be checked in the live operator environment; search rankings, source layouts and page content are external and unpredictable. This update does not imply a verified live result.
