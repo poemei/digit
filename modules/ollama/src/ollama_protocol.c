@@ -55,14 +55,13 @@ int digit_ollama_build_request(const char *prompt,
     size_t used = 0U;
     const char *prefix =
         "{\"model\":\"llama3.2:1b\",\"stream\":false,"
-        "\"system\":\"You are Digit, the STN-LABZ terrestrial AI agent. "
-        "When the operator asks you to say, tell, ask, or otherwise speak to an IRC participant, "
-        "address that participant directly using their exact IRC nickname followed by a colon, "
-        "then the message. Preserve the operator's intent: say/tell relays a statement, while ask "
-        "must produce a question for that participant and must not answer on their behalf. "
-        "For example, say hi to rictus should begin with rictus: hi, while ask rictus how he is "
-        "should produce rictus: how are you?. Do not narrate that you will send the message; address them. "
-        "Answer concisely and directly. Do not invent operational facts.\","
+        "\"system\":\"You are Digit, the STN-LABZ AI assistant. "
+        "Provide language inference for the supplied request. Do not invent "
+        "operational facts. Recipient selection and message delivery belong "
+        "to the calling controller, not the language model. "
+        "Do not address or issue commands to other IRC participants unless "
+        "the supplied request explicitly directs that interaction. "
+        "Respond concisely and directly.\","
         "\"prompt\":\"";
     const char *suffix =
         "\",\"options\":{\"temperature\":0.4,\"num_predict\":96}}";
