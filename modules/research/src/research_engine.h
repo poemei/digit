@@ -16,6 +16,7 @@ typedef struct {
  unsigned count;
 } research_hits_t;
 
+void research_runtime_log(const char *event,const char *fmt,...);
 int research_terms(const char *question,char *query,size_t cap);
 unsigned research_parse_rss(const char *rss,const char *question,
                             research_hits_t *hits);
