@@ -298,3 +298,9 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 
 - Operator demonstrated that a SpaceX next-launch question returned the unrelated Next clothing retailer. Fixed research query topic extraction and source-level relevance gating instead of accepting the first Bing RSS hit.
 - Added case-specific regression fixtures and checks and expanded upcoming launch search context. No Core/IRC changes. No confirmed compilation, live feed validation or authoritative launch schedule verification yet.
+
+## 2026-10-30 — Digit research answer correction (Research 1.2.0 / Ollama 1.0.9)
+
+- Replaced the user-visible source dump for next-SpaceX-launch questions with a structured no-key launch schedule query to Launch Library 2, provider-matched and future-only, with mission, rocket, location, Pacific target time and status in a single concise answer.
+- Ollama now returns the research module's short answer directly, without a research timestamp, URLs or the first RSS headline. General RSS questions still yield limited topical headline summaries and are not fully validated answers.
+- Added offline regression fixtures for dated launch parsing, timezone formatting, and suppression of irrelevant clothing hits. Source structure checks passed. No native compile, live API query, module hotload or end-user acceptance has been verified.
