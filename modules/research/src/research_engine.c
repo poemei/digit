@@ -238,7 +238,8 @@ static unsigned score(const char *question,const research_hit_t *hit)
 {
  char terms[256],compound[1100],word[48];
  const char *p;
- unsigned matches=0,unique=0;
+ /* [AI:GPT-6 | 2026-10-31 16:39:00 UTC] */
+ unsigned matches=0,unique=0,distinctive=0;
  if(!research_terms(question,terms,sizeof terms))return 0;
  snprintf(compound,sizeof compound,"%s %s",hit->title,hit->excerpt);
  p=terms;
@@ -249,13 +250,19 @@ static unsigned score(const char *question,const research_hit_t *hit)
   while(p[i]&&p[i]!=' '&&i+1<sizeof word){word[i]=p[i];i++;}
   word[i]=0;p+=i;
   if(i<2&&strcmp(word,"c")!=0)continue;
-  if(unique==0&&!has_word(compound,word))return 0;
   unique++;
-  if(has_word(compound,word))matches++;
+  if(has_word(compound,word)){
+   matches++;
+   /* A single distinctive subject word repeated in the headline
+    * and excerpt can identify a relevant abbreviated result. */
+   if(i>=7&&has_word(hit->title,word)&&has_word(hit->excerpt,word))
+    distinctive=1;
+  }
  }
  if(!unique||!matches)return 0;
- if(unique>1&&matches<2)return 0;
+ if(unique>1&&matches<2&&!distinctive)return 0;
  return matches*10+(!strncmp(hit->url,"https://",8)?1:0);
+ /* [End AI:GPT-6] */
 }
 unsigned research_parse_rss(const char *rss,const char *question,
                             research_hits_t *hits)
