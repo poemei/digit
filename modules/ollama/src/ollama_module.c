@@ -185,10 +185,10 @@ static stnlabz_module_result_t chat_controller(
         size_t question_length = strlen(command->arguments);
         if (question_length >= sizeof request.query)
             return reply(reply_context,
-                "Live research request exceeds the supported question length.")
+                "I couldn't check that question.")
                 ? STNLABZ_MODULE_OK : STNLABZ_MODULE_ERR_INVALID_STATE;
         if (!owner || !owner->invoke_service)
-            return reply(reply_context,"Live research is unavailable; I cannot verify a current answer.")
+            return reply(reply_context,"I couldn't verify that right now.")
                 ? STNLABZ_MODULE_OK : STNLABZ_MODULE_ERR_INVALID_STATE;
         evidence = calloc(1,sizeof *evidence);
         if (!evidence)
@@ -202,11 +202,11 @@ static stnlabz_module_result_t chat_controller(
             !memchr(evidence->evidence,0,sizeof evidence->evidence) ||
             evidence->status != RESEARCH_EVIDENCE ||
             evidence->sources == 0U) {
-            const char *failure="Live research could not verify an answer; no offline guess will be used.";
+            const char *failure="I couldn't verify that right now.";
             if (researched == STNLABZ_MODULE_OK &&
                 received_size == sizeof *evidence &&
                 evidence->status == RESEARCH_DENIED)
-                failure="Research request was denied by the safety policy.";
+                failure="I can't help with that request.";
             free(evidence);
             return reply(reply_context,failure)
                 ? STNLABZ_MODULE_OK : STNLABZ_MODULE_ERR_INVALID_STATE;
@@ -215,7 +215,7 @@ static stnlabz_module_result_t chat_controller(
          * Conversation does not expose feed records or rewrite the result. */
         if (strlen(evidence->evidence) >= sizeof summary) {
             free(evidence);
-            return reply(reply_context,"I could not produce a concise verified answer.")
+            return reply(reply_context,"I couldn't verify that right now.")
                 ? STNLABZ_MODULE_OK : STNLABZ_MODULE_ERR_INVALID_STATE;
         }
         memcpy(summary,evidence->evidence,strlen(evidence->evidence)+1U);
