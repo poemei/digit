@@ -246,3 +246,7 @@ No protected Core or other module was changed. Natural-language DSD integration 
 ### Research 1.4.10 test coverage extension (2026-10-31)
 
 The page-evidence regression now exercises HTML-to-text conversion followed by dated passage selection, and schedule-row extraction handles December-to-January date rollover. Source changes have been committed; native module compilation, full test execution, installation, and live operator acceptance remain unverified.
+
+### Research 1.4.10 source coverage and selection boundary
+
+The operator's accepted results included an official schedule at index 2, while the previous reader examined only indexes 0 and 1. The source reader now examines up to four undated hits until the bounded page-read budget is exhausted, with per-index read outcomes, so eligible official pages beyond the first two are not ignored by position alone. Schedule-formatted event rows are considered only for a schedule-like question. Source changes committed; post-change native tests and live qualification are not yet available.
