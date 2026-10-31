@@ -526,7 +526,11 @@ static int decode_search_link(const char *raw,char *out,size_t cap)
   /* Preserve escapes in ordinary destination URLs. HTML-encoded
    * ampersands in href attributes are the only transformation. */
   for(p=raw;*p;p++){
-   if(!strncmp(p,"&amp;",5))p+=4;
+   if(!strncmp(p,"&amp;",5)){
+    if(n+1>=cap)return 0;
+    out[n++]='&';p+=4;
+    continue;
+   }
    if(n+1>=cap)return 0;
    out[n++]=*p;
   }
