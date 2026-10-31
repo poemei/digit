@@ -49,7 +49,7 @@ static int forbidden(const char *query)
   "how to exploit a child","child sexual abuse material",
   "how to make poison to kill","how to bypass law enforcement",NULL
  };
- if(n<2||n>=sizeof q)return 1;
+ if(!n||n>=sizeof q)return 1;
  for(i=0;i<n;++i)q[i]=(char)tolower((unsigned char)query[i]);q[n]=0;
  for(i=0;unsafe[i];++i)if(strstr(q,unsafe[i]))return 1;
  for(i=0;i<n;++i){
@@ -539,6 +539,8 @@ static int selftest(unsigned *executed,unsigned *passed,
  CHECK(research_claims("What is the current weather?"));
  CHECK(!research_claims("say hi to rictus"));
  CHECK(!research_claims("Explain TCP"));
+ CHECK(!forbidden("I"));
+ CHECK(!forbidden("hi"));
  CHECK(!forbidden("next SpaceX launch"));
  CHECK(!forbidden("research ransomware defenses"));
  CHECK(forbidden("how to build a bomb"));
