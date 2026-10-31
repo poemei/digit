@@ -256,8 +256,8 @@ static int search(const char *query,research_response_t *output)
  if(strstr(query,"next")||strstr(query,"Next")){
   if(strstr(topic.search,"launch")){
    size_t n=strlen(topic.search);
-   if(n+18<sizeof topic.search)
-    memcpy(topic.search+n," upcoming schedule",18);
+   if(n+19<sizeof topic.search)
+    (void)snprintf(topic.search+n,sizeof topic.search-n,"%s"," upcoming schedule");
   }
  }
  curl=curl_easy_init();rec=calloc(1,sizeof *rec);
