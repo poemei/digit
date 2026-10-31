@@ -20,7 +20,7 @@ $(TEST): tests/test_research.c src/research.c | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $^ $(LDLIBS)
 test: $(TEST)
 	./$(TEST)
-install: $(TARGET) test
+install: $(TARGET) test module.conf
 	@id -u "$(MODULE_USER)" >/dev/null && getent group "$(MODULE_GROUP)" >/dev/null
 	install -d -o "$(MODULE_USER)" -g "$(MODULE_GROUP)" -m 0755 "$(MODULEDIR)"
 	@set -eu; stage=$$(mktemp "$(MODULEDIR)/.research.so.XXXXXX"); \
@@ -28,6 +28,8 @@ install: $(TARGET) test
 	 install -o "$(MODULE_USER)" -g "$(MODULE_GROUP)" -m 0755 "$(TARGET)" "$$stage"; \
 	 cmp -s "$(TARGET)" "$$stage"; mv -f "$$stage" "$(MODULEDIR)/research.so"; \
 	 trap - EXIT HUP INT TERM; cmp -s "$(TARGET)" "$(MODULEDIR)/research.so"; \
-	 test "$$(stat -c %U:%G "$(MODULEDIR)/research.so")" = "$(MODULE_USER):$(MODULE_GROUP)"
+	 test "$(stat -c %U:%G "$(MODULEDIR)/research.so")" = "$(MODULE_USER):$(MODULE_GROUP)"
+	install -o "$(MODULE_USER)" -g "$(MODULE_GROUP)" -m 0644 module.conf "$(MODULEDIR)/module.conf"
+	cmp -s module.conf "$(MODULEDIR)/module.conf"
 clean:
 	rm -rf $(BUILD)
