@@ -509,7 +509,8 @@ static int selftest(unsigned *executed,unsigned *passed,
  CHECK(make_topic("when is the next SpaceX rocket launch?",&topic));
  CHECK(extract_results(fixture,strlen(fixture),&topic,&r)==1);
  CHECK(r.sources==1);
- CHECK(strstr(r.evidence,"https://example.org/launch")!=NULL);
+ CHECK(strstr(r.evidence,"SpaceX launch schedule")!=NULL);
+ CHECK(strstr(r.evidence,"https://")==NULL);
  CHECK(strstr(r.evidence,"127.0.0.1")==NULL);
  CHECK(strstr(r.evidence,"next.us")==NULL);
  CHECK(!strcmp(topic.search,"spacex launch"));
