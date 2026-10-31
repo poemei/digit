@@ -3,33 +3,6 @@
 #include <string.h>
 #include "ollama_internal.h"
 
-/* Questions whose factual answers depend on the live world must not
- * reach offline generation without evidence. Other chat is unchanged. */
-int digit_ollama_requires_research(const char *question)
-{
- char normalized[512];size_t i,n;int words=0;
- static const char *markers[]={
-  "next ","upcoming ","latest ","today","tonight","tomorrow",
-  "this week","this month","current ","currently","right now",
-  "recent ","live ","schedule","scheduled","launch",
-  "news ","weather","forecast","stock price","exchange rate",
-  "who won","who is winning","when is","when will",
-  "how much is","as of now","opening hours",NULL
- };
- if(!question)return 0;
- n=strlen(question);
- if(n==0)return 0;
- if(n>=sizeof normalized)return 1;
- for(i=0;i<n;++i){
-  unsigned char c=(unsigned char)question[i];
-  normalized[i]=(char)tolower(c);
-  if(isalpha(c))words=1;
- }
- normalized[n]=0;
- if(!words)return 0;
- for(i=0;markers[i];++i)if(strstr(normalized,markers[i]))return 1;
- return 0;
-}
 static int append_char(char *output, size_t output_size, size_t *used, char c)
 {
     if (!output || !used || *used + 1U >= output_size) return 0;
@@ -225,11 +198,6 @@ int digit_ollama_run_selftests(unsigned int *executed,
     expect(!digit_ollama_extract_response(
            "{\"response\":\"\"}", response, sizeof response), &e, &p);
 
-    expect(digit_ollama_requires_research("when is the next SpaceX rocket launch?"), &e, &p);
-    expect(digit_ollama_requires_research("What's the latest NASA news?"), &e, &p);
-    expect(digit_ollama_requires_research("What is the weather tonight?"), &e, &p);
-    expect(!digit_ollama_requires_research("say hi to rictus"), &e, &p);
-    expect(!digit_ollama_requires_research("Explain how TCP works"), &e, &p);
     ne = 1;
     np = !digit_ollama_extract_response(NULL, response, sizeof response);
 
