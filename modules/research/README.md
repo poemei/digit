@@ -1,4 +1,4 @@
-# Digit Research — native module v1.4.9
+# Digit Research — native module v1.4.10
 
 Research is a **general-purpose, subject-independent information acquisition module**. Search terms come from the user's question or learning directive, not from a programmed subject list.
 
@@ -39,7 +39,7 @@ make -C modules/research clean all test
 sudo make -C modules/research install
 ```
 
-**Status:** Source and module version updated to 1.4.9; native build and retest after this version correction, installed activation, live retrieval, and operator acceptance remain unverified.
+**Status:** Source and module version updated to 1.4.10; native build and retest after this version correction, installed activation, live retrieval, and operator acceptance remain unverified.
 
 Research removes leading conversational addressees from interrogative queries and supports `when are` schedule phrasing. Unavailable evidence distinguishes provider retrieval failure, zero relevant results, and insufficient factual detail. Live success remains unverified.
 
@@ -58,3 +58,7 @@ Research now extracts nested-markup search snippets through the closing result e
 ### Qualification correction (v1.4.9)
 
 The v1.4.8 nested-highlight regression test mistakenly supplied a shadowing `const char *html` fixture (with `sizeof` equal to pointer size) as the writable destination for `research_choose_fact`. The regression now uses a separate writable 448-byte response array and checks its content. Research's log writer also handles EINTR and short writes instead of discarding `write`'s result. The operator's v1.4.8 build completed; the test reported 112/113 passing with line 205 failing and two `write` warnings. Revised v1.4.9 build/test and runtime acceptance are pending.
+
+### Precision correction (v1.4.10)
+
+Source-page text is now used to supply dated, source-attributed excerpts to Research's answer selector. Previously it was fetched but discarded. Dated schedule rows are recognized without a team allowlist; unrelated subjects continue through generic dated-context matching. Time-sensitive searches continue refining until a dated hit is found (or three attempts are exhausted), and new dated results can replace weaker leads even when all six slots are occupied. Diagnostics report whether each fetched page supplied a dated passage. The source reader remains bounded; structured content hidden in scripts may not be captured. The presence of a date alone does not establish complete chronological accuracy. Build, full regression tests and live operation are not yet verified.
