@@ -228,8 +228,27 @@ int main(void)
  CHECK(strstr(reply,"PHP programming manual")!=NULL);
  snprintf(facts.hit[0].excerpt,sizeof facts.hit[0].excerpt,
   "There is a news article concerning a football game but its time is not confirmed.");
- CHECK(!research_choose_fact("when is the next game?",&facts,
+ CHECK(research_choose_fact("when is the next game?",&facts,
    reply,sizeof reply,&count));
+ CHECK(strstr(reply,"Date not confirmed")!=NULL);
+ CHECK(strstr(reply,"news article")!=NULL);
+ CHECK(count==1);
+ /* A title-only relevant lead must also be reported without fabricating
+  * the requested time, and the source URL must survive if it fits. */
+ memset(&facts,0,sizeof facts);
+ facts.count=1;facts.hit[0].relevance=35;
+ strcpy(facts.hit[0].title,"New England Patriots next game schedule");
+ strcpy(facts.hit[0].url,"https://www.patriots.com/schedule/");
+ CHECK(research_choose_fact("when are the Patriots playing again?",
+    &facts,reply,sizeof reply,&count));
+ CHECK(strstr(reply,"Date not confirmed")!=NULL);
+ CHECK(strstr(reply,"https://www.patriots.com/schedule/")!=NULL);
+ CHECK(count==1);
+ strcpy(facts.hit[0].excerpt,"The Patriots are scheduled to play on 2026-11-01 at 16:25 ET.");
+ CHECK(research_choose_fact("when are the Patriots playing again?",
+    &facts,reply,sizeof reply,&count));
+ CHECK(strstr(reply,"Source reports:")!=NULL);
+ CHECK(strstr(reply,"2026-11-01")!=NULL);
  }
  printf("Research qualification: %d/%d passed\n",checks-fails,checks);
  return fails?1:0;
