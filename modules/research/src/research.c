@@ -79,7 +79,7 @@ static void audit(const char *query,const char *status,unsigned sources)
  uint64_t h=UINT64_C(14695981039346656037);
  const unsigned char *p=(const unsigned char *)query;
  while(*p){h^=*p++;h*=UINT64_C(1099511628211);}
- fprintf(stderr,"[RESEARCH] query_hash=%016llx disposition=%s sources=%u\n",
+ research_runtime_log("AUDIT","query_hash=%016llx disposition=%s sources=%u",
   (unsigned long long)h,status,sources);
 }
 /* Bounded RSS parser for a fixed, keyless, HTTPS search endpoint.
@@ -738,7 +738,7 @@ static stnlabz_module_result_t stop(void)
 static const stnlabz_module_descriptor_t descriptor={
  /* AI version progression: 1.4.0 -> 1.4.1 (approved revision arithmetic). */
  /* AI Learn that a modules descriptor belongs at the top of the modules primary .c file, not at the bottom */
- "research","Digit Live Research",1,4,1,
+ "research","Digit Live Research",1,4,2,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
