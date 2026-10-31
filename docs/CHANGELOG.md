@@ -326,3 +326,9 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 - Preserved the accepted SpaceX structured-data path as an optimization with general-search fallback, and preserved `/research`, `digit.research.search.v1` and `digit.research.answer.v1` ABI contracts. No Core, IRC, Ask or Ollama modifications.
 - New standalone `research_engine.c/.h` and tests for Patriots schedule material, PHP reference facts, C/C#/Go term handling, HTML extraction, subject relevance and date-grounded answer selection. The independent engine does not require a nested language-model service call, respecting the no multi-module response-chain boundary.
 - This is a general search-and-extraction capability, not a verified fully reasoned researcher or persistent learning module. The unofficial search index and short excerpt selection remain quality limits. **Source committed only; native compilation, tests and live integration remain unverified.**
+
+## 2026-10-31 — Research 1.4.0 offline qualification correction
+
+- Operator's clean compilation succeeded, but tests reported 68/70 because two stale assertions expected the new general-purpose Research service to reject a weather query. The service now legitimately searches that subject; the log recorded general evidence with three sources.
+- Replaced the live-network-dependent assertions in `modules/research/tests/test_research.c` with deterministic intent coverage for weather, Patriots, PHP and Native C. Existing fixture tests continue to exercise relevance, parsing and answer selection.
+- Test source committed; rerun results and runtime acceptance have not been claimed. No Core, IRC, Ask, Ollama or production Research source change for this correction.
