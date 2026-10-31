@@ -1,4 +1,4 @@
-# Digit Research — native module v1.4.3
+# Digit Research — native module v1.4.4
 
 Research is a **general-purpose, subject-independent information acquisition module**. Search terms come from the user's question or learning directive, not from a programmed subject list.
 
