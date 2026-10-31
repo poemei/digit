@@ -18,7 +18,7 @@
 #define RESEARCH_HTTP_LIMIT (4U * 1024U * 1024U)
 #define RESEARCH_TEXT_LIMIT (512U * 1024U)
 #define RESEARCH_MAX_SEARCHES 3U
-#define RESEARCH_MAX_READS 2U
+#define RESEARCH_MAX_READS 4U
 
 typedef struct {
  char *data;
@@ -494,7 +494,11 @@ int research_extract_page_fact(const char *text,const char *question,
  if(!text||!question||!excerpt||cap<64)return 0;
  excerpt[0]=0;
  if(!research_terms(question,terms,sizeof terms))return 0;
- if(temporal_question(question)&&scheduled_row(text,excerpt,cap))return 1;
+ if(temporal_question(question)&&
+    (strstr(question,"schedule")||strstr(question,"playing")||
+     strstr(question,"when are")||strstr(question,"when do")||
+     strstr(question,"next game"))&&
+    scheduled_row(text,excerpt,cap))return 1;
  for(size_t offset=0,len=strlen(text);offset<len;offset+=220){
   char window[481];size_t take=len-offset;unsigned matches=0;
   const char *p=terms;
@@ -849,10 +853,14 @@ int research_general_answer(const char *question,const stnlabz_module_host_t *ho
   return 0;
  }
  research_runtime_log("SEARCH","outcome=accepted hits=%u",combined.count);
- for(unsigned i=0;i<combined.count&&i<RESEARCH_MAX_READS;i++){
-  char *body=calloc(RESEARCH_HTTP_LIMIT+1,1);
-  char *plain=calloc(RESEARCH_TEXT_LIMIT+1,1);
+ unsigned reads=0;
+ for(unsigned i=0;i<combined.count&&reads<RESEARCH_MAX_READS;i++){
+  char *body,*plain;
   size_t received=0;
+  if(date_evidence(combined.hit[i].excerpt))continue;
+  reads++;
+  body=calloc(RESEARCH_HTTP_LIMIT+1,1);
+  plain=calloc(RESEARCH_TEXT_LIMIT+1,1);
   if(!body||!plain){free(body);free(plain);continue;}
   if(https_get(combined.hit[i].url,body,RESEARCH_HTTP_LIMIT+1,&received)&&
      research_html_text(body,plain,RESEARCH_TEXT_LIMIT+1)){
@@ -867,7 +875,8 @@ int research_general_answer(const char *question,const stnlabz_module_host_t *ho
     }else research_runtime_log("SOURCE_READ",
        "index=%u outcome=no_relevant_dated_context bytes=%zu",i,received);
    }
-  }
+  }else research_runtime_log("SOURCE_READ",
+      "index=%u outcome=unreadable bytes=%zu",i,received);
   free(body);free(plain);
  }
  {
