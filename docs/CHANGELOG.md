@@ -281,3 +281,9 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 - Removed the mandatory commercial Brave Search API and its credential path following Director objection to pay-as-you-go dependency.
 - Switched the native research module to a fixed, keyless HTTPS public RSS search endpoint. Preserved source attribution, size limits, rate limits, safety gate, audit hashing, and fail-closed behavior.
 - Replaced test fixtures and removed JSON search-provider dependency. The RSS endpoint is unofficial and its uptime/format are unguaranteed. No compilation, network test, installed-state verification, or DSD routing integration has been completed.
+
+## 2026-10-30 — Ollama v1.0.7 live-research chat route
+
+- Corrected the actual root cause of stale launch answers: `chat` previously invoked Ollama without the `digit.research.search.v1` service. The module now routes time-sensitive questions through the existing Core service registry and fails closed when research is missing or unavailable.
+- Added deterministic routing classifier tests, linked the existing research service contract, and preserved identity precedence/general peer behavior; no Core or IRC edits.
+- Build, module activation, live search success, and case-specific result verification remain unverified. Search excerpts alone are not proof of a particular launch time.
