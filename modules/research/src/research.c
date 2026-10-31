@@ -25,7 +25,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h);
 static stnlabz_module_result_t stop(void);
 /* Operator rule: module descriptor belongs at the top of the primary C file. */
 static const stnlabz_module_descriptor_t descriptor={
- "research","Digit Live Research",1,4,4,
+ "research","Digit Live Research",1,4,5,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
@@ -642,7 +642,7 @@ static stnlabz_module_result_t answer_service(const void *req,size_t len,
  if(!permitted_rate()){
   reply->status=RESEARCH_UNAVAILABLE;
   snprintf(reply->evidence,sizeof reply->evidence,
-   "I couldn't verify that right now.");
+   "Research rate limit reached. Please retry in a minute.");
   audit(request->query,"rate-limited",0);
   return STNLABZ_MODULE_OK;
  }
@@ -662,8 +662,9 @@ static stnlabz_module_result_t answer_service(const void *req,size_t len,
  }else{
   reply->status=RESEARCH_UNAVAILABLE;
   reply->sources=0;
-  snprintf(reply->evidence,sizeof reply->evidence,
-   "I couldn't verify that right now.");
+  if(!reply->evidence[0])
+   snprintf(reply->evidence,sizeof reply->evidence,
+    "Research could not establish an answer.");
   audit(request->query,"unverified",0);
  }
  return STNLABZ_MODULE_OK;
@@ -692,8 +693,9 @@ static stnlabz_module_result_t command(const stnlabz_module_command_t *cmd,
   result.status=RESEARCH_EVIDENCE;
  }else{
   result.status=RESEARCH_UNAVAILABLE;
-  snprintf(result.evidence,sizeof result.evidence,
-   "I couldn't verify that right now.");
+  if(!result.evidence[0])
+   snprintf(result.evidence,sizeof result.evidence,
+    "Research could not establish an answer.");
  }
  snprintf(message,sizeof message,"%.350s",result.evidence);
  return reply(context,message)?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
