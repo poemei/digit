@@ -202,9 +202,12 @@ int main(void)
      "when are the New England Patriots playing again?",&found)==1);
    CHECK(strstr(found.hit[0].excerpt,"Miami Dolphins")!=NULL);
    CHECK(strstr(found.hit[0].excerpt,"November 1, 2026")!=NULL);
-   CHECK(research_choose_fact("when are the Patriots playing again?",
-     &found,html,sizeof html,NULL));
-   CHECK(strstr(html,"November 1")!=NULL);
+   {
+    char answer[448]={0};
+    CHECK(research_choose_fact("when are the Patriots playing again?",
+      &found,answer,sizeof answer,NULL));
+    CHECK(strstr(answer,"November 1")!=NULL);
+   }
   }
   CHECK(research_parse_web_html(dev,"learn PHP",&found)==1);
   CHECK(strstr(found.hit[0].excerpt,"functions")!=NULL);
