@@ -1,4 +1,4 @@
-# Digit Research — 1.5.5 (Unreleased)
+# Digit Research — 1.5.6 (Unreleased)
 
 Research searches the supplied text once and returns source results. It does
 not answer the question, rewrite the query, add search directives, fetch the
@@ -16,7 +16,7 @@ result pages, specialize by subject, or claim that retrieved content is true.
   not cause rejection. There is no secondary keyword relevance gate.
 - The search service returns the results within its existing 8192-byte field.
   `/research` and the Ask-facing service return as many complete result URLs
-  as fit their existing short reply boundary (349 and 1699 bytes respectively),
+  as fit their existing IRC reply boundaries (349 and 439 bytes respectively),
   budgeting a bounded share of space per result so a lengthy first snippet cannot hide later complete URLs. `sources` counts displayed
   results. Long URLs that cannot fit are reported as a reply-size limitation.
 - `RESEARCH_EVIDENCE` preserves the existing ABI value and means retrieved
@@ -79,3 +79,7 @@ handoff, not the factual reliability of live search results or the inference
 provider. If a single search returns no useful factual snippet, Research
 cannot establish the missing fact without another source. Native compilation,
 qualification, activation and operator end-to-end acceptance are outstanding.
+
+## 1.5.6 — KISS direct IRC results
+
+The conversational Research service now formats its single DuckDuckGo result set within the IRC-sized 439-character output boundary. Results are returned as source titles, excerpts and complete URLs, not an inferred or synthesized answer. The explicit `/research` command remains a short search-results view. Service names, result status, safety, rate controls, exact-query encoding, single acquisition and HTTPS protections are unchanged. This version is intended for direct delivery by Ask without invoking language inference. Tests and live deployment require operator qualification.
