@@ -1,4 +1,4 @@
-# Digit Ask — native conversation controller 1.0.0
+# Digit Ask — native conversation controller 1.0.1
 
 Ask owns the registered `chat` route (ordinary directed conversation). It does not directly call external networks, classify research intent, access Corpus tables, or generate language.
 
@@ -24,3 +24,5 @@ sudo make -C modules/ask install
 These source changes are not automatically installed or qualified. The operator controls runtime activation. Verify: normal greeting, authoritative identity, next SpaceX launch, live-information failure, peer-directed ask/tell/say, and an unclaimed technical question.
 
 **State:** Source committed; compilation, qualification, actual activation and operator acceptance pending.
+
+Ask v1.0.1 relays Research-owned unavailable evidence instead of replacing it with a generic verification refusal. Service-call success remains distinct from verified research.
