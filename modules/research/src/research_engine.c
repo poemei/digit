@@ -364,7 +364,7 @@ static int date_evidence(const char *text)
  for(size_t i=0;words[i];i++)if(has_word(text,words[i]))return 1;
  return 0;
 }
-static int choose_fact(const char *question,const research_hits_t *hits,
+int research_choose_fact(const char *question,const research_hits_t *hits,
                        char *answer,size_t cap,unsigned *sources)
 {
  int temporal=temporal_question(question);
@@ -475,13 +475,11 @@ int research_general_answer(const char *question,const stnlabz_module_host_t *ho
    /* Retain the initial excerpt as the default factual candidate.
     * Page content may supplement it if the excerpt lacks an event date. */
    if(!date_evidence(combined.hit[i].excerpt)&&date_evidence(plain)){
-    char *cut=strchr(plain,'.');
-    (void)cut;
     snprintf(combined.hit[i].excerpt,sizeof combined.hit[i].excerpt,
       "%.400s",plain);
    }
   }
   free(body);free(plain);
  }
- return choose_fact(question,&combined,answer,cap,sources);
+ return research_choose_fact(question,&combined,answer,cap,sources);
 }
