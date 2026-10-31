@@ -318,3 +318,11 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 - Operator compile exposed the unit target calling `answer_service` while its definition was hidden behind `#ifndef RESEARCH_TEST`. Moved the guard below the service definitions so both the real module and isolated tests exercise the same callable controller.
 - Corrected misleading one-line control-flow indentation and bounded failed-research message formatting. Runtime registration state is excluded in test builds; test target now exercises module selftest and invalid service input.
 - Source descriptor and module.conf updated to 1.3.1. No claim of a completed local build or operator activation; rerun the exact `make -C modules/research clean all test` gate.
+
+## 2026-10-31 — Research 1.4.0: general subject-term searching
+
+- Replaced the conversational Research service's SpaceX-only acceptance/failure gate with a subject-independent lookup path. Research now extracts significant search terms, searches an existing free keyless RSS endpoint, filters irrelevant hits, retries with broadly applicable query refinements, and reads selected public HTTPS pages.
+- Its native engine selects a short factual excerpt with explicit date/time evidence where a timing question requires it. It returns only the answer text; it does not expose the search index, links, timestamps or raw result lists. Unsupported or unsubstantiated answers fail closed.
+- Preserved the accepted SpaceX structured-data path as an optimization with general-search fallback, and preserved `/research`, `digit.research.search.v1` and `digit.research.answer.v1` ABI contracts. No Core, IRC, Ask or Ollama modifications.
+- New standalone `research_engine.c/.h` and tests for Patriots schedule material, PHP reference facts, C/C#/Go term handling, HTML extraction, subject relevance and date-grounded answer selection. The independent engine does not require a nested language-model service call, respecting the no multi-module response-chain boundary.
+- This is a general search-and-extraction capability, not a verified fully reasoned researcher or persistent learning module. The unofficial search index and short excerpt selection remain quality limits. **Source committed only; native compilation, tests and live integration remain unverified.**
