@@ -105,8 +105,11 @@ int main(void)
  CHECK(research_parse_rss(sports,"when do the New England Patriots play again?",&found)==1);
  CHECK(strstr(found.hit[0].title,"Patriots")!=NULL);
  CHECK(strstr(found.hit[0].excerpt,"Dolphins")!=NULL);
- CHECK(research_parse_rss(sports,"next clothing store",&found)==0);
+ CHECK(research_parse_rss(sports,"next SpaceX launch",&found)==0);
  CHECK(research_terms("learn Golang",terms,sizeof terms));
+ CHECK(research_terms("learn Go",terms,sizeof terms)&&strstr(terms,"go")!=NULL);
+ CHECK(research_terms("learn Native C",terms,sizeof terms)&&strstr(terms," c ")!=NULL);
+ CHECK(research_terms("learn C#",terms,sizeof terms)&&strstr(terms,"c#")!=NULL);
  CHECK(research_terms("learn PHP",terms,sizeof terms));
  CHECK(research_parse_rss(programming,"learn Go language",&found)==1);
  CHECK(research_html_text("<html><script>malicious()</script><p>Real PHP documentation "
