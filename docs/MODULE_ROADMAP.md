@@ -272,3 +272,7 @@ Ask now forwards bounded research evidence and the operator's question through t
 **Limitations:** A search result without the actual date/time cannot establish a factual next-game answer. Source-page reading, retrieval relevance, the hardcoded Research conversational-claim gate, and LLM factual grounding remain unverified for end-to-end correctness. No operator-host compilation or live DuckDuckGo/Ollama execution has been performed. Do not call this a verified repair until the operator demonstrates results with the installed modules.
 
 **Operator checks required:** `make -C modules/research clean all test` and `make -C modules/ask clean all test`, verify module versions and controlled activation, then repeat the ordinary console Patriots question and unrelated research and safety-negative requests. Do not advance development without the operator's explicit acceptance.
+
+### Research 1.5.3 qualification assertion correction — 2026-10-31
+
+Operator executed `make -C modules/research clean all test` after the 1.5.3 source update. Shared module and test binary compiled. Regression reported **204/205 PASS**, failing line 148 because `tests/test_research.c` still asserted descriptor patch version 2 even though the module descriptor was advanced to patch version 3. Corrected the stale assertion to expect 1.5.3 in the complete test file. No engine, Core, ABI, or runtime logic changed in this correction. **Post-correction build/test, installation, activation, and operator end-to-end acceptance remain unverified.**
