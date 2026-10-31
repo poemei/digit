@@ -156,3 +156,7 @@ No protected Core or other module was changed. Natural-language DSD integration 
 ## Live Research v1.1.0 — Director correction: no paid provider
 
 **Source committed, verification pending.** The paid Brave credential dependency was removed. A fixed, keyless public HTTPS RSS search source supplies unverified headline evidence with a strict bounded parser. The interface is unofficial and cannot guarantee broad research coverage. Protected Core and DSD/transport modules remain untouched. Operator compilation, live-source validation, qualification, installation, and DSD consumer integration remain open gates.
+
+## Live question routing — Ollama v1.0.7
+
+**State: source committed; operator build/qualification/hotload/integration verification pending.** `chat` now dispatches time-sensitive factual requests to the existing Core-mediated `digit.research.search.v1` service, refuses unsupported offline generation on missing/failed evidence, and returns attributed live search leads. Existing Core and IRC remain untouched. A primary-source schedule verifier is still required before Digit can confidently assert the next launch date/time.
