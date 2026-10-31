@@ -333,7 +333,7 @@ static unsigned launch_answer(const char *data,size_t bytes,
  struct json_tokener *tok=json_tokener_new();
  struct json_object *root=NULL,*rows=NULL,*chosen=NULL;
  int64_t best=INT64_MAX;int chosen_y=0;size_t i;
- char when[90],mission[110],rocket[70],site[110],status[50];
+ char when[90],mission[76],rocket[56],site[76],status[40];
  int found=0;
  if(!tok)return 0;
  root=json_tokener_parse_ex(tok,data,(int)bytes);
@@ -483,7 +483,7 @@ done:
  if(!ok){
   output->status=RESEARCH_UNAVAILABLE;
   snprintf(output->evidence,sizeof output->evidence,
-   "Live search evidence unavailable. Do not invent an answer.");
+   launch_question(query)?"I could not confirm the next SpaceX launch.":"I could not verify that right now.");
  }
  audit(query,ok?"evidence":"unavailable",output->sources);
  return ok;
