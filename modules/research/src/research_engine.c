@@ -184,8 +184,13 @@ int research_terms(const char *question,char *query,size_t cap)
  }
  if(!count)return 0;
  /* The question supplies intent, while subject terms stay topic-neutral. */
- if(removed&&strstr(question,"next")&&count<13) (void)append_word(query,cap,"next schedule");
- else if(strstr(question,"learn ")||strstr(question,"study ")) (void)append_word(query,cap,"official documentation");
+ if((strstr(question,"next")||strstr(question,"Next")||
+     strstr(question,"when do")||strstr(question,"When do")||
+     strstr(question,"when is")||strstr(question,"When is"))&&count<13)
+  (void)append_word(query,cap,"upcoming schedule");
+ else if(strstr(question,"learn ")||strstr(question,"Learn ")||
+         strstr(question,"study ")||strstr(question,"Study "))
+  (void)append_word(query,cap,"official documentation");
  (void)removed;
  return 1;
 }
@@ -462,7 +467,7 @@ int research_general_answer(const char *question,const stnlabz_module_host_t *ho
   else if(!make_variation(query,question,attempt,variant,sizeof variant))break;
   memset(&batch,0,sizeof batch);
   if(search_once(variant,question,&batch))combine_hits(&combined,&batch);
-  if(combined.count>=3)break;
+  if(combined.count>=3&&attempt>=1)break;
  }
  if(!combined.count)return 0;
  for(unsigned i=0;i<combined.count&&i<RESEARCH_MAX_READS;i++){
