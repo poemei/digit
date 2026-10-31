@@ -737,6 +737,7 @@ static stnlabz_module_result_t stop(void)
 }
 static const stnlabz_module_descriptor_t descriptor={
  /* AI version progression: 1.4.0 -> 1.4.1 (approved revision arithmetic). */
+ /* AI Learn that a modules descriptor belongs at the top of the modules primary .c file, not at the bottom */
  "research","Digit Live Research",1,4,1,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
