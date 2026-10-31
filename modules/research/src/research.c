@@ -207,8 +207,6 @@ static unsigned extract_results(const char *body,size_t len,const topic_t *topic
  const char *cursor,*end;
  if(!body||len<20||len>MAX_HTTP)return 0;
  if(!strstr(body,"<rss")&&!strstr(body,"<feed"))return 0;
- if(!append(response->evidence,sizeof response->evidence,&used,
-  ""))return 0;
  cursor=body;end=body+len;
  while(found<5){
   const char *start=strstr(cursor,"<item>");
@@ -297,9 +295,10 @@ static int selftest(unsigned *executed,unsigned *passed,
 {
  research_response_t r={0};topic_t topic;
  const char *fixture="<?xml version=\"1.0\"?><rss><channel><item>"
- "<title>Launch schedule</title><link>https://example.org/launch</link>"
+ "<title>SpaceX launch schedule</title><link>https://example.org/launch</link>"
  "<pubDate>Fri, 30 Oct 2026 12:00:00 GMT</pubDate>"
- "<description>Schedule &amp; updates</description></item>"
+ "<description>SpaceX rocket launches and updates</description></item>"
+ "<item><title>Next US Official Site Fashion</title><link>https://www.next.us/en</link></item>"
  "<item><title>Bad</title><link>http://127.0.0.1/x</link></item>"
  "</channel></rss>";
  unsigned e=0,p=0;int ne=0,np=0;
@@ -314,6 +313,8 @@ static int selftest(unsigned *executed,unsigned *passed,
  CHECK(r.sources==1);
  CHECK(strstr(r.evidence,"https://example.org/launch")!=NULL);
  CHECK(strstr(r.evidence,"127.0.0.1")==NULL);
+ CHECK(strstr(r.evidence,"next.us")==NULL);
+ CHECK(!strcmp(topic.search,"spacex launch"));
  CHECK(extract_results("{}",2,&topic,&r)==0);
  ne=1;np=extract_results("<rss><item>",11,&topic,&r)==0;
  #undef CHECK
