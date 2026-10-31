@@ -81,6 +81,44 @@ int main(void)
  CHECK(negative_executed==1&&negative_passed==1);
  CHECK(service(NULL,0,NULL,0,NULL,NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT);
  }
+
+ {
+ char terms[300],html[500];
+ research_hits_t found={0};
+ const char *sports="<?xml version=\"1.0\"?><rss><channel>"
+ "<item><title>Unrelated clothing store</title>"
+ "<link>https://shop.example.com/next</link>"
+ "<description>Fashion and accessories</description></item>"
+ "<item><title>New England Patriots next game schedule</title>"
+ "<link>https://sports.example.com/patriots</link>"
+ "<pubDate>Sat, 31 Oct 2026 08:00:00 GMT</pubDate>"
+ "<description>Patriots play Miami Dolphins Sunday November 1 at 4:25 PM ET</description></item>"
+ "</channel></rss>";
+ const char *programming="<?xml version=\"1.0\"?><rss><channel>"
+ "<item><title>The Go Programming Language - Documentation</title>"
+ "<link>https://go.example.com/docs</link>"
+ "<description>Official Go language documentation, packages and examples</description></item>"
+ "</channel></rss>";
+ CHECK(research_terms("when do the New England Patriots play again?",terms,sizeof terms));
+ CHECK(strstr(terms,"patriots")!=NULL);
+ CHECK(strstr(terms,"spacex")==NULL);
+ CHECK(research_parse_rss(sports,"when do the New England Patriots play again?",&found)==1);
+ CHECK(strstr(found.hit[0].title,"Patriots")!=NULL);
+ CHECK(strstr(found.hit[0].excerpt,"Dolphins")!=NULL);
+ CHECK(research_parse_rss(sports,"next clothing store",&found)==0);
+ CHECK(research_terms("learn Golang",terms,sizeof terms));
+ CHECK(research_terms("learn PHP",terms,sizeof terms));
+ CHECK(research_parse_rss(programming,"learn Go language",&found)==1);
+ CHECK(research_html_text("<html><script>malicious()</script><p>Real PHP documentation "
+    "covers functions and modern programming tools.</p></html>",html,sizeof html));
+ CHECK(strstr(html,"malicious")==NULL);
+ CHECK(strstr(html,"PHP documentation")!=NULL);
+ CHECK(research_grounded("Patriots play Miami on November 1 at 4:25 PM",
+    "Patriots play Miami on November 1 at 4:25 PM"));
+ CHECK(!research_grounded("Patriots play Miami on November 12",
+    "Patriots play Miami on November 1"));
+ CHECK(!research_grounded("https://sports.example.com","evidence"));
+ }
  printf("Research qualification: %d/%d passed\n",checks-fails,checks);
  return fails?1:0;
 }
