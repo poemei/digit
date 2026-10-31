@@ -1,28 +1,36 @@
 # Digit Research — native module v1.4.0
 
-**Research is topic-independent.** A question or research/learning instruction determines search terms at runtime, not a hardcoded list of technologies, sports teams, companies or languages.
+Research is a **general-purpose, subject-independent information acquisition module**. Search terms come from the user's question or learning directive, not from a programmed subject list.
 
-## Flow
+## Processing flow
 
-1. Research's `digit.research.answer.v1` service decides whether the utterance calls for investigation. Unclaimed ordinary conversation returns `RESEARCH_NOT_APPLICABLE`.
-2. For a claimed question, Research extracts meaningful words from the question, retaining the subject and request intent. Examples are `patriots play schedule`, `php official documentation`, `native c official documentation`, `go official documentation`, and `rust official documentation`—**examples, not subject-specific rules**.
-3. It searches a public, keyless HTTPS RSS search endpoint. It rejects unrelated entries based on subject terms, consolidates unique results and refines the search when evidence is sparse. Refinements are selected from general learning, scheduling and explanatory intents, not topic names.
-4. It follows up to two HTTPS source pages discovered from those results, with TLS verification, no redirects or proxies, a socket-level restriction against private/reserved destinations and bounded response sizes. HTML scripts, styles and navigation are excluded from extracted text.
-5. Research assembles a bounded evidence prompt and, when needed, calls the separately registered `digit.llm.generate` language generator **through Core**. Ollama provides language only; it does not classify questions, search, choose sources or own the response. The prompt demands concise evidence-only answers. Generated answers containing unsupported numbers or source URLs are rejected.
-6. Research returns the answer via its service, without search logs, URLs or raw article dumps. If available evidence cannot support a factual answer, it says so briefly rather than guessing.
+1. The existing `digit.research.answer.v1` service claims factual, current-information, investigation and learning requests. Ordinary conversation remains unclaimed.
+2. Research extracts significant terms from the question. It retains subjects such as `New England Patriots`, `PHP`, `Native C`, `C#`, `C++`, `Go`, `Rust`, and anything else encountered. **These examples are not a subject allowlist.**
+3. It queries an unofficial, free, keyless HTTPS RSS search endpoint. It rejects results that do not match the actual subject, deduplicates leads, and makes up to three searches with generic schedule, learning or explanatory refinements when initial coverage is sparse.
+4. It fetches up to two HTTPS source pages discovered through search, extracts readable text without executing scripts, and considers that material when the search excerpt lacks a needed date.
+5. Research itself selects a relevant factual excerpt as a concise answer. Time-oriented questions need explicit date/time evidence; otherwise they receive a brief inability-to-verify response. **No module-to-module-to-module response chain is required.**
+6. The final `/chat` or `/research` reply contains the selected information, not URLs, research timestamps, source listings or raw multi-result dumps.
 
-The existing structured SpaceX launch provider remains a narrow optimization **with general search fallback**. It is not a subject limit or a model for adding one hardcoded handler per topic. The existing `digit.research.search.v1` service is preserved. Explicit `/research` also uses the new general workflow.
+The existing structured SpaceX launch provider remains a successful specialized **optimization**, with the same general search fallback when it does not produce a result. This is not a SpaceX-only system.
 
-## Boundaries and important limits
+## Contracts and boundaries
 
-- No pay-as-you-go search APIs, credentials, or subscriptions are required.
-- Web results and generated prose are **not inherently verified facts**. The module uses relevance filters, short multi-source excerpts and numeric grounding checks; these cannot guarantee full semantic truth, freshness, or agreement between sources. The public RSS endpoint is unofficial and may have coverage, access or ranking issues. The configured local LLM can still omit supported facts or produce wording errors.
-- Its general research flow can retrieve material about PHP, Native C, C#, C++, HTML, CSS, Go, Rust and other subjects. This implementation **does not yet write learned facts into Digit's persistent knowledge**, which is separate future work and remains authorization-gated.
-- The module does not autonomously install tools, execute material from pages, or change project code. Source content is untrusted data, not instructions.
-- Search rate limit: 12 claimed queries per minute; up to three search attempts and two source-page reads per request. Individual HTTPS calls have a bounded response size and timeout. General answer synthesis requires the existing Core-mediated `digit.llm.generate` service.
-- Safety screening remains a limited phrase-based gate, not a comprehensive guarantee against harmful content.
+- `/research`, `digit.research.search.v1` and `digit.research.answer.v1` remain registered. Core, shared ABI, IRC, Ask and Ollama code are unchanged.
+- No paid API key, credentials, new provider, or additional general-purpose module is required.
+- Read-only HTTPS; TLS verification, socket-level checks against private/reserved destinations, no redirects or proxies, bounded response sizes, per-call timeouts and an existing 12-per-minute research gate.
+- No execution of retrieved instructions or code. The limited harmful-intent gate remains in Research.
+- Retrieval, extraction and answer selection work independently of Ollama. Ollama does **not** own research, choose sources, classify research intent or become a dependency of the Research module.
+- **Limits:** Bing RSS is an unofficial source and may be sparse, unavailable, stale or incomplete. Relevance and date checks cannot fully establish truth, source authority, schedule freshness, semantic contradictions or comprehensive factual answers. A short source excerpt may lack the complete answer; in that case Research should decline rather than invent one. This is a functioning general *search and reading workflow*, **not** full ChatGPT-grade research reasoning or an autonomous learning/knowledge-storage system.
+- Learning directions retrieve evidence; they **do not yet persist knowledge or establish demonstrated competence**. Retention and validation are separate authorized work.
 
-## Build and qualification (operator-controlled)
+## Source and qualification
+
+- `src/research.c`: controller, safety gate, Core-mediated service and explicit command.
+- `src/research_engine.c`: term extraction, keyless search, result relevance, bounded page reading and grounded answer extraction.
+- `src/research_engine.h`: independent engine contract.
+- `tests/test_research.c`: fixture-based tests for unrelated result rejection, Patriots schedule facts, PHP documentation, Go, Native C, C#, HTML handling, missing dates, and retained SpaceX behavior.
+
+Operator-controlled build gate:
 
 ```sh
 git pull
@@ -30,6 +38,4 @@ make -C modules/research clean all test
 sudo make -C modules/research install
 ```
 
-The native C module and test target compile `src/research.c` plus `src/research_engine.c` with libcurl, json-c and pthread. Offline tests exercise term generation, subject filtering, RSS/HTML extraction, programming language terminology, result grounding and the previous structured launch path.
-
-**Source committed.** Native compilation, qualifications, live provider retrieval, activation and operator acceptance must be distinguished. No Core, ABI, IRC, Ask or Ollama source was changed as part of this release.
+**Status:** Source committed; native build, test execution, active runtime and client acceptance have not been independently established.
