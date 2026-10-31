@@ -152,3 +152,7 @@ Required gate: `make -C modules/ollama clean all test`, qualification evidence i
 The native `modules/research` v1.0.0 module registers `/research` and Core-mediated `digit.research.search.v1`. It uses a fixed HTTPS search-provider endpoint, strict SafeSearch, read-only requests, bounded responses, guarded credentials, and a per-minute query budget. Source excerpts are untrusted and explicitly not evidence of independently verified events. A local deterministic denial gate covers selected harmful actionable requests but does **not** claim comprehensive content-safety classification.
 
 No protected Core or other module was changed. Natural-language DSD integration remains a separate operator-authorized step. No build/test, deployment, live connection, end-to-end result or acceptance is claimed. Next required check: `make -C modules/research clean all test`, then authorized credential provisioning and operator-controlled activation/client testing.
+
+## Live Research v1.1.0 — Director correction: no paid provider
+
+**Source committed, verification pending.** The paid Brave credential dependency was removed. A fixed, keyless public HTTPS RSS search source supplies unverified headline evidence with a strict bounded parser. The interface is unofficial and cannot guarantee broad research coverage. Protected Core and DSD/transport modules remain untouched. Operator compilation, live-source validation, qualification, installation, and DSD consumer integration remain open gates.
