@@ -121,6 +121,9 @@ int main(void)
   /* One generic query word must not make an unrelated result relevant. */
   CHECK(research_parse_rss(short_title,
    "when is the next rocket launch schedule?",&found)==0);
+  /* Repeating the same word must not satisfy the two-word threshold. */
+  CHECK(research_parse_rss(short_title,
+   "rocket launch schedule schedule schedule",&found)==0);
  }
  /* [End AI:GPT-6] */
  CHECK(research_terms("learn Golang",terms,sizeof terms));
