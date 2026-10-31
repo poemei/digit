@@ -1,4 +1,4 @@
-# Digit Research — native module v1.4.7
+# Digit Research — native module v1.4.8
 
 Research is a **general-purpose, subject-independent information acquisition module**. Search terms come from the user's question or learning directive, not from a programmed subject list.
 
@@ -39,7 +39,7 @@ make -C modules/research clean all test
 sudo make -C modules/research install
 ```
 
-**Status:** Source and module version updated to 1.4.6; native build and retest after this version correction, installed activation, live retrieval, and operator acceptance remain unverified.
+**Status:** Source and module version updated to 1.4.8; native build and retest after this version correction, installed activation, live retrieval, and operator acceptance remain unverified.
 
 Research removes leading conversational addressees from interrogative queries and supports `when are` schedule phrasing. Unavailable evidence distinguishes provider retrieval failure, zero relevant results, and insufficient factual detail. Live success remains unverified.
 
@@ -50,3 +50,7 @@ For each general search attempt, Research appends `RESEARCH SEARCH_QUERY terms=<
 ### Evidence-preserving result handling (v1.4.7)
 
 When the search returns relevant results but no dated statement suitable for a scheduling answer, Research returns a clearly identified source lead rather than an empty result. Source statements are attributed, and uncertainty is not concealed. The Research log records each considered hit with its title, excerpt, URL, and whether a recognized date appeared. Schedule query variations no longer repeat `schedule`. The original host-level binary compilation, full test suite, live source-date interpretation, and operator acceptance remain unverified.
+
+### Search snippet and large-page repair (v1.4.8)
+
+Research now extracts nested-markup search snippets through the closing result element, rather than stopping at the first bold or emphasis tag. The bounded source fetch limit increases from 512 KiB to 4 MiB, while the extracted text cap increases to 96 KiB. HTTP failures record the active byte cap. These are bounded acquisition repairs; the operator's Patriots example demonstrated six accepted hits with damaged snippets and a 508403-byte HTTP write failure. Native test execution and live retrieval acceptance are still pending.
