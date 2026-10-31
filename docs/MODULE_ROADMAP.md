@@ -168,3 +168,7 @@ No protected Core or other module was changed. Natural-language DSD integration 
 ## Research v1.1.2 — launch question false-positive fix
 
 **Source committed; live qualification pending.** A real operator report exposed a complete semantic failure: a query for SpaceX's next launch produced a fashion-retailer result. Native Research now strips stopwords and enforces subject terms in results before treating the RSS item as an evidence lead. The offending retailer is part of the regression fixture. Compilation, search quality, installed activation and final schedule verification remain separate operator gates.
+
+## Research 1.2.0 / Ollama 1.0.9 — direct answers, 2026-10-30
+
+**State: source committed; operator tests and acceptance outstanding.** The Director required end-user responses to contain requested facts only, with no links, snippets, or research commentary. The native Research module now queries a free structured launch schedule for SpaceX launch questions, and the conversation controller presents a concise answer. No protected Core, IRC or ABI changes. General live factual questions still lack broad structured verification and should not be represented as solved. Compile, automated tests, admission, activation, live source validation and operator acceptance remain independent gates.
