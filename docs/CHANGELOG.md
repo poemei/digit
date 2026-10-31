@@ -275,3 +275,9 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 - Added an independent C module at `modules/research`: bounded Brave Search HTTPS source retrieval, strict provider SafeSearch, fixed network destination, no redirects or arbitrary-page requests, credential mode checks, operator-visible `/research`, Core-mediated `digit.research.search.v1` service, resource rate limiting, deterministic intent safeguards, and hashed request disposition audit.
 - Evidence reports include source citations and UTC retrieval time. Absence of evidence fails closed; the module does not fabricate launch schedules.
 - Qualification now executes deterministic checks; operator compilation, live API credentials, DSD service integration, activation, and end-to-end testing are pending. Source edits do not modify Core or another module.
+
+## 2026-10-30 — Live Research v1.1.0 keyless correction
+
+- Removed the mandatory commercial Brave Search API and its credential path following Director objection to pay-as-you-go dependency.
+- Switched the native research module to a fixed, keyless HTTPS public RSS search endpoint. Preserved source attribution, size limits, rate limits, safety gate, audit hashing, and fail-closed behavior.
+- Replaced test fixtures and removed JSON search-provider dependency. The RSS endpoint is unofficial and its uptime/format are unguaranteed. No compilation, network test, installed-state verification, or DSD routing integration has been completed.
