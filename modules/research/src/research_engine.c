@@ -245,7 +245,7 @@ static unsigned score(const char *question,const research_hit_t *hit)
   if(!*p)break;
   while(p[i]&&p[i]!=' '&&i+1<sizeof word){word[i]=p[i];i++;}
   word[i]=0;p+=i;
-  if(i<2&&!strcmp(word,"c")!=0)continue;
+  if(i<2&&strcmp(word,"c")!=0)continue;
   if(unique==0&&!has_word(compound,word))return 0;
   unique++;
   if(has_word(compound,word))matches++;
