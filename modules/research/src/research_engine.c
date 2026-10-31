@@ -29,7 +29,7 @@ typedef struct {
  * events to Digit's existing log, without creating another log file. */
 void research_runtime_log(const char *event,const char *fmt,...)
 {
- char detail[320],line[512],stamp[32];
+ char detail[1800],line[1900],stamp[32];
  struct tm utc; time_t now; va_list ap;
  int fd,n;
  if(!event||!fmt)return;
@@ -616,8 +616,19 @@ static int search_once(const char *terms,const char *question,
  int ok=0;
  if(!curl)return -1;
  url=curl_easy_escape(curl,terms,0);
- if(!url||snprintf(address,sizeof address,
-     RESEARCH_SEARCH "?q=%s",url)>=(int)sizeof address)goto done;
+ if(!url){
+  research_runtime_log("SEARCH_BUILD","outcome=encoding_failed");
+  goto done;
+ }
+ if(snprintf(address,sizeof address,
+     RESEARCH_SEARCH "?q=%s",url)>=(int)sizeof address){
+  research_runtime_log("SEARCH_BUILD","outcome=url_too_long");
+  goto done;
+ }
+ /* Operator diagnostic: exact constructed search and exact HTTPS URL.
+  * URL contains only locally encoded search terms; no credentials. */
+ research_runtime_log("SEARCH_QUERY","terms=%s",terms);
+ research_runtime_log("SEARCH_REQUEST","url=%s",address);
  body=calloc(RESEARCH_HTTP_LIMIT+1,1);
  if(!body)goto done;
  if(!https_get(address,body,RESEARCH_HTTP_LIMIT+1,&length)){
