@@ -123,8 +123,10 @@ static stnlabz_module_result_t controller(
      snprintf(message,sizeof message,"%s",research_out->evidence);
     else if(research_out->status==RESEARCH_DENIED)
      snprintf(message,sizeof message,"I can't help with that request.");
+    else if(research_out->status==RESEARCH_UNAVAILABLE&&research_out->evidence[0])
+     snprintf(message,sizeof message,"%s",research_out->evidence);
     else snprintf(message,sizeof message,
-       "I couldn't verify that information right now.");
+       "Research could not establish an answer.");
     free(research_out);
     return reply_text(reply,ctx,message)?
      STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
@@ -209,7 +211,7 @@ static stnlabz_module_result_t stop(void)
  return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
- "ask","Digit Ask Controller",1,0,0,
+ "ask","Digit Ask Controller",1,0,1,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
