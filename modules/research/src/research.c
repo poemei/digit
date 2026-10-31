@@ -736,7 +736,8 @@ static stnlabz_module_result_t stop(void)
  curl_global_cleanup();return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
- "research","Digit Live Research",1,4,0,
+ /* AI version progression: 1.4.0 -> 1.4.1 (approved revision arithmetic). */
+ "research","Digit Live Research",1,4,1,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
