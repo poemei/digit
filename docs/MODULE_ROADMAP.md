@@ -258,3 +258,7 @@ The operator's accepted results included an official schedule at index 2, while 
 ### Research 1.5.0 source-level corrections and diagnostic scope
 
 The Research term builder no longer appends search modifiers. The outbound HTTPS request sends the user's exact wording after the leading conversational addressee. For next-event questions, the answer selector requires a future dated event with a nearby time; date-like navigation fragments cannot be returned as successful evidence. Calendar month recognition excludes player names that begin with a month abbreviation (for example `Maye`). Regression fixtures now include the verbatim Patriots question and both navigation-year and non-month-name false positives. Complete native compilation, executable regressions, live source interpretation and operator acceptance remain outstanding.
+
+## Research 1.5.2 — Fair result formatting (2026-10-31)
+
+Source inspection identified that the existing short reply formatter spent the entire remaining reply budget on the first verbose result. The correction uses per-result budgets, preserving full URLs and source order so later results are not suppressed by oversized snippets. This is limited to Research; the established ABI, Core and Ask remain unchanged. New regression checks long excerpts in a 350-byte buffer. Source commit is not a native qualification receipt: compilation, tests, installation and live routing remain unverified.
