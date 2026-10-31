@@ -293,3 +293,8 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 - Identified output-contract mismatch: the Core route reply buffer is only 512 bytes, while Ollama's new research response was constructed in an 850-byte buffer and the Research command in a 900-byte buffer. Oversized responses can be rejected without a visible reply.
 - Bounded Ollama chat research replies to 380 bytes (v1.0.8) and Research command replies to 380 bytes (v1.1.1), leaving margin for formatting; synchronized Research module configuration version.
 - No protected Core or IRC changes. Build/runtime verification remains pending.
+
+## 2026-10-30 — Live Research v1.1.2 relevance correction
+
+- Operator demonstrated that a SpaceX next-launch question returned the unrelated Next clothing retailer. Fixed research query topic extraction and source-level relevance gating instead of accepting the first Bing RSS hit.
+- Added case-specific regression fixtures and checks and expanded upcoming launch search context. No Core/IRC changes. No confirmed compilation, live feed validation or authoritative launch schedule verification yet.
