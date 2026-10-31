@@ -1,4 +1,4 @@
-# Digit Research — native module v1.4.8
+# Digit Research — native module v1.4.9
 
 Research is a **general-purpose, subject-independent information acquisition module**. Search terms come from the user's question or learning directive, not from a programmed subject list.
 
@@ -39,7 +39,7 @@ make -C modules/research clean all test
 sudo make -C modules/research install
 ```
 
-**Status:** Source and module version updated to 1.4.8; native build and retest after this version correction, installed activation, live retrieval, and operator acceptance remain unverified.
+**Status:** Source and module version updated to 1.4.9; native build and retest after this version correction, installed activation, live retrieval, and operator acceptance remain unverified.
 
 Research removes leading conversational addressees from interrogative queries and supports `when are` schedule phrasing. Unavailable evidence distinguishes provider retrieval failure, zero relevant results, and insufficient factual detail. Live success remains unverified.
 
@@ -54,3 +54,7 @@ When the search returns relevant results but no dated statement suitable for a s
 ### Search snippet and large-page repair (v1.4.8)
 
 Research now extracts nested-markup search snippets through the closing result element, rather than stopping at the first bold or emphasis tag. The bounded source fetch limit increases from 512 KiB to 4 MiB, while the extracted text cap increases to 96 KiB. HTTP failures record the active byte cap. These are bounded acquisition repairs; the operator's Patriots example demonstrated six accepted hits with damaged snippets and a 508403-byte HTTP write failure. Native test execution and live retrieval acceptance are still pending.
+
+### Qualification correction (v1.4.9)
+
+The v1.4.8 nested-highlight regression test mistakenly supplied a shadowing `const char *html` fixture (with `sizeof` equal to pointer size) as the writable destination for `research_choose_fact`. The regression now uses a separate writable 448-byte response array and checks its content. Research's log writer also handles EINTR and short writes instead of discarding `write`'s result. The operator's v1.4.8 build completed; the test reported 112/113 passing with line 205 failing and two `write` warnings. Revised v1.4.9 build/test and runtime acceptance are pending.
