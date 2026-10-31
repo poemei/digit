@@ -1,4 +1,4 @@
-# Digit Ask — native conversation controller 1.0.2
+# Digit Ask — native conversation controller 1.0.3
 
 Ask owns the registered `chat` route (ordinary directed conversation). It does not directly call external networks, classify research intent, access Corpus tables, or generate language.
 
@@ -28,3 +28,7 @@ These source changes are not automatically installed or qualified. The operator 
 Ask v1.0.1 relays Research-owned unavailable evidence instead of replacing it with a generic verification refusal. Service-call success remains distinct from verified research.
 
 Ask 1.0.2 removes the early return that treated unverified search listings as the user's final answer. Bounded source evidence is provided as context to language inference. Safety-denied requests remain denied. Provider or search failures are explained using actual failure context, without pretending live facts were verified. No Core, ABI or transport changes; build, qualification, activation and operator testing remain outstanding.
+
+## 1.0.3 — Ordinary reply/IRC recipient isolation
+
+An ordinary chat answer is not authorization to address a channel participant. When the replaceable inference service returns a leading IRC nickname with a colon, Ask strips that unintended recipient prefix before normal reply delivery; the generated content is not dispatched through the peer send service. Explicit `ask`, `tell`, and `say ... to` peer requests retain existing controller-owned routing and send behavior. A regression supplies the observed `rictus:` prefix from language generation and verifies zero peer sends. If stripping yields empty content, Ask rejects it rather than publishing an IRC address. This is a source-level guard; it is not evidence of live bot-loop prevention or satisfactory factual research answers. Build, qualification and operator acceptance remain pending.
