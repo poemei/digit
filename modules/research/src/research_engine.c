@@ -97,7 +97,6 @@ static int https_get(const char *url,char *body,size_t capacity,
  document_t document;
  CURLcode result;
  long status=0;
- char type[128]={0};
  int ok=0;
  if(!safe_url(url)||capacity<2||!body)return 0;
  curl=curl_easy_init();
@@ -113,7 +112,7 @@ static int https_get(const char *url,char *body,size_t capacity,
  curl_easy_setopt(curl,CURLOPT_SSL_VERIFYHOST,2L);
  curl_easy_setopt(curl,CURLOPT_CONNECTTIMEOUT,3L);
  curl_easy_setopt(curl,CURLOPT_TIMEOUT,8L);
- curl_easy_setopt(curl,CURLOPT_OPENFUNCTION,open_public_socket);
+ curl_easy_setopt(curl,CURLOPT_OPENSOCKETFUNCTION,open_public_socket);
  curl_easy_setopt(curl,CURLOPT_WRITEFUNCTION,receive_body);
  curl_easy_setopt(curl,CURLOPT_WRITEDATA,&document);
  curl_easy_setopt(curl,CURLOPT_USERAGENT,"DigitResearch/1.4 (+read-only)");
@@ -121,7 +120,6 @@ static int https_get(const char *url,char *body,size_t capacity,
  result=curl_easy_perform(curl);
  if(result==CURLE_OK){
   curl_easy_getinfo(curl,CURLINFO_RESPONSE_CODE,&status);
-  curl_easy_getinfo(curl,CURLINFO_CONTENT_TYPE,&type);
   ok=status==200&&document.length>20;
  }
  curl_easy_cleanup(curl);
@@ -187,7 +185,9 @@ int research_terms(const char *question,char *query,size_t cap)
   count++;
  }
  if(!count)return 0;
- /* The query is evidence acquisition, not a hardcoded answer. */
+ /* The question supplies intent, while subject terms stay topic-neutral. */
+ if(removed&&strstr(question,"next")&&count<13) (void)append_word(query,cap,"next schedule");
+ else if(strstr(question,"learn ")||strstr(question,"study ")) (void)append_word(query,cap,"official documentation");
  (void)removed;
  return 1;
 }
