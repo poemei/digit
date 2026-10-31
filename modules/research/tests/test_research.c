@@ -131,6 +131,14 @@ int main(void)
  CHECK(research_terms("learn Native C",terms,sizeof terms)&&strstr(terms," c ")!=NULL);
  CHECK(research_terms("learn C#",terms,sizeof terms)&&strstr(terms,"c#")!=NULL);
  CHECK(research_terms("learn PHP",terms,sizeof terms));
+ CHECK(research_terms("digicat, when are the New England Patriots playing again?",terms,sizeof terms));
+ CHECK(strstr(terms,"digicat")==NULL);
+ CHECK(strstr(terms,"new england patriots playing")!=NULL);
+ CHECK(strstr(terms,"upcoming schedule")!=NULL);
+ CHECK(research_terms("when are the New England Patriots playing again?",terms,sizeof terms));
+ CHECK(strstr(terms,"upcoming schedule")!=NULL);
+ CHECK(research_terms("compare TCP, UDP protocols",terms,sizeof terms));
+ CHECK(strstr(terms,"tcp")!=NULL&&strstr(terms,"udp")!=NULL);
  CHECK(research_parse_rss(programming,"learn Go language",&found)==1);
  /* [AI:GPT-6 | 2026-10-31] Independent general-purpose search fixtures. */
  {
