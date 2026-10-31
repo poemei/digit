@@ -12,7 +12,7 @@
 
 #define OLLAMA_VERSION_MAJOR 1U
 #define OLLAMA_VERSION_MINOR 0U
-#define OLLAMA_VERSION_PATCH 8U
+#define OLLAMA_VERSION_PATCH 9U
 
 typedef struct { char *data; size_t used; size_t capacity; } buffer_t;
 static const stnlabz_module_host_t *owner;
@@ -211,12 +211,14 @@ static stnlabz_module_result_t chat_controller(
             return reply(reply_context,failure)
                 ? STNLABZ_MODULE_OK : STNLABZ_MODULE_ERR_INVALID_STATE;
         }
-        /* Sources are search leads, not verified first-hand schedules. Keep
-         * the first citation intact; avoid asking Ollama to hallucinate. */
-        snprintf(summary,sizeof summary,
-                 "Research %s: %.260s",
-                 evidence->retrieved_utc[0] ? evidence->retrieved_utc : "time unavailable",
-                 evidence->evidence);
+        /* Research owns evidence selection and the final concise answer.
+         * Conversation does not expose feed records or rewrite the result. */
+        if (strlen(evidence->evidence) >= sizeof summary) {
+            free(evidence);
+            return reply(reply_context,"I could not produce a concise verified answer.")
+                ? STNLABZ_MODULE_OK : STNLABZ_MODULE_ERR_INVALID_STATE;
+        }
+        memcpy(summary,evidence->evidence,strlen(evidence->evidence)+1U);
         free(evidence);
         return reply(reply_context,summary)
             ? STNLABZ_MODULE_OK : STNLABZ_MODULE_ERR_INVALID_STATE;
