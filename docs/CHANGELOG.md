@@ -332,3 +332,10 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 - Operator's clean compilation succeeded, but tests reported 68/70 because two stale assertions expected the new general-purpose Research service to reject a weather query. The service now legitimately searches that subject; the log recorded general evidence with three sources.
 - Replaced the live-network-dependent assertions in `modules/research/tests/test_research.c` with deterministic intent coverage for weather, Patriots, PHP and Native C. Existing fixture tests continue to exercise relevance, parsing and answer selection.
 - Test source committed; rerun results and runtime acceptance have not been claimed. No Core, IRC, Ask, Ollama or production Research source change for this correction.
+
+
+## Unreleased — 2026-10-31 — Research 1.5.7 temporal result selection
+
+- Operator-authorized KISS adjustment: an explicitly upcoming "when" question triggers one DuckDuckGo search with a generic next-schedule/current-date query; other queries remain unchanged. No subject allowlist, NFL-specific code, additional search or page fetching.
+- Exclude DuckDuckGo advertising disclosure links from organic results. For time-constrained questions, return the nearest explicitly future-dated result found in source title or excerpt with its URL; otherwise preserve the existing concise source-list response.
+- Updated Research regression source for temporal query generation, nearest dated result, no-topic-special-case operation, and advertising disclosure exclusion. Source commits only: build execution, test execution, runtime activation, completeness of provider excerpts, and live IRC acceptance remain unverified.
