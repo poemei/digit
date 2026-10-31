@@ -172,3 +172,9 @@ No protected Core or other module was changed. Natural-language DSD integration 
 ## Research 1.2.0 / Ollama 1.0.9 — direct answers, 2026-10-30
 
 **State: source committed; operator tests and acceptance outstanding.** The Director required end-user responses to contain requested facts only, with no links, snippets, or research commentary. The native Research module now queries a free structured launch schedule for SpaceX launch questions, and the conversation controller presents a concise answer. No protected Core, IRC or ABI changes. General live factual questions still lack broad structured verification and should not be represented as solved. Compile, automated tests, admission, activation, live source validation and operator acceptance remain independent gates.
+
+## Director-authorized module-owned research routing — 2026-10-30
+
+**Status: source implemented, not qualified or operator accepted.** The user-directed architecture eliminates the erroneous Research classification and service invocation inside Ollama. New Ask v1.0.0 owns the transport-neutral `chat` command and delegates through Core services; Research v1.3.0 alone claims and answers live research questions, and Ollama v1.1.0 is a pure language-generation provider. Identity and peer-message behavior are retained at the conversation-controller boundary. No Core, router, IRC or ABI source was modified.
+
+**Ordered operator transition:** Build/test all three, verify current active module versions, activate Research 1.3.0 first, then upgrade Ollama 1.1.0 to relinquish the old chat route, then activate Ask 1.0.0 to claim that route. An uncoordinated gap or simultaneous old/new chat ownership may prevent responses or activation. Confirm ordinary chat, Identity, peer-directed messages, a live SpaceX query and a denied/research-unavailable case. No claim of production success until operator end-to-end acceptance.
