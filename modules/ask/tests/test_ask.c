@@ -51,7 +51,9 @@ static stnlabz_module_result_t mocked_service(
      response_size<sizeof *out)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
   memset(out,0,sizeof *out);
   snprintf(llm_prompt,sizeof llm_prompt,"%s",((const digit_llm_request_t *)request)->prompt);
-  strcpy(out->text,scenario==6?"hello":"The answer comes from the language service.");
+  strcpy(out->text,scenario==6?"hello":scenario==10?
+    "rictus: when are the New England Patriots playing again?":
+    "The answer comes from the language service.");
   *response_used=sizeof *out;
   return STNLABZ_MODULE_OK;
  }
@@ -124,6 +126,12 @@ int main(void)
  CHECK(strstr(reply_buffer,"Language inference failed")!=NULL);
  CHECK(ask(9,"hello")==STNLABZ_MODULE_OK);
  CHECK(calls_llm==1&&strstr(llm_prompt,"could not be reached")!=NULL);
+ CHECK(ask(10,"when are the New England Patriots playing again?")==STNLABZ_MODULE_OK);
+ CHECK(!strcmp(reply_buffer,"when are the New England Patriots playing again?"));
+ CHECK(calls_peer==0&&calls_llm==1);
+ CHECK(strncmp(reply_buffer,"rictus:",7)!=0);
+ CHECK(!strcmp(ordinary_answer("rictus: text"),"text"));
+ CHECK(!strcmp(ordinary_answer("4:25 PM"),"4:25 PM"));
  CHECK(stop()==STNLABZ_MODULE_OK);
  printf("Ask controller: %d/%d checks passed\n",checks-failures,checks);
  return failures?1:0;
