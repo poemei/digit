@@ -238,7 +238,8 @@ static unsigned score(const char *question,const research_hit_t *hit)
 {
  char terms[256],compound[1100],word[48];
  const char *p;
- unsigned matches=0,unique=0;
+ /* [AI:GPT-6 | 2026-10-31 16:23:38 UTC] */
+ unsigned matches=0,unique=0,strong=0;
  if(!research_terms(question,terms,sizeof terms))return 0;
  snprintf(compound,sizeof compound,"%s %s",hit->title,hit->excerpt);
  p=terms;
@@ -249,13 +250,18 @@ static unsigned score(const char *question,const research_hit_t *hit)
   while(p[i]&&p[i]!=' '&&i+1<sizeof word){word[i]=p[i];i++;}
   word[i]=0;p+=i;
   if(i<2&&strcmp(word,"c")!=0)continue;
-  if(unique==0&&!has_word(compound,word))return 0;
   unique++;
-  if(has_word(compound,word))matches++;
+  if(has_word(compound,word)){
+   matches++;
+   if(i>=8)strong=1;
+  }
  }
  if(!unique||!matches)return 0;
- if(unique>1&&matches<2)return 0;
+ /* A result may omit the leading words of a multiword subject.
+  * Require multiple matching words or one distinctive long word. */
+ if(unique>1&&matches<2&&!strong)return 0;
  return matches*10+(!strncmp(hit->url,"https://",8)?1:0);
+ /* [End AI:GPT-6] */
 }
 unsigned research_parse_rss(const char *rss,const char *question,
                             research_hits_t *hits)
