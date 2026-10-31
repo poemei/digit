@@ -74,6 +74,13 @@ int main(void)
  CHECK(answer_service(&question,sizeof question,&answer,sizeof answer,&used,NULL)==STNLABZ_MODULE_OK);
  CHECK(answer.status==RESEARCH_DENIED);
  }
+ {
+ unsigned executed=0,passed=0;int negative_executed=0,negative_passed=0;
+ CHECK(selftest(&executed,&passed,&negative_executed,&negative_passed));
+ CHECK(executed==passed&&executed>=10);
+ CHECK(negative_executed==1&&negative_passed==1);
+ CHECK(service(NULL,0,NULL,0,NULL,NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT);
+ }
  printf("Research qualification: %d/%d passed\n",checks-fails,checks);
  return fails?1:0;
 }
