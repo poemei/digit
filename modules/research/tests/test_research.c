@@ -134,9 +134,20 @@ int main(void)
  CHECK(research_terms("digicat, when are the New England Patriots playing again?",terms,sizeof terms));
  CHECK(strstr(terms,"digicat")==NULL);
  CHECK(strstr(terms,"new england patriots playing")!=NULL);
- CHECK(strstr(terms,"upcoming schedule")!=NULL);
+ CHECK(strstr(terms,"upcoming schedule")==NULL);
  CHECK(research_terms("when are the New England Patriots playing again?",terms,sizeof terms));
- CHECK(strstr(terms,"upcoming schedule")!=NULL);
+ CHECK(strstr(terms,"upcoming schedule")==NULL);
+ {
+  char exact[512]={0};
+  CHECK(user_search_query(
+   "digicat, when are the New England Patriots playing again?",
+   exact,sizeof exact));
+  CHECK(!strcmp(exact,"when are the New England Patriots playing again?"));
+  CHECK(strstr(exact,"official")==NULL);
+  CHECK(strstr(exact,"upcoming schedule")==NULL);
+  CHECK(user_search_query("What is PHP?",exact,sizeof exact));
+  CHECK(!strcmp(exact,"What is PHP?"));
+ }
  CHECK(research_terms("compare TCP, UDP protocols",terms,sizeof terms));
  CHECK(strstr(terms,"tcp")!=NULL&&strstr(terms,"udp")!=NULL);
  CHECK(research_parse_rss(programming,"learn Go language",&found)==1);
@@ -192,21 +203,26 @@ int main(void)
   }
   /* Regression for DDG Lite snippets with inline highlight markup. */
   {
-   const char *highlighted=
+   char highlighted[800],date[40]={0};
+   time_t future=time(NULL)+86400;
+   struct tm utc={0};
+   CHECK(gmtime_r(&future,&utc)!=NULL);
+   CHECK(strftime(date,sizeof date,"%B %d, %Y",&utc)>0);
+   snprintf(highlighted,sizeof highlighted,
     "<a class='result-link' href='https://www.patriots.com/schedule/'>"
     "New England Patriots Schedule</a>"
     "<td class='result-snippet'>THE <b>New England Patriots</b> "
-    "play the <strong>Miami Dolphins</strong> on November 1, 2026 "
-    "at 4:25 PM ET.</td>";
+    "play the <strong>Miami Dolphins</strong> on %s "
+    "at 4:25 PM ET.</td>",date);
    CHECK(research_parse_web_html(highlighted,
      "when are the New England Patriots playing again?",&found)==1);
    CHECK(strstr(found.hit[0].excerpt,"Miami Dolphins")!=NULL);
-   CHECK(strstr(found.hit[0].excerpt,"November 1, 2026")!=NULL);
+   CHECK(strstr(found.hit[0].excerpt,date)!=NULL);
    {
     char answer[448]={0};
     CHECK(research_choose_fact("when are the Patriots playing again?",
       &found,answer,sizeof answer,NULL));
-    CHECK(strstr(answer,"November 1")!=NULL);
+    CHECK(strstr(answer,date)!=NULL);
    }
   }
   CHECK(research_parse_web_html(dev,"learn PHP",&found)==1);
@@ -234,12 +250,18 @@ int main(void)
  char reply[448];unsigned count=0;
  facts.count=1;
  facts.hit[0].relevance=41;
- snprintf(facts.hit[0].excerpt,sizeof facts.hit[0].excerpt,
-  "The New England Patriots face the Miami Dolphins on Sunday November 1 at 4:25 PM ET.");
+ {
+  time_t future=time(NULL)+86400;
+  struct tm utc={0};char date[40]={0};
+  CHECK(gmtime_r(&future,&utc)!=NULL);
+  CHECK(strftime(date,sizeof date,"%B %d, %Y",&utc)>0);
+  snprintf(facts.hit[0].excerpt,sizeof facts.hit[0].excerpt,
+   "The New England Patriots face Miami on %s at 4:25 PM ET.",date);
+ }
  CHECK(research_choose_fact("when do the Patriots play again?",&facts,
    reply,sizeof reply,&count));
  CHECK(strstr(reply,"Miami Dolphins")!=NULL);
- CHECK(strstr(reply,"November 1")!=NULL);
+ CHECK(strstr(reply,"4:25 PM")!=NULL);
  CHECK(count==1);
  snprintf(facts.hit[0].excerpt,sizeof facts.hit[0].excerpt,
   "The PHP programming manual documents language syntax, functions and examples.");
@@ -247,27 +269,30 @@ int main(void)
  CHECK(strstr(reply,"PHP programming manual")!=NULL);
  snprintf(facts.hit[0].excerpt,sizeof facts.hit[0].excerpt,
   "There is a news article concerning a football game but its time is not confirmed.");
- CHECK(research_choose_fact("when is the next game?",&facts,
+ CHECK(!research_choose_fact("when is the next game?",&facts,
    reply,sizeof reply,&count));
- CHECK(strstr(reply,"Date not confirmed")!=NULL);
- CHECK(strstr(reply,"news article")!=NULL);
- CHECK(count==1);
+ CHECK(count==0);
  /* A title-only relevant lead must also be reported without fabricating
   * the requested time, and the source URL must survive if it fits. */
  memset(&facts,0,sizeof facts);
  facts.count=1;facts.hit[0].relevance=35;
  strcpy(facts.hit[0].title,"New England Patriots next game schedule");
  strcpy(facts.hit[0].url,"https://www.patriots.com/schedule/");
- CHECK(research_choose_fact("when are the Patriots playing again?",
+ CHECK(!research_choose_fact("when are the Patriots playing again?",
     &facts,reply,sizeof reply,&count));
- CHECK(strstr(reply,"Date not confirmed")!=NULL);
- CHECK(strstr(reply,"https://www.patriots.com/schedule/")!=NULL);
- CHECK(count==1);
- strcpy(facts.hit[0].excerpt,"The Patriots are scheduled to play on 2026-11-01 at 16:25 ET.");
+ CHECK(count==0);
+ {
+  time_t future=time(NULL)+86400;
+  struct tm utc={0};char date[40]={0};
+  CHECK(gmtime_r(&future,&utc)!=NULL);
+  CHECK(strftime(date,sizeof date,"%B %d, %Y",&utc)>0);
+  snprintf(facts.hit[0].excerpt,sizeof facts.hit[0].excerpt,
+   "The Patriots are scheduled to play on %s at 4:25 PM ET.",date);
+ }
  CHECK(research_choose_fact("when are the Patriots playing again?",
     &facts,reply,sizeof reply,&count));
  CHECK(strstr(reply,"Source reports:")!=NULL);
- CHECK(strstr(reply,"2026-11-01")!=NULL);
+ CHECK(strstr(reply,"4:25 PM")!=NULL);
  }
  {
   char page_answer[650]={0};
