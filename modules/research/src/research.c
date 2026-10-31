@@ -251,6 +251,15 @@ static int search(const char *query,research_response_t *output)
   audit(query,"rate-limited",0);return 0;
  }
  if(!make_topic(query,&topic))goto done;
+ /* Favor upcoming, recently scheduled events without treating "next" as
+  * a subject (the clothing-site false positive). */
+ if(strstr(query,"next")||strstr(query,"Next")){
+  if(strstr(topic.search,"launch")){
+   size_t n=strlen(topic.search);
+   if(n+18<sizeof topic.search)
+    memcpy(topic.search+n," upcoming schedule",18);
+  }
+ }
  curl=curl_easy_init();rec=calloc(1,sizeof *rec);
  if(!curl||!rec)goto done;
  encoded=curl_easy_escape(curl,topic.search,0);
