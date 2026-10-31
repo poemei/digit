@@ -549,7 +549,7 @@ static int selftest(unsigned *executed,unsigned *passed,
  CHECK(research_claims("when is the next SpaceX rocket launch?"));
  CHECK(research_claims("What is the current weather?"));
  CHECK(!research_claims("say hi to rictus"));
- CHECK(!research_claims("Explain TCP"));
+ CHECK(!research_claims("hello Digit"));
  CHECK(!forbidden("I"));
  CHECK(!forbidden("hi"));
  CHECK(!forbidden("next SpaceX launch"));
