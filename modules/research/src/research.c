@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <time.h>
 #include <unistd.h>
 #include "research.h"
@@ -20,7 +21,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h);
 static stnlabz_module_result_t stop(void);
 /* Operator rule: module descriptor belongs at the top of the primary C file. */
 static const stnlabz_module_descriptor_t descriptor={
- "research","Digit Live Research",1,5,6,
+ "research","Digit Live Research",1,5,7,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
@@ -67,6 +68,101 @@ static void audit(const char *query,const char *status,unsigned sources)
  research_runtime_log("AUDIT","query_hash=%016llx disposition=%s sources=%u",
   (unsigned long long)h,status,sources);
 }
+/* Extract explicitly dated results. Undated snippets cannot establish
+ * the nearest upcoming event and must not be guessed into a schedule. */
+static int calendar_day(int year,int month,int day)
+{
+ static const int days[]={0,31,28,31,30,31,30,31,31,30,31,30,31};
+ int last;
+ if(year<2000||year>2100||month<1||month>12||day<1)return 0;
+ last=days[month];
+ if(month==2&&year%4==0&&(year%100!=0||year%400==0))last++;
+ return day<=last?year*10000+month*100+day:0;
+}
+static int earliest_date(const char *src,int today)
+{
+ static const char *months[]={"January","February","March","April","May",
+  "June","July","August","September","October","November","December"};
+ int closest=0;
+ if(!src)return 0;
+ for(const char *p=src;*p;p++){
+  int y=0,m=0,d=0,date=0;
+  if(p>src&&isalnum((unsigned char)p[-1]))continue;
+  if(isdigit((unsigned char)p[0])&&isdigit((unsigned char)p[1])&&
+     isdigit((unsigned char)p[2])&&isdigit((unsigned char)p[3])&&
+     p[4]=='-'&&isdigit((unsigned char)p[5])&&
+     isdigit((unsigned char)p[6])&&p[7]=='-'&&
+     isdigit((unsigned char)p[8])&&isdigit((unsigned char)p[9])&&
+     !isdigit((unsigned char)p[10])){
+   y=(p[0]-'0')*1000+(p[1]-'0')*100+(p[2]-'0')*10+p[3]-'0';
+   m=(p[5]-'0')*10+p[6]-'0';d=(p[8]-'0')*10+p[9]-'0';
+   date=calendar_day(y,m,d);
+  }
+  if(!date)for(unsigned i=0;i<12;i++){
+   size_t len=strlen(months[i]);
+   const char *q;
+   if(!strncasecmp(p,months[i],len)&&(p[len]==' '||p[len]=='.'))
+    q=p+len;
+   else if(!strncasecmp(p,months[i],3)&&
+           (p[3]==' '||p[3]=='.'))q=p+3;
+   else continue;
+   if(*q=='.')q++;
+   while(*q==' ')q++;
+   if(!isdigit((unsigned char)*q))continue;
+   d=*q++-'0';
+   if(isdigit((unsigned char)*q))d=d*10+(*q++-'0');
+   if(*q==',')q++;
+   while(*q==' ')q++;
+   if(isdigit((unsigned char)q[0])&&isdigit((unsigned char)q[1])&&
+      isdigit((unsigned char)q[2])&&isdigit((unsigned char)q[3])&&
+      !isdigit((unsigned char)q[4])){
+    y=(q[0]-'0')*1000+(q[1]-'0')*100+(q[2]-'0')*10+q[3]-'0';
+    date=calendar_day(y,(int)i+1,d);
+   }
+   break;
+  }
+  if(date>=today&&(!closest||date<closest))closest=date;
+ }
+ return closest;
+}
+static int today_utc(void)
+{
+ time_t now=time(NULL);struct tm utc;
+ if(now==(time_t)-1||!gmtime_r(&now,&utc))return 0;
+ return calendar_day(utc.tm_year+1900,utc.tm_mon+1,utc.tm_mday);
+}
+static int format_next_event(const research_hits_t *hits,char *out,size_t cap)
+{
+ int today=today_utc(),best_date=0;
+ const research_hit_t *best=NULL;
+ if(!today||cap<80)return 0;
+ for(unsigned i=0;i<hits->count&&i<6;i++){
+  const research_hit_t *h=&hits->hit[i];
+  int date=earliest_date(h->excerpt,today);
+  int title_date=earliest_date(h->title,today);
+  if(!date||(title_date&&title_date<date))date=title_date;
+  if(date&&(!best_date||date<best_date)){best=h;best_date=date;}
+ }
+ if(!best)return 0;
+ {
+  char prefix[36];size_t url_len=strlen(best->url),title_len=strlen(best->title);
+  size_t prefix_len,room,excerpt_len=strlen(best->excerpt);
+  int n;
+  snprintf(prefix,sizeof prefix,"When: %04d-%02d-%02d | ",
+    best_date/10000,(best_date/100)%100,best_date%100);
+  prefix_len=strlen(prefix);
+  if(!url_len||url_len+prefix_len+16>=cap)return 0;
+  if(title_len>110)title_len=110;
+  room=cap-prefix_len-url_len-7;
+  if(title_len>room/2)title_len=room/2;
+  room-=title_len;
+  if(excerpt_len>room)excerpt_len=room;
+  n=snprintf(out,cap,"%s%.*s - %.*s (%s)",prefix,
+      (int)title_len,best->title,(int)excerpt_len,best->excerpt,best->url);
+  return n>0&&(size_t)n<cap;
+ }
+}
+
 /* [AI:Codex | 2026-10-31] Results are source leads, not verified answers.
  * Keep each URL intact; fit the title and snippet around it. */
 /* Preserve complete URLs and distribute a short reply across results,
@@ -82,6 +178,8 @@ static unsigned format_results(const research_hits_t *hits,char *out,size_t cap)
  int conversational=cap>512U;
  if(!hits||!out||cap<2U)return 0;
  out[0]=0;
+ /* Temporal questions prefer the nearest explicitly dated future result. */
+ if(cap<=512U&&format_next_event(hits,out,cap))return 1;
  for(unsigned i=0;i<hits->count&&i<6U;i++){
   const research_hit_t *h=&hits->hit[i];
   size_t remaining=cap-used;
