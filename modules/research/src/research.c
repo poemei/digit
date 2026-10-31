@@ -20,7 +20,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h);
 static stnlabz_module_result_t stop(void);
 /* Operator rule: module descriptor belongs at the top of the primary C file. */
 static const stnlabz_module_descriptor_t descriptor={
- "research","Digit Live Research",1,5,1,
+ "research","Digit Live Research",1,5,2,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
@@ -100,6 +100,8 @@ static int research_claims(const char *question)
 }
 /* [AI:Codex | 2026-10-31] Results are source leads, not verified answers.
  * Keep each URL intact; fit the title and snippet around it. */
+/* Preserve complete URLs and distribute a short reply across results,
+ * rather than allowing the first snippet to consume the entire budget. */
 static unsigned format_results(const research_hits_t *hits,char *out,size_t cap)
 {
  size_t used=0;
@@ -108,21 +110,32 @@ static unsigned format_results(const research_hits_t *hits,char *out,size_t cap)
  out[0]=0;
  for(unsigned i=0;i<hits->count&&i<6;i++){
   const research_hit_t *h=&hits->hit[i];
-  size_t url=strlen(h->url),remaining=cap-used;
+  size_t remaining=cap-used;
+  size_t url_len=strlen(h->url);
+  size_t space,title_len,snippet_len,budget;
   int n;
-  if(!url||remaining<url+24)break;
-  size_t title=strlen(h->title),snippet=strlen(h->excerpt);
-  size_t budget=remaining-url-24;
-  if(title>80)title=80;
-  if(title>budget)title=budget;
-  budget-=title;
-  if(snippet>260)snippet=260;
-  if(snippet>budget)snippet=budget;
-  n=snprintf(out+used,remaining,"%sResult %u: %.*s %s%s%.*s",
-   used?" | ":"",i+1,(int)title,h->title,h->url,
-   snippet?" - ":"",(int)snippet,h->excerpt);
+  if(!url_len||remaining<=url_len+16U)break;
+  /* Keep short chat replies useful even when multiple results have
+   * verbose descriptions; explicit search retains more detail. */
+  budget=cap<=512U?170U:500U;
+  if(budget>remaining-1U)budget=remaining-1U;
+  if(budget<url_len+16U)budget=url_len+16U;
+  if(budget>remaining-1U)budget=remaining-1U;
+  space=budget-url_len-16U;
+  title_len=strlen(h->title);
+  if(title_len>90U)title_len=90U;
+  if(title_len>space)title_len=space;
+  space-=title_len;
+  snippet_len=strlen(h->excerpt);
+  if(snippet_len>260U)snippet_len=260U;
+  if(snippet_len>space)snippet_len=space;
+  n=snprintf(out+used,remaining,"%s%u. %.*s%s%s%s%.*s",
+   count?" | ":"",i+1,(int)title_len,h->title,
+   title_len?" ":"",h->url,
+   snippet_len?" - ":"",(int)snippet_len,h->excerpt);
   if(n<0||(size_t)n>=remaining)break;
-  used+=(size_t)n;count++;
+  used+=(size_t)n;
+  count++;
  }
  return count;
 }
