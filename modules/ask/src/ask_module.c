@@ -48,6 +48,22 @@ static int prefix_peer(const char *target,char *reply,size_t cap)
  if(strlen(temporary)+1>cap)return 0;
  strcpy(reply,temporary);return 1;
 }
+/* Generated text cannot select an IRC recipient. Only an explicit
+ * peer-directed operator request may produce a nickname-prefixed message.
+ * Remove accidental IRC-nick prefixes from ordinary replies. */
+static const char *ordinary_answer(const char *text)
+{
+ const char *p=text;size_t n=0;
+ if(!p||!*p)return text;
+ while(peer_char(p[n])&&n<32U)n++;
+ if(n&&p[n]==':'&&(p[n+1]==' '||p[n+1]=='\t')){
+  p+=n+1U;
+  while(*p==' '||*p=='\t')p++;
+  return p;
+ }
+ return text;
+}
+
 static int reply_text(stnlabz_module_command_reply_fn reply,void *ctx,
                       const char *message)
 {
@@ -163,7 +179,8 @@ static stnlabz_module_result_t controller(
     !memchr(llm_out.text,0,sizeof llm_out.text)||!llm_out.text[0])
   return reply_text(reply,ctx,"Language inference failed; no answer was generated.")?
    STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
- snprintf(message,sizeof message,"%s",llm_out.text);
+ snprintf(message,sizeof message,"%s",target[0]?llm_out.text:ordinary_answer(llm_out.text));
+ if(!message[0])return STNLABZ_MODULE_ERR_INVALID_STATE;
  if(target[0]){
   if(!prefix_peer(target,message,sizeof message)||!host->send_message)
    return STNLABZ_MODULE_ERR_INVALID_STATE;
@@ -223,7 +240,7 @@ static stnlabz_module_result_t stop(void)
  return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
- "ask","Digit Ask Controller",1,0,2,
+ "ask","Digit Ask Controller",1,0,3,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
