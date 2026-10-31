@@ -20,7 +20,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *h);
 static stnlabz_module_result_t stop(void);
 /* Operator rule: module descriptor belongs at the top of the primary C file. */
 static const stnlabz_module_descriptor_t descriptor={
- "research","Digit Live Research",1,5,4,
+ "research","Digit Live Research",1,5,5,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
@@ -71,40 +71,50 @@ static void audit(const char *query,const char *status,unsigned sources)
  * Keep each URL intact; fit the title and snippet around it. */
 /* Preserve complete URLs and distribute a short reply across results,
  * rather than allowing the first snippet to consume the entire budget. */
+/* Format search-result evidence for its actual consumer. An explicit
+ * short /research reply remains compact, while Ask receives source text
+ * optimized for reading and grounding an answer, not a URL inventory.
+ * In either form, source URLs remain complete and ordered. */
 static unsigned format_results(const research_hits_t *hits,char *out,size_t cap)
 {
  size_t used=0;
  unsigned count=0;
- if(!hits||!out||cap<2)return 0;
+ int conversational=cap>512U;
+ if(!hits||!out||cap<2U)return 0;
  out[0]=0;
- for(unsigned i=0;i<hits->count&&i<6;i++){
+ for(unsigned i=0;i<hits->count&&i<6U;i++){
   const research_hit_t *h=&hits->hit[i];
   size_t remaining=cap-used;
   size_t url_len=strlen(h->url);
-  size_t space,title_len,snippet_len,budget;
+  size_t title_len=strlen(h->title);
+  size_t excerpt_len=strlen(h->excerpt);
+  size_t required,limit;
+  char entry[1200];
   int n;
-  if(!url_len||remaining<=url_len+16U)break;
-  /* Keep short chat replies useful even when multiple results have
-   * verbose descriptions; explicit search retains more detail. */
-  budget=cap<=512U?170U:500U;
-  if(budget>remaining-1U)budget=remaining-1U;
-  if(budget<url_len+16U)budget=url_len+16U;
-  if(budget>remaining-1U)budget=remaining-1U;
-  space=budget-url_len-16U;
-  title_len=strlen(h->title);
-  if(title_len>90U)title_len=90U;
-  if(title_len>space)title_len=space;
-  space-=title_len;
-  snippet_len=strlen(h->excerpt);
-  if(snippet_len>260U)snippet_len=260U;
-  if(snippet_len>space)snippet_len=space;
-  n=snprintf(out+used,remaining,"%s%u. %.*s%s%s%s%.*s",
-   count?" | ":"",i+1,(int)title_len,h->title,
-   title_len?" ":"",h->url,
-   snippet_len?" - ":"",(int)snippet_len,h->excerpt);
-  if(n<0||(size_t)n>=remaining)break;
-  used+=(size_t)n;
-  count++;
+  if(!url_len||!title_len)continue;
+  if(title_len>140U)title_len=140U;
+  if(excerpt_len>440U)excerpt_len=440U;
+  /*
+   * Reserve complete provenance and space for more than one result.
+   * Never spend the remaining response on a link without its context.
+   */
+  limit=conversational?540U:170U;
+  required=url_len+title_len+(conversational?34U:12U);
+  if(required>=remaining||required>=limit)continue;
+  if(excerpt_len>limit-required)excerpt_len=limit-required;
+  if(conversational)
+   n=snprintf(entry,sizeof entry,
+    "Source %u: %.*s\nExcerpt: %.*s\nURL: %s\n",
+    i+1U,(int)title_len,h->title,(int)excerpt_len,h->excerpt,h->url);
+  else
+   n=snprintf(entry,sizeof entry,
+    "%s%u. %.*s - %.*s (%s)",
+    count?" | ":"",i+1U,(int)title_len,h->title,
+    (int)excerpt_len,h->excerpt,h->url);
+  if(n<0||(size_t)n>=sizeof entry)continue;
+  if((size_t)n>=remaining)continue;
+  memcpy(out+used,entry,(size_t)n+1U);
+  used+=(size_t)n;count++;
  }
  return count;
 }
