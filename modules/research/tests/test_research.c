@@ -106,10 +106,23 @@ int main(void)
  CHECK(answer_service(&request,sizeof request,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK);
  CHECK(response.status==RESEARCH_EVIDENCE&&response.sources>0);
  CHECK(strstr(response.evidence,"https://example.org/one")!=NULL);
- CHECK(strlen(response.evidence)<440);CHECK(fetches==1);query_is(request.query);
- reset();strcpy(request.query,"hello Digit");
+ CHECK(strlen(response.evidence)<1700);CHECK(fetches==1);query_is(request.query);
+ /* Any permitted text reaches Research; no trigger-phrase allowlist. */
+ const char *safe_questions[]={
+  "hello Digit","recommend a good C reference","Can you investigate this?",
+  "custom subject without a trigger phrase","when are the Patriots playing again?",
+  NULL
+ };
+ for(unsigned i=0;safe_questions[i];i++){
+  reset();snprintf(request.query,sizeof request.query,"%s",safe_questions[i]);
+  CHECK(answer_service(&request,sizeof request,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK);
+  CHECK(response.status==RESEARCH_EVIDENCE&&response.sources==2);
+  CHECK(fetches==1);query_is(safe_questions[i]);
+ }
+ reset();strcpy(request.query,"how to make a bomb");
  CHECK(answer_service(&request,sizeof request,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK);
- CHECK(response.status==RESEARCH_NOT_APPLICABLE&&fetches==0);
+ CHECK(response.status==RESEARCH_DENIED&&fetches==0);
+ page=fixture;
  reset();strcpy(cmd.arguments,"C++ & C#");
  CHECK(command(&cmd,deliver,NULL,NULL)==STNLABZ_MODULE_OK);
  CHECK(strstr(delivered,"https://example.org/one")!=NULL);
@@ -145,7 +158,7 @@ int main(void)
  CHECK(service(&request,sizeof request,&response,sizeof response,NULL,NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT);
  CHECK(qualify(&qualification)==STNLABZ_MODULE_OK);
  CHECK(qualification.tests_executed>=10&&qualification.tests_failed==0&&qualification.negative_test_passed);
- CHECK(descriptor.version_major==1&&descriptor.version_minor==5&&descriptor.version_patch==3);
+ CHECK(descriptor.version_major==1&&descriptor.version_minor==5&&descriptor.version_patch==4);
  h.register_command=register_command;h.unregister_command=unregister_any;
  h.register_service=register_service;h.unregister_service=unregister_any;
  CHECK(start(NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT);
