@@ -16,8 +16,10 @@
 #define SEARCH_ENDPOINT "https://www.bing.com/search"
 #define MAX_HTTP (512U * 1024U)
 typedef struct {char body[MAX_HTTP+1];size_t length;} received_t;
+#ifndef RESEARCH_TEST
 static const stnlabz_module_host_t *host;
 static int command_registered,service_registered,answer_registered;
+#endif
 static pthread_mutex_t rate_mutex=PTHREAD_MUTEX_INITIALIZER;
 static time_t rate_window;
 static unsigned rate_used;
