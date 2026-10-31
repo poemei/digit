@@ -12,7 +12,7 @@
 
 #define OLLAMA_VERSION_MAJOR 1U
 #define OLLAMA_VERSION_MINOR 0U
-#define OLLAMA_VERSION_PATCH 7U
+#define OLLAMA_VERSION_PATCH 8U
 
 typedef struct { char *data; size_t used; size_t capacity; } buffer_t;
 static const stnlabz_module_host_t *owner;
@@ -181,7 +181,7 @@ static stnlabz_module_result_t chat_controller(
         research_response_t *evidence;
         stnlabz_module_result_t researched;
         size_t received_size = 0U;
-        char summary[850];
+        char summary[380];
         size_t question_length = strlen(command->arguments);
         if (question_length >= sizeof request.query)
             return reply(reply_context,
@@ -214,7 +214,7 @@ static stnlabz_module_result_t chat_controller(
         /* Sources are search leads, not verified first-hand schedules. Keep
          * the first citation intact; avoid asking Ollama to hallucinate. */
         snprintf(summary,sizeof summary,
-                 "Live research (%s): %.650s",
+                 "Research %s: %.260s",
                  evidence->retrieved_utc[0] ? evidence->retrieved_utc : "time unavailable",
                  evidence->evidence);
         free(evidence);
