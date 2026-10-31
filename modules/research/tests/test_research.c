@@ -301,7 +301,8 @@ int main(void)
   now+=86400;
   CHECK(gmtime_r(&now,&tomorrow)!=NULL);
   if(gmtime_r(&now,&tomorrow)){
-   char page[500],today[500],date[32];
+   char page[500],today[500],date[32],long_date[50];
+   CHECK(strftime(long_date,sizeof long_date,"%B %d, %Y",&tomorrow)>0);
    snprintf(date,sizeof date,"%02d/%02d",tomorrow.tm_mon+1,tomorrow.tm_mday);
    snprintf(page,sizeof page,
     "Example 2026 schedule WEEK 7 Thu 10/22 FINAL VS Old Opponent "
@@ -324,10 +325,11 @@ int main(void)
     CHECK(strstr(page_answer,date)!=NULL);
    }
    snprintf(today,sizeof today,
-    "Unrelated footer 2026. Example schedule has Sun November 1, 2026 at 4:25 PM.");
+    "Unrelated footer 2026. Example schedule has Sun %s at 4:25 PM.",
+    long_date);
    CHECK(research_extract_page_fact(today,"Example schedule",
      page_answer,sizeof page_answer));
-   CHECK(strstr(page_answer,"November 1")!=NULL);
+   CHECK(strstr(page_answer,long_date)!=NULL);
   }
  }
  printf("Research qualification: %d/%d passed\n",checks-fails,checks);
