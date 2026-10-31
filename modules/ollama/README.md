@@ -1,4 +1,4 @@
-# Digit Ollama Language Generation — v1.1.0
+# Digit Ollama Language Generation — v1.1.1
 
 Ollama is a **generation service only**. It no longer registers `/chat`, interprets user questions, invokes Research, or owns conversational routing.
 
@@ -31,3 +31,7 @@ Native compilation, qualification, installation, activation and client acceptanc
 - v1.0.6 preserved peer-directed say/tell/ask messaging.
 - v1.0.7–1.0.9 temporarily routed Research from inside Ollama and added concise response behavior. Those responsibilities have now moved to the proper owners.
 - v1.1.0 retains generation only; Ask owns the conversational route and peer orchestration.
+
+## 1.1.1 — Remove unsolicited IRC recipient bias
+
+The inference provider's global system prompt previously included a named IRC participant and examples of addressing that participant. Those instructions were applied indiscriminately, including to ordinary research answers. The global prompt now leaves recipient choice and delivery to the calling controller and does not embed names or specific relay examples. Explicit peer commands remain handled by Ask. Protocol selftests check that an unrelated research question does not contain the previous participant name or examples. This change is source-only and is not live-validated.
