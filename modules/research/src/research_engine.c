@@ -15,7 +15,7 @@
 
 #define RESEARCH_SEARCH "https://lite.duckduckgo.com/lite/"
 #define RESEARCH_HTTP_LIMIT (512U * 1024U)
-#define RESEARCH_TEXT_LIMIT 1200U
+#define RESEARCH_TEXT_LIMIT 12000U
 #define RESEARCH_MAX_SEARCHES 3U
 #define RESEARCH_MAX_READS 2U
 
@@ -418,6 +418,15 @@ static int temporal_question(const char *q)
 }
 static int date_evidence(const char *text)
 {
+ /* Accept ISO calendar dates as well as written month/day expressions. */
+ for(const char *p=text;p&&*p;p++){
+  if(isdigit((unsigned char)p[0])&&isdigit((unsigned char)p[1])&&
+     isdigit((unsigned char)p[2])&&isdigit((unsigned char)p[3])&&
+     p[4]=='-'&&isdigit((unsigned char)p[5])&&
+     isdigit((unsigned char)p[6])&&p[7]=='-'&&
+     isdigit((unsigned char)p[8])&&isdigit((unsigned char)p[9]))
+   return 1;
+ }
  static const char *words[]={"january","february","march","april","may","june",
  "july","august","september","october","november","december",
  "jan","feb","mar","apr","jun","jul","aug","sep","sept","oct","nov","dec",
@@ -429,39 +438,57 @@ static int date_evidence(const char *text)
  for(size_t i=0;words[i];i++)if(has_word(text,words[i]))return 1;
  return 0;
 }
+/* Research must not discard acquired evidence because a snippet is
+ * short or lacks the date asked for. An answer and a source lead are
+ * different outcomes; label the source lead and its uncertainty. */
 int research_choose_fact(const char *question,const research_hits_t *hits,
-                       char *answer,size_t cap,unsigned *sources)
+                         char *answer,size_t cap,unsigned *sources)
 {
- int temporal=temporal_question(question);
- unsigned best_score=0,best=0;
- char candidate[550],best_text[550]={0};
- if(!hits||!answer||cap<64)return 0;
- for(unsigned i=0;i<hits->count;i++){
+ int temporal=0,selected=-1,qualified=-1;
+ unsigned best=0,qualified_score=0;
+ if(!question||!hits||!answer||cap<64)return 0;
+ answer[0]=0;
+ if(sources)*sources=0;
+ temporal=temporal_question(question);
+ for(unsigned i=0;i<hits->count&&i<6;i++){
   const research_hit_t *h=&hits->hit[i];
-  const char *text=h->excerpt;
-  unsigned value=h->relevance;
-  size_t len;
-  if(!text||!*text)continue;
-  len=strlen(text);
-  if(len<35)continue;
-  if(temporal){
-   if(!date_evidence(text))continue;
-   value+=20;
-  }
-  /* Avoid promoting an index title as an answer. Select the factual
-   * excerpt and preserve its wording rather than inventing details. */
-  snprintf(candidate,sizeof candidate,"%.400s",text);
-  if(value>best_score){
-   best_score=value;best=i;
-   snprintf(best_text,sizeof best_text,"%s",candidate);
+  int has_date;
+  if(!h->title[0]&&!h->excerpt[0])continue;
+  if(strncmp(h->url,"https://",8))continue;
+  has_date=date_evidence(h->excerpt)||date_evidence(h->title)||
+           date_evidence(h->date);
+  research_runtime_log("HIT",
+   "index=%u score=%u date=%d title=%.160s excerpt=%.260s url=%.450s",
+   i,h->relevance,has_date,h->title,h->excerpt,h->url);
+  if(selected<0||h->relevance>best){selected=(int)i;best=h->relevance;}
+  if(h->excerpt[0]&&(!temporal||has_date)&&
+     (qualified<0||h->relevance>qualified_score)){
+   qualified=(int)i;qualified_score=h->relevance;
   }
  }
- if(!best_score||!research_grounded(best_text,hits->hit[best].excerpt))
-  return 0;
- if(strlen(best_text)>=cap)return 0;
- strcpy(answer,best_text);
+ if(selected<0)return 0;
  if(sources)*sources=hits->count;
- return 1;
+ if(qualified>=0){
+  const research_hit_t *h=&hits->hit[qualified];
+  /* Report the text as the source's statement, never as a newly
+   * verified conclusion independently established by Digit. */
+  snprintf(answer,cap,"Source reports: %.260s",h->excerpt);
+  return 1;
+ }
+ {
+  const research_hit_t *h=&hits->hit[selected];
+  size_t n;
+  snprintf(answer,cap,"%s %.110s%s%.145s",
+   temporal?"Date not confirmed in retrieved results. Relevant source:":
+            "Relevant source:",
+   h->title,h->excerpt[0]?" — ":"",h->excerpt);
+  n=strlen(answer);
+  if(h->url[0]&&strlen(h->url)+10<cap-n)
+   snprintf(answer+n,cap-n," Source: %s",h->url);
+  research_runtime_log("ANSWER_DETAIL",
+   "outcome=source_lead index=%d temporal=%d",selected,temporal);
+  return 1;
+ }
 }
 
 /* [AI:GPT-6 | 2026-10-31] General-purpose HTML search result parser.
@@ -666,7 +693,7 @@ static int make_variation(const char *terms,const char *question,
   suffix=attempt==1?" official reference":" tutorial examples";
  }else if(strstr(question,"when")||strstr(question,"next")||
           strstr(question,"schedule")){
-  suffix=attempt==1?" schedule date time":" upcoming official";
+  suffix=attempt==1?" date time":" official";
  }else{
   suffix=attempt==1?" primary source":" detailed explanation";
  }
@@ -710,11 +737,14 @@ int research_general_answer(const char *question,const stnlabz_module_host_t *ho
   if(!body||!plain){free(body);free(plain);continue;}
   if(https_get(combined.hit[i].url,body,RESEARCH_HTTP_LIMIT+1,&received)&&
      research_html_text(body,plain,RESEARCH_TEXT_LIMIT+1)){
-   /* Retain the initial excerpt as the default factual candidate.
-    * Page content may supplement it if the excerpt lacks an event date. */
+   /* Search excerpt remains attributed to its result; scraped page
+    * text is not promoted over it without subject/date corroboration. */
    if(!date_evidence(combined.hit[i].excerpt)&&date_evidence(plain)){
-    snprintf(combined.hit[i].excerpt,sizeof combined.hit[i].excerpt,
-      "%.400s",plain);
+    /* Avoid replacing an on-topic search excerpt with unrelated
+     * page boilerplate. The source text is retained for diagnosis. */
+    research_runtime_log("SOURCE_READ",
+      "index=%u page_date=%d snippet_date=0 bytes=%zu",
+      i,1,received);
    }
   }
   free(body);free(plain);
