@@ -287,3 +287,9 @@ This is the source-change record for Digit. Dates are source dates, not deployme
 - Corrected the actual root cause of stale launch answers: `chat` previously invoked Ollama without the `digit.research.search.v1` service. The module now routes time-sensitive questions through the existing Core service registry and fails closed when research is missing or unavailable.
 - Added deterministic routing classifier tests, linked the existing research service contract, and preserved identity precedence/general peer behavior; no Core or IRC edits.
 - Build, module activation, live search success, and case-specific result verification remain unverified. Search excerpts alone are not proof of a particular launch time.
+
+## 2026-10-30 — Repair silent Digit chat responses
+
+- Identified output-contract mismatch: the Core route reply buffer is only 512 bytes, while Ollama's new research response was constructed in an 850-byte buffer and the Research command in a 900-byte buffer. Oversized responses can be rejected without a visible reply.
+- Bounded Ollama chat research replies to 380 bytes (v1.0.8) and Research command replies to 380 bytes (v1.1.1), leaving margin for formatting; synchronized Research module configuration version.
+- No protected Core or IRC changes. Build/runtime verification remains pending.
