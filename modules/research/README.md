@@ -1,4 +1,4 @@
-# Digit Research — 1.5.6 (Unreleased)
+# Digit Research — 1.5.7 (Unreleased)
 
 Research searches the supplied text once and returns source results. It does
 not answer the question, rewrite the query, add search directives, fetch the
@@ -83,3 +83,7 @@ qualification, activation and operator end-to-end acceptance are outstanding.
 ## 1.5.6 — KISS direct IRC results
 
 The conversational Research service now formats its single DuckDuckGo result set within the IRC-sized 439-character output boundary. Results are returned as source titles, excerpts and complete URLs, not an inferred or synthesized answer. The explicit `/research` command remains a short search-results view. Service names, result status, safety, rate controls, exact-query encoding, single acquisition and HTTPS protections are unchanged. This version is intended for direct delivery by Ask without invoking language inference. Tests and live deployment require operator qualification.
+
+## 1.5.7 — Nearest upcoming result
+
+For explicitly upcoming WHEN questions (next/again/upcoming), Research extracts the subject from the request and includes the current UTC date and generic schedule/date/time/location terms in its one DuckDuckGo search. Other queries remain unmodified. The result parser excludes DuckDuckGo's advertising disclosure link. For upcoming queries, the IRC reply selects the nearest explicitly future-dated result from titles and snippets, preserving its source URL and accompanying details; ordinary search queries continue returning a concise source list. No sports/brand-specific rules, additional network requests, inference or page crawling. Missing facts are not guessed. Source-level change only; native build, tests and live acceptance remain unverified.
