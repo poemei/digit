@@ -120,7 +120,7 @@ int main(void)
  CHECK(answer_service(&request,sizeof request,&response,sizeof response,&used,NULL)==STNLABZ_MODULE_OK);
  CHECK(response.status==RESEARCH_EVIDENCE&&response.sources>0);
  CHECK(strstr(response.evidence,"https://example.org/one")!=NULL);
- CHECK(strlen(response.evidence)<1700);CHECK(fetches==1);query_is(request.query);
+ CHECK(strlen(response.evidence)<440);CHECK(fetches==1);query_is(request.query);
  /* Any permitted text reaches Research; no trigger-phrase allowlist. */
  const char *safe_questions[]={
   "hello Digit","recommend a good C reference","Can you investigate this?",
@@ -172,7 +172,7 @@ int main(void)
  CHECK(service(&request,sizeof request,&response,sizeof response,NULL,NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT);
  CHECK(qualify(&qualification)==STNLABZ_MODULE_OK);
  CHECK(qualification.tests_executed>=10&&qualification.tests_failed==0&&qualification.negative_test_passed);
- CHECK(descriptor.version_major==1&&descriptor.version_minor==5&&descriptor.version_patch==5);
+ CHECK(descriptor.version_major==1&&descriptor.version_minor==5&&descriptor.version_patch==6);
  h.register_command=register_command;h.unregister_command=unregister_any;
  h.register_service=register_service;h.unregister_service=unregister_any;
  CHECK(start(NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT);
