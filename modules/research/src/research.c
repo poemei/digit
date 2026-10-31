@@ -606,6 +606,13 @@ static stnlabz_module_result_t answer_service(const void *req,size_t len,
   return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(reply,0,sizeof *reply);
  *used=sizeof *reply;
+ if(forbidden(request->query)){
+  reply->status=RESEARCH_DENIED;
+  snprintf(reply->evidence,sizeof reply->evidence,
+   "I can't help with that request.");
+  audit(request->query,"denied",0);
+  return STNLABZ_MODULE_OK;
+ }
  if(!research_claims(request->query)){
   reply->status=RESEARCH_NOT_APPLICABLE;
   return STNLABZ_MODULE_OK;
