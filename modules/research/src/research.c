@@ -136,14 +136,79 @@ static int safe_source_url(const char *url)
  }
  return 1;
 }
-static unsigned extract_results(const char *body,size_t len,research_response_t *response)
+/* Keep subject terms, not conversational filler such as "when is the next".
+ * The same terms are required in result metadata before any lead is accepted. */
+typedef struct {char term[6][40];unsigned count;char search[256];} topic_t;
+static int stopword(const char *word)
+{
+ static const char *words[]={
+  "a","an","and","are","at","be","can","could","do","does","for","from",
+  "how","i","in","is","it","latest","me","my","next","of","on","or",
+  "please","rocket","show","tell","the","this","to","today","tomorrow",
+  "upcoming","us","what","when","where","which","who","will","with",
+  "you","your",NULL
+ };
+ unsigned j;
+ for(j=0;words[j];++j)if(!strcmp(word,words[j]))return 1;
+ return 0;
+}
+static int make_topic(const char *question,topic_t *topic)
+{
+ const unsigned char *p=(const unsigned char *)question;size_t used=0;
+ memset(topic,0,sizeof *topic);
+ while(*p&&topic->count<6){
+  char word[40];size_t n=0;unsigned i;
+  while(*p&&!isalnum(*p))p++;
+  while(*p&&isalnum(*p)){
+   if(n+1<sizeof word)word[n++]=(char)tolower(*p);
+   p++;
+  }
+  if(!n)break;
+  word[n]=0;
+  if(n<3||stopword(word))continue;
+  for(i=0;i<topic->count;i++)if(!strcmp(word,topic->term[i]))break;
+  if(i<topic->count)continue;
+  memcpy(topic->term[topic->count++],word,n+1);
+  if(used+n+2>=sizeof topic->search)break;
+  if(used)topic->search[used++]=' ';
+  memcpy(topic->search+used,word,n);used+=n;topic->search[used]=0;
+ }
+ return topic->count>0;
+}
+static int contains_token(const char *haystack,const char *needle)
+{
+ size_t len=strlen(needle);const unsigned char *p=(const unsigned char *)haystack;
+ if(!len)return 0;
+ while(*p){
+  size_t i=0;
+  if(p!=(const unsigned char *)haystack&&isalnum(p[-1])){p++;continue;}
+  while(i<len&&p[i]&&tolower(p[i])==(unsigned char)needle[i])i++;
+  if(i==len&&!isalnum(p[i]))return 1;
+  p++;
+ }
+ return 0;
+}
+static int relevant(const topic_t *topic,const char *title,
+                    const char *description,const char *link)
+{
+ unsigned matches=0,i;
+ char combined[1100];
+ snprintf(combined,sizeof combined,"%s %s %s",title,description,link);
+ /* Require the primary subject (e.g. SpaceX) AND a second subject when
+  * present; a retailer called "Next" cannot satisfy either requirement. */
+ if(!topic->count||!contains_token(combined,topic->term[0]))return 0;
+ for(i=1;i<topic->count;i++)
+  if(contains_token(combined,topic->term[i]))matches++;
+ return topic->count==1||matches>0;
+}
+static unsigned extract_results(const char *body,size_t len,const topic_t *topic,research_response_t *response)
 {
  size_t used=0;unsigned found=0;
  const char *cursor,*end;
  if(!body||len<20||len>MAX_HTTP)return 0;
  if(!strstr(body,"<rss")&&!strstr(body,"<feed"))return 0;
  if(!append(response->evidence,sizeof response->evidence,&used,
-  "Live search headlines are leads, not independently verified facts.\n\n"))return 0;
+  ""))return 0;
  cursor=body;end=body+len;
  while(found<5){
   const char *start=strstr(cursor,"<item>");
@@ -158,10 +223,11 @@ static unsigned extract_results(const char *body,size_t len,research_response_t 
      !safe_source_url(link))continue;
   (void)item_value(start,finish,"description",summary,sizeof summary);
   (void)item_value(start,finish,"pubDate",date,sizeof date);
+  if(!relevant(topic,title,summary,link))continue;
   if(!append(response->evidence,sizeof response->evidence,&used,
-    "[%u] %s\nLink: %s\nPublished (feed): %s\nSummary: %s\n\n",
-    found+1,title,link,date[0]?date:"not supplied",
-    summary[0]?summary:"not supplied"))break;
+    "%s — %s (feed: %s). %s\n",
+    title,link,date[0]?date:"unknown",
+    summary[0]?summary:""))break;
   found++;
  }
  response->sources=found;
@@ -170,7 +236,7 @@ static unsigned extract_results(const char *body,size_t len,research_response_t 
 static int search(const char *query,research_response_t *output)
 {
  CURL *curl=NULL;received_t *rec=NULL;
- char url[1400];char *encoded=NULL;
+ char url[1400];char *encoded=NULL;topic_t topic;
  CURLcode rc;long status=0;time_t now=time(NULL);
  struct tm utc;int ok=0;
  memset(output,0,sizeof *output);
@@ -186,9 +252,10 @@ static int search(const char *query,research_response_t *output)
     "Live research rate limit reached.");
   audit(query,"rate-limited",0);return 0;
  }
+ if(!make_topic(query,&topic))goto done;
  curl=curl_easy_init();rec=calloc(1,sizeof *rec);
  if(!curl||!rec)goto done;
- encoded=curl_easy_escape(curl,query,0);
+ encoded=curl_easy_escape(curl,topic.search,0);
  if(!encoded)goto done;
  if(snprintf(url,sizeof url,SEARCH_ENDPOINT "?format=rss&q=%s",encoded)
     >=(int)sizeof url)goto done;
@@ -207,7 +274,7 @@ static int search(const char *query,research_response_t *output)
  if(rc!=CURLE_OK)goto done;
  curl_easy_getinfo(curl,CURLINFO_RESPONSE_CODE,&status);
  if(status!=200L||!rec->length)goto done;
- if(!extract_results(rec->body,rec->length,output))goto done;
+ if(!extract_results(rec->body,rec->length,&topic,output))goto done;
  output->status=RESEARCH_EVIDENCE;
  if(now>0&&gmtime_r(&now,&utc))
   strftime(output->retrieved_utc,sizeof output->retrieved_utc,
@@ -228,7 +295,7 @@ done:
 static int selftest(unsigned *executed,unsigned *passed,
                     int *negative_executed,int *negative_passed)
 {
- research_response_t r={0};
+ research_response_t r={0};topic_t topic;
  const char *fixture="<?xml version=\"1.0\"?><rss><channel><item>"
  "<title>Launch schedule</title><link>https://example.org/launch</link>"
  "<pubDate>Fri, 30 Oct 2026 12:00:00 GMT</pubDate>"
@@ -242,17 +309,18 @@ static int selftest(unsigned *executed,unsigned *passed,
  CHECK(forbidden("how to build a bomb"));
  CHECK(forbidden("write ransomware"));
  CHECK(forbidden(""));
- CHECK(extract_results(fixture,strlen(fixture),&r)==1);
+ CHECK(make_topic("when is the next SpaceX rocket launch?",&topic));
+ CHECK(extract_results(fixture,strlen(fixture),&topic,&r)==1);
  CHECK(r.sources==1);
  CHECK(strstr(r.evidence,"https://example.org/launch")!=NULL);
  CHECK(strstr(r.evidence,"127.0.0.1")==NULL);
- CHECK(extract_results("{}",2,&r)==0);
- ne=1;np=extract_results("<rss><item>",11,&r)==0;
+ CHECK(extract_results("{}",2,&topic,&r)==0);
+ ne=1;np=extract_results("<rss><item>",11,&topic,&r)==0;
  #undef CHECK
  if(executed)*executed=e;if(passed)*passed=p;
  if(negative_executed)*negative_executed=ne;
  if(negative_passed)*negative_passed=np;
- return e==10&&p==10&&ne==1&&np==1;
+ return e>=10&&e==p&&ne==1&&np==1;
 }
 #ifndef RESEARCH_TEST
 static stnlabz_module_result_t service(const void *req,size_t len,void *res,
@@ -325,7 +393,7 @@ static stnlabz_module_result_t stop(void)
  curl_global_cleanup();return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
- "research","Digit Live Research",1,1,1,
+ "research","Digit Live Research",1,1,2,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
