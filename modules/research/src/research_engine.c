@@ -485,29 +485,54 @@ static int link_attribute(const char *start,const char *end,
  }
  return 0;
 }
+/* Search-result URLs may be direct HTTPS links or DuckDuckGo /l/
+ * redirect links. Decode only the uddg parameter, never the trailing
+ * tracking parameters, and never follow the redirect itself. */
 static int decode_search_link(const char *raw,char *out,size_t cap)
 {
- const char *p=raw;
+ const char *encoded=NULL,*p;
  size_t n=0;
- /* DuckDuckGo may use a tracking redirect. Extract its destination
-  * rather than fetching the redirect or weakening safe_url(). */
- const char *ud=strstr(raw,"uddg=");
- if(ud&&(strstr(raw,"duckduckgo.com/")||strstr(raw,"duckduckgo.com%2F")))
-  p=ud+5;
- while(*p&&n+1<cap){
-  unsigned char c=(unsigned char)*p++;
-  if(c=='%'&&isxdigit((unsigned char)p[0])&&
-     isxdigit((unsigned char)p[1])){
-   unsigned char a=(unsigned char)tolower(p[0]),b=(unsigned char)tolower(p[1]);
-   a=(unsigned char)(isdigit(a)?a-'0':a-'a'+10);
-   b=(unsigned char)(isdigit(b)?b-'0':b-'a'+10);
-   c=(unsigned char)(a*16+b);p+=2;
-  }else if(c=='&'&&!strncmp(p,"amp;",4)){p+=4;c='&';}
-  if(c<' '||c==127)return 0;
-  out[n++]=(char)c;
+ if(!raw||!out||cap<16)return 0;
+ if(!strncmp(raw,"/l/?",4)||
+    !strncmp(raw,"//duckduckgo.com/l/?",20)||
+    !strncmp(raw,"https://duckduckgo.com/l/?",26)||
+    !strncmp(raw,"https://www.duckduckgo.com/l/?",30)){
+  const char *query=strchr(raw,'?');
+  if(!query)return 0;
+  p=query+1;
+  while(*p){
+   if(!strncmp(p,"uddg=",5)){encoded=p+5;break;}
+   p=strchr(p,'&');
+   if(!p)break;
+   p++;
+   if(!strncmp(p,"amp;",4))p+=4;
+  }
+  if(!encoded)return 0;
+  for(p=encoded;*p&&*p!='&'&&*p!='#';p++){
+   unsigned char c=(unsigned char)*p;
+   if(c=='%'&&isxdigit((unsigned char)p[1])&&
+      p[1]&&p[2]&&isxdigit((unsigned char)p[2])){
+    unsigned char a=(unsigned char)tolower((unsigned char)p[1]);
+    unsigned char b=(unsigned char)tolower((unsigned char)p[2]);
+    a=(unsigned char)(isdigit(a)?a-'0':a-'a'+10);
+    b=(unsigned char)(isdigit(b)?b-'0':b-'a'+10);
+    c=(unsigned char)(a*16+b);
+    p+=2;
+   }
+   if(c<' '||c==127||n+1>=cap)return 0;
+   out[n++]=(char)c;
+  }
+ }else{
+  /* Preserve escapes in ordinary destination URLs. HTML-encoded
+   * ampersands in href attributes are the only transformation. */
+  for(p=raw;*p;p++){
+   if(!strncmp(p,"&amp;",5))p+=4;
+   if(n+1>=cap)return 0;
+   out[n++]=*p;
+  }
  }
  out[n]=0;
- return *p==0&&safe_url(out);
+ return safe_url(out);
 }
 unsigned research_parse_web_html(const char *html,const char *question,
                                  research_hits_t *hits)
@@ -534,8 +559,8 @@ unsigned research_parse_web_html(const char *html,const char *question,
   /* Match the snippet belonging to this result, not the next result.
    * Both DDG Lite and DDG HTML provide a distinct snippet class. */
   {
-   const char *scan=next,*limit=next+4000;
-   if(limit>end)limit=end;
+   const char *scan=next;
+   const char *limit=(size_t)(end-next)<4000?end:next+4000;
    while((scan=strchr(scan,'<'))&&scan<limit){
     const char *tagend=strchr(scan,'>');
     if(!tagend||tagend>=limit)break;
