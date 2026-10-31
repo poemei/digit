@@ -144,3 +144,11 @@ Required gate: `make -C modules/ollama clean all test`, qualification evidence i
 - Updated module descriptor and module.conf to 1.2.1; no Digit Core, IRC, credentials, or website source changes.
 - Existing last-published stamp continues to govern eligibility; a collection or publishing failure may prevent an hourly public update. Configuration values document the compiled intervals and are not dynamically loaded by S2.
 - Source committed; installed runtime activation and live hourly publications are not verified.
+
+## Director-authorized Live Research module — 2026-10-30
+
+**State: source implemented; compile, qualification and operator client acceptance pending.**
+
+The native `modules/research` v1.0.0 module registers `/research` and Core-mediated `digit.research.search.v1`. It uses a fixed HTTPS search-provider endpoint, strict SafeSearch, read-only requests, bounded responses, guarded credentials, and a per-minute query budget. Source excerpts are untrusted and explicitly not evidence of independently verified events. A local deterministic denial gate covers selected harmful actionable requests but does **not** claim comprehensive content-safety classification.
+
+No protected Core or other module was changed. Natural-language DSD integration remains a separate operator-authorized step. No build/test, deployment, live connection, end-to-end result or acceptance is claimed. Next required check: `make -C modules/research clean all test`, then authorized credential provisioning and operator-controlled activation/client testing.
