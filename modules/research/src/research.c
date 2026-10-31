@@ -12,6 +12,7 @@
 #include <time.h>
 #include <unistd.h>
 #include "research.h"
+#include "research_engine.h"
 
 #define SEARCH_ENDPOINT "https://www.bing.com/search"
 #define MAX_HTTP (512U * 1024U)
@@ -272,7 +273,10 @@ static int research_claims(const char *question)
   "recent ","live ","schedule","scheduled","launch",
   "news ","weather","forecast","stock price","exchange rate",
   "who won","who is winning","when is","when will",
-  "how much is","as of now","opening hours",NULL
+  "when do","when are","when does","where can","what time",
+  "how much is","as of now","opening hours","learn ","study ",
+  "research ","investigate ","look up ","find out","find information",
+  "teach me","read about","tell me about","search for",NULL
  };
  if(!question)return 0;
  n=strlen(question);
@@ -624,14 +628,33 @@ static stnlabz_module_result_t answer_service(const void *req,size_t len,
   reply->status=RESEARCH_NOT_APPLICABLE;
   return STNLABZ_MODULE_OK;
  }
- if(!launch_question(request->query)){
+ if(!permitted_rate()){
   reply->status=RESEARCH_UNAVAILABLE;
   snprintf(reply->evidence,sizeof reply->evidence,
-   "I cannot verify that current information yet.");
-  audit(request->query,"unsupported-live-answer",0);
+   "I couldn't verify that right now.");
+  audit(request->query,"rate-limited",0);
   return STNLABZ_MODULE_OK;
  }
- (void)search(request->query,reply);
+ /* Preserve the already-working structured provider as an optimization,
+  * not a limitation: unsupported subjects and failures use general research. */
+ if(launch_question(request->query)){
+  if(fetch_launch(time(NULL),reply)){
+   reply->status=RESEARCH_EVIDENCE;
+   audit(request->query,"structured-evidence",reply->sources);
+   return STNLABZ_MODULE_OK;
+  }
+ }
+ if(research_general_answer(request->query,host,reply->evidence,
+                           sizeof reply->evidence,&reply->sources)){
+  reply->status=RESEARCH_EVIDENCE;
+  audit(request->query,"general-evidence",reply->sources);
+ }else{
+  reply->status=RESEARCH_UNAVAILABLE;
+  reply->sources=0;
+  snprintf(reply->evidence,sizeof reply->evidence,
+   "I couldn't verify that right now.");
+  audit(request->query,"unverified",0);
+ }
  return STNLABZ_MODULE_OK;
 }
 #ifndef RESEARCH_TEST
@@ -644,11 +667,24 @@ static stnlabz_module_result_t command(const stnlabz_module_command_t *cmd,
  if(!cmd->arguments[0])
   return reply(context,"Usage: /research <question>")?
    STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
- search(cmd->arguments,&result);
- if(result.status!=RESEARCH_EVIDENCE)
-  snprintf(message,sizeof message,"%.350s",result.evidence);
- else
-  snprintf(message,sizeof message,"%.350s",result.evidence);
+ memset(&result,0,sizeof result);
+ if(forbidden(cmd->arguments)){
+  result.status=RESEARCH_DENIED;
+  snprintf(result.evidence,sizeof result.evidence,
+   "I can't help with that request.");
+ }else if(!permitted_rate()){
+  result.status=RESEARCH_UNAVAILABLE;
+  snprintf(result.evidence,sizeof result.evidence,
+   "I couldn't verify that right now.");
+ }else if(research_general_answer(cmd->arguments,host,result.evidence,
+                                  sizeof result.evidence,&result.sources)){
+  result.status=RESEARCH_EVIDENCE;
+ }else{
+  result.status=RESEARCH_UNAVAILABLE;
+  snprintf(result.evidence,sizeof result.evidence,
+   "I couldn't verify that right now.");
+ }
+ snprintf(message,sizeof message,"%.350s",result.evidence);
  return reply(context,message)?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
 }
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
@@ -698,7 +734,7 @@ static stnlabz_module_result_t stop(void)
  curl_global_cleanup();return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
- "research","Digit Live Research",1,3,1,
+ "research","Digit Live Research",1,4,0,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
