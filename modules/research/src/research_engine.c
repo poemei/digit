@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <time.h>
 #include "research_engine.h"
 
@@ -324,6 +325,8 @@ unsigned research_parse_web_html(const char *html,
      !decode_search_link(link,hit.url,sizeof hit.url))continue;
   strip_markup(gt+1,(size_t)(close-gt-1),hit.title,sizeof hit.title);
   if(!hit.title[0])continue;
+  /* DuckDuckGo advertising disclosure links are not organic results. */
+  if(strstr(hit.url,"duckduckgo.com/duckduckgo-help-pages/company/ads"))continue;
   /* Match the snippet belonging to this result, not the next result.
    * Both DDG Lite and DDG HTML provide a distinct snippet class. */
   {
@@ -354,12 +357,54 @@ unsigned research_parse_web_html(const char *html,
 /* [End AI:GPT-6] */
 
 
+/*
+ * Only next/upcoming WHEN questions need a temporal search hint.
+ * All other search strings are passed to DuckDuckGo unchanged.
+ * This is grammar-based, not a list of teams, products or events.
+ */
+static void search_terms(const char *question,char *out,size_t cap)
+{
+ const char *p=question;
+ char base[512],lower[512],date[16];
+ size_t n;
+ time_t now;struct tm utc;
+ int temporal=0;
+ snprintf(out,cap,"%s",question);
+ if(strncasecmp(p,"when ",5))return;
+ for(size_t i=0;question[i]&&i+1<sizeof lower;i++)
+  lower[i]=(char)tolower((unsigned char)question[i]);
+ lower[strlen(question)]=0;
+ temporal=strstr(lower," again")!=NULL||
+          strstr(lower," next ")!=NULL||
+          strstr(lower," upcoming ")!=NULL;
+ if(!temporal)return;
+ p+=5;
+ const char *aux[]={"are ","is ","will ","does ","do ",NULL};
+ for(unsigned i=0;aux[i];i++)if(!strncasecmp(p,aux[i],strlen(aux[i]))){
+  p+=strlen(aux[i]);break;
+ }
+ while(*p==' ')p++;
+ if(!strncasecmp(p,"the ",4))p+=4;
+ snprintf(base,sizeof base,"%s",p);
+ n=strlen(base);
+ while(n&&(base[n-1]=='?'||base[n-1]==' '||base[n-1]=='.'))base[--n]=0;
+ if(n>=6&&!strncasecmp(base+n-6," again",6))base[n-=6]=0;
+ n=strlen(base);
+ if(n>=8&&!strncasecmp(base+n-8," playing",8))base[n-=8]=0;
+ while(n&&base[n-1]==' ')base[--n]=0;
+ if(!base[0])return;
+ now=time(NULL);
+ if(now==(time_t)-1||!gmtime_r(&now,&utc))return;
+ if(!strftime(date,sizeof date,"%Y-%m-%d",&utc))return;
+ snprintf(out,cap,"%s next schedule after %s date time location",base,date);
+}
+
 /* [AI:Codex | 2026-10-31] Search the supplied text once. No subject
  * rewriting, page-reading or answer qualification belongs in retrieval. */
 int research_search(const char *query,research_hits_t *hits)
 {
  CURL *curl=NULL;
- char *encoded=NULL,*body=NULL,address[1600];
+ char *encoded=NULL,*body=NULL,address[1600],terms[1024];
  size_t length=0;
  int result=-1;
  if(!hits)return -1;
@@ -367,7 +412,8 @@ int research_search(const char *query,research_hits_t *hits)
  if(!query||!*query||strlen(query)>=512)return -1;
  curl=curl_easy_init();
  if(!curl)goto done;
- encoded=curl_easy_escape(curl,query,0);
+ search_terms(query,terms,sizeof terms);
+ encoded=curl_easy_escape(curl,terms,0);
  if(!encoded)goto done;
  if(snprintf(address,sizeof address,RESEARCH_SEARCH "?q=%s",encoded)
     >=(int)sizeof address)goto done;
