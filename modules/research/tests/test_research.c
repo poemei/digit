@@ -286,6 +286,17 @@ int main(void)
      "when is the next Example game?",page_answer,sizeof page_answer));
    CHECK(strstr(page_answer,date)!=NULL);
    CHECK(strstr(page_answer,"Visiting Opponent")!=NULL);
+   {
+    char markup[500],plain[500]={0};
+    snprintf(markup,sizeof markup,
+     "<main><h2>2026 Schedule</h2><div>WEEK 7 Thu 10/22 FINAL</div>"
+     "<section><h3>WEEK 8 Sun %s 4:25 PM EST</h3>"
+     "<p>AT Visiting Opponent</p></section></main>",date);
+    CHECK(research_html_text(markup,plain,sizeof plain));
+    CHECK(research_extract_page_fact(plain,
+      "when is the next Example game?",page_answer,sizeof page_answer));
+    CHECK(strstr(page_answer,date)!=NULL);
+   }
    snprintf(today,sizeof today,
     "Unrelated footer 2026. Example schedule has Sun November 1, 2026 at 4:25 PM.");
    CHECK(research_extract_page_fact(today,"Example schedule",
