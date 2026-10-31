@@ -423,12 +423,20 @@ static int combine_hits(research_hits_t *dest,const research_hits_t *source)
  }
  return added;
 }
-static int make_variation(const char *terms,unsigned attempt,char *out,size_t cap)
+static int make_variation(const char *terms,const char *question,
+                          unsigned attempt,char *out,size_t cap)
 {
- const char *suffix=attempt==1?" official schedule documentation":
-                    " latest details";
- if(snprintf(out,cap,"%s%s",terms,suffix)>=(int)cap)return 0;
- return 1;
+ const char *suffix;
+ if(strstr(question,"learn")||strstr(question,"study")||
+    strstr(question,"documentation")){
+  suffix=attempt==1?" official reference":" tutorial examples";
+ }else if(strstr(question,"when")||strstr(question,"next")||
+          strstr(question,"schedule")){
+  suffix=attempt==1?" schedule date time":" upcoming official";
+ }else{
+  suffix=attempt==1?" primary source":" detailed explanation";
+ }
+ return snprintf(out,cap,"%s%s",terms,suffix)<(int)cap;
 }
 int research_general_answer(const char *question,const stnlabz_module_host_t *host,
                             char *answer,size_t cap,unsigned *sources)
@@ -446,7 +454,7 @@ int research_general_answer(const char *question,const stnlabz_module_host_t *ho
     !research_terms(question,query,sizeof query))return 0;
  for(unsigned attempt=0;attempt<RESEARCH_MAX_SEARCHES;attempt++){
   if(attempt==0)snprintf(variant,sizeof variant,"%s",query);
-  else if(!make_variation(query,attempt,variant,sizeof variant))break;
+  else if(!make_variation(query,question,attempt,variant,sizeof variant))break;
   memset(&batch,0,sizeof batch);
   if(search_once(variant,question,&batch))combine_hits(&combined,&batch);
   if(combined.count>=3)break;
