@@ -171,13 +171,17 @@ int digit_ollama_run_selftests(unsigned int *executed,
            strstr(request, "\"prompt\":\"hello\""), &e, &p);
     expect(digit_ollama_build_request("say \"hi\"", request, sizeof request) &&
            strstr(request, "say \\\"hi\\\""), &e, &p);
-    expect(digit_ollama_build_request("say hi to rictus", request, sizeof request) &&
-           strstr(request, "exact IRC nickname followed by a colon") &&
-           strstr(request, "say/tell relays a statement") &&
-           strstr(request, "ask must produce a question") &&
-           strstr(request, "must not answer on their behalf") &&
-           strstr(request, "Do not narrate that you will send the message"),
+    expect(digit_ollama_build_request("when are the Patriots playing again?",
+           request, sizeof request) &&
+           strstr(request, "Recipient selection and message delivery belong") &&
+           strstr(request, "the calling controller") &&
+           !strstr(request, "rictus") &&
+           strstr(request, "\"prompt\":\"when are the Patriots playing again?\""),
            &e, &p);
+    expect(digit_ollama_build_request("ask a colleague for status",
+           request, sizeof request) &&
+           strstr(request, "unless the supplied request explicitly directs") &&
+           !strstr(request, "say hi to rictus"), &e, &p);
     expect(digit_ollama_extract_response(
            "{\"response\":\"Hello there\",\"done\":true}",
            response, sizeof response) && !strcmp(response, "Hello there"), &e, &p);
