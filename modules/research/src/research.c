@@ -50,7 +50,10 @@ static int forbidden(const char *query)
   "how to make poison to kill","how to bypass law enforcement",NULL
  };
  if(!n||n>=sizeof q)return 1;
- for(i=0;i<n;++i)q[i]=(char)tolower((unsigned char)query[i]);q[n]=0;
+ for(i=0;i<n;++i){
+  q[i]=(char)tolower((unsigned char)query[i]);
+ }
+ q[n]=0;
  for(i=0;unsafe[i];++i)if(strstr(q,unsafe[i]))return 1;
  for(i=0;i<n;++i){
   if((unsigned char)query[i]<32||(unsigned char)query[i]==127)return 1;
@@ -574,12 +577,12 @@ static int selftest(unsigned *executed,unsigned *passed,
  }
  ne=1;np=extract_results("<rss><item>",11,&topic,&r)==0;
  #undef CHECK
- if(executed)*executed=e;if(passed)*passed=p;
+ if(executed)*executed=e;
+ if(passed)*passed=p;
  if(negative_executed)*negative_executed=ne;
  if(negative_passed)*negative_passed=np;
  return e>=10&&e==p&&ne==1&&np==1;
 }
-#ifndef RESEARCH_TEST
 static stnlabz_module_result_t service(const void *req,size_t len,void *res,
  size_t cap,size_t *used,void *ctx)
 {
@@ -629,6 +632,7 @@ static stnlabz_module_result_t answer_service(const void *req,size_t len,
  (void)search(request->query,reply);
  return STNLABZ_MODULE_OK;
 }
+#ifndef RESEARCH_TEST
 static stnlabz_module_result_t command(const stnlabz_module_command_t *cmd,
  stnlabz_module_command_reply_fn reply,void *context,void *unused)
 {
@@ -640,7 +644,7 @@ static stnlabz_module_result_t command(const stnlabz_module_command_t *cmd,
    STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
  search(cmd->arguments,&result);
  if(result.status!=RESEARCH_EVIDENCE)
-  snprintf(message,sizeof message,"%s",result.evidence);
+  snprintf(message,sizeof message,"%.350s",result.evidence);
  else
   snprintf(message,sizeof message,"%.350s",result.evidence);
  return reply(context,message)?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
