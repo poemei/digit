@@ -240,19 +240,38 @@ int research_terms(const char *question,char *query,size_t cap)
   count++;
  }
  if(!count)return 0;
- /* The question supplies intent, while subject terms stay topic-neutral. */
- if((strstr(question,"next")||strstr(question,"Next")||
-     strstr(question,"when do")||strstr(question,"When do")||
-     strstr(question,"when is")||strstr(question,"When is")||
-      strstr(question,"when are")||strstr(question,"When are")||
-      strstr(question,"when does")||strstr(question,"When does"))&&count<13)
-  (void)append_word(query,cap,"upcoming schedule");
- else if(strstr(question,"learn ")||strstr(question,"Learn ")||
-         strstr(question,"study ")||strstr(question,"Study "))
-  (void)append_word(query,cap,"official documentation");
  (void)removed;
  return 1;
 }
+/* Only the addressed name is transport metadata. Submit the user's
+ * own question verbatim after removing that prefix; no AI-added terms. */
+static int user_search_query(const char *question,char *out,size_t cap)
+{
+ const char *p=question,*comma,*last;
+ size_t n;
+ if(!question||!out||cap<2)return 0;
+ comma=strchr(question,',');
+ if(comma&&comma>question&&comma-question<48){
+  const char *after=comma+1;
+  static const char *const openers[]={
+   "when","what","where","who","why","how","which",NULL
+  };
+  while(*after&&isspace((unsigned char)*after))after++;
+  for(size_t i=0;openers[i];i++){
+   size_t j=0,k=strlen(openers[i]);
+   while(j<k&&after[j]&&tolower((unsigned char)after[j])==openers[i][j])j++;
+   if(j==k&&isspace((unsigned char)after[j])){p=after;break;}
+  }
+ }
+ while(*p&&isspace((unsigned char)*p))p++;
+ last=p+strlen(p);
+ while(last>p&&isspace((unsigned char)last[-1]))last--;
+ n=(size_t)(last-p);
+ if(!n||n>=cap)return 0;
+ memcpy(out,p,n);out[n]=0;
+ return 1;
+}
+
 static void strip_markup(const char *src,size_t len,char *out,size_t cap)
 {
  size_t i=0,j=0;int markup=0,white=1;
@@ -799,50 +818,23 @@ static int combine_hits(research_hits_t *dest,const research_hits_t *source)
  }
  return added;
 }
-static int has_dated_hit(const research_hits_t *hits)
-{
- for(unsigned i=0;i<hits->count;i++)
-  if(date_evidence(hits->hit[i].excerpt))return 1;
- return 0;
-}
-static int make_variation(const char *terms,const char *question,
-                          unsigned attempt,char *out,size_t cap)
-{
- const char *suffix;
- if(strstr(question,"learn")||strstr(question,"study")||
-    strstr(question,"documentation")){
-  suffix=attempt==1?" official reference":" tutorial examples";
- }else if(strstr(question,"when")||strstr(question,"next")||
-          strstr(question,"schedule")){
-  suffix=attempt==1?" date time":" official";
- }else{
-  suffix=attempt==1?" primary source":" detailed explanation";
- }
- return snprintf(out,cap,"%s%s",terms,suffix)<(int)cap;
-}
 int research_general_answer(const char *question,const stnlabz_module_host_t *host,
                             char *answer,size_t cap,unsigned *sources)
 {
  research_hits_t combined={0},batch={0};
- char query[300],variant[340];
+ char query[512];
  unsigned provider_failures=0,attempts=0;
  (void)host;
  if(answer&&cap)answer[0]=0;
  if(sources)*sources=0;
  if(!question||!answer||cap<64||
-    !research_terms(question,query,sizeof query))return 0;
- for(unsigned attempt=0;attempt<RESEARCH_MAX_SEARCHES;attempt++){
-  if(attempt==0)snprintf(variant,sizeof variant,"%s",query);
-  else if(!make_variation(query,question,attempt,variant,sizeof variant))break;
-  int result;
-  memset(&batch,0,sizeof batch);
-  attempts++;
-  result=search_once(variant,question,&batch);
+    !user_search_query(question,query,sizeof query))return 0;
+ memset(&batch,0,sizeof batch);
+ attempts=1;
+ {
+  int result=search_once(query,question,&batch);
   if(result>0)combine_hits(&combined,&batch);
   else if(result<0)provider_failures++;
-  if(temporal_question(question)){
-   if(has_dated_hit(&combined))break;
-  }else if(combined.count>=3&&attempt>=1)break;
  }
  if(!combined.count){
   research_runtime_log("SEARCH","outcome=no_accepted_hits attempts=%u provider_failures=%u",
