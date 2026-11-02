@@ -330,3 +330,13 @@ The shared `stnlabz/ABI` repository's README confirms the ABI 1.5 descriptor exp
 **Exit gate:** Native S2 build, qualification and negative tests, persistence verification across cycles, source-data privacy review, controlled activation, verified DSA read-back, and explicit Director acceptance. Validate that repeated retained records are not reported as repeated attacks.
 
 **State:** Source changes committed; native execution, live investigative fidelity and public report acceptance remain unverified. Independent incident confirmation, event-by-event source history prior to the journal, and a human-assigned investigative case disposition are not established by this increment.
+
+## S2 1.3.4 — Evidence-specific public investigation findings
+
+**Objective:** Replace indistinguishable high-severity lead narratives with individual source-backed assessments for the DSA report.
+
+**Deliverables:** Per-lead request-category interpretation, supplied observation time, HTTP outcome, related-indicator counts, continuity context and independent verification priority. Preserve raw-identifier, domain, IP, URL and payload redaction, existing collection journal, Core/ABI boundary and six-hour cadence.
+
+**Exit gate:** `make -C modules/s2 clean all test`, actual fixture output inspection, privacy and classification negative checks, controlled S2 activation, DSA page verification and Director acceptance.
+
+**State:** Source committed; native build, live investigative fidelity and final operator acceptance unverified. No claim of independent access-log corroboration or confirmed compromise.
