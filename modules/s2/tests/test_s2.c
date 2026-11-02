@@ -103,6 +103,27 @@ int main(void)
                     (time_t)1700003600,detail,sizeof detail) &&
                  strstr(detail,"Revised retained source records: 0")!=NULL;
         }
+        if(history_ok){
+            const char *pattern=
+                "{\"threats\":["
+                "{\"id\":\"t_site_a\",\"severity\":\"HIGH\","
+                "\"ip\":\"198.51.100.10\",\"domain\":\"site-a.test\","
+                "\"created_at\":\"2026-10-29 12:00:00\","
+                "\"response_status\":403},"
+                "{\"id\":\"t_site_b\",\"severity\":\"CRITICAL\","
+                "\"ip\":\"198.51.100.10\",\"domain\":\"site-b.test\","
+                "\"created_at\":\"2026-10-30 12:00:00\","
+                "\"response_status\":429}]}";
+            history_ok=s2_ingest_json(&tracked,pattern,strlen(pattern)) &&
+                 s2_investigation_update(pattern,strlen(pattern),&tracked,journal,
+                    (time_t)1700007200,detail,sizeof detail) &&
+                 strstr(detail,"Indicator group 1")!=NULL &&
+                 strstr(detail,"multiple reported site domains")!=NULL &&
+                 strstr(detail,"across different reported source dates")!=NULL &&
+                 strstr(detail,"2 reported denials or rate limits")!=NULL &&
+                 strstr(detail,"198.51.100.10")==NULL &&
+                 strstr(detail,"site-a.test")==NULL;
+        }
         unlink(journal);
         s2_register_free(&tracked);
         if(!history_ok)ok=0;
