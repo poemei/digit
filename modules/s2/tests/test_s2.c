@@ -129,6 +129,46 @@ int main(void)
         if(!history_ok)ok=0;
         printf("S2 cross-collection investigation: %s\n",history_ok?"PASS":"FAIL");
     }
+    /* Investigation leads must explain actual distinct source evidence. */
+    {
+        const char *distinct =
+            "{\"threats\":["
+            "{\"id\":\"t_login\",\"severity\":\"HIGH\","
+            "\"created_at\":\"2026-11-02 09:12:00\","
+            "\"details\":{\"request_url\":\"/wp-admin/\","
+            "\"response_status\":403}},"
+            "{\"id\":\"t_config\",\"severity\":\"HIGH\","
+            "\"created_at\":\"2026-11-02 10:20:00\","
+            "\"details\":{\"request_url\":\"/.env\","
+            "\"response_status\":500}}]}";
+        s2_register_t samples={0};
+        char location[]="/tmp/s2-leads-XXXXXX",report[16384];
+        int sample_fd=mkstemp(location),lead_ok=sample_fd>=0;
+        if(lead_ok){
+            (void)close(sample_fd);
+            (void)unlink(location);
+            lead_ok=s2_ingest_json(&samples,distinct,strlen(distinct)) &&
+                s2_investigation_update(distinct,strlen(distinct),&samples,
+                    location,(time_t)1793650000,report,sizeof report) &&
+                strstr(report,"Lead 1")!=NULL &&
+                strstr(report,"Lead 2")!=NULL &&
+                strstr(report,"CMS login or administration probing")!=NULL &&
+                strstr(report,"configuration or development-file probing")!=NULL &&
+                strstr(report,"HTTP 403")!=NULL &&
+                strstr(report,"HTTP 5xx")!=NULL &&
+                strstr(report,"2026-11-02 09:12:00")!=NULL &&
+                strstr(report,"2026-11-02 10:20:00")!=NULL &&
+                strstr(report,"t_login")==NULL &&
+                strstr(report,"t_config")==NULL &&
+                strstr(report,"/wp-admin/")==NULL &&
+                strstr(report,"/.env")==NULL;
+        }
+        if(!lead_ok)ok=0;
+        printf("S2 distinct case findings and redaction: %s\n",
+               lead_ok?"PASS":"FAIL");
+        (void)unlink(location);
+        s2_register_free(&samples);
+    }
     (void)unlink(name);
     s2_register_free(&initial);
     s2_register_free(&restored);
