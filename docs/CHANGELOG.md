@@ -1,5 +1,12 @@
 # Digit — CHANGELOG
 
+## Unreleased — 2026-11-01 — Digit mission and role roadmap statement
+
+- Updated `docs/ROADMAP.md` with the Project Director's supplied Digit identity, purpose, assistant role, intended STN-Labz and ChAoS MVC engineering certification, and mission statement, preserving the original wording.
+- This documentation-only change establishes intended direction; it does not confer certification, modify module permissions or Core, authorize implementation, or claim operational acceptance.
+- Verification: GitHub content update completed. No code change, build, test, deployment or activation was performed.
+
+
 This is the source-change record for Digit. Dates are source dates, not deployment or acceptance dates. Module versions are independent of Digit's agent release. A GitHub commit, successful compilation, or a module reconnect does not establish qualification or operator acceptance.
 
 ## 2026-10-27 — Concurrent Core routing withdrawal test coverage
