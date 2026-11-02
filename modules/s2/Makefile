@@ -14,7 +14,7 @@ PREFIX ?= /opt/digit
 MODULEDIR := $(PREFIX)/modules/s2
 MODULE_USER ?= digit
 MODULE_GROUP ?= digit
-SOURCES := src/s2_model.c src/s2_public.c src/s2_research.c src/s2_publish.c src/s2_module.c
+SOURCES := src/s2_model.c src/s2_public.c src/s2_research.c src/s2_investigation.c src/s2_publish.c src/s2_module.c
 OBJS := $(patsubst src/%.c,$(BUILD)/%.o,$(SOURCES))
 .PHONY: all test test-live-page install clean
 all: $(TARGET)
@@ -23,7 +23,7 @@ $(BUILD)/%.o: src/%.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -MMD -MP -c $< -o $@
 $(TARGET): $(OBJS)
 	$(CC) -shared $(LDFLAGS) -o $@ $^ $(LDLIBS)
-$(TEST): tests/test_s2.c src/s2_model.c src/s2_public.c src/s2_research.c
+$(TEST): tests/test_s2.c src/s2_model.c src/s2_public.c src/s2_research.c src/s2_investigation.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ $^ -ljson-c
 test: $(TEST)
