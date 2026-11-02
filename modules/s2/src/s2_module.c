@@ -14,12 +14,14 @@
 #include "stnlabz_abi/module.h"
 #include "s2_model.h"
 #include "s2_public.h"
+#include "s2_investigation.h"
 #include "digit_llm.h"
 
 #define S2_URL "https://api.stn-labz.com/threats"
 #define S2_MAX_BYTES (8U * 1024U * 1024U)
 #define S2_STATE_DIR "/opt/digit/state/s2"
 #define S2_STATE_FILE S2_STATE_DIR "/sentinel-register.txt"
+#define S2_INVESTIGATION_FILE S2_STATE_DIR "/investigations.txt"
 #define S2_POLL_SECONDS 21600U
 #define S2_PUBLISH_SECONDS 21600U
 #define S2_PUBLIC_STAMP S2_STATE_DIR "/last-published"
@@ -126,6 +128,22 @@ done:
         char prepared[sizeof latest_public_report];
         if (s2_public_render(data.body, data.length, report_total, report_opened,
                              report_changed, time(NULL), prepared, sizeof prepared)) {
+            char investigation[8192] = {0};
+            size_t prepared_length = strlen(prepared);
+            if (s2_investigation_update(data.body, data.length, &cases,
+                                        S2_INVESTIGATION_FILE, last_success,
+                                        investigation, sizeof investigation)) {
+                size_t additional = strlen(investigation);
+                if (prepared_length + additional < sizeof prepared) {
+                    memcpy(prepared + prepared_length, investigation, additional + 1U);
+                } else {
+                    fputs("[S2] investigation summary exceeds report capacity; omitting continuity section\n", stderr);
+                }
+            } else {
+                fputs("[S2] investigative journal unavailable; publishing snapshot only\n", stderr);
+                if (prepared_length + 100U < sizeof prepared)
+                    (void)strcat(prepared, "\n\n**Investigation continuity:** unavailable; no historical comparison is claimed.\n");
+            }
             add_reader_note(prepared,sizeof prepared);
             (void)snprintf(latest_public_report, sizeof latest_public_report, "%s", prepared);
         } else {
@@ -317,7 +335,7 @@ static stnlabz_module_result_t stop(void)
     return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor = {
-    "s2", "Digit S2 Security Intelligence", 1, 3, 2,
+    "s2", "Digit S2 Security Intelligence", 1, 3, 3,
     STNLABZ_MODULE_API_MAJOR, STNLABZ_MODULE_API_MINOR,
     qualify, start, stop
 };
