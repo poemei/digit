@@ -93,7 +93,7 @@ Digit's intended roles are a friendly common assistant available to STN-Labz sta
 
 ## Existing approval record
 
-The previous roadmap baseline was approved as recorded below. This record is retained historically; it does not automatically approve newly stated cycles or implementations.
+Any significant changes to this plan require an updated assessment and authorization.
 
 - **Name:** P.Mei
 - **Section:** Operations
