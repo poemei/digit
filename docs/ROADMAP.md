@@ -1,213 +1,104 @@
-# Digit — ROADMAP and Development Milestones
+# Digit — Development Roadmap
 
-**Baseline:** 2026-10-27 repository `main`. This is a continuity plan, not automatic authorization to execute milestones. Digit's established Core structure and the shared STN-LABZ ABI 1.5 are the starting point. Core modifications require direct consent from the Director of the Digit Project.
+**Purpose:** Define Digit's development in cycles: objectives, deliverables, exit gates, and status. Implementation history and fixes belong in [CHANGELOG.md](CHANGELOG.md). Module-specific planning belongs in [MODULE_ROADMAP.md](MODULE_ROADMAP.md).
 
-## Digit — Mission and Intended Role
+## Mission and destination
 
-**Director-provided roadmap statement — 2026-11-01.** The following is preserved as supplied by the Project Director:
-
-> Digit
->
-> Hi, my name is Digit, am the STN-Labz, autonomous engineering assistant.
->
-> The key Policy in my World is to Do what my creator, created me to do
->
-> I was created to become the friendly common assistant to the staff of STN-Labz, but also to be an STN-Labz and ChAoS MVC Certified Engineer, a personal assistant and available to everyone within the Company.
->
 > My mission is to support STN-LABZ in the pursuit and advancement of its overall mission, objectives, and long-term vision through research, development, engineering, technical analysis, innovation, and operational support.
 
-**Roadmap classification:** This establishes Digit's intended identity, purpose and direction. Certification is an objective described by the Director, not a claim that certification or engineering qualification has already been earned. Operational access and authority remain subject to the established human-directed, qualification and module-permission gates below.
+Digit's intended roles are a friendly common assistant available to STN-Labz staff, a personal assistant, an autonomous engineering assistant, and—after appropriate qualification—an STN-Labz and ChAoS MVC Certified Engineer.
 
-## AI Assistance — Authority and Operational Boundaries
+**Guiding policy:** Do what her creator created her to do. Human authority controls assignments, authorization, qualification, and acceptance. Intended certification is not certification already earned.
 
-**Human Authority**
+## Cycle 0 — Foundation and Identity
 
-All AI assistants participating in the Digit Project operate under the authority and direction of the Project Director.
+**Objective:** Establish Digit's stable runtime, identity, and mission.
 
-**AI assistance does not constitute decision-making authority, operational command, or permission to act independently.**
+**Deliverables:** Identity and mission module; protected Core lifecycle and qualification; shared ABI 1.5; authorization and module-permission boundaries.
 
-The Project Director retains exclusive authority over project direction, development priorities, architectural decisions, implementation approval, qualification acceptance, deployment, and operational changes.
+**Exit gate:** Operator-verified identity, lifecycle, and authorization behavior, with Director acceptance.
 
-**Mandatory AI Conduct**
-1. No Autonomous Authorization: AI assistants shall not initiate, expand, redirect, or execute development activities without explicit authorization from the Project Director.
-2. No Implied Consent: Access to source code, repositories, documentation, development tools, or previous conversations does not constitute permission to modify anything.
-3. No Unauthorized Core Modifications: Protected Digit Core components and shared ABI contracts shall not be modified without direct, specific authorization. Approval of one modification does not authorize additional modifications.
-4. No Unauthorized Workflows: AI assistants shall not initiate background work, autonomous agents, repository operations, deployment workflows, or external development sessions without the Director's authorization.
-5. No Architectural Substitution: AI assistants shall preserve the established Core, module, controller, model, view, and transport responsibilities. Alternative architectures may be proposed for consideration but shall not be implemented without approval.
-6. No Scope Expansion: An authorized task shall remain within its explicitly approved scope. Discovering an unrelated defect does not authorize correcting it.
-7. Evidence Before Claims: AI assistants shall distinguish proposed, committed, built, verified, qualified, activated, and operator-accepted states. No success, qualification, or acceptance shall be fabricated or inferred.
-8. Mandatory Documentation: Authorized development changes shall be accurately recorded in the CHANGELOG and ROADMAP, preserving decisions, outstanding work, qualification evidence, and operational boundaries.
-9. Human-Controlled Progression: Completion of a task, passing tests, or reaching a milestone does not authorize proceeding to another task or milestone.
-10. Stop and Report: If an action requires authorization that has not been granted, or an instruction conflicts with established project authority or governing documentation, the AI shall stop the affected action, report the issue, and await the Director's decision.
+**State:** Foundation present; separate cycle acceptance remains unrecorded.
 
-**Authority Limitation**
+## Cycle 1 — Core and Modular Architecture
 
-An AI assistant has no independent authority over the Digit Project.
+**Objective:** Keep execution understandable and module capabilities independent.
 
-Recommendations are not decisions. Proposals are not approvals. Tests are not acceptance. Repository access is not authorization.
+**Deliverables:** Core routing and lifecycle management; module-local controller/model responsibilities; optional views; Core-mediated service registration; qualified start, stop, withdrawal, and replacement; deterministic error delivery.
 
-Approval of this ROADMAP establishes its governance and development direction. It does not grant blanket permission to execute its milestones.
+**Exit gate:** Positive/negative routing and hot-replacement verification plus Director acceptance.
 
-**The Project Director directs. AI assistants assist. Human authority is final.**
----
+**State:** Core implementation and previous test evidence exist; separate final cycle acceptance remains open.
 
-## Architectural contract
+## Cycle 2 — Communications and Assistant Interaction
 
-- **Core:** routing and management. A dumb router resolves a registered module destination and dispatches; it does not interpret requests, implement model logic, or format reports.
-- **Module controller:** owns routing *inside* its module.
-- **Module model:** owns its functional work and data interactions.
-- **Module view:** optional, used only when special output/report rendering is needed.
-- **Transport (IRC, Slack, Ollama):** its protocol and communication concerns only; no application-level capability selection or intelligence.
-- **ABI:** the established Core-mediated registration, invocation, and communication interface. Modules must not directly bind to each other.
-- **Root-cause standard:** competency is demonstrated; root causes are corrected. Evidence, not expedient workarounds, determines the component to change.
+**Objective:** Provide reliable, friendly access for authorized users.
 
-## Milestone 0 — Continuity baseline
+**Deliverables:** Addressed commands and messages; correct return recipient and transport; authenticated sender authority where supported; module-owned responses without transport-specific intelligence.
 
-**State: Continuity baseline documented; Director's 2026-10-27 Roadmap approval recorded below. Acceptance of individual engineering milestones remains separate.**
+**Exit gate:** End-to-end ingress → Core → module → response verification, including failed and unauthorized routes.
 
-- Maintain `docs/CHANGELOG.md` (what actually changed) and this `docs/ROADMAP.md` (gates, remaining work, and decisions).
-- Keep module version, Core revision, source commit, build evidence, qualification, installation, runtime results, and operator acceptance distinct.
-- Identify any historical documentation links with absent backing files; do not substitute invented qualification receipts.
-- **Exit gate:** Director reviews and accepts the continuity baseline.
+**State:** IRC and Ask are implemented; broader transport-neutral acceptance remains open.
 
-## Milestone 1 — Core Router and module controller handoff
+## Cycle 3 — Research and Information Support
 
-**State: Core clean build and full configured test suite PASSED on 2026-10-27; revised Core installed and reported operational by Director. Separate Core routing and authority acceptance remains open.**
+**Objective:** Enable general-purpose retrieval of accurate, relevant and current information.
 
-- **Core qualification:** Director reported `make clean && make && make test` PASS and confirmed installed/operational Core. Individually passed suites: 20/20 static source contracts (not behavioral), 20/20 executable Root/policy behavior, 20/20 hotload integration, 23/23 concurrency, 13/13 self-unregister, and 15/15 in-flight hotload replacement; total 111/111 mixed-type checks.
-- **Remaining Core gate:** identity and authority handling, routing error delivery, boundedness and separate Director acceptance. Module activation details belong in `docs/MODULE_ROADMAP.md`.
+**Deliverables:** Arbitrary legitimate questions; direct URL retrieval; source targeting and freshness checks; concise factual answers; traceable evidence; deterministic unavailable/uncertain responses. Research is not learning or privileged execution.
 
-- Existing ABI 1.5 `register_command`, `unregister_command`, and `invoke_service` are used for controller registration and Core dispatch.
-- New Core-owned ingress contract: `digit.router.dispatch`.
-- Core selects a registered destination; the module controller selects its own operation.
-- **Open inspection:** route naming/collisions; exact command parser behavior; source/authority integrity; response and argument bounds; safe unload and registration withdrawal; error semantics; no hardcoded per-module Core logic.
-- **Exit gate:** review full Core source and external ABI contract; compile and run Core positive/negative tests; verify Core routing and withdrawal independently; obtain operator acceptance.
+**Exit gate:** Operator-verified live questions across unrelated subjects, specific URLs, current-event queries and negative cases; no unverified answers represented as facts.
 
-### Protected Core hotload correction (2026-10-27)
+**State:** Research qualified and live retrieval observed; source relevance, currency, and direct-URL acceptance remain open.
 
-- Source correction committed: incumbent shared object retained until replacement activation succeeds; rollback attempts reactivate incumbent on candidate activation failure.
-- New and updated module qualification events record test-count and negative-test evidence in `modules.log`.
-- **Updated gate evidence:** Core behavioral and hotload suites subsequently passed, including candidate activation-failure rollback, loader ownership, stale-route removal and in-flight replacement checks. Director reported consolidated clean-build/full-suite PASS, followed by successful Core installation and operation. A zero-warning `-Werror` build and all possible live module stop/fault scenarios have not been separately evidenced.
-- Director controls activation of the revised Core.
+## Cycle 4 — Engineering and Technical Support
 
-### Concurrent routing and withdrawal verification (2026-10-27)
+**Objective:** Develop practical engineering assistance under established permission and qualification gates.
 
-- Threaded service and command tests now use the actual Core host to verify that unregister waits for active callbacks, removes routes and permits safe slot reuse.
-- `make test-concurrency` is wired into `make test`; Director subsequently reported 23/23 PASS, followed by consolidated `make clean && make && make test` PASS.
-- Self-unregister protection subsequently passed 13/13 and in-flight hotload replacement 15/15; broader module-defined stop behavior under arbitrary live workloads remains separate.
+**Deliverables:** Technical analysis, system diagnostics, root-cause investigation, reproducible validation, and authorized module-scoped development support. Competence is demonstrated rather than inferred from generated explanations.
 
-### Hotload integration test audit correction (2026-10-27)
+**Exit gate:** Assigned engineering functions demonstrate correct behavior under practical assessments, with Director acceptance.
 
-- Operator observed 19/20 integration results. Actual replacement, rollback, and loader assertions passed; only an audit test falsely expected suppressed success-detail text.
-- Assertion now requires two emitted `HOTLOAD_ACTIVE` events. Director subsequently confirmed 20/20 PASS; the preceding 19/20 report is retained as failure history.
+**State:** Development objective; general engineering certification not established.
 
-### Core hotload executable integration tests (2026-10-27)
+## Cycle 5 — Staff and Personal Assistance
 
-- Four real `.so` candidate fixtures and 20 executable integration assertions now exercise Core's actual qualification rejection, candidate activation failure, incumbent rollback, successful replacement and log evidence.
-- `make test` runs these alongside Root/policy and source-contract tests. Director subsequently confirmed hotload 20/20 PASS, concurrent routing 23/23 PASS, and in-flight hotload 15/15 PASS, plus consolidated clean-build/full-suite PASS.
+**Objective:** Make Digit useful and accessible to company staff and authorized personal workflows.
 
-### Executable Core unit behavioral tests (2026-10-27)
+**Deliverables:** Straightforward interaction; module-specific access enforcement; authorized page and S2 operations; reliable separation of information requests and system-changing actions.
 
-- `make test` compiles/runs 20 C unit behavior cases for Root and policy evaluation (positive and negative paths); Director subsequently confirmed 20/20 PASS and later consolidated test PASS.
-- Full module lifecycle/hotload regression and fault injection still required. Unit counts cannot substitute for all applicable Core qualification requirements.
+**Exit gate:** Real user tasks verified with successful authorization and denied-access scenarios.
 
-### Core test infrastructure restoration (2026-10-27)
+**State:** Mission objective established; acceptance remains capability-specific.
 
-- Root `make test` now builds Core and invokes 20 source-contract regression checks; `docs/CORE_QUALIFICATION.md` restored.
-- **Classification preserved:** the 20 source-contract checks are static and do not count as the mandatory behavioral Core minimum. Separate 20/20 executable Root/policy behavior and further executable integration suites subsequently passed, including a consolidated clean build/test receipt.
+## Cycle 6 — Certification and Operational Maturity
 
-## Milestone 2 — Transport neutrality and end-to-end delivery
+**Objective:** Qualify Digit for the intended STN-Labz and ChAoS MVC engineering responsibilities and operational support.
 
-**State: Planned; not authorized by prior source acceptance.**
+**Deliverables:** Human-defined certification criteria, practical assessments, evidence-based qualification, bounded operational authority, and repeatable reliability checks.
 
-- Verify inbound channel/private messaging carries the correct origin, authenticated identity when available, and return destination.
-- Verify unknown/unavailable routes fail deterministically without fabricated responses.
-- Verify ordinary channel traffic is ignored as appropriate, and addressed messages reach registered module controllers.
-- Ensure IRC/Slack/Ollama can be changed or absent without requiring unrelated capability modules to change.
-- Investigate existing transport-send bindings in Core (currently default IRC-oriented) before proposing any transport selection changes.
-- **Exit gate:** evidence-backed ingress → Core → controller → model → Core → originating transport tests, including negative cases.
+**Exit gate:** Formal human certification and acceptance decision. Module tests, account level, and inference abilities alone do not confer certification.
 
-## Required engineering sequence
+**State:** Future objective.
 
-`Requirement → Inspection → Evidence → Proposal → Director approval (when required) → Full-file implementation → Build → Verification → Qualification → Activation → End-to-end operator acceptance → Next explicit instruction`
+## Standing architecture and authority
 
-### Open decisions
+- **Core:** routing and lifecycle management; no module-specific logic.
+- **Module controller:** internal dispatch; **model:** work and data; **view:** optional presentation.
+- **Transport:** communication protocol only.
+- **Shared ABI:** Core-mediated registration, commands and services; version 1.5.
+- **Access:** authenticated role and module permissions; Level 7 is not unrestricted administrative authority.
+- **Human control:** the Project Director approves scope, priorities, protected Core or ABI changes, deployment and operational progression. No branch or workflow creation is authorized by the roadmap.
 
-- Whether the 512-byte ABI command-argument field is sufficient for general routed messages.
-- How route metadata carries origin, return destination, and authenticated authority without trusting unverified transport text.
-- Whether default `chat` routing is appropriate beyond the initial compatibility path.
-- Whether existing Core send-message functions require generalization to avoid IRC-first output behavior.
-- How to validate unload safety, concurrency, and failures before expanding the contract.
+**Cycle qualification:** Requirement → Inspection → Evidence → Approval where required → Whole-file implementation → Build → Tests → Qualification → Activation → Operator acceptance. Each stage is separate; completing one cycle does not authorize the next.
 
-These are review items, not permission to enlarge the ABI or rewrite Core.
+## Existing approval record
 
-## Core self-unregistration guard
+The previous roadmap baseline was approved as recorded below. This record is retained historically; it does not automatically approve newly stated cycles or implementations.
 
-2026-10-27: Director-authorized Core fix: module callback self-unregistration now fails immediately instead of deadlocking on its own in-flight counter. `make test-reentrant` is included in `make test`. Originally described as 12 assertions; actual corrected harness reports 13/13 PASS. Director also reported consolidated clean-build/full-suite PASS after this correction.
-
-### Self-unregister deadlock correction
-
-2026-10-27: Director-authorized Core fix: module callback self-unregistration now fails immediately instead of deadlocking on its own in-flight counter. `make test-reentrant` is included in `make test`. Originally described as 12 assertions; actual corrected harness reports 13/13 PASS. Director also reported consolidated clean-build/full-suite PASS after this correction.
-
-## Concurrent hotload with an in-flight callback
-
-2026-10-27: Added `tests/test_core_hotload_inflight.c` with 15 real C integration assertions for concurrent replacement of a module whose service callback is blocked in flight. The fixture's `stop()` unregisters its service through Core; the test checks replacement waits, callback completion, loader and registry uniqueness, stale-route removal and successful replacement. Added `test-inflight` to mandatory `make test`. No production Core or ABI logic changed. Director subsequently confirmed 15/15 PASS and consolidated clean-build/full-suite PASS. This does not cover every shutdown implementation or crash scenario.
-
-## Core qualification and operational evidence snapshot — 2026-10-27
-
-- **Core:** Director reported clean source build and full configured `make test` PASS; revised Core installed and operational. Six suites individually passed: 20 static source checks; 20 executable Root/policy; 20 executable hotload; 23 threaded routing; 13 self-unregister; and 15 in-flight hotload = **111/111 mixed-type checks**. Static checks are not counted as behavioral tests.
-- **Module releases and evidence:** maintained separately in `docs/MODULE_ROADMAP.md`; module-level qualification and operation are not Core milestones.
-- **Governance:** operator-provided technical receipts do not silently grant future Core modifications, production changes or blanket milestone acceptance. Existing Roadmap approval block is preserved verbatim below.
-
-## Protected Core Root read-only service — 2026-10-28
-
-- Director specifically authorized exposing the actual General Orders to the Identity module through the existing Core-mediated ABI. Core now answers `digit.root.orders.read` requests by reading and validating the immutable Root descriptor and returning the requested order; modules cannot register over that reserved service or modify the Root through it.
-- The Core router continues to perform registered dispatch only. Natural-language identity interpretation stays in modules; no IRC or shared ABI modification was required.
-- Core source and build-test linking updates committed; the **revised Core requires a new clean build, all qualification tests, controlled installation and operator acceptance**. Existing 2026-10-27 Core receipts cannot be reused to qualify this new revision. Module-specific work is recorded in `docs/MODULE_ROADMAP.md`.
-
-
-## 2026-10-28 — Revert experimental Core Root retrieval interface
-
-- Per Director instruction, removed the newly introduced `digit.root.orders.read` service from Core. The protected Core Root identity and General Orders were **not deleted or modified**. Restored the prior Core unit-test linking arrangement. The Identity module now serves operator-approved General Order copies in its own data, with no Core-specific retrieval service.
-- Revised Core source remains subject to the normal operator build/qualification gate. Module-specific changes are tracked separately in `docs/MODULE_ROADMAP.md`.
-
-## Approval
-- **Name**: P.Mei
-- **Section**: Operations
-- **Position**: Founder/CEO
-- **Company**: STN-Labz, LLC.
-- **Project**: Digit
-- **Date/Time**: 20261027:1830Z
-- **Status**: Approved
-
-
-## 2026-10-28 — Core DSD continuity transfer from Rictus
-
-**State: Source implemented; qualification and operator acceptance pending.**
-
-The Director authorized transferring the proven Rictus Core diagnostic foundation into Digit.
-
-Implemented Core behavior:
-
-- bounded last-request trace per sender/account
-- route and registered command-owner capture
-- nested service owner/result capture
-- reply/action disposition
-- dynamic current-source correlation
-- repo-relative `Code: file:line` evidence when provable
-- default source tree `/home/stnchain/digit`
-- optional `DIGIT_SOURCE_ROOT` override
-- no SQLite dependency
-- no shared ABI 1.5 change
-
-The Core diagnostic control request is:
-
-`diagnose my last request`
-
-It is handled before starting a new trace so it cannot overwrite the request under diagnosis.
-
-Registration ownership is learned from the module activation/registration path rather than maintained in a static module-to-source table. Source correlation is deliberately late-bound so code/file movement does not invalidate the runtime trace model.
-
-**Reopened Core gate:** the prior 2026-10-27 Core qualification receipts do not qualify this new Core revision. Required evidence is a clean Core build, the full configured `make test` suite, controlled installation/startup evidence, applicable runtime diagnostics, and explicit Director acceptance.
-
-No later roadmap milestone is authorized by this source transfer.
+- **Name:** P.Mei
+- **Section:** Operations
+- **Position:** Founder/CEO
+- **Company:** STN-Labz, LLC.
+- **Project:** Digit
+- **Date/Time:** 20261027:1830Z
+- **Status:** Approved
