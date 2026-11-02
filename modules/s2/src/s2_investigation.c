@@ -1,4 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
+#include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
@@ -159,6 +160,14 @@ static const char *source_ip(struct json_object *row)
 {
     const char *ip=field(row,"ip");
     return ip && *ip ? ip : field(row,"ip_address");
+}
+static int valid_address(const char *text)
+{
+    struct in_addr ipv4;
+    struct in6_addr ipv6;
+    return text && *text && strlen(text)<64U &&
+           (inet_pton(AF_INET,text,&ipv4)==1 ||
+            inet_pton(AF_INET6,text,&ipv6)==1);
 }
 static int status_of(struct json_object *row)
 {
@@ -340,12 +349,12 @@ int s2_investigation_update(const char *source_json,size_t source_size,
             const char *first_date=NULL,*last_date=NULL;
             size_t j,count=0,high=0,critical=0,denied=0;
             int cross_domain=0,multiple_dates=0;
-            if(visited[i]||!ip||!*ip)continue;
+            if(visited[i]||!valid_address(ip))continue;
             for(j=i;j<n;++j){
                 struct json_object *row=json_object_array_get_idx(rows,j);
                 const char *other=source_ip(row),*other_domain,*date;
                 int sev,status;
-                if(!other||strcmp(ip,other))continue;
+                if(!valid_address(other)||strcmp(ip,other))continue;
                 visited[j]=1;
                 ++count;
                 sev=severity_of(row);
