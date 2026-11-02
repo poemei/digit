@@ -363,8 +363,10 @@ int s2_investigation_update(const char *source_json,size_t source_size,
                 if(sev==3)++critical;
                 if(status==403||status==429)++denied;
                 other_domain=field(row,"domain");
-                if(domain&&*domain&&other_domain&&*other_domain&&
-                   strcmp(domain,other_domain))cross_domain=1;
+                if(other_domain&&*other_domain){
+                    if(!domain||!*domain)domain=other_domain;
+                    else if(strcmp(domain,other_domain))cross_domain=1;
+                }
                 date=field(row,"created_at");
                 if(source_day(date)){
                     if(!first_date||strncmp(date,first_date,10)<0)first_date=date;
