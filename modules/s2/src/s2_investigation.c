@@ -300,11 +300,11 @@ int s2_investigation_update(const char *source_json,size_t source_size,
         for(i=0;i<n && detail<12;++i){
             const char *id=case_id(json_object_array_get_idx(rows,i));
             investigation_t *r=find_investigation(&j,id);
-            int priority=(r->escalations && r->severity>=2)?0:
-                         (r->revisions && r->severity>=2)?1:
-                         (r->severity>=2 && r->cycles>1)?2:3;
+            int priority;
             char first[32],last[32];
-            if(!r || priority!=pass)continue;
+            if(!r || r->severity<2)continue;
+            priority=r->escalations?0:r->revisions?1:r->cycles>1?2:3;
+            if(priority!=pass)continue;
             format_utc((time_t)r->first,first);
             format_utc((time_t)r->last,last);
             ++detail;
