@@ -383,15 +383,15 @@ int s2_investigation_update(const char *source_json,size_t source_size,
             format_utc((time_t)r->last,last);
             ++detail;
             if(!append(out,cap,&used,
-                 "**Lead %zu — %s: %s**\\n\\n"
-                 "- **Source observation:** %s (source timezone not independently verified).\\n"
-                 "- **Observed behavior:** %s.\\n"
-                 "- **Recorded response:** %s.\\n"
+                 "**Lead %zu — %s: %s**\n\n"
+                 "- **Source observation:** %s (source timezone not independently verified).\n"
+                 "- **Observed behavior:** %s.\n"
+                 "- **Recorded response:** %s.\n"
                  "- **Associated records:** %zu other source record(s) share an exact valid address in this snapshot; %zu classified HIGH/CRITICAL. "
-                 "This may reflect a shared proxy or retained source events, not one actor.\\n"
-                 "- **History:** First S2 collection %s; latest %s; %u collection cycle(s), %u source revision(s), %u severity escalation(s).\\n"
-                 "- **Finding:** %s; %s.\\n"
-                 "- **Investigation requirement:** %s.\\n\\n",
+                 "This may reflect a shared proxy or retained source events, not one actor.\n"
+                 "- **History:** First S2 collection %s; latest %s; %u collection cycle(s), %u source revision(s), %u severity escalation(s).\n"
+                 "- **Finding:** %s; %s.\n"
+                 "- **Investigation requirement:** %s.\n\n",
                  detail,severity_name(r->severity),category,observed_text,
                  category,response_finding(status),related,related_high,
                  first,last,r->cycles,r->revisions,r->escalations,
