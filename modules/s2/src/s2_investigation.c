@@ -217,6 +217,8 @@ int s2_investigation_update(const char *source_json,size_t source_size,
             record->cycles=1;
             ++baseline;
         }else{
+            /* A clock moving backwards cannot rewrite established history. */
+            if(record->last>epoch)goto finish;
             if(record->last!=epoch && record->cycles<UINT32_MAX){
                 ++record->cycles;
                 ++continuing;
@@ -237,7 +239,6 @@ int s2_investigation_update(const char *source_json,size_t source_size,
         else if(sev==3)++seen_critical;
         else if(!sev)++unclassified;
     }
-    if(!save_journal(&j,journal_path))goto finish;
     format_utc(collected_at,collected);
     if(!append(out,cap,&used,
        "\n\n## INVESTIGATION CONTINUITY\n\n"
@@ -296,6 +297,8 @@ int s2_investigation_update(const char *source_json,size_t source_size,
        "- Determine access outcomes from independently authenticated server/application logs before concluding intrusion.\n"
        "- Investigator authority remains human-controlled; publication does not authorize blocking or remediation.\n"))
        goto finish;
+    /* Do not advance the journal if the report cannot be completed. */
+    if(!save_journal(&j,journal_path))goto finish;
     ok=1;
 finish:
     if(root)json_object_put(root);
