@@ -1,4 +1,4 @@
-# Digit S2 — Sentinel Intelligence and sai-dsa Publication v1.3.0
+# Digit S2 — Sentinel Intelligence and sai-dsa Publication v1.3.3
 
 ## Operating scope
 
@@ -96,3 +96,11 @@ Source changes and qualification fixtures are committed; compilation and real-ho
 ## Six-hour operating cadence — v1.3.2
 
 Sentinel collection, report regeneration, and successful SAI-DSA publication operate on six-hour intervals (21,600 seconds). The prior one-hour testing cadence has ended. An unsuccessful publishing attempt can be retried after one hour, but successful publication is still gated by the six-hour last-published timestamp. Existing publishing verification and IRC notification remain unchanged. Build and activate under operator control.
+
+## v1.3.3 Investigation continuity
+
+The S2 report now includes a source-record history summary when the new journal is available. It tracks first/last collection times, record revisions, severity-classification increases, and recurrence across collection cycles. The report includes selected priority leads and explicit uncertainty.
+
+Journal location: `/opt/digit/state/s2/investigations.txt`, with restricted file permissions and atomic replacement. Collection history does not establish attack frequency, incident outcome, or full source-event chronology. Publishing and collection remain on their existing six-hour schedules. ABI and Core are unchanged.
+
+Qualification: `make -C modules/s2 clean all test`. Native build, host tests, and live publication have not been verified for this revision.
