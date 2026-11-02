@@ -320,3 +320,13 @@ Operator reported an initial Research build failure caused by an unauthorized li
 The shared `stnlabz/ABI` repository's README confirms the ABI 1.5 descriptor export and stop/unregister lifecycle. The Research ABI source contract uses the established `stnlabz_abi/module.h`, registers the existing answer/search services through Core, and exports `stnlabz_module_get_descriptor`. The native qualification test now exercises descriptor identity and API compatibility, positive lifecycle registration and stop, invalid-host rejection, and registration-failure rollback. A standard `module.conf` manifest was added to the module package and install target. No Core, Ask, shared ABI, branch or workflow changes are included.
 
 **Verification status:** Source committed. The operator's successful `research.so` compile predates the latest qualification test and manifest updates. Current native `make -C modules/research clean all test`, installation and end-to-end Research/Ask behavior have **not** been independently confirmed. An offline test pass does not establish correct answers to live arbitrary questions; production acceptance remains the operator's decision.
+
+## S2 investigative continuity milestone — 1.3.3
+
+**Objective:** Follow individual Sentinel source records across collection cycles, identify revisions and severity escalations, and add evidence-bounded investigative leads to the DSA assessment.
+
+**Deliverables:** Persistent, access-restricted investigation journal separate from the existing collection register; first/last S2 observation, re-observation counts, source-record revisions, classification increases, and priority lead summaries. Preserve HTTP:BL lookup, existing Rictus candidate-log matching, six-hour collection and publication, Core/ABI 1.5, and human-controlled response.
+
+**Exit gate:** Native S2 build, qualification and negative tests, persistence verification across cycles, source-data privacy review, controlled activation, verified DSA read-back, and explicit Director acceptance. Validate that repeated retained records are not reported as repeated attacks.
+
+**State:** Source changes committed; native execution, live investigative fidelity and public report acceptance remain unverified. Independent incident confirmation, event-by-event source history prior to the journal, and a human-assigned investigative case disposition are not established by this increment.
