@@ -1,5 +1,12 @@
 # Digit — CHANGELOG
 
+## Unreleased — 2026-11-01 — Cycle-based roadmap restructure
+
+- Replaced the complete `docs/ROADMAP.md` narrative/history layout with a forward-looking development-cycle plan (Cycles 0–6), each defining objective, deliverables, acceptance gate and state.
+- Preserved Digit's Director-supplied mission, intended roles, existing architecture and human-authority boundaries, and the original approval record as a historical baseline.
+- Past fixes, test receipts and implementation chronology belong in this changelog rather than the development roadmap. No Core or module code changed.
+- Verification: documentation source committed; builds and runtime tests not applicable. Revised cycle progression is a planning structure, not independent authorization to develop or deploy.
+
 ## Unreleased — 2026-11-01 — Digit mission and role roadmap statement
 
 - Updated `docs/ROADMAP.md` with the Project Director's supplied Digit identity, purpose, assistant role, intended STN-Labz and ChAoS MVC engineering certification, and mission statement, preserving the original wording.
