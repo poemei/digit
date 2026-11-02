@@ -214,7 +214,7 @@ int s2_investigation_update(const char *source_json,size_t source_size,
     char collected[32];
 
     if(!source_json||!source_size||source_size>MAX_SOURCE||!state||!journal_path||
-       !out||cap<1500||collected_at<=0 || !state->cases && state->count)
+       !out||cap<1500||collected_at<=0 || (!state->cases && state->count))
         return 0;
     out[0]=0;
     j.rows=calloc(MAX_ENTRIES,sizeof *j.rows);
@@ -296,7 +296,7 @@ int s2_investigation_update(const char *source_json,size_t source_size,
 
     /* Prioritize escalations, then changed and recurring HIGH/CRITICAL cases.
      * Expose no source IPs, customer domains, raw payloads, or case identifiers. */
-    for(int pass=0;pass<3 && detail<12;++pass){
+    for(int pass=0;pass<4 && detail<12;++pass){
         for(i=0;i<n && detail<12;++i){
             const char *id=case_id(json_object_array_get_idx(rows,i));
             investigation_t *r=find_investigation(&j,id);
@@ -316,7 +316,8 @@ int s2_investigation_update(const char *source_json,size_t source_size,
                  r->revisions,r->escalations,
                  r->escalations?"Source severity escalated; verify site responses and independent access logs":
                  r->revisions?"Retained source evidence changed; compare field-level changes and verify outcome":
-                 "Persistent source record; determine whether underlying events are repeated or simply retained"))
+                 r->cycles>1?"Persistent source record; determine whether underlying events are repeated or simply retained":
+                 "Newly recorded in the S2 journal; inspect reported response and seek independent corroboration"))
                goto finish;
             ++examined;
         }
