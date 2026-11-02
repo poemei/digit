@@ -128,11 +128,14 @@ done:
         char prepared[sizeof latest_public_report];
         if (s2_public_render(data.body, data.length, report_total, report_opened,
                              report_changed, time(NULL), prepared, sizeof prepared)) {
-            char investigation[8192] = {0};
+            char investigation[16384] = {0};
             size_t prepared_length = strlen(prepared);
-            if (s2_investigation_update(data.body, data.length, &cases,
+            size_t room = sizeof prepared - prepared_length;
+            if (room >= 1500U &&
+                s2_investigation_update(data.body, data.length, &cases,
                                         S2_INVESTIGATION_FILE, last_success,
-                                        investigation, sizeof investigation)) {
+                                        investigation,
+                                        room < sizeof investigation ? room : sizeof investigation)) {
                 size_t additional = strlen(investigation);
                 if (prepared_length + additional < sizeof prepared) {
                     memcpy(prepared + prepared_length, investigation, additional + 1U);
