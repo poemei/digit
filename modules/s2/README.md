@@ -1,4 +1,4 @@
-# Digit S2 — Sentinel Intelligence and sai-dsa Publication v1.3.3
+# Digit S2 — Sentinel Intelligence and sai-dsa Publication v1.3.4
 
 ## Operating scope
 
@@ -104,3 +104,9 @@ The S2 report now includes a source-record history summary when the new journal 
 Journal location: `/opt/digit/state/s2/investigations.txt`, with restricted file permissions and atomic replacement. Collection history does not establish attack frequency, incident outcome, or full source-event chronology. Publishing and collection remain on their existing six-hour schedules. ABI and Core are unchanged.
 
 Qualification: `make -C modules/s2 clean all test`. Native build, host tests, and live publication have not been verified for this revision.
+
+## v1.3.4 — Evidence-specific investigation findings
+
+The DSA investigation leads now report per-record observed request category, supplied source event time, HTTP response interpretation, counts of associated records sharing a validated address, recorded history, the supported assessment, and the next independent verification requirement. Public output continues to omit raw source case IDs, IPs, domains, URLs and arbitrary payload fields. The journal format and existing six-hour collection/publication cadence are unchanged.
+
+Regression fixtures distinguish a denied administration request from an application error on a configuration-file request, and check that source paths and case identifiers are not leaked. These fixtures are source-committed; the target-host build and live publication still require operator verification.
