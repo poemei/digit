@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include "s2_model.h"
 #include "s2_public.h"
+#include "s2_investigation.h"
 #include <time.h>
 int main(void)
 {
@@ -71,6 +72,41 @@ int main(void)
                             report,sizeof report))ok=0;
         if(s2_public_render(private_source,strlen(private_source),
                             42U,0U,0U,time(NULL),report,8U))ok=0;
+    }
+    {
+        char journal[] = "/tmp/s2-history-test-XXXXXX";
+        char detail[8192];
+        s2_register_t tracked={0};
+        const char *first="{\"threats\":[{\"id\":\"t_first\",\"severity\":\"HIGH\",\"response_status\":403}]}";
+        const char *second="{\"threats\":[{\"id\":\"t_first\",\"severity\":\"CRITICAL\",\"response_status\":403}]}";
+        int fd_history=mkstemp(journal), history_ok=fd_history>=0;
+        if(history_ok){
+            close(fd_history);
+            unlink(journal);
+            history_ok=s2_ingest_json(&tracked,first,strlen(first)) &&
+                 s2_investigation_update(first,strlen(first),&tracked,journal,
+                    (time_t)1700000000,detail,sizeof detail) &&
+                 strstr(detail,"first recorded by this journal: 1")!=NULL;
+        }
+        if(history_ok){
+            history_ok=s2_ingest_json(&tracked,second,strlen(second)) &&
+                 s2_investigation_update(second,strlen(second),&tracked,journal,
+                    (time_t)1700003600,detail,sizeof detail) &&
+                 strstr(detail,"previously recorded and observed again: 1")!=NULL &&
+                 strstr(detail,"Revised retained source records: 1")!=NULL &&
+                 strstr(detail,"increased severity classifications: 1")!=NULL;
+        }
+        if(history_ok){
+            history_ok=!s2_investigation_update("invalid",7,&tracked,journal,
+                          (time_t)1700007200,detail,sizeof detail) &&
+                 s2_investigation_update(second,strlen(second),&tracked,journal,
+                    (time_t)1700003600,detail,sizeof detail) &&
+                 strstr(detail,"Revised retained source records: 0")!=NULL;
+        }
+        unlink(journal);
+        s2_register_free(&tracked);
+        if(!history_ok)ok=0;
+        printf("S2 cross-collection investigation: %s\n",history_ok?"PASS":"FAIL");
     }
     (void)unlink(name);
     s2_register_free(&initial);
