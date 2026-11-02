@@ -1,5 +1,12 @@
 # Digit — CHANGELOG
 
+## Unreleased — 2026-11-02 — S2 1.3.4 evidence-specific investigation reporting
+
+- Replaced repetitive HIGH/CRITICAL investigation journal leads with individual findings drawn from each matching Sentinel source record: observed request category, reported source timestamp, HTTP response, related address-match counts, continuity history and a targeted independent-verification action.
+- Preserved public redaction of raw case IDs, IP addresses, domains, source paths, credentials and untrusted payload text. A request-level HTTP success is not evidence of authenticated access.
+- Added distinct-case reporting and redaction regression fixtures; advanced the S2 descriptor and manifest to 1.3.4. No Core, ABI, new dependencies or publication-cadence changes.
+- **Evidence state:** Source committed. Host build, regression execution, activation and verification against real DSA reports not performed here.
+
 ## Unreleased — 2026-11-02 — S2 v1.3.3 investigation continuity
 
 - Added an S2-local investigation journal with atomic persistence for source-case identifiers, signatures, first/last collection times, observation-cycle counts, record revisions, and severity escalations.
