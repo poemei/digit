@@ -181,6 +181,45 @@ static int status_of(struct json_object *row)
     }
     { int status=json_object_get_int(v);return status>=100&&status<=599?status:0; }
 }
+static const char *request_category(struct json_object *row)
+{
+    const char *path=field(row,"request_url");
+    if(!path)path=field(row,"request");
+    if(!path)path=field(row,"path");
+    if(!path||!*path)return "request path not supplied";
+    if(strstr(path,"/wp-admin")||strstr(path,"/wp-login.php"))
+        return "CMS login or administration probing";
+    if(strstr(path,"/.env")||strstr(path,"/config.php")||
+       strstr(path,"/.git/")||strstr(path,"/phpunit"))
+        return "configuration or development-file probing";
+    if(strstr(path,"/admin")||strstr(path,"/login"))
+        return "application login or administration request";
+    return "other or unclassified request";
+}
+static const char *response_finding(int status)
+{
+    if(status==401)return "HTTP 401 indicates an authentication challenge; access outcome unverified";
+    if(status==403)return "HTTP 403 indicates the source reports a denied request";
+    if(status==429)return "HTTP 429 indicates the source reports rate limiting";
+    if(status>=200 && status<300)
+        return "HTTP 2xx reports request-level success, not authenticated access or compromise";
+    if(status>=300 && status<400)return "HTTP 3xx reports a redirect; target access is unverified";
+    if(status>=500)return "HTTP 5xx reports a server error; operational impact is unverified";
+    if(status>=400)return "HTTP 4xx reports request rejection; cause is not established";
+    return "no valid HTTP response status provided; access outcome unknown";
+}
+static const char *next_check(int status,const char *category)
+{
+    if(status==403||status==429)
+        return "Check local access and enforcement logs for the reported denial and related attempts";
+    if(status>=200&&status<400)
+        return "Check authentication and application logs before interpreting the response as access";
+    if(status>=500)
+        return "Check application error and availability logs before alleging service impact";
+    if(strstr(category,"configuration")||strstr(category,"administration"))
+        return "Check exact request handling against the protected resource and access logs";
+    return "Obtain the original request and independently verified response before closing this lead";
+}
 static int source_day(const char *date)
 {
     size_t i;
@@ -303,32 +342,66 @@ int s2_investigation_update(const char *source_json,size_t source_size,
        "The following are source-record histories selected for review. "
        "Collection-cycle repetition is not proof of renewed hostile activity.\n\n"))goto finish;
 
-    /* Prioritize escalations, then changed and recurring HIGH/CRITICAL cases.
-     * Expose no source IPs, customer domains, raw payloads, or case identifiers. */
+    /* Rank by observed source changes, not invented attacker identity.
+     * Evidence and response are taken from the individual source record.
+     * Never emit raw case IDs, IPs, domains, URLs or arbitrary source text. */
     for(int pass=0;pass<4 && detail<12;++pass){
         for(i=0;i<n && detail<12;++i){
-            const char *id=case_id(json_object_array_get_idx(rows,i));
+            struct json_object *row=json_object_array_get_idx(rows,i);
+            const char *id=case_id(row),*category,*ip,*observed;
             investigation_t *r=find_investigation(&j,id);
-            int priority;
-            char first[32],last[32];
+            int priority,status;
+            size_t related=0,related_high=0,k;
+            char first[32],last[32],observed_text[24]="not supplied";
             if(!r || r->severity<2)continue;
             priority=r->escalations?0:r->revisions?1:r->cycles>1?2:3;
             if(priority!=pass)continue;
+            category=request_category(row);
+            status=status_of(row);
+            observed=field(row,"created_at");
+            if(source_day(observed)){
+                size_t length=strlen(observed);
+                if(length>=19 && (observed[10]==' '||observed[10]=='T')){
+                    memcpy(observed_text,observed,19);
+                    observed_text[19]=0;
+                }else{
+                    memcpy(observed_text,observed,10);
+                    observed_text[10]=0;
+                }
+            }
+            ip=source_ip(row);
+            if(valid_address(ip)){
+                for(k=0;k<n;++k){
+                    struct json_object *other=json_object_array_get_idx(rows,k);
+                    const char *other_ip=source_ip(other);
+                    if(k==i||!valid_address(other_ip)||strcmp(ip,other_ip))continue;
+                    ++related;
+                    if(severity_of(other)>=2)++related_high;
+                }
+            }
             format_utc((time_t)r->first,first);
             format_utc((time_t)r->last,last);
             ++detail;
             if(!append(out,cap,&used,
-                 "- **Lead %zu — %s:** First recorded %s; last observed %s; "
-                 "seen in %u collection cycle(s), %u record revision(s), "
-                 "%u severity escalation(s). **Assessment:** %s.\n",
-                 detail,severity_name(r->severity),first,last,r->cycles,
-                 r->revisions,r->escalations,
-                 r->escalations?"Source severity escalated; verify site responses and independent access logs":
-                 r->revisions?"Retained source evidence changed; compare field-level changes and verify outcome":
-                 r->cycles>1?"Persistent source record; determine whether underlying events are repeated or simply retained":
-                 "Newly recorded in the S2 journal; inspect reported response and seek independent corroboration"))
-               goto finish;
-            ++examined;
+                 "**Lead %zu — %s: %s**\\n\\n"
+                 "- **Source observation:** %s (source timezone not independently verified).\\n"
+                 "- **Observed behavior:** %s.\\n"
+                 "- **Recorded response:** %s.\\n"
+                 "- **Associated records:** %zu other source record(s) share an exact valid address in this snapshot; %zu classified HIGH/CRITICAL. "
+                 "This may reflect a shared proxy or retained source events, not one actor.\\n"
+                 "- **History:** First S2 collection %s; latest %s; %u collection cycle(s), %u source revision(s), %u severity escalation(s).\\n"
+                 "- **Finding:** %s; %s.\\n"
+                 "- **Investigation requirement:** %s.\\n\\n",
+                 detail,severity_name(r->severity),category,observed_text,
+                 category,response_finding(status),related,related_high,
+                 first,last,r->cycles,r->revisions,r->escalations,
+                 r->escalations?"The source's severity classification increased":
+                 r->revisions?"The retained source record changed":
+                 r->cycles>1?"This source record remains present in later S2 collections":
+                 "This is the first journal observation of the source record",
+                 status==403||status==429?"reported protective response; successful intrusion not established":
+                 "independent incident outcome not established",
+                 next_check(status,category)))goto finish;
         }
     }
     if(!detail && !append(out,cap,&used,
