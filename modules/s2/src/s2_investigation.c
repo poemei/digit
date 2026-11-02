@@ -1,0 +1,307 @@
+#define _POSIX_C_SOURCE 200809L
+#include <errno.h>
+#include <fcntl.h>
+#include <inttypes.h>
+#include <json-c/json.h>
+#include <stdarg.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <time.h>
+#include <unistd.h>
+#include "s2_investigation.h"
+
+/* AI-assisted: GPT-6, 2026-11-02 UTC.
+ * Collectors and reporters must not convert repeated source records into
+ * claims of new attacks. Investigation journal times are COLLECTION times. */
+#define MAX_ENTRIES 10000U
+#define MAX_SOURCE (8U * 1024U * 1024U)
+#define JOURNAL_MAGIC "S2INV1"
+typedef struct {
+    char id[96];
+    uint64_t hash;
+    int64_t first, last;
+    unsigned cycles, revisions, escalations;
+    int severity;
+} investigation_t;
+typedef struct {
+    investigation_t *rows;
+    size_t count;
+} journal_t;
+
+static const char *severity_name(int level)
+{
+    return level == 3 ? "CRITICAL" : level == 2 ? "HIGH" :
+           level == 1 ? "MEDIUM" : "UNCLASSIFIED";
+}
+static int severity_of(struct json_object *row)
+{
+    struct json_object *v = NULL, *detail = NULL;
+    const char *value;
+    if (!json_object_object_get_ex(row, "severity", &v) ||
+        !json_object_is_type(v, json_type_string)) {
+        if (!json_object_object_get_ex(row, "details", &detail) ||
+            !json_object_is_type(detail, json_type_object) ||
+            !json_object_object_get_ex(detail, "severity", &v) ||
+            !json_object_is_type(v, json_type_string)) return 0;
+    }
+    value = json_object_get_string(v);
+    return !strcmp(value,"CRITICAL") ? 3 : !strcmp(value,"HIGH") ? 2 :
+           !strcmp(value,"MEDIUM") ? 1 : 0;
+}
+static const char *case_id(struct json_object *row)
+{
+    struct json_object *v = NULL;
+    if (!row || !json_object_is_type(row,json_type_object) ||
+        !json_object_object_get_ex(row,"id",&v) ||
+        !json_object_is_type(v,json_type_string)) return NULL;
+    return json_object_get_string(v);
+}
+static int valid_id(const char *id)
+{
+    size_t i;
+    if (!id || id[0]!='t' || id[1]!='_' || !id[2]) return 0;
+    for (i=2;id[i];++i)
+        if (i>=95 || !((id[i]>='a'&&id[i]<='z') ||
+                       (id[i]>='A'&&id[i]<='Z') ||
+                       (id[i]>='0'&&id[i]<='9') ||
+                       id[i]=='_' || id[i]=='.' || id[i]=='-')) return 0;
+    return 1;
+}
+static investigation_t *find_investigation(journal_t *j,const char *id)
+{
+    size_t i;
+    for(i=0;i<j->count;++i)
+        if(!strcmp(j->rows[i].id,id))return j->rows+i;
+    return NULL;
+}
+static const s2_case_t *find_source(const s2_register_t *s,const char *id)
+{
+    size_t i;
+    for(i=0;i<s->count;++i)
+        if(!strcmp(s->cases[i].id,id))return &s->cases[i];
+    return NULL;
+}
+static int load_journal(journal_t *j,const char *path)
+{
+    FILE *f;
+    char line[320],magic[32];
+    size_t n=0;
+    if(!j || !path)return 0;
+    f=fopen(path,"r");
+    if(!f)return errno==ENOENT;
+    if(!fgets(magic,sizeof magic,f)||strcmp(magic,JOURNAL_MAGIC "\n")){
+        fclose(f);return 0;
+    }
+    while(fgets(line,sizeof line,f)){
+        investigation_t record={0};
+        char extra;
+        int consumed;
+        if(n>=MAX_ENTRIES || !strchr(line,'\n')){fclose(f);return 0;}
+        consumed=sscanf(line,"%95s %" SCNx64 " %" SCNd64 " %" SCNd64
+                        " %u %u %u %d %c",
+                        record.id,&record.hash,&record.first,&record.last,
+                        &record.cycles,&record.revisions,&record.escalations,
+                        &record.severity,&extra);
+        if(consumed!=8 || !valid_id(record.id) ||
+           record.cycles<1U || record.first<=0 || record.last<record.first ||
+           record.severity<0 || record.severity>3 ||
+           find_investigation(j,record.id)){
+            fclose(f);return 0;
+        }
+        j->rows[n++]=record;
+        j->count=n;
+    }
+    if(ferror(f)){fclose(f);return 0;}
+    return fclose(f)==0;
+}
+static int save_journal(const journal_t *j,const char *path)
+{
+    char temporary[1024];
+    FILE *f;
+    int fd,failed=0;
+    size_t i;
+    if(snprintf(temporary,sizeof temporary,"%s.tmp.XXXXXX",path)>=(int)sizeof temporary)
+        return 0;
+    fd=mkstemp(temporary);
+    if(fd<0)return 0;
+    if(fchmod(fd,0600)){close(fd);unlink(temporary);return 0;}
+    f=fdopen(fd,"w");
+    if(!f){close(fd);unlink(temporary);return 0;}
+    if(fprintf(f,JOURNAL_MAGIC "\n")<0)failed=1;
+    for(i=0;i<j->count && !failed;++i){
+        const investigation_t *r=&j->rows[i];
+        if(fprintf(f,"%s %016" PRIx64 " %" PRId64 " %" PRId64
+                   " %u %u %u %d\n",r->id,r->hash,r->first,r->last,
+                   r->cycles,r->revisions,r->escalations,r->severity)<0)failed=1;
+    }
+    if(fflush(f)!=0)failed=1;
+    if(fsync(fd)!=0)failed=1;
+    if(fclose(f)!=0)failed=1;
+    if(failed){unlink(temporary);return 0;}
+    if(rename(temporary,path)){unlink(temporary);return 0;}
+    return 1;
+}
+static int append(char *out,size_t cap,size_t *used,const char *format,...)
+{
+    va_list args;
+    int n;
+    if(*used>=cap)return 0;
+    va_start(args,format);
+    n=vsnprintf(out+*used,cap-*used,format,args);
+    va_end(args);
+    if(n<0 || (size_t)n>=cap-*used)return 0;
+    *used+=(size_t)n;
+    return 1;
+}
+static void format_utc(time_t when,char out[32])
+{
+    struct tm tm;
+    if(!gmtime_r(&when,&tm) ||
+       !strftime(out,32,"%Y-%m-%d %H:%M UTC",&tm))
+        snprintf(out,32,"unavailable");
+}
+int s2_investigation_update(const char *source_json,size_t source_size,
+                            const s2_register_t *state,const char *journal_path,
+                            time_t collected_at,char *out,size_t cap)
+{
+    journal_t j={0};
+    struct json_tokener *tok=NULL;
+    struct json_object *root=NULL,*rows=NULL;
+    size_t i,n,used=0,continuing=0,changed=0,escalated=0,baseline=0;
+    size_t seen_high=0,seen_critical=0,unclassified=0;
+    size_t examined=0,detail=0;
+    int ok=0;
+    int64_t epoch=(int64_t)collected_at;
+    char collected[32];
+
+    if(!source_json||!source_size||source_size>MAX_SOURCE||!state||!journal_path||
+       !out||cap<1500||collected_at<=0 || !state->cases && state->count)
+        return 0;
+    out[0]=0;
+    j.rows=calloc(MAX_ENTRIES,sizeof *j.rows);
+    if(!j.rows)return 0;
+    if(!load_journal(&j,journal_path))goto finish;
+    tok=json_tokener_new();
+    if(!tok)goto finish;
+    root=json_tokener_parse_ex(tok,source_json,(int)source_size);
+    if(json_tokener_get_error(tok)!=json_tokener_success || !root ||
+       !json_object_is_type(root,json_type_object) ||
+       !json_object_object_get_ex(root,"threats",&rows) ||
+       !json_object_is_type(rows,json_type_array))goto finish;
+    n=json_object_array_length(rows);
+    if(n>MAX_ENTRIES)goto finish;
+    /* Validate the entire snapshot before writing any journal state. */
+    for(i=0;i<n;++i){
+        struct json_object *row=json_object_array_get_idx(rows,i);
+        const char *id=case_id(row);
+        size_t k;
+        if(!valid_id(id)||!find_source(state,id))goto finish;
+        for(k=0;k<i;++k)
+            if(!strcmp(id,case_id(json_object_array_get_idx(rows,k))))goto finish;
+    }
+    for(i=0;i<n;++i){
+        struct json_object *row=json_object_array_get_idx(rows,i);
+        const char *id=case_id(row);
+        const s2_case_t *source=find_source(state,id);
+        investigation_t *record=find_investigation(&j,id);
+        int sev=severity_of(row);
+        if(!record){
+            if(j.count>=MAX_ENTRIES)goto finish;
+            record=&j.rows[j.count++];
+            memset(record,0,sizeof *record);
+            snprintf(record->id,sizeof record->id,"%s",id);
+            record->first=epoch;
+            record->cycles=1;
+            ++baseline;
+        }else{
+            if(record->last!=epoch && record->cycles<UINT32_MAX){
+                ++record->cycles;
+                ++continuing;
+            }
+            if(record->hash!=source->hash && record->hash!=0 && record->revisions<UINT32_MAX){
+                ++record->revisions;
+                ++changed;
+            }
+            if(record->severity && sev>record->severity && record->escalations<UINT32_MAX){
+                ++record->escalations;
+                ++escalated;
+            }
+        }
+        record->hash=source->hash;
+        record->last=epoch;
+        record->severity=sev;
+        if(sev==2)++seen_high;
+        else if(sev==3)++seen_critical;
+        else if(!sev)++unclassified;
+    }
+    if(!save_journal(&j,journal_path))goto finish;
+    format_utc(collected_at,collected);
+    if(!append(out,cap,&used,
+       "\n\n## INVESTIGATION CONTINUITY\n\n"
+       "**Journal updated:** %s. This section tracks Sentinel source-record continuity "
+       "across S2 collection cycles, not independent attack events.\n\n"
+       "- Source records examined in this collection: %zu; first recorded by this journal: %zu; "
+       "previously recorded and observed again: %zu.\n"
+       "- Revised retained source records: %zu; increased severity classifications: %zu.\n"
+       "- Current HIGH records: %zu; CRITICAL records: %zu; without recognized severity: %zu.\n"
+       "- Cumulative records in the investigation journal: %zu. "
+       "Absence from a later snapshot is not case closure.\n\n",
+       collected,n,baseline,continuing,changed,escalated,
+       seen_high,seen_critical,unclassified,j.count))goto finish;
+
+    if(!append(out,cap,&used,
+       "### Priority investigative leads\n\n"
+       "The following are source-record histories selected for review. "
+       "Collection-cycle repetition is not proof of renewed hostile activity.\n\n"))goto finish;
+
+    /* Prioritize escalations, then changed and recurring HIGH/CRITICAL cases.
+     * Expose no source IPs, customer domains, raw payloads, or case identifiers. */
+    for(int pass=0;pass<3 && detail<12;++pass){
+        for(i=0;i<n && detail<12;++i){
+            const char *id=case_id(json_object_array_get_idx(rows,i));
+            investigation_t *r=find_investigation(&j,id);
+            int priority=(r->escalations && r->severity>=2)?0:
+                         (r->revisions && r->severity>=2)?1:
+                         (r->severity>=2 && r->cycles>1)?2:3;
+            char first[32],last[32];
+            if(!r || priority!=pass)continue;
+            format_utc((time_t)r->first,first);
+            format_utc((time_t)r->last,last);
+            ++detail;
+            if(!append(out,cap,&used,
+                 "- **Lead %zu — %s:** First recorded %s; last observed %s; "
+                 "seen in %u collection cycle(s), %u record revision(s), "
+                 "%u severity escalation(s). **Assessment:** %s.\n",
+                 detail,severity_name(r->severity),first,last,r->cycles,
+                 r->revisions,r->escalations,
+                 r->escalations?"Source severity escalated; verify site responses and independent access logs":
+                 r->revisions?"Retained source evidence changed; compare field-level changes and verify outcome":
+                 "Persistent source record; determine whether underlying events are repeated or simply retained"))
+               goto finish;
+            ++examined;
+        }
+    }
+    if(!detail && !append(out,cap,&used,
+          "No recurring, revised, or escalating HIGH/CRITICAL source records qualified for priority review.\n"))
+        goto finish;
+    if(!append(out,cap,&used,
+       "\n### Evidence and investigative limitations\n\n"
+       "- The journal records **first/last S2 collection**, not the source event's actual first occurrence.\n"
+       "- Source-record revisions do not identify which field changed or establish impact.\n"
+       "- A record repeatedly returned by the API may represent one retained event, not repeated attacks.\n"
+       "- Source severity and HTTP status are investigative leads, not independent proof of compromise.\n"
+       "- Determine access outcomes from independently authenticated server/application logs before concluding intrusion.\n"
+       "- Investigator authority remains human-controlled; publication does not authorize blocking or remediation.\n"))
+       goto finish;
+    ok=1;
+finish:
+    if(root)json_object_put(root);
+    if(tok)json_tokener_free(tok);
+    free(j.rows);
+    if(!ok)out[0]=0;
+    (void)examined;
+    return ok;
+}
