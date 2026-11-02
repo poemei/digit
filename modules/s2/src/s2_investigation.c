@@ -144,6 +144,42 @@ static int save_journal(const journal_t *j,const char *path)
     if(rename(temporary,path)){unlink(temporary);return 0;}
     return 1;
 }
+static const char *field(struct json_object *row,const char *name)
+{
+    struct json_object *v=NULL,*detail=NULL;
+    if(json_object_object_get_ex(row,name,&v) &&
+       json_object_is_type(v,json_type_string))return json_object_get_string(v);
+    if(json_object_object_get_ex(row,"details",&detail) &&
+       json_object_is_type(detail,json_type_object) &&
+       json_object_object_get_ex(detail,name,&v) &&
+       json_object_is_type(v,json_type_string))return json_object_get_string(v);
+    return NULL;
+}
+static const char *source_ip(struct json_object *row)
+{
+    const char *ip=field(row,"ip");
+    return ip && *ip ? ip : field(row,"ip_address");
+}
+static int status_of(struct json_object *row)
+{
+    struct json_object *v=NULL,*details=NULL;
+    if(!json_object_object_get_ex(row,"response_status",&v) ||
+       !json_object_is_type(v,json_type_int)){
+        if(!json_object_object_get_ex(row,"details",&details) ||
+           !json_object_is_type(details,json_type_object) ||
+           !json_object_object_get_ex(details,"response_status",&v) ||
+           !json_object_is_type(v,json_type_int))return 0;
+    }
+    { int status=json_object_get_int(v);return status>=100&&status<=599?status:0; }
+}
+static int source_day(const char *date)
+{
+    size_t i;
+    if(!date || strlen(date)<10U || date[4]!='-' || date[7]!='-')return 0;
+    for(i=0;i<10;++i)
+        if(i!=4&&i!=7&&(date[i]<'0'||date[i]>'9'))return 0;
+    return 1;
+}
 static int append(char *out,size_t cap,size_t *used,const char *format,...)
 {
     va_list args;
@@ -288,6 +324,65 @@ int s2_investigation_update(const char *source_json,size_t source_size,
     if(!detail && !append(out,cap,&used,
           "No recurring, revised, or escalating HIGH/CRITICAL source records qualified for priority review.\n"))
         goto finish;
+    if(!append(out,cap,&used,
+       "\n### Shared network indicators in the current snapshot\n\n"
+       "This comparison joins exact recorded address values within the current "
+       "source snapshot. It does not establish a common attacker or successful access.\n\n"))
+       goto finish;
+    {
+        unsigned char *visited=calloc(n?n:1U,1U);
+        size_t groups=0;
+        if(!visited)goto finish;
+        for(i=0;i<n&&groups<8;++i){
+            struct json_object *base=json_object_array_get_idx(rows,i);
+            const char *ip=source_ip(base),*domain=field(base,"domain");
+            const char *first_date=NULL,*last_date=NULL;
+            size_t j,count=0,high=0,critical=0,denied=0;
+            int cross_domain=0,multiple_dates=0;
+            if(visited[i]||!ip||!*ip)continue;
+            for(j=i;j<n;++j){
+                struct json_object *row=json_object_array_get_idx(rows,j);
+                const char *other=source_ip(row),*other_domain,*date;
+                int sev,status;
+                if(!other||strcmp(ip,other))continue;
+                visited[j]=1;
+                ++count;
+                sev=severity_of(row);
+                status=status_of(row);
+                if(sev==2)++high;
+                if(sev==3)++critical;
+                if(status==403||status==429)++denied;
+                other_domain=field(row,"domain");
+                if(domain&&*domain&&other_domain&&*other_domain&&
+                   strcmp(domain,other_domain))cross_domain=1;
+                date=field(row,"created_at");
+                if(source_day(date)){
+                    if(!first_date||strncmp(date,first_date,10)<0)first_date=date;
+                    if(!last_date||strncmp(date,last_date,10)>0)last_date=date;
+                }
+            }
+            if(first_date&&last_date&&strncmp(first_date,last_date,10))
+                multiple_dates=1;
+            if(count<2 || (!high&&!critical) ||
+               (!cross_domain&&!multiple_dates))continue;
+            ++groups;
+            if(!append(out,cap,&used,
+                "- **Indicator group %zu:** %zu retained source records, %zu HIGH and "
+                "%zu CRITICAL classifications, %zu reported denials or rate limits. "
+                "Evidence shows %s%s. **Assessment:** investigate whether the shared "
+                "address represents a proxy, service provider or repeated activity; "
+                "cross-check independent request and authentication records.\n",
+                groups,count,high,critical,denied,
+                cross_domain?"multiple reported site domains":"one reported site domain",
+                multiple_dates?" across different reported source dates":""))
+                { free(visited);goto finish; }
+        }
+        free(visited);
+        if(!groups && !append(out,cap,&used,
+           "No repeated HIGH/CRITICAL address indicator spanning multiple reported "
+           "site domains or source dates was found in the available snapshot.\n"))
+            goto finish;
+    }
     if(!append(out,cap,&used,
        "\n### Evidence and investigative limitations\n\n"
        "- The journal records **first/last S2 collection**, not the source event's actual first occurrence.\n"
