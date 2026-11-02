@@ -3,8 +3,8 @@
 ## Unreleased — 2026-11-02 — S2 v1.3.3 investigation continuity
 
 - Added an S2-local investigation journal with atomic persistence for source-case identifiers, signatures, first/last collection times, observation-cycle counts, record revisions, and severity escalations.
-- Added an evidence-bounded DSA investigation section listing current cross-collection metrics and up to twelve priority investigative leads. The existing snapshot assessment, Rictus candidate-ID matching, HTTP:BL research, publication verification, and six-hour schedules are retained.
-- Added deterministic regression fixtures for journal persistence across two collections, severity escalation, record revision and invalid-input rejection.
+- Added an evidence-bounded DSA investigation section listing cross-collection metrics, up to twelve priority investigative leads, and multi-domain or multi-date shared network indicators drawn from the current source snapshot. The existing snapshot assessment, Rictus candidate-ID matching, HTTP:BL research, publication verification, and six-hour schedules are retained.
+- Added deterministic regression fixtures for journal persistence across collections, severity escalation, record revision, cross-site indicator grouping, public-output redaction and invalid-input rejection.
 - Updated the S2 module descriptor and module.conf to 1.3.3; updated build sources, S2 README, and module roadmap. No shared ABI, Core, credentials, new dependency, or unrelated module change.
 - **Verification:** Source commits recorded, but no local native build or test execution was performed in this environment. Publication and live investigation behavior are not yet operator-verified. Retained API records alone do not establish repeated attacks or confirmed intrusions.
 
