@@ -1,5 +1,12 @@
 # Digit — CHANGELOG
 
+## Unreleased — 2026-11-03 — GitHub module 1.0.4 language-independent repository discovery
+
+- **Direction:** Digit's read-only GitHub inspection must not assume that every repository is C-only or impose a limited language allowlist. Mixed-language repositories such as C/C++/PHP must be recognized without implying engineering verification.
+- **Implementation:** Normal GitHub summary now queries GitHub's public /languages resource, identifies up to four detected languages by source-byte count, labels mixed-language projects, and explains when the breakdown cannot be retrieved. Existing concise IRC responses, allowlist validation, source-file access, and named report service are preserved.
+- Added offline mixed-language JSON and output assertions; synchronized module descriptor, test expectations and module.conf to 1.0.4. No new dependencies, Core changes, ABI changes, GitHub write operations, or restart requirement.
+- **Verification:** Code and metadata committed; host compilation, post-change qualification, hot-loader activation and live repository responses remain to be demonstrated. GitHub classification does not establish code understanding or test results.
+
 ## Unreleased — 2026-11-03 — GitHub module 1.0.3 plain-English repository reporting
 
 - Operator demonstrated successful live `/github poemei/digit` replies but rejected the numbered, metadata-heavy output as unintelligible.
