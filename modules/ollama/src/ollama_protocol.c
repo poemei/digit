@@ -92,7 +92,7 @@ int digit_ollama_build_engineering_request(const char *prompt,
         "Respond in plain English, at most two short sentences.\","
         "\"prompt\":\"";
     const char *suffix=
-        "\",\"options\":{\"temperature\":0.1,\"num_predict\":160}}";
+        "\",\"options\":{\"temperature\":0.1,\"num_predict\":96}}";
     if(!prompt||!*prompt||!output||output_size<2U)return 0;
     output[0]=0;
     return append_text(output,output_size,&used,prefix)&&
@@ -231,7 +231,7 @@ int digit_ollama_run_selftests(unsigned int *executed,
            request,sizeof request) &&
            strstr(request,"\"model\":\"qwen2.5-coder:3b\"") &&
            strstr(request,"\"keep_alive\":0") &&
-           strstr(request,"\"num_predict\":160") &&
+           strstr(request,"\"num_predict\":96") &&
            strstr(request,"never claim you compiled") &&
            strstr(request,"int main(void)"),&e,&p);
     expect(digit_ollama_build_engineering_request(
