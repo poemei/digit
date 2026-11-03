@@ -1,5 +1,11 @@
 # Digit — CHANGELOG
 
+## Unreleased — 2026-11-03 — GitHub module multi-target Makefile fix
+
+- Corrected both GitHub module compile recipes to recreate their output directory before writing a binary. This addresses the operator-observed `make -C modules/github all clean test` failure, where `clean` removed `build/` after Make had already satisfied its directory prerequisite.
+- Whole Makefile updated; no module C source, Core, ABI, or repository permissions changed.
+- Validation: exact source change committed; operator rerun of `all clean test` and target-host qualification still pending.
+
 ## Unreleased — 2026-11-03 — Digit GitHub Read-Only Module 1.0.0
 
 - Added `modules/github` as a native ABI 1.5 module exposing a `github` command and `digit.github.report.v1` service; no Core or ABI changes.
