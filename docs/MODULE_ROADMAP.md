@@ -350,3 +350,7 @@ The shared `stnlabz/ABI` repository's README confirms the ABI 1.5 descriptor exp
 **Exit gate:** Native build, at least ten qualification checks including negatives, full controller/service lifecycle tests, verification against an operator-approved live public repository, report usefulness review, and Director acceptance.
 
 **State:** Cycle 1 source implemented and committed. Native build, offline tests, runtime activation and live GitHub report quality remain unverified. No private repository authentication, cloning, pulling, checkout, diff, commit, push, GitHub workflow, or Rictus integration is implemented. These are outside the current cycle.
+
+### GitHub Cycle 1 build-directory correction — 2026-11-03
+
+**Observed:** Operator ran `make -C modules/github all clean test`; linking `build/test_github` failed because `clean` removed the previously created build directory. **Correction:** Both full compile recipes now ensure the output directory exists immediately before compilation, independent of an earlier Make directory prerequisite. **Gate:** Operator repeat build and offline qualification remain pending; this source correction does not establish successful execution.
