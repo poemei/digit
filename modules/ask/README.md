@@ -1,10 +1,10 @@
-# Digit Ask — native conversation controller 1.0.5
+# Digit Ask — native conversation controller 1.0.6
 
 Ask owns the registered `chat` route (ordinary directed conversation). It does not directly call external networks, classify research intent, access Corpus tables, or generate language.
 
 - Authoritative Identity first through Core service `digit.identity.answer`.
-- Research's `digit.research.answer.v1` service next; **Research alone owns research intent** and either returns a complete answer, an unavailable/denied status, or NOT_APPLICABLE.
-- The replaceable `digit.llm.generate` service supports both unclaimed questions and evidence-grounded responses to research questions.
+- Explicit `research <query>` or `search <query>` requests use Research's `digit.research.answer.v1` service. Research retains ownership of acquisition and result formatting. Its dedicated `/research` command remains available.
+- Ordinary conversation (including `Hello`) and explicitly directed peer messages use the existing lightweight `digit.llm.generate` service. Ask never calls the separate engineering model.
 - Peer-directed messages maintain the previous Ask/Tell/Say-to participant behavior.
 - Every output stays within Core's 512-byte routed-reply limit.
 - Core/IRC/shared ABI unchanged.
@@ -51,3 +51,22 @@ reliably supply it from the evidence alone.
 ## 1.0.5 — Direct search results to IRC
 
 Operator-approved KISS path: incoming ordinary question → Research service → one DuckDuckGo search → formatted search results → ordinary IRC response. Ask no longer sends research results to the language inference service, asks the model to infer dates or locations, or manufactures an answer from result snippets. The user's exact question is passed unchanged to Research. Research unavailable, empty and denied statuses return directly without invoking language inference. The pre-existing authoritative Identity response and explicitly addressed peer messages keep their previous handling. Tests cover exact query handoff, verbatim results, no inference, denial, unavailability, identity and explicit peer routing. No Core, IRC transport or shared contract changes; native qualification and live operation remain unverified.
+
+## 1.0.6 — Restore ordinary conversation routing (2026-11-03)
+
+**Observed operator failure:** `Hello` returned an unrelated applicant privacy-policy headline. Source inspection established that Ask 1.0.5 routed **every ordinary question and greeting** directly to Research, because it selected Research whenever the message was not a peer command. This was a controller-routing defect, not a coder-model failure.
+
+**Correction:** After authoritative Identity, ordinary `chat` messages invoke the existing lightweight conversational service. Only explicit `research <query>` or `search <query>` messages invoke Research through Ask; the independently registered `/research` command is unchanged. Explicit peer-directed `ask`, `tell`, and `say ... to` messages retain their original chat-model and peer-send path. An unsolicited leading IRC nickname in an ordinary generated reply is removed before delivery, without sending anything to that participant. Engineering inference remains the separate GitHub/engineering service.
+
+**Examples:**
+
+```text
+Hello                         -> lightweight conversation
+What is PHP?                  -> lightweight conversation
+research PHP 8.5 updates      -> Research evidence
+search next SpaceX launch     -> Research evidence
+/research next SpaceX launch  -> Research's own command
+/github poemei/digit inspect src/digit.c -> engineering model
+```
+
+**Validation:** Source and offline regression tests cover conversational greetings, ordinary technical questions, explicit Research, unavailable/denied research, authoritative Identity, peer messages, and unwanted nickname prefixes. Native compilation, test execution, installed version, and live IRC acceptance remain unverified until operator receipts. No Core, ABI, Ollama, Research, or GitHub source files were changed for this correction.
