@@ -1,5 +1,12 @@
 # Digit — CHANGELOG
 
+## Unreleased — 2026-11-03 — GitHub module first-install allowlist correction
+
+- Operator reported `sudo make -C modules/github install` passed offline qualification (25/25 module checks, negative 1/1, lifecycle 29/29), then failed because production `repos.conf` was absent.
+- Updated the complete module Makefile to create `/opt/digit/modules/github/repos.conf` from `tests/approved.conf` on first installation with `digit:digit` ownership and 0640 mode; an existing file is not overwritten.
+- Updated the fixture label and module README. No Core, ABI, GitHub module runtime C code, network permissions or live deployment changes.
+- Verification: operator-provided pre-fix test pass; source change committed. Post-fix installation and host behavior not yet verified.
+
 ## Unreleased — 2026-11-03 — GitHub module multi-target Makefile fix
 
 - Corrected both GitHub module compile recipes to recreate their output directory before writing a binary. This addresses the operator-observed `make -C modules/github all clean test` failure, where `clean` removed `build/` after Make had already satisfied its directory prerequisite.
