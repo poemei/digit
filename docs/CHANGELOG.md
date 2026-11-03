@@ -1,5 +1,13 @@
 # Digit — CHANGELOG
 
+## Unreleased — 2026-11-03 — GitHub module 1.0.6 read-only source inspection
+
+- Added `/github owner/repo inspect path/to/file` to inspect **actual GitHub source content**, rather than inferring behavior from repository filenames or language metadata.
+- The module validates authorized repository and path, retrieves GitHub file content, decodes a bounded text excerpt, and invokes Digit's **existing Core-mediated** `digit.llm.generate` service for an English explanation. Replies identify source path and blob SHA and label generated interpretation as **not tested**.
+- On missing/inaccessible Ollama service, returns a plain-English, grounded excerpt fallback with explicit inability to explain behavior; binary or inaccessible source is never described as understood. Untrusted GitHub content is data, not instructions; no code executes.
+- Added offline qualification for `inspect` input, traversal denial, Base64 source decoding, binary rejection, and source fallback. Bumped module descriptor, manifest and tests to 1.0.6; updated module README.
+- No Core or ABI modification; no new external dependency; read-only authorization preserved. **Build, source qualification, live module update and IRC source-inspection responses remain unverified.**
+
 ## Unreleased — 2026-11-03 — GitHub 1.0.5 evidence-based language roles
 
 - **Observed:** Live read-only reports listed Python alongside C for Digit and CSS/XSLT/JavaScript alongside PHP for ChAoS MVC without distinguishing primary application code from tests and supporting assets. GitHub /languages reports byte counts, not engineering roles.
