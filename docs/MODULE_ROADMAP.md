@@ -452,3 +452,9 @@ Director authorized initial native transport implementation; `/digit-chat` ChAoS
 **Limitation:** Existing router reply cap is 512 bytes, so unbounded/extended web responses are not implemented. Larger response contracts, streaming, persistence, and concurrency are deferred. No build, native qualification or live operation has been verified.
 
 Web 1.0.0 test scope expanded with socketpair round-trip against a mocked `digit.router.dispatch` callback (success and error), plus intact failure counters. Tests remain unexecuted on the operator host.
+
+### Web transport 1.0.1 — 2026-11-03
+
+Approved design: Digit initiates outbound HTTP requests to a local ChAoS MVC `/chat/transport` endpoint, retrieves pending messages, routes them through the existing `digit.router.dispatch` Core service, and posts the reply. This replaces the previous socket transport. Browser interface is `/chat`.
+
+Offline C build and 16/16 tests passed in an isolated environment. Native host build, installation, hotload and web integration are not verified. The PHP endpoint, browser authorization and queue behavior are separate implementation steps. Core remains unchanged and its existing reply length limit still applies.
