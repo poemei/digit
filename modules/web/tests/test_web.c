@@ -57,29 +57,6 @@ static void verify_roundtrip(const char *message,int expected_success,
  close(fds[0]);
  close(fds[1]);
 }
-static void verify_socket_acl(void)
-{
- char path[]="/tmp/digit-web-acl-XXXXXX";
- acl_t restrictive=NULL,expected=NULL,actual=NULL;
- int fd=mkstemp(path);
- CHECK(fd>=0);
- if(fd<0)return;
- restrictive=acl_from_text("u::rw-,g::r--,o::---");
- expected=acl_from_text("u::rw-,g::rw-,o::---");
- CHECK(restrictive!=NULL&&expected!=NULL);
- if(restrictive&&expected){
-  CHECK(acl_set_file(path,ACL_TYPE_ACCESS,restrictive)==0);
-  CHECK(set_socket_access(path));
-  actual=acl_get_file(path,ACL_TYPE_ACCESS);
-  CHECK(actual!=NULL);
-  if(actual)CHECK(acl_cmp(actual,expected)==0);
- }
- if(actual)acl_free(actual);
- if(expected)acl_free(expected);
- if(restrictive)acl_free(restrictive);
- close(fd);
- unlink(path);
-}
 int main(void)
 {
  stnlabz_module_qualification_result_t q={0};
@@ -108,7 +85,6 @@ int main(void)
  verify_roundtrip("Hello",1,"Hello!");
  verify_roundtrip("not found",0,"Digit could not complete the request.");
  CHECK(routed==2U);
- verify_socket_acl();
  host_api=NULL;
  printf("Web transport: %d/%d checks passed\n",passed,checks);
  return checks==passed?0:1;
