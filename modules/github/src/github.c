@@ -462,6 +462,18 @@ static int qualification(unsigned *executed,unsigned *passed,int *negative)
     CHECK(parsed!=NULL);
     if(parsed)json_object_put(parsed);
     CHECK(!decode(&fixture,json_type_array));
+    {
+        struct json_object *file=json_object_new_object();
+        size_t used_file=0;
+        char excerpt[512]={0};
+        json_object_object_add(file,"content",json_object_new_string("SGVsbG8gZ2l0aHViIQo="));
+        json_object_object_add(file,"encoding",json_object_new_string("base64"));
+        CHECK(file_excerpt(file,excerpt,sizeof excerpt,&used_file));
+        CHECK(strstr(excerpt,"Hello github!")!=NULL);
+        CHECK(strstr(excerpt,"source blob")==NULL);
+        json_object_put(file);
+    }
+
     CHECK(!strcmp(DIGIT_GITHUB_REPORT_SERVICE,"digit.github.report.v1"));
 #undef CHECK
     if(executed)*executed=e;
