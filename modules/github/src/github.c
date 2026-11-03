@@ -217,6 +217,25 @@ static int list_items(const response_t *r,const char *kind,char *out,size_t cap,
         const char *url=value(item,"html_url"),*type=value(item,"type");
         char detail[180],link[250],extra[80];
         plain(detail,sizeof detail,name?name:path?path:title?title:sha?sha:"unknown");
+        if(sha&&!strcmp(kind,"Recent commit references")){
+            struct json_object *commit=NULL,*author=NULL;
+            const char *message=NULL,*date=NULL;
+            if(json_object_object_get_ex(item,"commit",&commit) &&
+               json_object_is_type(commit,json_type_object)){
+                message=value(commit,"message");
+                if(json_object_object_get_ex(commit,"author",&author) &&
+                   json_object_is_type(author,json_type_object))
+                    date=value(author,"date");
+            }
+            if(message){
+                char message_clean[105],sha_clean[16],date_clean[24];
+                plain(message_clean,sizeof message_clean,message);
+                plain(sha_clean,sizeof sha_clean,sha);
+                plain(date_clean,sizeof date_clean,date?date:"date not provided");
+                snprintf(detail,sizeof detail,"%.12s: %.95s (%s)",
+                         sha_clean,message_clean,date_clean);
+            }
+        }
         plain(link,sizeof link,url?url:"");
         plain(extra,sizeof extra,type?type:"");
         if(!emit(out,cap,used,"- %s%s%s%s%s\n",detail,
