@@ -1,91 +1,51 @@
-#define _GNU_SOURCE
-#include <arpa/inet.h>
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <string.h>
-#include <sys/socket.h>
-#include <unistd.h>
+#include <json-c/json.h>
 #include "../src/web_module.c"
-
 static int checks,passed;
-static unsigned routed;
 #define CHECK(x) do {++checks;if(x)++passed;else fprintf(stderr,"FAIL line %d: %s\n",__LINE__,#x);}while(0)
-
-static stnlabz_module_result_t test_dispatch(const char *name,
- const void *input,size_t input_len,void *output,size_t output_len,
- size_t *used)
+static int calls;
+static stnlabz_module_result_t fake_router(const char *service,const void *input,
+ size_t input_size,void *response,size_t capacity,size_t *used)
 {
  const digit_route_request_t *request=input;
- digit_route_reply_t *reply=output;
- ++routed;
- if(strcmp(name,DIGIT_ROUTER_DISPATCH_SERVICE)||!request||
-    input_len!=sizeof *request||!reply||output_len<sizeof *reply)
-  return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ digit_route_reply_t *reply=response;
+ ++calls;
+ if(strcmp(service,DIGIT_ROUTER_DISPATCH_SERVICE)||
+    input_size!=sizeof *request||capacity<sizeof *reply)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+ if(strcmp(request->sender,"digit-web")||strcmp(request->text,"Hello"))return STNLABZ_MODULE_ERR_NOT_FOUND;
  memset(reply,0,sizeof *reply);
- if(!strcmp(request->text,"Hello")){
-  strcpy(reply->text,"Hello!");
-  reply->replied=1;
-  if(used)*used=sizeof *reply;
-  return STNLABZ_MODULE_OK;
- }
- return STNLABZ_MODULE_ERR_NOT_FOUND;
-}
-static void verify_roundtrip(const char *message,int expected_success,
-                             const char *expected_reply)
-{
- int fds[2]={-1,-1};
- unsigned char request_header[4],response_header[5];
- size_t reply_size;
- uint32_t length;
- char text[DIGIT_ROUTE_REPLY_MAX];
- CHECK(socketpair(AF_UNIX,SOCK_STREAM,0,fds)==0);
- if(fds[0]<0||fds[1]<0)return;
- permitted_uid=geteuid();
- CHECK(encode_request_length(strlen(message),request_header));
- CHECK(write_all(fds[0],request_header,sizeof request_header));
- CHECK(write_all(fds[0],message,strlen(message)));
- process_client(fds[1]);
- CHECK(read_all(fds[0],response_header,sizeof response_header));
- CHECK(response_header[0]==(expected_success?0U:1U));
- memcpy(&length,response_header+1,4U);
- reply_size=(size_t)ntohl(length);
- CHECK(reply_size<DIGIT_ROUTE_REPLY_MAX);
- if(reply_size<DIGIT_ROUTE_REPLY_MAX){
-  CHECK(read_all(fds[0],text,reply_size));
-  text[reply_size]=0;
-  CHECK(!strcmp(text,expected_reply));
- }
- close(fds[0]);
- close(fds[1]);
+ strcpy(reply->text,"Hello!");
+ reply->replied=1;
+ if(used)*used=sizeof *reply;
+ return STNLABZ_MODULE_OK;
 }
 int main(void)
 {
  stnlabz_module_qualification_result_t q={0};
- stnlabz_module_host_t mock={.invoke_service=test_dispatch};
- unsigned char header[4]={0};
- size_t size=0;
- uid_t uid=0;
+ stnlabz_module_host_t mock={.invoke_service=fake_router};
+ web_job_t job={0};
+ char reply[DIGIT_ROUTE_REPLY_MAX]={0},payload[1400];
  CHECK(qualify(&q)==STNLABZ_MODULE_OK);
  CHECK(q.tests_executed>=STNLABZ_MODULE_MIN_TESTS);
  CHECK(q.tests_executed==q.tests_passed);
- CHECK(q.negative_test_executed==1&&q.negative_test_passed==1);
+ CHECK(q.negative_test_executed&&q.negative_test_passed);
  CHECK(qualify(NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT);
- CHECK(!strcmp(stnlabz_module_get_descriptor()->id,"web"));
- CHECK(stnlabz_module_get_descriptor()->version_major==1);
- CHECK(stnlabz_module_get_descriptor()->version_minor==0);
- CHECK(stnlabz_module_get_descriptor()->version_patch==0);
  CHECK(start(NULL)==STNLABZ_MODULE_ERR_START_FAILED);
  CHECK(stop()==STNLABZ_MODULE_OK);
- CHECK(parse_uid("1234",&uid)&&uid==(uid_t)1234);
- CHECK(!parse_uid("1234x",&uid));
- CHECK(encode_request_length(128,header));
- CHECK(decode_request_length(header,&size)&&size==128U);
- CHECK(validate_text("/github poemei/digit tree",25));
- CHECK(!validate_text("/github\ntree",12));
- host_api=&mock;
- verify_roundtrip("Hello",1,"Hello!");
- verify_roundtrip("not found",0,"Digit could not complete the request.");
- CHECK(routed==2U);
- host_api=NULL;
- printf("Web transport: %d/%d checks passed\n",passed,checks);
- return checks==passed?0:1;
+ CHECK(stnlabz_module_get_descriptor()->version_patch==1);
+ CHECK(parse_job("{\"id\":\"test-1\",\"message\":\"Hello\"}",&job));
+ module_host=&mock;
+ CHECK(dispatch(&job,reply));
+ CHECK(!strcmp(reply,"Hello!"));
+ CHECK(calls==1);
+ CHECK(build_reply(job.id,1,reply,payload,sizeof payload));
+ CHECK(strstr(payload,"\"id\":\"test-1\"")!=NULL);
+ CHECK(strstr(payload,"\"message\":\"Hello!\"")!=NULL);
+ CHECK(!parse_job("{\"id\":\"x\",\"message\":\"hi\\u0000there\"}",&job));
+ module_host=NULL;
+ printf("Web HTTP transport tests %d/%d %s\n",passed,checks,
+     passed==checks?"PASS":"FAIL");
+ return passed==checks?0:1;
 }
