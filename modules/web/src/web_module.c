@@ -20,7 +20,7 @@
 #define WEB_WAIT_NS 250000000L
 
 typedef struct {char bytes[WEB_HTTP_LIMIT+1U];size_t used;} web_buffer_t;
-typedef struct {char id[WEB_MAX_ID+1U];char text[DIGIT_ROUTE_TEXT_MAX];} web_job_t;
+typedef struct {char id[WEB_MAX_ID+1U];char text[DIGIT_ROUTE_TEXT_MAX];char display_name[128];} web_job_t;
 static pthread_t worker;
 static atomic_int stop_requested;
 static int worker_started;
@@ -68,8 +68,8 @@ static int valid_id(const char *id)
 }
 static int parse_job(const char *body,web_job_t *job)
 {
- struct json_object *root=NULL,*id_obj=NULL,*text_obj=NULL;
- const char *id,*message;
+ struct json_object *root=NULL,*id_obj=NULL,*text_obj=NULL,*name_obj=NULL;
+ const char *id,*message,*name=NULL;
  size_t len;
  int ok=0;
  if(!body||!job)return 0;
@@ -85,8 +85,19 @@ static int parse_job(const char *body,web_job_t *job)
  len=(size_t)json_object_get_string_len(text_obj);
  if(!valid_id(id)||!valid_message(message,len)||
     strlen(message)!=len)goto done;
+ /* Optional for older queued jobs. The website derives this field from
+  * the authenticated account; browsers cannot set it directly. */
+ if(json_object_object_get_ex(root,"display_name",&name_obj)){
+  size_t n;
+  if(!json_object_is_type(name_obj,json_type_string))goto done;
+  name=json_object_get_string(name_obj);
+  n=(size_t)json_object_get_string_len(name_obj);
+  if(!n||n>=sizeof job->display_name||strlen(name)!=n||
+     !valid_message(name,n))goto done;
+ }
  memcpy(job->id,id,strlen(id)+1U);
  memcpy(job->text,message,len+1U);
+ if(name)strcpy(job->display_name,name);
  ok=1;
 done:
  if(root)json_object_put(root);
@@ -160,7 +171,7 @@ static int dispatch(const web_job_t *job,char *reply)
  size_t used=0;
  stnlabz_module_result_t rc;
  if(!job||!reply||!module_host||!module_host->invoke_service)return 0;
- strcpy(request.sender,"digit-web");
+ strcpy(request.sender,job->display_name[0]?job->display_name:"digit-web");
  strcpy(request.text,job->text);
  rc=module_host->invoke_service(DIGIT_ROUTER_DISPATCH_SERVICE,
      &request,sizeof request,&result,sizeof result,&used);
