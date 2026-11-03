@@ -946,7 +946,7 @@ static int source_sample(struct json_object *file,char sample[1300],
         c=(unsigned char)((acc>>bits)&255U);
         ++decoded;
         if(!c)return 0;
-        if(n+1U>=1300U){more=1;break;}
+        if(n+1U>=1100U){more=1;break;}
         if(c=='\n')++lines;
         if(c=='\n'||c=='\t'||c=='\r'||(c>=32&&c<127))
             sample[n++]=(char)(c=='\t'?' ':c);
@@ -1153,6 +1153,8 @@ static int qualification(unsigned *executed,unsigned *passed,int *negative)
         CHECK(source_sample(file,sample,&lines,&partial));
         CHECK(strstr(sample,"int main(void)")!=NULL);
         CHECK(lines==2U&&!partial);
+        CHECK(!parse_query("poemei/digit inspect ../secret",owner,repo,action,path));
+
         CHECK(inspect_source(file,"src/main.c",reply_text));
         CHECK(strstr(reply_text,"SHA 0123456789ab")!=NULL);
         CHECK(strstr(reply_text,"No behavior verified.")!=NULL);
