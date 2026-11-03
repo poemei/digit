@@ -1,6 +1,6 @@
 # Digit GitHub Read-Only Module — Cycle 1
 
-**Version:** 1.0.0 source candidate (not yet qualified or deployed).
+**Version:** 1.0.1 source candidate (post-fix build and live confirmation pending).
 
 **Purpose:** Let Digit retrieve inspectable information from explicitly allowed public GitHub repositories using the existing native STN-Labz ABI 1.5. Read-only repository inspection is a prerequisite for future engineering assessments. It is not certification.
 
@@ -20,6 +20,8 @@ Use the registered `/github` controller:
 ```
 
 `summary` reports repository metadata, root entries, recent commits, open issues and pull requests, with evidence links where available. `tree` lists a bounded page of directory entries. `file` returns file metadata, source URL, blob SHA and a bounded printable text excerpt. `commits`, `issues`, and `prs` return bounded first-page references. Responses indicate unavailable data rather than inventing findings.
+
+**IRC command response contract:** Digit Core's `digit.router.dispatch` captures exactly one reply of at most 511 characters. The `/github` command returns one concise, possibly truncated response; it does not send multiple callback replies. The named `digit.github.report.v1` service retains the fuller bounded evidence report for capable consumers. This is deliberately distinct from Core's transport-agnostic one-response routing. A 1.0.1 `.so` replacement is eligible for the existing automatic hot-loader without restarting Digit, subject to runtime qualification and activation.
 
 The ABI service `digit.github.report.v1` accepts `digit_github_request_t` and returns `digit_github_response_t` from `include/github_module.h`. It is separate from ordinary conversational Ask behavior and does not alter Core routing.
 
