@@ -354,3 +354,11 @@ The shared `stnlabz/ABI` repository's README confirms the ABI 1.5 descriptor exp
 ### GitHub Cycle 1 build-directory correction — 2026-11-03
 
 **Observed:** Operator ran `make -C modules/github all clean test`; linking `build/test_github` failed because `clean` removed the previously created build directory. **Correction:** Both full compile recipes now ensure the output directory exists immediately before compilation, independent of an earlier Make directory prerequisite. **Gate:** Operator repeat build and offline qualification remain pending; this source correction does not establish successful execution.
+
+### GitHub Cycle 1 first-install allowlist — 2026-11-03
+
+**Observed:** Offline qualification passed (25/25, negative 1/1, lifecycle 29/29), but the operator's install command failed because `/opt/digit/modules/github/repos.conf` was missing.
+
+**Correction:** First install copies `tests/approved.conf` to the production allowlist with `digit:digit` ownership and 0640 permissions. Existing production allowlists are preserved on reinstall. No read/write capability expansion.
+
+**Exit gate:** Operator repeats installation and confirms the seeded configuration and module activation. Current evidence covers committed source only, not successful post-fix installation.
