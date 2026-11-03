@@ -111,6 +111,47 @@ static const char *standalone_greeting(const char *input)
  if(!strcmp(word,"hey"))return "Hey!";
  return NULL;
 }
+/* Answer only explicit questions about the conversational sender.
+ * Sender is a transport label, never an authorization claim. */
+static int asks_sender_name(const char *input)
+{
+ char normalized[80];
+ size_t i=0,n=0;
+ if(!input)return 0;
+ while(input[i]==' '||input[i]=='\\t')++i;
+ while(input[i]&&n+1U<sizeof normalized){
+  unsigned char ch=(unsigned char)input[i++];
+  if(ch=='?'||ch=='.'||ch=='!'){
+   while(input[i]==' '||input[i]=='\\t')++i;
+   if(input[i])return 0;
+   break;
+  }
+  if(ch>=0x80U)return 0;
+  normalized[n++]=(char)tolower(ch);
+ }
+ if(input[i]&&n+1U>=sizeof normalized)return 0;
+ while(n&&(normalized[n-1]==' '||normalized[n-1]=='\\t'))--n;
+ normalized[n]=0;
+ return !strcmp(normalized,"who am i")||
+        !strcmp(normalized,"what is my name")||
+        !strcmp(normalized,"do you know my name");
+}
+static const char *sender_name_reply(const char *sender,char *out,size_t cap)
+{
+ size_t i,n;
+ int len;
+ if(!sender||!out||cap<2U)return NULL;
+ n=strlen(sender);
+ if(!n||n>=128U||!strcmp(sender,"digit-web"))return
+  "I do not have a name for this conversation.";
+ for(i=0;i<n;++i){
+  unsigned char ch=(unsigned char)sender[i];
+  if(ch<0x20U||ch==0x7fU)return
+   "I do not have a name for this conversation.";
+ }
+ len=snprintf(out,cap,"I know you here as %s.",sender);
+ return len>0&&(size_t)len<cap?out:NULL;
+}
 static stnlabz_module_result_t controller(
  const stnlabz_module_command_t *cmd,
  stnlabz_module_command_reply_fn reply,void *ctx,void *unused)
@@ -134,6 +175,13 @@ static stnlabz_module_result_t controller(
  if(n>=sizeof identity_in.question||n>=sizeof llm_in.prompt)
   return reply_text(reply,ctx,"That question is too long.")?
    STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
+
+ if(asks_sender_name(cmd->arguments)){
+  const char *answer=sender_name_reply(cmd->sender,message,sizeof message);
+  if(!answer)return STNLABZ_MODULE_ERR_INVALID_STATE;
+  return reply_text(reply,ctx,answer)?
+   STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
+ }
 
  memcpy(identity_in.question,cmd->arguments,n+1);
  rc=host->invoke_service(DIGIT_IDENTITY_ANSWER_SERVICE,
@@ -238,6 +286,16 @@ static int selftest(unsigned *e,unsigned *p,int *ne,int *np)
  CHECK(!standalone_greeting("hello can you debug this?"));
  CHECK(!standalone_greeting("hello research PHP 8.5"));
  CHECK(!standalone_greeting("hello: /github poemei/digit"));
+ CHECK(asks_sender_name("Who am I?"));
+ CHECK(asks_sender_name("what is my name"));
+ CHECK(asks_sender_name("Do you know my name?"));
+ CHECK(!asks_sender_name("Who are you?"));
+ CHECK(!asks_sender_name("Who am I and what can you do?"));
+ CHECK(!asks_sender_name("Who am I? /github poemei/digit"));
+ CHECK(sender_name_reply("Poe Mei",message,sizeof message)!=NULL);
+ CHECK(!strcmp(message,"I know you here as Poe Mei."));
+ CHECK(!strcmp(sender_name_reply("digit-web",message,sizeof message),
+              "I do not have a name for this conversation."));
 
  CHECK(!research_query("Hello"));
  CHECK(!research_query("What is PHP?"));
@@ -291,7 +349,7 @@ static stnlabz_module_result_t stop(void)
  return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
- "ask","Digit Ask Controller",1,0,7,
+ "ask","Digit Ask Controller",1,0,8,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
