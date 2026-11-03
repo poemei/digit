@@ -1,4 +1,4 @@
-# Digit Ask — native conversation controller 1.0.8
+# Digit Ask — native conversation controller 1.0.9
 
 Ask owns the registered `chat` route (ordinary directed conversation). It does not directly call external networks, classify research intent, access Corpus tables, or generate language.
 
@@ -86,3 +86,18 @@ search next SpaceX launch     -> Research evidence
 **Correction:** Ask recognizes only the explicit questions `who am I?`, `what is my name?`, and `do you know my name?` (case insensitive, with optional terminal punctuation). These are handled locally using `cmd->sender`, without Ollama, Research or the Digit Identity service. A normal display name produces `I know you here as <display_name>.`; the legacy `digit-web` sender or absent name produces `I do not have a name for this conversation.` This is a conversational label, not a proof of account authority. `Who are you?` remains Digit Identity's responsibility; other questions keep their original routing.
 
 The module descriptor increments to **1.0.8** to satisfy strict hotload version checks. Rebuild and test through the existing `make -C modules/ask clean all test` path, then use the established operator-controlled install and hotload process. No Core, Web Transport or ChAoS MVC files were changed for this correction. Live acceptance remains pending until an updated Ask module is activated.
+
+## 1.0.9 — Exact-thread context resume (2026-11-03)
+
+Chat 0.3.0 builds scoped, bounded transport text from the authenticated
+account's selected project and conversation. A return greeting such as "hey"
+uses the [resume] envelope, and Ask replies with a literal recent-record recap.
+The answer does not infer missing project facts or search other conversations.
+Other contextual conversation prompts use the [conversation] envelope and the
+existing lightweight inference route. Slash module commands remain unchanged.
+
+**Boundary:** The module trusts the Web Transport's text as conversational
+input, not account authority; it does not fetch a database or widen context
+scope. The PHP Chat module owns account authorization and MySQL scoping.
+The native descriptor increments to 1.0.9 for hotload safety. Offline tests
+and active deployed behavior are separate acceptance steps.
