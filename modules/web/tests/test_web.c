@@ -34,7 +34,7 @@ int main(void)
  CHECK(qualify(NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT);
  CHECK(start(NULL)==STNLABZ_MODULE_ERR_START_FAILED);
  CHECK(stop()==STNLABZ_MODULE_OK);
- CHECK(stnlabz_module_get_descriptor()->version_patch==1);
+ CHECK(stnlabz_module_get_descriptor()->version_patch==2);
  CHECK(parse_job("{\"id\":\"test-1\",\"message\":\"Hello\",\"display_name\":\"Mei Shaw\"}",&job));
  CHECK(!strcmp(job.display_name,"Mei Shaw"));
  module_host=&mock;
