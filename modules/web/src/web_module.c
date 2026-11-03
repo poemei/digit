@@ -186,11 +186,23 @@ static void *run_transport(void *ignored)
   char payload[1400];
   long status=0,ack=0;
   int success;
-  if(!exchange(handle,"{\"type\":\"poll\"}",&incoming,&status)||
-     status!=200L||!parse_job(incoming.bytes,&job)){
+  int received=exchange(handle,"{\"type\":\"poll\"}",&incoming,&status);
+  /* HTTP 204 is healthy idle. Report failures only when status changes. */
+  static long last_failure=0;
+  long failure=0;
+  if(!received)failure=-1L;
+  else if(status==204L){last_failure=0;sleep_short();continue;}
+  else if(status!=200L)failure=status;
+  else if(!parse_job(incoming.bytes,&job))failure=-2L;
+  if(failure){
+   if(failure!=last_failure){
+    fprintf(stderr,"[WEB] poll failed code=%ld (-1=connection, -2=invalid job)\n",failure);
+    last_failure=failure;
+   }
    sleep_short();
    continue;
   }
+  if(last_failure){fprintf(stderr,"[WEB] poll recovered\n");last_failure=0;}
   success=dispatch(&job,reply);
   if(!success)strcpy(reply,"Digit could not complete the request.");
   if(build_reply(job.id,success,reply,payload,sizeof payload)){
