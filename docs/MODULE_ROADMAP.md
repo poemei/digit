@@ -340,3 +340,13 @@ The shared `stnlabz/ABI` repository's README confirms the ABI 1.5 descriptor exp
 **Exit gate:** `make -C modules/s2 clean all test`, actual fixture output inspection, privacy and classification negative checks, controlled S2 activation, DSA page verification and Director acceptance.
 
 **State:** Source committed; native build, live investigative fidelity and final operator acceptance unverified. No claim of independent access-log corroboration or confirmed compromise.
+
+## GitHub module — Cycle 1: read-only repository intelligence
+
+**Objective:** Allow Digit to return evidence-backed information about a human-approved GitHub repository, as a measurable prerequisite for engineering competence.
+
+**Deliverables:** Native `modules/github` module using existing ABI 1.5, explicit allowlist, read-only GitHub REST retrieval, report service and `/github` command. Inspect repository metadata, root/directory entries, source excerpts, commit references, issues, and pull requests. Deny unapproved repositories and malformed paths before network access.
+
+**Exit gate:** Native build, at least ten qualification checks including negatives, full controller/service lifecycle tests, verification against an operator-approved live public repository, report usefulness review, and Director acceptance.
+
+**State:** Cycle 1 source implemented and committed. Native build, offline tests, runtime activation and live GitHub report quality remain unverified. No private repository authentication, cloning, pulling, checkout, diff, commit, push, GitHub workflow, or Rictus integration is implemented. These are outside the current cycle.
