@@ -188,12 +188,12 @@ static int verify_parent(void)
 }
 /* Replace inherited directory ACLs with the socket's intended access
  * policy. chmod(0660) changes an extended ACL mask, not its group entry. */
-static int set_socket_access(void)
+static int set_socket_access(const char *path)
 {
  acl_t acl=acl_from_text("u::rw-,g::rw-,o::---");
  int ok;
- if(!acl)return 0;
- ok=acl_set_file(WEB_SOCKET_PATH,ACL_TYPE_ACCESS,acl)==0;
+ if(!acl||!path)return 0;
+ ok=acl_set_file(path,ACL_TYPE_ACCESS,acl)==0;
  acl_free(acl);
  return ok;
 }
@@ -211,7 +211,7 @@ static int make_listener(void)
  address.sun_family=AF_UNIX;
  snprintf(address.sun_path,sizeof address.sun_path,"%s",WEB_SOCKET_PATH);
  if(bind(fd,(struct sockaddr *)&address,sizeof address)!=0)goto fail;
- if(!set_socket_access())goto fail_unlink;
+ if(!set_socket_access(WEB_SOCKET_PATH))goto fail_unlink;
  if(lstat(WEB_SOCKET_PATH,&st)!=0||!S_ISSOCK(st.st_mode))goto fail_unlink;
  socket_dev=st.st_dev;
  socket_ino=st.st_ino;
