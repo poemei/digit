@@ -106,7 +106,14 @@ int main(void)
  CHECK(q.negative_test_executed==1&&q.negative_test_passed==1);
  CHECK(start(&mock_host)==STNLABZ_MODULE_OK);
 
- CHECK(stnlabz_module_get_descriptor()->version_patch==8);
+ CHECK(stnlabz_module_get_descriptor()->version_patch==9);
+ CHECK(ask_from(1,"[resume] Project Sentinel; conversation sentinel-dev. User: state tests | Digit: passed | User: hey","Poe")==STNLABZ_MODULE_OK);
+ CHECK(strstr(reply_buffer,"Project Sentinel")!=NULL);
+ CHECK(strstr(reply_buffer,"state tests")!=NULL);
+ CHECK(calls_identity==0&&calls_research==0&&calls_llm==0);
+ CHECK(ask_from(1,"[conversation] Project Sentinel; conversation sentinel-dev | Current user: summarize","Poe")==STNLABZ_MODULE_OK);
+ CHECK(calls_llm==1);
+ CHECK(strstr(requested_prompt,"sentinel-dev")!=NULL);
  CHECK(ask_from(1,"who am I?","Poe Mei")==STNLABZ_MODULE_OK);
  CHECK(!strcmp(reply_buffer,"I know you here as Poe Mei."));
  CHECK(calls_identity==0&&calls_research==0&&calls_llm==0);
