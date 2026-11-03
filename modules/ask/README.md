@@ -1,4 +1,4 @@
-# Digit Ask — native conversation controller 1.0.7
+# Digit Ask — native conversation controller 1.0.8
 
 Ask owns the registered `chat` route (ordinary directed conversation). It does not directly call external networks, classify research intent, access Corpus tables, or generate language.
 
@@ -78,3 +78,11 @@ search next SpaceX launch     -> Research evidence
 **Fix:** Standalone case-insensitive `Hello`, `Hi`, and `Hey` (with surrounding whitespace and basic punctuation) receive direct small replies in Ask after the authoritative Identity service, without calling Ollama or Research. A message that merely starts with a greeting but contains a substantive request remains on the original conversation route. No changes to Research, GitHub, coder inference, Core, or peer transport. Offline regression covers greetings under simulated inference failure, mixed technical requests, and existing controller behavior.
 
 **Important limitation:** This restores basic greeting behavior; it does **not** demonstrate that the existing `digit.llm.generate` inference provider is healthy for other conversation. The live cause of that service failure requires its server-side Ollama model inventory or module logs. Native build, test execution, and operator acceptance remain pending.
+
+## 1.0.8 — Conversational sender identity (2026-11-03)
+
+**Observed failure:** After authenticated ChAoS MVC Chat began forwarding the account `display_name` through Digit Web Transport as the router `sender`, asking `who am I?` still produced a generic language-inference answer. The transport and Core router already passed the sender label correctly; Ask did not use it.
+
+**Correction:** Ask recognizes only the explicit questions `who am I?`, `what is my name?`, and `do you know my name?` (case insensitive, with optional terminal punctuation). These are handled locally using `cmd->sender`, without Ollama, Research or the Digit Identity service. A normal display name produces `I know you here as <display_name>.`; the legacy `digit-web` sender or absent name produces `I do not have a name for this conversation.` This is a conversational label, not a proof of account authority. `Who are you?` remains Digit Identity's responsibility; other questions keep their original routing.
+
+The module descriptor increments to **1.0.8** to satisfy strict hotload version checks. Rebuild and test through the existing `make -C modules/ask clean all test` path, then use the established operator-controlled install and hotload process. No Core, Web Transport or ChAoS MVC files were changed for this correction. Live acceptance remains pending until an updated Ask module is activated.
