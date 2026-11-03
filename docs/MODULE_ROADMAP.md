@@ -426,3 +426,7 @@ The shared `stnlabz/ABI` repository's README confirms the ABI 1.5 descriptor exp
 **Implemented:** Identity first; explicit `research `/`search ` invocation selects Research; ordinary messages select the existing `digit.llm.generate` lite service; peer commands keep their existing route. The independent Research command and dedicated GitHub engineering inference are untouched. Ordinary generated messages cannot silently become directed peer sends from a leading nickname.
 
 **Qualification gate:** Compile and run `make -C modules/ask clean all test`; operator-controlled install of Ask 1.0.6, then verify conversational `Hello`, explicit `research ` results, authorized Identity responses, peer-directed messages and GitHub engineering inspection still function. Source/test implementation is committed but host build, qualification, activation and IRC acceptance remain unverified.
+
+### Ask 1.0.7 — Restore greetings independently of inference (2026-11-03)
+
+Operator witnessed `Hello` produce `Language inference failed` after Ask 1.0.6, with Research remaining functional. Source correction routes standalone `Hello`, `Hi`, `Hey` to deterministic replies after Identity; mixed input remains on the original request route. Source and tests committed. Qualification, hotload, and live acceptance require operator validation. **The lightweight inference service failure for other conversation remains open pending host logs/model availability evidence.**
