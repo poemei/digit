@@ -1,5 +1,11 @@
 # Digit — CHANGELOG
 
+## Unreleased — 2026-11-03 — Web transport offline test improvement
+
+- Added Unix socketpair request/response round-trip cases with a mocked Core router service, verifying framing, successful delivery and unavailable-route errors.
+- Corrected test compile feature-macro ordering for Linux `SO_PEERCRED` and kept qualification counters populated when selftests fail.
+- No native test execution or runtime activation performed here.
+
 ## Unreleased — 2026-11-03 — Digit local Web Transport 1.0.0 source baseline
 
 - Added native-C `modules/web`: local Unix socket, framed requests/replies, bounded input validation, filesystem isolation, mandatory Linux peer UID checks.
