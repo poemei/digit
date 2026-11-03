@@ -290,7 +290,7 @@ static stnlabz_module_result_t stop(void)
  return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
- "web","Digit HTTP Web Transport",1,0,1,
+ "web","Digit HTTP Web Transport",1,0,2,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
