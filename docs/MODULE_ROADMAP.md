@@ -362,3 +362,11 @@ The shared `stnlabz/ABI` repository's README confirms the ABI 1.5 descriptor exp
 **Correction:** First install copies `tests/approved.conf` to the production allowlist with `digit:digit` ownership and 0640 permissions. Existing production allowlists are preserved on reinstall. No read/write capability expansion.
 
 **Exit gate:** Operator repeats installation and confirms the seeded configuration and module activation. Current evidence covers committed source only, not successful post-fix installation.
+
+### GitHub Cycle 1 routing contract correction — 2026-11-03
+
+**Observed:** IRC `/github` attempts reached Digit's Core but reported result 7 (`INVALID_STATE`). The existing Core hot-loader is active without a restart, so a missing restart was not an established cause. Code inspection showed Core accepts exactly one routed reply under 512 characters, whereas GitHub 1.0.0 emitted multiple replies for a normal summary and treated the second rejection as failure.
+
+**Correction:** GitHub 1.0.1 emits one bounded command reply and leaves longer evidence in its named report service; descriptor, manifest, tests and documentation synchronized. No Core modification or restart requirement.
+
+**Exit gate:** Post-fix module build/tests, automatic hot-load acceptance and one actual operator-observed IRC response. Source committed; runtime gates not yet independently verified.
