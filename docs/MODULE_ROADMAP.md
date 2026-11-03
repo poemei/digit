@@ -410,3 +410,11 @@ The shared `stnlabz/ABI` repository's README confirms the ABI 1.5 descriptor exp
 **Implementation:** New `/github owner/repo inspect path` reads a GitHub file's Base64 content through the existing HTTPS read-only client, records Git blob SHA, and optionally requests plain-English interpretation using the already-established `digit.llm.generate` Core service. Inference is explicitly limited to the fetched text excerpt, does not establish test results, and falls back to observable code when the model is unavailable. Authorization, path checks and module lifecycle remain unchanged.
 
 **Qualification:** Offline tests cover permission-independent argument validation, Base64 source decoding, binary fallback and source attribution; target Linux compilation and actual Ollama-assisted source analysis are still unverified. Full-file comprehension, cross-file understanding and execution/testing remain outside this increment.
+
+### On-demand coder model selection — Ollama 1.1.2 + GitHub 1.0.7 (2026-11-03)
+
+**Directive:** Engineering inference is critically important; use `qwen2.5-coder:3b` only when engineering work requires it while preserving fast conversational `llama3.2:1b`.
+
+**Implemented:** Added `digit.llm.engineering.generate` as a separate Core-mediated service using the existing inference request/response shape, and updated GitHub `inspect` to request it explicitly. Coding requests use `keep_alive=0` and bounded generation; normal chat retains its original service. No global model switch or Core change. Coding inference failures surface through evidence-only fallback, never through the lite model. Ollama model must be installed by the operator.
+
+**Qualification gate:** Run `make -C modules/ollama clean all test` and `make -C modules/github clean all test`; install Ollama 1.1.2 before GitHub 1.0.7 through existing operator-controlled hotload. Verify lite chat, engineering inspection, unavailable model behavior, and model memory release under realistic load. No host build or live receipts for this increment yet. Exact single-model memory limits require separate host-level configuration and are not claimed here.
