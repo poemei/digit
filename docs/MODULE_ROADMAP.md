@@ -438,3 +438,7 @@ Operator witnessed `Hello` produce `Language inference failed` after Ask 1.0.6, 
 **Implemented:** GitHub tree commands now use item-aligned pagination against the approved GitHub Contents directory. Show count, current page, and exact follow-up `/github owner/repo tree [path] page=N`. Explicitly report unsupported directories exceeding 40 pages; no silent four-item truncation. Existing source/issue/commit inspection paths untouched.
 
 **Qualification pending:** `make -C modules/github clean all test`, operator-controlled install/hotload, and live root and subdirectory page navigation, with no Core changes. GitHub Contents API limits and mutable results between independently fetched pages remain explicit.
+
+### GitHub 1.0.8 qualification correction (2026-11-03)
+
+Operator native compile completed but module qualification failed. Root cause in test fixture: page 3 is out of range for 64 short entries (two valid pages); its `unavailable` response does not display `64 entries`, contrary to an unconditional test assertion. Corrected fixture and added exhaustive entry-presence tests plus explicit navigation/out-of-range assertions; cleaned reported C compiler warnings. Source committed, server build/qualification and hotload acceptance pending.
