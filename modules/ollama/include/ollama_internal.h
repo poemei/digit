@@ -5,10 +5,14 @@
 
 #define DIGIT_OLLAMA_ENDPOINT "http://127.0.0.1:11434/api/generate"
 #define DIGIT_OLLAMA_MODEL "llama3.2:1b"
+#define DIGIT_OLLAMA_CODER_MODEL "qwen2.5-coder:3b"
+#define DIGIT_OLLAMA_ENGINEERING_TIMEOUT_MS 180000L
 #define DIGIT_OLLAMA_HTTP_MAX (256U * 1024U)
 
 int digit_ollama_build_request(const char *prompt,
                                 char *output, size_t output_size);
+int digit_ollama_build_engineering_request(const char *prompt,
+                                        char *output, size_t output_size);
 int digit_ollama_extract_response(const char *json,
                                    char *output, size_t output_size);
 int digit_ollama_run_selftests(unsigned int *executed,
