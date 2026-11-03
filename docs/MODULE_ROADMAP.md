@@ -402,3 +402,11 @@ The shared `stnlabz/ABI` repository's README confirms the ABI 1.5 descriptor exp
 **Change:** Inspect actual recursive Git file paths before attributing language roles. Test folders, build tool locations and supporting assets are reported separately from implementation. Source language classification is evidence-limited, supports mixed-language repositories and does not hardcode project identities or assume GitHub's byte counts imply runtime. An incomplete or unavailable tree prevents a determinate role claim.
 
 **Acceptance gate:** Run module tests and install with operator control, then check the two reported repositories against observed file paths. No live post-change receipts yet. Actual code comprehension and verification remain separate, deferred capabilities.
+
+### GitHub Cycle 1 — real-source inspection (1.0.6), 2026-11-03
+
+**Scope:** After operator-demonstrated language-role classification in 1.0.5, introduce bounded actual-source inspection without Core or ABI changes.
+
+**Implementation:** New `/github owner/repo inspect path` reads a GitHub file's Base64 content through the existing HTTPS read-only client, records Git blob SHA, and optionally requests plain-English interpretation using the already-established `digit.llm.generate` Core service. Inference is explicitly limited to the fetched text excerpt, does not establish test results, and falls back to observable code when the model is unavailable. Authorization, path checks and module lifecycle remain unchanged.
+
+**Qualification:** Offline tests cover permission-independent argument validation, Base64 source decoding, binary fallback and source attribution; target Linux compilation and actual Ollama-assisted source analysis are still unverified. Full-file comprehension, cross-file understanding and execution/testing remain outside this increment.
