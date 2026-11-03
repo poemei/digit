@@ -1,40 +1,50 @@
-# Digit Web Transport — 1.0.0 (source baseline, not activated)
+# Digit Web Transport 1.0.1 — Outbound HTTP
 
-Native-C, local-only communications between Digit and a future ChAoS MVC PHP module at /digit-chat.
+This replaces the unauthorized Unix socket implementation of 1.0.0. Digit initiates outbound HTTP communication to an existing local web server, like IRC initiates its own network connection. Digit does not expose a new listening port or Unix socket.
 
-## Boundaries
+## Integration contract for ChAoS MVC
 
-- Uses a Unix domain socket, not a TCP listener or IRC. Location: `/run/digit-web/digit.sock` (private server configuration only).
-- Calls the existing Core-mediated `digit.router.dispatch` service, using the same transport-neutral ingress as IRC.
-- Refuses startup unless `DIGIT_WEB_ALLOWED_UID` is configured with the trusted local PHP process UID and a protected runtime directory exists.
-- Verifies callers with Linux `SO_PEERCRED`; socket mode 0660 and directory permissions add filesystem isolation.
-- Does not authenticate browser visitors, implement website sessions or expose a public web route. PHP process identity is not visitor authorization.
-- Does not alter Digit Core, its ABI, IRC, Ask, Research, Ollama or GitHub.
-- Existing router ABI limits replies to 511 text bytes. Removing IRC does not remove this internal contract. Larger replies will require an authorized extension or a larger existing service interface.
+The **visitor interface** is `/chat`. The ChAoS MVC module separately implements a **server-only** transport operation at `/chat/transport`. This operation must not be publicly accessible or included in the chat view.
 
-## Wire contract v1
+Digit polls with an HTTP POST and `Content-Type: application/json`:
 
-Request: unsigned big-endian 32-bit length (1–2047), followed by that many UTF-8 bytes (no NUL, CR, LF, control bytes). The message is the normal Digit input text, e.g. `Hello` or `research PHP 8.5`.
+```json
+{"type":"poll"}
+```
 
-Response: one status byte (`0` = Digit replied, `1` = error), followed by unsigned big-endian 32-bit payload length, followed by exactly that many bytes (maximum 511). One request per connection; synchronous and serial processing, no stream or retained conversation history.
+The ChAoS module returns HTTP 204 when no message is pending, or HTTP 200 with exactly one queued request:
 
-PHP model implementation: connect to `unix:///run/digit-web/digit.sock` with `stream_socket_client`; send `pack('N', strlen($message)) . $message`, handling partial writes; read exactly five bytes, decode status and length with `unpack`, then read exactly the reply length, handling partial reads. Validate status/length, application sessions, web authorization and CSRF before forwarding. Never expose the socket path, user IDs, credentials or runtime details to the browser.
+```json
+{"id":"request-001","message":"Hello"}
+```
 
-## Runtime provisioning (operator-controlled)
+Digit passes `message` to the existing Core-mediated `digit.router.dispatch` service, with sender `digit-web`, then POSTs the result back to the same operation:
 
-Provision `/run/digit-web` with ownership by the Digit runtime user, with no world access or group-write permission. A dedicated, setgid local group can allow the specific PHP process to traverse the directory and use the socket, while the module still checks its exact UID. Do not run PHP as Digit or grant general privileged groups for convenience. The `/run` directory is ephemeral and needs operator-controlled boot provisioning. Module startup fails closed if the directory is absent or socket path is already occupied; stale sockets require human inspection.
+```json
+{"type":"reply","id":"request-001","status":"ok","message":"Hello!"}
+```
 
-Set `DIGIT_WEB_ALLOWED_UID` in Digit's process environment to the trusted PHP runtime UID before operator-controlled module activation. Do not expose this server-side configuration publicly.
+The website acknowledges with HTTP 200. `status` is `ok` or `error`. HTTP replies are bounded and messages are correlated by `id` (1–64 ASCII letters, digits, underscores or hyphens). The PHP module must own request queueing, correlation, delivery acknowledgment and idempotency if a reply is retried. This Digit transport does not implement persistent conversations or transport-message de-duplication.
 
-## Build/qualification gate
+**Default local endpoint:** `http://127.0.0.1/chat/transport`. An optional `DIGIT_WEB_TRANSPORT_URL` environment variable can select another path under `http://127.0.0.1/chat/transport`, but cannot change host, scheme or port. Configure the existing web-server localhost virtual host so this route reaches the correct ChAoS MVC installation. No browser-side credentials, socket paths, ports or internal endpoints should be shown.
+
+**Security boundary:** The ChAoS MVC server must restrict the transport operation to loopback-origin requests and independently authorize each browser-side user before accepting messages for delivery. Digit currently has no individual browser-user authorization; sender is always `digit-web` and no user account is asserted. Do not expose the transport operation to internet clients. Restricting to 127.0.0.1 alone does not defend against untrusted processes already on the host.
+
+## Existing Core contract
+
+The HTTP transport sends the same router request type used by IRC: `digit_route_request_t`, invoking `digit.router.dispatch`. The existing router accepts at most 2047 bytes of input and supplies up to 511 text bytes of reply. The new transport removes IRC framing, but **cannot** change these Core limits. No Core edits or ABI changes were made.
+
+## Lifecycle and verification
+
+The module starts an outbound HTTP polling worker; it does **not** require a socket directory, Unix permissions, a PHP UID setting, a new listening port or an existing HTTP route to initialize. If the ChAoS endpoint does not exist yet, the worker remains active but cannot exchange messages. It does not falsely report web chat as operational.
 
 ```sh
 git pull
 make -C modules/web clean all test
 ```
 
-Only after qualification passes, the operator may install using `sudo make -C modules/web install`. Installation alone is not module activation. This module has **not** been compiled, qualified, installed or activated on Digit's VPS during this source commit.
+Only after native qualification succeeds may the operator choose `sudo make -C modules/web install` and activate/hotload it. Installation and production activation remain human-controlled. Any old systemd override such as `DIGIT_WEB_ALLOWED_UID` is obsolete for this version and may be reviewed or removed by the operator; this module does not require it.
 
-## Deferred
+## Limits
 
-Public-facing ChAoS MVC module, website authentication/authorization, end-user identity handling, response sizes exceeding existing Core router limits, streaming, history and concurrent sessions are not implemented in this increment. No website access is safe to enable before user-level authorization exists.
+One HTTP job per poll; one worker; no streaming, browser authentication, queue persistence, or guaranteed delivery semantics in Digit's transport. The PHP module is a separate development effort. Runtime connectivity to the real ChAoS MVC endpoint has not been verified by offline C tests.
