@@ -8,7 +8,7 @@ Ollama is a **generation service only**. It no longer registers `/chat`, interpr
 - Engineering service: `digit.llm.engineering.generate` (explicit callers only).
 - Local endpoint: `http://127.0.0.1:11434/api/generate`
 - Conversation model: `llama3.2:1b` (unchanged).
-- Engineering model: `qwen2.5-coder:3b`, loaded on demand, with `keep_alive=0`, a 160-token generation cap, and a bounded engineering timeout. The model must already be present in Ollama; the module never pulls or installs it.
+- Engineering model: `qwen2.5-coder:3b`, loaded on demand, with `keep_alive=0`, a 96-token generation cap, and a bounded engineering timeout. The model must already be present in Ollama; the module never pulls or installs it.
 - Input/output contract: `include/digit_llm.h`
 - No credential file required.
 - Identity, Research and conversational direction are handled by their own modules.
