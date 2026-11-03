@@ -25,14 +25,14 @@ The ABI service `digit.github.report.v1` accepts `digit_github_request_t` and re
 
 ## Repository authorization
 
-**Production repository list:** `/opt/digit/modules/github/repos.conf`. The operator must create and approve this file. Use one exact GitHub `owner/repo` per line, with optional `#` comment lines. The module fails to start if the list is absent, empty, malformed, or duplicated. Example *only*:
+**Production repository list:** `/opt/digit/modules/github/repos.conf`. On first installation, the installer copies `tests/approved.conf` into this location with ownership `digit:digit` and mode `0640`, as directed by the operator. Existing `repos.conf` files are preserved on reinstall. Use one exact GitHub `owner/repo` per line, with optional `#` comments. The module fails to start if the list is absent, empty, malformed, or duplicated. Example:
 
 ```text
 # Add repositories only after operator approval
 poemei/digit
 ```
 
-No repository is enabled merely because this example appears in documentation. The test fixture `tests/approved.conf` is compiled into offline tests only; it is not shipped as the production authorization list. The module has no private-repository credentials. It uses unauthenticated HTTPS requests to GitHub's REST API for public data only and may be rate limited.
+The initial approved list is copied directly from `tests/approved.conf`, currently containing `poemei/digit` and `stnlabz/chaos-mvc`. Future edits to the source fixture do not overwrite an existing production `repos.conf`. The module has no private-repository credentials. It uses unauthenticated HTTPS requests to GitHub's REST API for public data only and may be rate limited.
 
 No GitHub tokens, write permissions, Git clone, pull, checkout, diff, repository modification, branches, workflows, or deployment actions are implemented.
 
@@ -55,7 +55,7 @@ make -C modules/github clean all test
 
 This runs offline tests with explicit positive, negative, and ABI lifecycle coverage. Source is committed; no verified build or test receipt from Digit's host exists yet.
 
-**Operator-managed deployment only:** after qualification, create the production allowlist with approved repositories and proper file ownership, then use the existing module install/hotload process. The Makefile refuses installation if the production allowlist is absent. No automatic deployment has occurred.
+**Operator-managed deployment only:** after qualification, the existing module install/hotload process creates the initial production allowlist from `tests/approved.conf` if none exists. An existing production list is never replaced by the installer. No automatic deployment has occurred.
 
 ## Exit criteria for Cycle 1
 
