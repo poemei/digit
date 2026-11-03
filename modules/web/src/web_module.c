@@ -244,6 +244,12 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  TEST(valid_message("Hello",5));
  TEST(!valid_message("Hi\nWorld",8));
  TEST(parse_job("{\"id\":\"r1\",\"message\":\"Hello\"}",&job));
+ TEST(parse_job("{\"id\":\"r1\",\"message\":\"Hello\",\"display_name\":\"Mei Shaw\"}",&job));
+ TEST(!strcmp(job.display_name,"Mei Shaw"));
+ TEST(!parse_job("{\"id\":\"r1\",\"message\":\"Hello\",\"display_name\":42}",&job));
+ TEST(!parse_job("{\"id\":\"r1\",\"message\":\"Hello\",\"display_name\":\"\"}",&job));
+ TEST(parse_job("{\"id\":\"r1\",\"message\":\"Hello\"}",&job));
+ TEST(job.display_name[0]=='\0');
  TEST(!strcmp(job.id,"r1")&&!strcmp(job.text,"Hello"));
  TEST(!parse_job("{\"id\":\"../bad\",\"message\":\"Hello\"}",&job));
  TEST(!parse_job("{\"id\":\"r1\",\"message\":\"Hi\\nWorld\"}",&job));
