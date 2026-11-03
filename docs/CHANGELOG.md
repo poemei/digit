@@ -1,5 +1,12 @@
 # Digit — CHANGELOG
 
+## Unreleased — 2026-11-03 — GitHub read-only module 1.0.2 paginated IRC evidence
+
+- **Observed:** The operator's successful live `/github poemei/digit` response ended midway through the root directory listing with `[truncated;`, because Core's single-reply ABI is limited to 511 characters.
+- **Correction:** The GitHub module produces stateless numbered IRC evidence pages of approximately 320 characters with explicit next-page commands, supporting `summary page=2`, `tree modules page=2`, and `file README.md page=3`. The full bounded report service remains unchanged; Core and its single-reply contract remain untouched.
+- Added offline pagination checks for parsing, bounds, rejection, multi-page coverage, response length and whitespace handling. Synchronized module descriptor, manifest, test expectations and README to 1.0.2.
+- **Limitations:** Each page refetches GitHub and may reflect a changed snapshot; output and API result counts remain intentionally bounded. Native compilation, offline qualification, activation and end-to-end IRC paging have not yet been independently verified.
+
 ## Unreleased — 2026-11-03 — GitHub module 1.0.1 Core routing contract fix
 
 - **Observed operator failure:** IRC `/github poemei/digit` reached Core and returned `INVALID_STATE` (result 7) after installation despite offline module qualification.
