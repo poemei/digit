@@ -260,13 +260,13 @@ static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
  int ne=0,np=0;
  if(!q)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(q,0,sizeof *q);
- if(!selftests(&e,&p,&ne,&np))return STNLABZ_MODULE_ERR_QUALIFICATION;
+ int ok=selftests(&e,&p,&ne,&np);
  q->tests_executed=e;
  q->tests_passed=p;
  q->tests_failed=e-p;
  q->negative_test_executed=ne;
  q->negative_test_passed=np;
- return STNLABZ_MODULE_OK;
+ return ok?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_QUALIFICATION;
 }
 static stnlabz_module_result_t start(const stnlabz_module_host_t *h)
 {
