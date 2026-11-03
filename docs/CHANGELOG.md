@@ -1,5 +1,12 @@
 # Digit — CHANGELOG
 
+## Unreleased — 2026-11-03 — GitHub module 1.0.1 Core routing contract fix
+
+- **Observed operator failure:** IRC `/github poemei/digit` reached Core and returned `INVALID_STATE` (result 7) after installation despite offline module qualification.
+- **Verified from repository source:** `src/digit.c` already runs the hot-loader while the process is live. `src/module_host.c` captures only one command callback reply in a `DIGIT_ROUTE_REPLY_MAX=512` buffer; GitHub 1.0.0 attempted multiple replies for long reports and treated the second rejected callback as a routing failure.
+- **Correction:** GitHub module 1.0.1 sends one bounded command reply (with truncation disclosure) and retains the full bounded result in the separate `digit.github.report.v1` service. Added normalization/length regression checks, synchronized descriptor, manifest, tests and README. No Core/ABI code or write capabilities changed.
+- **Verification:** Root cause established by full command path inspection and matching operator logs; source committed. Native post-fix compilation, qualification, hot-load acceptance and actual IRC response remain unverified.
+
 ## Unreleased — 2026-11-03 — GitHub module first-install allowlist correction
 
 - Operator reported `sudo make -C modules/github install` passed offline qualification (25/25 module checks, negative 1/1, lifecycle 29/29), then failed because production `repos.conf` was absent.
