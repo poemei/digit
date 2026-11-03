@@ -1,5 +1,13 @@
 # Digit — CHANGELOG
 
+## Unreleased — 2026-11-03 — On-demand engineering inference (Ollama 1.1.2 / GitHub 1.0.7)
+
+- Director authorized model selection according to task: preserve the `llama3.2:1b` conversational generation service; add explicit engineering inference with `qwen2.5-coder:3b`.
+- Added Core-mediated `digit.llm.engineering.generate` with the **existing** request/response structure. The engineering Ollama request selects the coding model, sends `keep_alive=0`, caps token generation, and uses a longer request timeout appropriate to the observed 2-vCPU VPS. The original chat request builder and service remain unchanged.
+- GitHub `inspect` explicitly invokes the new service. It never falls back to conversation inference when coding inference fails and preserves the existing plain-English source-evidence fallback. No Core/ABI changes, second Ollama server, model installation, or global model replacement.
+- Added deterministic protocol selftests for engineering model selection, memory-release parameter, JSON escaping, bounded generation, invalid inputs, and preservation of the lightweight conversation path. Updated full source files, contracts, READMEs, module version descriptors and GitHub qualification expectation.
+- **Qualification limits:** No native build, host tests, install or live routing execution performed here. Ollama concurrent-model capacity remains an operator environment setting; per-request release is not a guarantee that another model is never resident simultaneously. The source excerpt limit and model-generated conclusions remain unverified engineering inference.
+
 ## Unreleased — 2026-11-03 — GitHub module 1.0.6 read-only source inspection
 
 - Added `/github owner/repo inspect path/to/file` to inspect **actual GitHub source content**, rather than inferring behavior from repository filenames or language metadata.
