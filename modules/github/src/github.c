@@ -547,7 +547,7 @@ static int qualification(unsigned *executed,unsigned *passed,int *negative)
         CHECK(command_reply_text(long_text,concise));
         CHECK(strlen(concise)<512U);
         CHECK(strstr(concise,"[truncated;")!=NULL);
-        CHECK(command_reply_text("one\\ntwo",concise));
+        CHECK(command_reply_text("one\ntwo",concise));
         CHECK(!strcmp(concise,"one two"));
         CHECK(!command_reply_text("",concise));
     }
