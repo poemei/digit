@@ -430,3 +430,11 @@ The shared `stnlabz/ABI` repository's README confirms the ABI 1.5 descriptor exp
 ### Ask 1.0.7 — Restore greetings independently of inference (2026-11-03)
 
 Operator witnessed `Hello` produce `Language inference failed` after Ask 1.0.6, with Research remaining functional. Source correction routes standalone `Hello`, `Hi`, `Hey` to deterministic replies after Identity; mixed input remains on the original request route. Source and tests committed. Qualification, hotload, and live acceptance require operator validation. **The lightweight inference service failure for other conversation remains open pending host logs/model availability evidence.**
+
+### GitHub 1.0.8 — Tree pagination (2026-11-03)
+
+**Evidence:** `stnlabz/chaos-mvc tree` returned four root names. Source `everyday_list()` had `shown<4`; page>1 entered an unrelated detailed-report view.
+
+**Implemented:** GitHub tree commands now use item-aligned pagination against the approved GitHub Contents directory. Show count, current page, and exact follow-up `/github owner/repo tree [path] page=N`. Explicitly report unsupported directories exceeding 40 pages; no silent four-item truncation. Existing source/issue/commit inspection paths untouched.
+
+**Qualification pending:** `make -C modules/github clean all test`, operator-controlled install/hotload, and live root and subdirectory page navigation, with no Core changes. GitHub Contents API limits and mutable results between independently fetched pages remain explicit.
