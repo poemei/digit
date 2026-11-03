@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include "stnlabz_abi/module.h"
 #include "digit_identity.h"
 #include "digit_llm.h"
@@ -87,6 +88,29 @@ static void strip_unrequested_peer(char *text)
  length=strlen(p);
  memmove(text,p,length+1U);
 }
+/* Restore the historical basic greeting behavior independently of Ollama.
+ * Match an entire greeting only; never intercept a technical request that
+ * merely begins with hello/hi/hey (e.g. "Hey, inspect this source"). */
+static const char *standalone_greeting(const char *input)
+{
+ char word[16];
+ size_t n=0;
+ const unsigned char *p=(const unsigned char *)input;
+ if(!p)return NULL;
+ while(*p&&isspace(*p))++p;
+ while(*p&&isalpha(*p)){
+  if(n+1U>=sizeof word)return NULL;
+  word[n++]=(char)tolower(*p++);
+ }
+ if(!n)return NULL;
+ word[n]=0;
+ while(*p&&(*p=='!'||*p=='.'||*p==','||isspace(*p)))++p;
+ if(*p)return NULL;
+ if(!strcmp(word,"hello"))return "Hello!";
+ if(!strcmp(word,"hi"))return "Hi!";
+ if(!strcmp(word,"hey"))return "Hey!";
+ return NULL;
+}
 static stnlabz_module_result_t controller(
  const stnlabz_module_command_t *cmd,
  stnlabz_module_command_reply_fn reply,void *ctx,void *unused)
@@ -123,6 +147,11 @@ static stnlabz_module_result_t controller(
  }
  if(rc!=STNLABZ_MODULE_ERR_NOT_FOUND)
   return reply_text(reply,ctx,"My identity service is unavailable.")?
+   STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
+
+ /* Basic greetings must remain available when Ollama is down or slow. */
+ if(standalone_greeting(cmd->arguments))
+  return reply_text(reply,ctx,standalone_greeting(cmd->arguments))?
    STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
 
  directed=peer(cmd->arguments,target,sizeof target);
@@ -202,6 +231,14 @@ static int selftest(unsigned *e,unsigned *p,int *ne,int *np)
  CHECK(peer("say hello to rictus",target,sizeof target)&&!strcmp(target,"rictus"));
  CHECK(!peer("what is next SpaceX launch?",target,sizeof target));
  CHECK(!peer("hello",target,sizeof target));
+ CHECK(standalone_greeting("Hello")&&!strcmp(standalone_greeting("Hello"),"Hello!"));
+ CHECK(standalone_greeting(" HI! ")&&!strcmp(standalone_greeting(" HI! "),"Hi!"));
+ CHECK(standalone_greeting("hey,")&&!strcmp(standalone_greeting("hey,"),"Hey!"));
+ CHECK(!standalone_greeting("hey what is C?"));
+ CHECK(!standalone_greeting("hello can you debug this?"));
+ CHECK(!standalone_greeting("hello research PHP 8.5"));
+ CHECK(!standalone_greeting("hello: /github poemei/digit"));
+
  CHECK(!research_query("Hello"));
  CHECK(!research_query("What is PHP?"));
  CHECK(research_query("research PHP 8.5")&&
@@ -254,7 +291,7 @@ static stnlabz_module_result_t stop(void)
  return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
- "ask","Digit Ask Controller",1,0,6,
+ "ask","Digit Ask Controller",1,0,7,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
