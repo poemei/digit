@@ -544,28 +544,221 @@ static int command_reply_page(const char *report,const char *base,
     }
     return 1;
 }
+/* Normal conversation must explain findings, not print a REST response.
+ * These statements are restricted to fields verified in the current reply. */
+static int everyday_summary(const char *owner,const char *repo,char out[512])
+{
+    response_t *data=NULL;
+    struct json_object *metadata=NULL,*entries=NULL;
+    char endpoint[360],name[160],description[130],language[64];
+    const char *raw,*branch;
+    int n,has_src=0,has_modules=0,has_tests=0,has_docs=0,has_readme=0;
+    int has_makefile=0,has_agents=0,root_available=0;
+    size_t i;
+    data=calloc(1,sizeof *data);
+    if(!data)return 0;
+    snprintf(endpoint,sizeof endpoint,"%s/%s",owner,repo);
+    if(!github_get(endpoint,data))goto fail;
+    metadata=decode(data,json_type_object);
+    if(!metadata || !value(metadata,"full_name"))goto fail;
+    plain(name,sizeof name,value(metadata,"full_name"));
+    raw=value(metadata,"description");
+    plain(description,sizeof description,raw&&*raw?raw:"a project with no description provided");
+    raw=value(metadata,"language");
+    plain(language,sizeof language,raw&&*raw?raw:"an unspecified language");
+    branch=value(metadata,"default_branch");
+    if(!branch)branch="unreported";
+    snprintf(endpoint,sizeof endpoint,"%s/%s/contents",owner,repo);
+    if(github_get(endpoint,data)){
+        entries=decode(data,json_type_array);
+        if(entries){
+            root_available=1;
+            for(i=0;i<json_object_array_length(entries);++i){
+                const char *file=value(json_object_array_get_idx(entries,i),"name");
+                if(!file)continue;
+                if(!strcmp(file,"src"))has_src=1;
+                if(!strcmp(file,"modules"))has_modules=1;
+                if(!strcmp(file,"tests"))has_tests=1;
+                if(!strcmp(file,"docs"))has_docs=1;
+                if(!strcmp(file,"README.md"))has_readme=1;
+                if(!strcmp(file,"Makefile"))has_makefile=1;
+                if(!strcmp(file,"AGENTS.md"))has_agents=1;
+            }
+        }
+    }
+    n=snprintf(out,512,"I checked %s. GitHub describes it as %s, primarily written in %s. ",
+               name,description,language);
+    if(n<0||n>=512)goto fail;
+    if(root_available){
+        size_t used=(size_t)n;
+        int k=snprintf(out+used,512-used,"I found ");
+        if(k<0||(size_t)k>=512-used)goto fail;
+        used+=(size_t)k;
+        if(!has_src&&!has_modules&&!has_tests&&!has_docs&&!has_readme&&!has_makefile&&!has_agents){
+            k=snprintf(out+used,512-used,"a repository file listing. ");
+        }else{
+            k=snprintf(out+used,512-used,"%s%s%s%s%s%s%s. ",
+                has_src?"source code (src/), ":"",
+                has_modules?"modules (modules/), ":"",
+                has_tests?"tests (tests/), ":"",
+                has_docs?"documentation (docs/), ":"",
+                has_readme?"a README, ":"",
+                has_makefile?"a build Makefile, ":"",
+                has_agents?"developer instructions (AGENTS.md)":"");
+        }
+        if(k<0||(size_t)k>=512-used)goto fail;
+        used+=(size_t)k;
+        n=snprintf(out+used,512-used,"This is a structural overview, not a code-quality assessment. https://github.com/%s/%s",owner,repo);
+    }else{
+        n=snprintf(out+(size_t)n,512-(size_t)n,"I could not inspect its root files, so I cannot describe its structure. https://github.com/%s/%s",owner,repo);
+    }
+    if(entries)json_object_put(entries);
+    if(metadata)json_object_put(metadata);
+    free(data);
+    return n>=0 && strlen(out)<511U;
+fail:
+    if(entries)json_object_put(entries);
+    if(metadata)json_object_put(metadata);
+    free(data);
+    return 0;
+}
+static int everyday_list(const char *owner,const char *repo,
+                         const char *action,const char *path,char out[512])
+{
+    response_t *data=calloc(1,sizeof *data);
+    struct json_object *array=NULL,*item=NULL;
+    char endpoint[720],names[290]={0},clean[55];
+    const char *subject,*field_name="name";
+    int n;
+    size_t i,count,used=0,shown=0;
+    if(!data)return 0;
+    if(!strcmp(action,"tree")){
+        snprintf(endpoint,sizeof endpoint,"%s/%s/contents%s%s",owner,repo,
+                 *path?"/":"",path);
+        subject=*path?path:"the repository root";
+    }else if(!strcmp(action,"commits")){
+        snprintf(endpoint,sizeof endpoint,"%s/%s/commits?per_page=8",owner,repo);
+        subject="recent commits";field_name="sha";
+    }else if(!strcmp(action,"issues")){
+        snprintf(endpoint,sizeof endpoint,"%s/%s/issues?state=open&per_page=8",owner,repo);
+        subject="open issues";
+        field_name="title";
+    }else{
+        snprintf(endpoint,sizeof endpoint,"%s/%s/pulls?state=open&per_page=8",owner,repo);
+        subject="open pull requests";
+        field_name="title";
+    }
+    if(!github_get(endpoint,data))goto fail;
+    array=decode(data,json_type_array);
+    if(!array)goto fail;
+    count=json_object_array_length(array);
+    for(i=0;i<count&&shown<4;++i){
+        const char *raw=value(json_object_array_get_idx(array,i),field_name);
+        size_t size;
+        if(!raw)continue;
+        plain(clean,sizeof clean,raw);
+        if(!*clean)continue;
+        size=strlen(clean);
+        if(used+size+4U>=sizeof names)break;
+        if(used){memcpy(names+used,", ",2);used+=2;}
+        memcpy(names+used,clean,size);used+=size;
+        names[used]=0;
+        ++shown;
+    }
+    n=snprintf(out,512,"I checked %s in %s/%s. %s",
+               subject,owner,repo,count?"I found: ":"No entries were returned in GitHub's first page.");
+    if(n<0||n>=512)goto fail;
+    if(count){
+        int k=snprintf(out+(size_t)n,512-(size_t)n,"%s. ",shown?names:"No readable titles.");
+        if(k<0||k>=512-n)goto fail;
+        n+=k;
+    }
+    if(!strcmp(action,"issues"))
+        snprintf(out+(size_t)n,512-(size_t)n,"GitHub's issue list may include pull requests.");
+    else
+        snprintf(out+(size_t)n,512-(size_t)n,
+                 "This is a list of records, not a review of their contents.");
+    json_object_put(array);
+    free(data);
+    return 1;
+fail:
+    if(array)json_object_put(array);
+    free(data);
+    return 0;
+}
+static int everyday_file(const char *owner,const char *repo,
+                         const char *path,char out[512])
+{
+    response_t *data=calloc(1,sizeof *data);
+    struct json_object *item=NULL;
+    char endpoint[720];
+    const char *type,*sha;
+    int n;
+    if(!data)return 0;
+    snprintf(endpoint,sizeof endpoint,"%s/%s/contents/%s",owner,repo,path);
+    if(!github_get(endpoint,data))goto fail;
+    item=decode(data,json_type_object);
+    if(!item)goto fail;
+    type=value(item,"type");
+    sha=value(item,"sha");
+    if(!type||strcmp(type,"file")||!sha)goto fail;
+    n=snprintf(out,512,
+        "I found %s in %s/%s and retrieved its GitHub file record. "
+        "I have not yet evaluated what the code does or whether it is correct. "
+        "Read the file: https://github.com/%s/%s/blob/HEAD/%s",
+        path,owner,repo,owner,repo,path);
+    json_object_put(item);
+    free(data);
+    return n>0&&n<512;
+fail:
+    if(item)json_object_put(item);
+    free(data);
+    return 0;
+}
+static int everyday_reply(const char *query,char out[512])
+{
+    char owner[80],repo[80],action[32],path[320];
+    if(!parse_query(query,owner,repo,action,path)){
+        snprintf(out,512,"Tell me which repository to inspect, like /github poemei/digit.");
+        return 1;
+    }
+    if(!permit(owner,repo)){
+        snprintf(out,512,"I cannot inspect %s/%s because it is not on my approved repository list.",owner,repo);
+        return 1;
+    }
+    if(!strcmp(action,"summary"))
+        return everyday_summary(owner,repo,out);
+    if(!strcmp(action,"file"))
+        return everyday_file(owner,repo,path,out);
+    return everyday_list(owner,repo,action,path,out);
+}
 static stnlabz_module_result_t command(const stnlabz_module_command_t *cmd,
     stnlabz_module_command_reply_fn reply,void *context,void *ctx)
 {
-    digit_github_response_t *result;
-    char query[512],single[512];
-    unsigned page;
-    int accepted;
+    char query[512],answer[512];
+    unsigned page=1;
+    int ok;
     (void)ctx;
     if(!cmd||!reply||!memchr(cmd->arguments,0,sizeof cmd->arguments))
         return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
-    if(!page_request(cmd->arguments,query,&page)){
-        return reply(context,
-            "Usage: /github owner/repo [summary|tree [path]|file path|commits|issues|prs] [page=N]")
+    if(!page_request(cmd->arguments,query,&page))
+        return reply(context,"Tell me which repository to inspect, like /github poemei/digit.")
             ?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
+    if(page==1U){
+        if(!everyday_reply(query,answer))
+            snprintf(answer,sizeof answer,
+                "I couldn't retrieve enough information to describe that repository reliably.");
+        ok=reply(context,answer);
+    }else{
+        /* Explicit page requests retain the detailed evidence reader. */
+        digit_github_response_t *result=calloc(1,sizeof *result);
+        if(!result)return STNLABZ_MODULE_ERR_INVALID_STATE;
+        result->status=run(query,result->report,sizeof result->report);
+        ok=command_reply_page(result->report,query,page,answer) &&
+           reply(context,answer);
+        free(result);
     }
-    result=calloc(1,sizeof *result);
-    if(!result)return STNLABZ_MODULE_ERR_INVALID_STATE;
-    result->status=run(query,result->report,sizeof result->report);
-    accepted=command_reply_page(result->report,query,page,single) &&
-             reply(context,single);
-    free(result);
-    return accepted?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
+    return ok?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
 }
 static int qualification(unsigned *executed,unsigned *passed,int *negative)
 {
@@ -702,7 +895,7 @@ static stnlabz_module_result_t stop(void)
     return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
-    "github","Digit GitHub Read-Only",1,0,2,
+    "github","Digit GitHub Read-Only",1,0,3,
     STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
     qualify,start,stop
 };
