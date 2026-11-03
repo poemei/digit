@@ -1,5 +1,13 @@
 # Digit — CHANGELOG
 
+## Unreleased — 2026-11-03 — GitHub 1.0.8 directory pagination
+
+- Live evidence: `/github stnlabz/chaos-mvc tree` reported only four root items. Confirmed source root cause: `everyday_list()` stopped at `shown<4`; requests for later pages went through a different report formatter.
+- Replaced the tree command's ordinary four-item view with a directory-specific, entry-aligned, stateless page formatter. Each response identifies total returned entries, page number and the exact next tree command. No entries silently dropped by the four-item cap; a too-large (>40 page) directory is explicitly reported incomplete.
+- Added native qualification fixtures exercising multiple directory pages, out-of-range pages, next-command links and the one-IRC-reply limit. GitHub module descriptor/config/tests/docs updated to 1.0.8.
+- Other Github commands, allowed-repository access control, source inspection, engineering service, Core, Ask, Research and Ollama remain unchanged.
+- **Verification limits:** Source committed; no Linux build, native qualification, installed-artifact comparison, live GitHub fetch or operator acceptance performed in this interaction. GitHub Contents results represent GitHub's returned directory view and may change across stateless page requests.
+
 ## Unreleased — 2026-11-03 — Ask 1.0.7 restores standalone greetings
 
 - After Ask 1.0.6 went live, operator reported `Hello` failed through `digit.llm.generate`, although explicitly requested Research succeeded.
