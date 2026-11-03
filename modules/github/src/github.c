@@ -546,81 +546,78 @@ static int command_reply_page(const char *report,const char *base,
 }
 /* Normal conversation must explain findings, not print a REST response.
  * These statements are restricted to fields verified in the current reply. */
+static int summary_explanation(struct json_object *metadata,
+                               struct json_object *entries,char out[512])
+{
+    const char *raw,*name;
+    char description[100],language[42],items[220]={0};
+    static const struct {const char *name,*meaning;} recognized[]={
+        {"src","source code"},{"modules","modules"},{"tests","tests"},
+        {"docs","documentation"},{"README.md","a README"},
+        {"Makefile","a build Makefile"},{"AGENTS.md","developer instructions"}
+    };
+    size_t i,j,used=0,found=0;
+    int n;
+    if(!metadata||!out)return 0;
+    name=value(metadata,"full_name");
+    if(!name)return 0;
+    raw=value(metadata,"description");
+    plain(description,sizeof description,raw&&*raw?raw:"a project without a description");
+    raw=value(metadata,"language");
+    plain(language,sizeof language,raw&&*raw?raw:"an unspecified language");
+    if(entries && json_object_is_type(entries,json_type_array)){
+        for(j=0;j<sizeof recognized/sizeof recognized[0];++j){
+            for(i=0;i<json_object_array_length(entries);++i){
+                const char *file=value(json_object_array_get_idx(entries,i),"name");
+                size_t size=strlen(recognized[j].meaning);
+                if(!file||strcmp(file,recognized[j].name))continue;
+                if(used+size+3U>=sizeof items)break;
+                if(used){memcpy(items+used,", ",2);used+=2;}
+                memcpy(items+used,recognized[j].meaning,size);
+                used+=size;
+                items[used]=0;
+                ++found;
+                break;
+            }
+        }
+    }
+    n=snprintf(out,512,"I checked %.100s. GitHub describes it as %.99s. "
+               "Its primary language is %.40s. ",name,description,language);
+    if(n<0||n>=512)return 0;
+    if(!entries)
+        n+=snprintf(out+(size_t)n,512-(size_t)n,
+            "I couldn't retrieve the files to explain the structure. ");
+    else if(found)
+        n+=snprintf(out+(size_t)n,512-(size_t)n,
+            "I found %s. ",items);
+    else
+        n+=snprintf(out+(size_t)n,512-(size_t)n,
+            "The root listing did not identify familiar project folders. ");
+    if(n<0||n>=512)return 0;
+    n+=snprintf(out+(size_t)n,512-(size_t)n,
+        "This tells us how it is organized, not whether the code works.");
+    return n>0&&n<512;
+}
 static int everyday_summary(const char *owner,const char *repo,char out[512])
 {
     response_t *data=NULL;
     struct json_object *metadata=NULL,*entries=NULL;
-    char endpoint[360],name[160],description[130],language[64];
-    const char *raw,*branch;
-    int n,has_src=0,has_modules=0,has_tests=0,has_docs=0,has_readme=0;
-    int has_makefile=0,has_agents=0,root_available=0;
-    size_t i;
+    char endpoint[360];
+    int ok=0;
     data=calloc(1,sizeof *data);
     if(!data)return 0;
     snprintf(endpoint,sizeof endpoint,"%s/%s",owner,repo);
-    if(!github_get(endpoint,data))goto fail;
+    if(!github_get(endpoint,data))goto done;
     metadata=decode(data,json_type_object);
-    if(!metadata || !value(metadata,"full_name"))goto fail;
-    plain(name,sizeof name,value(metadata,"full_name"));
-    raw=value(metadata,"description");
-    plain(description,sizeof description,raw&&*raw?raw:"a project with no description provided");
-    raw=value(metadata,"language");
-    plain(language,sizeof language,raw&&*raw?raw:"an unspecified language");
-    branch=value(metadata,"default_branch");
-    if(!branch)branch="unreported";
+    if(!metadata)goto done;
     snprintf(endpoint,sizeof endpoint,"%s/%s/contents",owner,repo);
-    if(github_get(endpoint,data)){
-        entries=decode(data,json_type_array);
-        if(entries){
-            root_available=1;
-            for(i=0;i<json_object_array_length(entries);++i){
-                const char *file=value(json_object_array_get_idx(entries,i),"name");
-                if(!file)continue;
-                if(!strcmp(file,"src"))has_src=1;
-                if(!strcmp(file,"modules"))has_modules=1;
-                if(!strcmp(file,"tests"))has_tests=1;
-                if(!strcmp(file,"docs"))has_docs=1;
-                if(!strcmp(file,"README.md"))has_readme=1;
-                if(!strcmp(file,"Makefile"))has_makefile=1;
-                if(!strcmp(file,"AGENTS.md"))has_agents=1;
-            }
-        }
-    }
-    n=snprintf(out,512,"I checked %s. GitHub describes it as %s, primarily written in %s. ",
-               name,description,language);
-    if(n<0||n>=512)goto fail;
-    if(root_available){
-        size_t used=(size_t)n;
-        int k=snprintf(out+used,512-used,"I found ");
-        if(k<0||(size_t)k>=512-used)goto fail;
-        used+=(size_t)k;
-        if(!has_src&&!has_modules&&!has_tests&&!has_docs&&!has_readme&&!has_makefile&&!has_agents){
-            k=snprintf(out+used,512-used,"a repository file listing. ");
-        }else{
-            k=snprintf(out+used,512-used,"%s%s%s%s%s%s%s. ",
-                has_src?"source code (src/), ":"",
-                has_modules?"modules (modules/), ":"",
-                has_tests?"tests (tests/), ":"",
-                has_docs?"documentation (docs/), ":"",
-                has_readme?"a README, ":"",
-                has_makefile?"a build Makefile, ":"",
-                has_agents?"developer instructions (AGENTS.md)":"");
-        }
-        if(k<0||(size_t)k>=512-used)goto fail;
-        used+=(size_t)k;
-        n=snprintf(out+used,512-used,"This is a structural overview, not a code-quality assessment. https://github.com/%s/%s",owner,repo);
-    }else{
-        n=snprintf(out+(size_t)n,512-(size_t)n,"I could not inspect its root files, so I cannot describe its structure. https://github.com/%s/%s",owner,repo);
-    }
+    if(github_get(endpoint,data))entries=decode(data,json_type_array);
+    ok=summary_explanation(metadata,entries,out);
+done:
     if(entries)json_object_put(entries);
     if(metadata)json_object_put(metadata);
     free(data);
-    return n>=0 && strlen(out)<511U;
-fail:
-    if(entries)json_object_put(entries);
-    if(metadata)json_object_put(metadata);
-    free(data);
-    return 0;
+    return ok;
 }
 static int everyday_list(const char *owner,const char *repo,
                          const char *action,const char *path,char out[512])
@@ -811,6 +808,24 @@ static int qualification(unsigned *executed,unsigned *passed,int *negative)
     }
 
     CHECK(!strcmp(DIGIT_GITHUB_REPORT_SERVICE,"digit.github.report.v1"));
+    {
+        struct json_object *meta=decode(&fixture,json_type_object);
+        struct json_object *tree=json_tokener_parse(
+           "[{\"name\":\"src\"},{\"name\":\"modules\"},"
+           "{\"name\":\"tests\"},{\"name\":\"docs\"},"
+           "{\"name\":\"README.md\"},{\"name\":\"Makefile\"}]");
+        char explanation[512];
+        CHECK(summary_explanation(meta,tree,explanation));
+        CHECK(strstr(explanation,"I checked poemei/digit")!=NULL);
+        CHECK(strstr(explanation,"source code, modules, tests")!=NULL);
+        CHECK(strstr(explanation,"how it is organized")!=NULL);
+        CHECK(strstr(explanation,"Root entries")==NULL);
+        CHECK(strstr(explanation,"Page 1/")==NULL);
+        CHECK(strlen(explanation)<512U);
+        if(tree)json_object_put(tree);
+        if(meta)json_object_put(meta);
+    }
+
     {
         char query[512],short_reply[512],long_text[1800];
         unsigned page=0;
