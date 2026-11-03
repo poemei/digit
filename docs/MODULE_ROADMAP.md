@@ -370,3 +370,11 @@ The shared `stnlabz/ABI` repository's README confirms the ABI 1.5 descriptor exp
 **Correction:** GitHub 1.0.1 emits one bounded command reply and leaves longer evidence in its named report service; descriptor, manifest, tests and documentation synchronized. No Core modification or restart requirement.
 
 **Exit gate:** Post-fix module build/tests, automatic hot-load acceptance and one actual operator-observed IRC response. Source committed; runtime gates not yet independently verified.
+
+### GitHub Cycle 1 — IRC evidence pagination, 1.0.2 (2026-11-03)
+
+**Observed:** Operator confirmed successful live retrieval and IRC response for `poemei/digit`, but the result was cut midway through the root listing by the Core reply limit.
+
+**Implemented:** Read-only `/github` paged commands using `page=N` (1–40) and single bounded Core replies. Full bounded service response, repository approval checks and read-only GitHub REST behavior are preserved. No Core, ABI, GitHub write access, or Rictus policy changes.
+
+**Qualification gate:** Run `make -C modules/github clean all test`, install the 1.0.2 module under operator control, and verify page 1, page 2, final page and invalid-page responses against a live authorized repository. Record exact module admission and command routing results. This gate is not yet complete.
