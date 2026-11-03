@@ -256,6 +256,50 @@ static int repo_summary(const response_t *r,char *out,size_t cap,size_t *used)
     json_object_put(root);
     return 1;
 }
+static int base64_digit(char c)
+{
+    if(c>='A'&&c<='Z')return c-'A';
+    if(c>='a'&&c<='z')return c-'a'+26;
+    if(c>='0'&&c<='9')return c-'0'+52;
+    if(c=='+')return 62;
+    if(c=='/')return 63;
+    return -1;
+}
+static int file_excerpt(struct json_object *item,char *out,size_t cap,size_t *used)
+{
+    const char *content=value(item,"content");
+    const char *encoding=value(item,"encoding");
+    const char *size=value(item,"size");
+    size_t i,n=0,seen=0;
+    unsigned bits=0,acc=0;
+    char excerpt[1300];
+    (void)size;
+    if(!content||!encoding||strcmp(encoding,"base64"))
+        return emit(out,cap,used,"File contents unavailable as a readable Base64 source blob.\n");
+    for(i=0;content[i]&&n+1<sizeof excerpt;++i){
+        int digit;
+        unsigned char c;
+        if(content[i]=='='||content[i]=='\r'||content[i]=='\n')
+            continue;
+        digit=base64_digit(content[i]);
+        if(digit<0)return 0;
+        acc=(acc<<6)|(unsigned)digit;
+        bits+=6;
+        if(bits<8)continue;
+        bits-=8;
+        c=(unsigned char)((acc>>bits)&255U);
+        ++seen;
+        if(c==0)return emit(out,cap,used,
+            "Binary content detected; source excerpt omitted.\n");
+        if(c=='\n'||c=='\r')excerpt[n++]='\n';
+        else if(c=='\t')excerpt[n++]=' ';
+        else if(c>=32&&c<127)excerpt[n++]=(char)c;
+    }
+    excerpt[n]=0;
+    return emit(out,cap,used,
+        "File content excerpt (max 1299 plain-text bytes; inspect linked source for full context):\n%s\n",
+        excerpt);
+}
 static int parse_query(const char *query,char owner[80],char repo[80],
                        char action[32],char path[320])
 {
@@ -326,12 +370,11 @@ static int run(const char *query,char *out,size_t cap)
         const char *type=value(item,"type"),*sha=value(item,"sha");
         const char *url=value(item,"html_url");
         char clean[350];
-        if(item&&type&&sha&&url){
+        if(item&&type&&sha&&url&&!strcmp(type,"file")){
             plain(clean,sizeof clean,url);
             result=emit(out,cap,&used,
-                "File: %s\nBlob SHA: %s\nSource: %s\n"
-                "Metadata only in Cycle 1. Raw file content is not emitted to chat; "
-                "inspect the evidence link for the exact source.\n",path,sha,clean)?0:2;
+                "File: %s\nBlob SHA: %s\nSource: %s\n",
+                path,sha,clean)&&file_excerpt(item,out,cap,&used)?0:2;
         }
         if(item)json_object_put(item);
     }
