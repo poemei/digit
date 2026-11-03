@@ -1,4 +1,4 @@
-# Digit Ask — native conversation controller 1.0.6
+# Digit Ask — native conversation controller 1.0.7
 
 Ask owns the registered `chat` route (ordinary directed conversation). It does not directly call external networks, classify research intent, access Corpus tables, or generate language.
 
@@ -70,3 +70,11 @@ search next SpaceX launch     -> Research evidence
 ```
 
 **Validation:** Source and offline regression tests cover conversational greetings, ordinary technical questions, explicit Research, unavailable/denied research, authoritative Identity, peer messages, and unwanted nickname prefixes. Native compilation, test execution, installed version, and live IRC acceptance remain unverified until operator receipts. No Core, ABI, Ollama, Research, or GitHub source files were changed for this correction.
+
+## 1.0.7 — Standalone greeting regression recovery (2026-11-03)
+
+**Operator evidence:** After Ask 1.0.6 went live, `Hello` returned `Language inference failed; no answer was generated.` Explicit `research PHP 8.5` continued to work. The previous Ask change routed basic greetings through the lightweight Ollama service without establishing its availability, so it broke historically reliable common greetings. Older repository history includes a dedicated greeting service; that is separate from, and not a substitute for, proving current inference service health.
+
+**Fix:** Standalone case-insensitive `Hello`, `Hi`, and `Hey` (with surrounding whitespace and basic punctuation) receive direct small replies in Ask after the authoritative Identity service, without calling Ollama or Research. A message that merely starts with a greeting but contains a substantive request remains on the original conversation route. No changes to Research, GitHub, coder inference, Core, or peer transport. Offline regression covers greetings under simulated inference failure, mixed technical requests, and existing controller behavior.
+
+**Important limitation:** This restores basic greeting behavior; it does **not** demonstrate that the existing `digit.llm.generate` inference provider is healthy for other conversation. The live cause of that service failure requires its server-side Ollama model inventory or module logs. Native build, test execution, and operator acceptance remain pending.
