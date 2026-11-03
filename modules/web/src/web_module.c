@@ -1,311 +1,267 @@
-#define _GNU_SOURCE
 #define _POSIX_C_SOURCE 200809L
-#include <arpa/inet.h>
-#include <errno.h>
-#include <grp.h>
-#include <limits.h>
-#include <poll.h>
+#include <curl/curl.h>
+#include <json-c/json.h>
 #include <pthread.h>
 #include <stdatomic.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/time.h>
-#include <sys/un.h>
-#include <unistd.h>
+#include <time.h>
 #include "stnlabz_abi/module.h"
 #include "digit_route.h"
 #include "web_transport.h"
 
-/* Local transport only; no TCP listener and no Core changes.
- * Protocol: request BE32 length + UTF-8 bytes; response U8 status +
- * BE32 length + bytes. Status 0 means Core replied; 1 means failure.
- * Wire text limits reflect the currently verified router service ABI. */
-#define WEB_SOCKET_PATH "/run/digit-web/digit.sock"
-#define WEB_MAX_REQUEST (DIGIT_ROUTE_TEXT_MAX - 1U)
-#define WEB_MAX_REPLY (DIGIT_ROUTE_REPLY_MAX - 1U)
-#define WEB_IO_TIMEOUT_SEC 5
+/* Like IRC, this transport is a worker which calls Digit's existing
+ * transport-neutral router. Unlike the abandoned 1.0.0 implementation,
+ * it never binds, listens, or creates a socket/port. */
+#define WEB_DEFAULT_ENDPOINT "http://127.0.0.1/chat/transport"
+#define WEB_HTTP_LIMIT 4096U
+#define WEB_MAX_ID 64U
+#define WEB_WAIT_NS 250000000L
 
-static const stnlabz_module_host_t *host_api;
+typedef struct {char bytes[WEB_HTTP_LIMIT+1U];size_t used;} web_buffer_t;
+typedef struct {char id[WEB_MAX_ID+1U];char text[DIGIT_ROUTE_TEXT_MAX];} web_job_t;
 static pthread_t worker;
-static int worker_running;
-static atomic_int stopped;
-static atomic_int listener_fd;
-static uid_t permitted_uid;
-static dev_t socket_dev;
-static ino_t socket_ino;
+static atomic_int stop_requested;
+static int worker_started;
+static const stnlabz_module_host_t *module_host;
+static char endpoint[512];
 
-static int parse_uid(const char *text,uid_t *uid)
+static int endpoint_allowed(const char *url)
 {
- unsigned long n;
- char *end=NULL;
- if(!text||!*text||!uid)return 0;
- for(const char *p=text;*p;++p)if(*p<'0'||*p>'9')return 0;
- errno=0;
- n=strtoul(text,&end,10);
- if(errno||!end||*end||n==0UL||(unsigned long)(uid_t)n!=n)return 0;
- *uid=(uid_t)n;
- return 1;
+ const char *p;
+ size_t length;
+ if(!url)return 0;
+ length=strlen(url);
+ if(length<strlen("http://127.0.0.1/")||length>=sizeof endpoint)return 0;
+ if(strncmp(url,"http://127.0.0.1/",17)!=0)return 0;
+ /* No credentials, query strings, redirects, alternate hosts or ports. */
+ for(p=url+17;*p;++p){
+  unsigned char c=(unsigned char)*p;
+  if(c<=0x20U||c>=0x7fU||c=='?'||c=='#'||c=='@'||c=='\\')return 0;
+ }
+ return !strncmp(url+17,"chat/transport",14)&&
+        (url[31]=='\0'||url[31]=='/');
 }
-static int validate_text(const char *text,size_t n)
+static int valid_message(const char *text,size_t size)
 {
  size_t i;
- if(!text||!n||n>WEB_MAX_REQUEST)return 0;
- for(i=0;i<n;++i){
+ if(!text||!size||size>=DIGIT_ROUTE_TEXT_MAX)return 0;
+ for(i=0;i<size;++i){
   unsigned char c=(unsigned char)text[i];
-  if(!c||c=='\r'||c=='\n'||c<0x20U||c==0x7fU)return 0;
+  if(c==0||c<0x20U||c==0x7fU)return 0;
  }
  return 1;
 }
-static int encode_request_length(size_t n,unsigned char header[4])
+static int valid_id(const char *id)
 {
- uint32_t length;
- if(!header||!n||n>WEB_MAX_REQUEST)return 0;
- length=htonl((uint32_t)n);
- memcpy(header,&length,4U);
- return 1;
-}
-static int decode_request_length(const unsigned char header[4],size_t *n)
-{
- uint32_t length;
- if(!header||!n)return 0;
- memcpy(&length,header,4U);
- length=ntohl(length);
- if(!length||length>WEB_MAX_REQUEST)return 0;
- *n=(size_t)length;
- return 1;
-}
-static int write_all(int fd,const void *source,size_t length)
-{
- const unsigned char *data=source;
- size_t done=0U;
- while(done<length){
-  ssize_t sent=send(fd,data+done,length-done,MSG_NOSIGNAL);
-  if(sent<0&&errno==EINTR)continue;
-  if(sent<=0)return 0;
-  done+=(size_t)sent;
+ size_t i,length;
+ if(!id)return 0;
+ length=strlen(id);
+ if(!length||length>WEB_MAX_ID)return 0;
+ for(i=0;i<length;++i){
+  char c=id[i];
+  if(!((c>='a'&&c<='z')||(c>='A'&&c<='Z')||
+       (c>='0'&&c<='9')||c=='-'||c=='_'))return 0;
  }
  return 1;
 }
-static int read_all(int fd,void *dest,size_t length)
+static int parse_job(const char *body,web_job_t *job)
 {
- unsigned char *data=dest;
- size_t done=0U;
- while(done<length){
-  ssize_t got=recv(fd,data+done,length-done,0);
-  if(got<0&&errno==EINTR)continue;
-  if(got<=0)return 0;
-  done+=(size_t)got;
- }
- return 1;
+ struct json_object *root=NULL,*id_obj=NULL,*text_obj=NULL;
+ const char *id,*message;
+ size_t len;
+ int ok=0;
+ if(!body||!job)return 0;
+ memset(job,0,sizeof *job);
+ root=json_tokener_parse(body);
+ if(!root||!json_object_is_type(root,json_type_object))goto done;
+ if(!json_object_object_get_ex(root,"id",&id_obj)||
+    !json_object_is_type(id_obj,json_type_string)||
+    !json_object_object_get_ex(root,"message",&text_obj)||
+    !json_object_is_type(text_obj,json_type_string))goto done;
+ id=json_object_get_string(id_obj);
+ message=json_object_get_string(text_obj);
+ len=(size_t)json_object_get_string_len(text_obj);
+ if(!valid_id(id)||!valid_message(message,len)||
+    strlen(message)!=len)goto done;
+ memcpy(job->id,id,strlen(id)+1U);
+ memcpy(job->text,message,len+1U);
+ ok=1;
+done:
+ if(root)json_object_put(root);
+ return ok;
 }
-static int send_response(int fd,int success,const char *message)
+static int build_reply(const char *id,int success,const char *message,
+                       char *out,size_t capacity)
 {
- unsigned char header[5]={0};
- uint32_t length;
- size_t n;
- if(!message)return 0;
- n=strlen(message);
- if(n>WEB_MAX_REPLY)return 0;
- header[0]=success?0U:1U;
- length=htonl((uint32_t)n);
- memcpy(header+1U,&length,4U);
- return write_all(fd,header,sizeof header)&&
-        (!n||write_all(fd,message,n));
+ struct json_object *root=NULL;
+ const char *text;
+ size_t length;
+ int ok=0;
+ if(!valid_id(id)||!message||!out||!capacity)return 0;
+ length=strlen(message);
+ if(length>=DIGIT_ROUTE_REPLY_MAX)return 0;
+ root=json_object_new_object();
+ if(!root)return 0;
+ json_object_object_add(root,"type",json_object_new_string("reply"));
+ json_object_object_add(root,"id",json_object_new_string(id));
+ json_object_object_add(root,"status",json_object_new_string(success?"ok":"error"));
+ json_object_object_add(root,"message",json_object_new_string(message));
+ text=json_object_to_json_string_ext(root,JSON_C_TO_STRING_PLAIN);
+ if(text&&strlen(text)<capacity){strcpy(out,text);ok=1;}
+ json_object_put(root);
+ return ok;
 }
-static void process_client(int fd)
+static size_t receive_bytes(char *ptr,size_t size,size_t n,void *context)
 {
- struct ucred peer={0};
- socklen_t peer_size=sizeof peer;
- struct timeval timeout={.tv_sec=WEB_IO_TIMEOUT_SEC,.tv_usec=0};
- unsigned char header[4];
+ web_buffer_t *buffer=context;
+ size_t length;
+ if(!buffer||!ptr||size==0||n>SIZE_MAX/size)return 0;
+ length=size*n;
+ if(length>WEB_HTTP_LIMIT-buffer->used)return 0;
+ memcpy(buffer->bytes+buffer->used,ptr,length);
+ buffer->used+=length;
+ buffer->bytes[buffer->used]=0;
+ return length;
+}
+static int exchange(CURL *handle,const char *payload,web_buffer_t *buffer,
+                    long *http_status)
+{
+ struct curl_slist *headers=NULL;
+ CURLcode rc;
+ if(!handle||!payload||!buffer||!http_status)return 0;
+ memset(buffer,0,sizeof *buffer);
+ *http_status=0;
+ headers=curl_slist_append(NULL,"Content-Type: application/json");
+ if(!headers)return 0;
+ curl_easy_setopt(handle,CURLOPT_URL,endpoint);
+ curl_easy_setopt(handle,CURLOPT_HTTPHEADER,headers);
+ curl_easy_setopt(handle,CURLOPT_POST,1L);
+ curl_easy_setopt(handle,CURLOPT_POSTFIELDS,payload);
+ curl_easy_setopt(handle,CURLOPT_POSTFIELDSIZE,(long)strlen(payload));
+ curl_easy_setopt(handle,CURLOPT_WRITEFUNCTION,receive_bytes);
+ curl_easy_setopt(handle,CURLOPT_WRITEDATA,buffer);
+ curl_easy_setopt(handle,CURLOPT_CONNECTTIMEOUT_MS,1000L);
+ curl_easy_setopt(handle,CURLOPT_TIMEOUT_MS,5000L);
+ curl_easy_setopt(handle,CURLOPT_FOLLOWLOCATION,0L);
+ curl_easy_setopt(handle,CURLOPT_PROXY,"");
+ curl_easy_setopt(handle,CURLOPT_IPRESOLVE,CURL_IPRESOLVE_V4);
+ rc=curl_easy_perform(handle);
+ if(rc==CURLE_OK)(void)curl_easy_getinfo(handle,CURLINFO_RESPONSE_CODE,http_status);
+ curl_slist_free_all(headers);
+ curl_easy_setopt(handle,CURLOPT_HTTPHEADER,NULL);
+ return rc==CURLE_OK;
+}
+static int dispatch(const web_job_t *job,char *reply)
+{
  digit_route_request_t request={0};
- digit_route_reply_t response={0};
- size_t length=0,used=0;
- stnlabz_module_result_t result;
- /* Both the Unix directory/socket mode AND the peer UID must authorize. */
- if(getsockopt(fd,SOL_SOCKET,SO_PEERCRED,&peer,&peer_size)!=0||
-    peer_size!=sizeof peer||peer.uid!=permitted_uid)return;
- (void)setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof timeout);
- (void)setsockopt(fd,SOL_SOCKET,SO_SNDTIMEO,&timeout,sizeof timeout);
- if(!read_all(fd,header,sizeof header)||
-    !decode_request_length(header,&length)||
-    !read_all(fd,request.text,length))return;
- if(!validate_text(request.text,length)){
-  (void)send_response(fd,0,"Invalid request.");
-  return;
- }
- request.text[length]=0;
- /* The trusted *local process* is identified; do not invent end-user auth. */
- snprintf(request.sender,sizeof request.sender,"digit-web");
- if(!host_api||!host_api->invoke_service){
-  (void)send_response(fd,0,"Digit routing unavailable.");
-  return;
- }
- result=host_api->invoke_service(DIGIT_ROUTER_DISPATCH_SERVICE,
-          &request,sizeof request,&response,sizeof response,&used);
- if(result!=STNLABZ_MODULE_OK||used!=sizeof response||
-    !response.replied||!memchr(response.text,0,sizeof response.text)||
-    !response.text[0]){
-  (void)send_response(fd,0,"Digit could not complete the request.");
-  return;
- }
- (void)send_response(fd,1,response.text);
-}
-static void *listen_loop(void *ignored)
-{
- (void)ignored;
- while(!atomic_load(&stopped)){
-  struct pollfd pfd={.fd=atomic_load(&listener_fd),.events=POLLIN};
-  int rc;
-  if(pfd.fd<0)break;
-  rc=poll(&pfd,1,250);
-  if(rc<0&&errno==EINTR)continue;
-  if(rc<0||rc==0)continue;
-  if(pfd.revents&(POLLERR|POLLHUP|POLLNVAL))break;
-  if(pfd.revents&POLLIN){
-   int fd=accept(pfd.fd,NULL,NULL);
-   if(fd<0)continue;
-   process_client(fd);
-   close(fd);
-  }
- }
- return NULL;
-}
-static int verify_parent(void)
-{
- struct stat st;
- /* Require a manually provisioned protected runtime directory. */
- if(lstat("/run/digit-web",&st)!=0||!S_ISDIR(st.st_mode)||
-    st.st_uid!=geteuid()||(st.st_mode&0007U)!=0U||
-    (st.st_mode&0020U)!=0U)return 0;
+ digit_route_reply_t result={0};
+ size_t used=0;
+ stnlabz_module_result_t rc;
+ if(!job||!reply||!module_host||!module_host->invoke_service)return 0;
+ strcpy(request.sender,"digit-web");
+ strcpy(request.text,job->text);
+ rc=module_host->invoke_service(DIGIT_ROUTER_DISPATCH_SERVICE,
+     &request,sizeof request,&result,sizeof result,&used);
+ if(rc!=STNLABZ_MODULE_OK||used!=sizeof result||!result.replied||
+    !memchr(result.text,0,sizeof result.text)||!result.text[0])return 0;
+ strcpy(reply,result.text);
  return 1;
 }
-static int make_listener(void)
+static void sleep_short(void)
 {
- struct sockaddr_un address={0};
- struct stat st;
- int fd=-1;
- if(!verify_parent())return -1;
- /* Refuse an existing pathname, including a stale socket or symlink.
-  * Operator must remove a stale socket after confirming ownership. */
- if(lstat(WEB_SOCKET_PATH,&st)==0||errno!=ENOENT)return -1;
- fd=socket(AF_UNIX,SOCK_STREAM|SOCK_CLOEXEC,0);
- if(fd<0)return -1;
- address.sun_family=AF_UNIX;
- snprintf(address.sun_path,sizeof address.sun_path,"%s",WEB_SOCKET_PATH);
- if(bind(fd,(struct sockaddr *)&address,sizeof address)!=0)goto fail;
- if(chmod(WEB_SOCKET_PATH,0660)!=0)goto fail_unlink;
- if(lstat(WEB_SOCKET_PATH,&st)!=0||!S_ISSOCK(st.st_mode))goto fail_unlink;
- socket_dev=st.st_dev;
- socket_ino=st.st_ino;
- if(listen(fd,8)!=0)goto fail_unlink;
- return fd;
-fail_unlink:
- (void)unlink(WEB_SOCKET_PATH);
-fail:
- close(fd);
- return -1;
+ struct timespec delay={.tv_sec=0,.tv_nsec=WEB_WAIT_NS};
+ while(!atomic_load(&stop_requested)&&nanosleep(&delay,&delay)!=0){}
 }
-static void unlink_owned_socket(void)
+static void *run_transport(void *ignored)
 {
- struct stat st;
- if(!lstat(WEB_SOCKET_PATH,&st)&&S_ISSOCK(st.st_mode)&&
-    st.st_uid==geteuid()&&st.st_dev==socket_dev&&st.st_ino==socket_ino)
-  (void)unlink(WEB_SOCKET_PATH);
- socket_dev=0;
- socket_ino=0;
-}
-static int selftests(unsigned *executed,unsigned *passed,
-                     int *negative_executed,int *negative_passed)
-{
- unsigned e=0,p=0;
- int ne=0,np=0;
- uid_t uid=0;
- unsigned char header[4]={0};
- size_t count=0;
- #define CHECK(x) do{++e;if(x)++p;}while(0)
- CHECK(parse_uid("1001",&uid)&&uid==(uid_t)1001);
- CHECK(!parse_uid(NULL,&uid));
- CHECK(!parse_uid("0",&uid));
- CHECK(!parse_uid("10x",&uid));
- CHECK(!parse_uid("-12",&uid));
- CHECK(validate_text("Hello",5));
- CHECK(validate_text("research PHP 8.5",16));
- CHECK(!validate_text("",0));
- CHECK(!validate_text("hello\nthere",11));
- CHECK(!validate_text("bad\0message",11));
- CHECK(encode_request_length(2047U,header));
- CHECK(decode_request_length(header,&count)&&count==2047U);
- CHECK(!encode_request_length(2048U,header));
- CHECK(!decode_request_length((unsigned char[]){0,0,8,0},&count));
- CHECK(!decode_request_length((unsigned char[]){0,0,0,0},&count));
- CHECK(!strcmp(DIGIT_ROUTER_DISPATCH_SERVICE,"digit.router.dispatch"));
- #undef CHECK
- ne=1;
- np=!validate_text(NULL,1);
- if(executed)*executed=e;
- if(passed)*passed=p;
- if(negative_executed)*negative_executed=ne;
- if(negative_passed)*negative_passed=np;
- return e==p&&e>=STNLABZ_MODULE_MIN_TESTS&&np;
+ CURL *handle=curl_easy_init();
+ (void)ignored;
+ if(!handle)return NULL;
+ while(!atomic_load(&stop_requested)){
+  web_buffer_t incoming={0},confirmation={0};
+  web_job_t job={0};
+  char reply[DIGIT_ROUTE_REPLY_MAX]={0};
+  char payload[1400];
+  long status=0,ack=0;
+  int success;
+  if(!exchange(handle,"{\"type\":\"poll\"}",&incoming,&status)||
+     status!=200L||!parse_job(incoming.bytes,&job)){
+   sleep_short();
+   continue;
+  }
+  success=dispatch(&job,reply);
+  if(!success)strcpy(reply,"Digit could not complete the request.");
+  if(build_reply(job.id,success,reply,payload,sizeof payload)){
+   if(!exchange(handle,payload,&confirmation,&ack)||ack!=200L){
+    fprintf(stderr,"[WEB] reply delivery failed; request id=%s\n",job.id);
+   }
+  }
+  sleep_short();
+ }
+ curl_easy_cleanup(handle);
+ return NULL;
 }
 static stnlabz_module_result_t qualify(stnlabz_module_qualification_result_t *q)
 {
  unsigned e=0,p=0;
- int ne=0,np=0;
+ web_job_t job={0};
+ char out[1400];
+ #define TEST(x) do{++e;if(x)++p;}while(0)
  if(!q)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
  memset(q,0,sizeof *q);
- int ok=selftests(&e,&p,&ne,&np);
- q->tests_executed=e;
- q->tests_passed=p;
- q->tests_failed=e-p;
- q->negative_test_executed=ne;
- q->negative_test_passed=np;
- return ok?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_QUALIFICATION;
+ TEST(endpoint_allowed(WEB_DEFAULT_ENDPOINT));
+ TEST(!endpoint_allowed("https://example.com/chat/transport"));
+ TEST(!endpoint_allowed("http://127.0.0.1:8000/chat/transport"));
+ TEST(!endpoint_allowed("http://127.0.0.1/other"));
+ TEST(!endpoint_allowed("http://127.0.0.1/chat/transport?x=1"));
+ TEST(valid_id("req_01-a"));
+ TEST(!valid_id("../bad"));
+ TEST(valid_message("Hello",5));
+ TEST(!valid_message("Hi\nWorld",8));
+ TEST(parse_job("{\"id\":\"r1\",\"message\":\"Hello\"}",&job));
+ TEST(!strcmp(job.id,"r1")&&!strcmp(job.text,"Hello"));
+ TEST(!parse_job("{\"id\":\"../bad\",\"message\":\"Hello\"}",&job));
+ TEST(!parse_job("{\"id\":\"r1\",\"message\":\"Hi\\nWorld\"}",&job));
+ TEST(!parse_job("{\"id\":1,\"message\":\"Hello\"}",&job));
+ TEST(build_reply("r1",1,"Hello!",out,sizeof out));
+ TEST(strstr(out,"\"status\":\"ok\"")!=NULL);
+ #undef TEST
+ q->tests_executed=e;q->tests_passed=p;q->tests_failed=e-p;
+ q->negative_test_executed=1;q->negative_test_passed=e==p;
+ return e==p?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_QUALIFICATION;
 }
-static stnlabz_module_result_t start(const stnlabz_module_host_t *h)
+static stnlabz_module_result_t start(const stnlabz_module_host_t *host)
 {
- const char *configured=getenv("DIGIT_WEB_ALLOWED_UID");
- int fd;
- if(!h||!h->invoke_service||worker_running||
-    !parse_uid(configured,&permitted_uid))
-  return STNLABZ_MODULE_ERR_START_FAILED;
- atomic_store(&stopped,0);
- fd=make_listener();
- if(fd<0)return STNLABZ_MODULE_ERR_START_FAILED;
- host_api=h;
- atomic_store(&listener_fd,fd);
- if(pthread_create(&worker,NULL,listen_loop,NULL)!=0){
-  atomic_store(&listener_fd,-1);
-  close(fd);
-  unlink_owned_socket();
-  host_api=NULL;
+ const char *configured=getenv("DIGIT_WEB_TRANSPORT_URL");
+ if(!host||!host->invoke_service||worker_started)return STNLABZ_MODULE_ERR_START_FAILED;
+ if(!configured||!*configured)configured=WEB_DEFAULT_ENDPOINT;
+ if(!endpoint_allowed(configured))return STNLABZ_MODULE_ERR_START_FAILED;
+ if(curl_global_init(CURL_GLOBAL_DEFAULT)!=CURLE_OK)return STNLABZ_MODULE_ERR_START_FAILED;
+ strcpy(endpoint,configured);
+ module_host=host;
+ atomic_store(&stop_requested,0);
+ if(pthread_create(&worker,NULL,run_transport,NULL)!=0){
+  module_host=NULL;
+  curl_global_cleanup();
   return STNLABZ_MODULE_ERR_START_FAILED;
  }
- worker_running=1;
+ worker_started=1;
  return STNLABZ_MODULE_OK;
 }
 static stnlabz_module_result_t stop(void)
 {
- int fd;
- if(!worker_running)return STNLABZ_MODULE_OK;
- atomic_store(&stopped,1);
- /* Keep listen fd open until the worker exits to avoid fd-reuse races. */
- (void)pthread_join(worker,NULL);
- fd=atomic_exchange(&listener_fd,-1);
- if(fd>=0)close(fd);
- worker_running=0;
- host_api=NULL;
- unlink_owned_socket();
+ if(!worker_started)return STNLABZ_MODULE_OK;
+ atomic_store(&stop_requested,1);
+ if(pthread_join(worker,NULL)!=0)return STNLABZ_MODULE_ERR_STOP_FAILED;
+ worker_started=0;
+ module_host=NULL;
+ curl_global_cleanup();
  return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
- "web","Digit Local Web Transport",1,0,0,
+ "web","Digit HTTP Web Transport",1,0,1,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
