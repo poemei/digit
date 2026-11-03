@@ -450,3 +450,5 @@ Director authorized initial native transport implementation; `/digit-chat` ChAoS
 **Gate:** Run `make -C modules/web clean all test`, provision a protected local runtime directory and trusted PHP process UID, manually install/activate and validate end-to-end. Website authentication and per-user permission checks must exist before public browser access.
 
 **Limitation:** Existing router reply cap is 512 bytes, so unbounded/extended web responses are not implemented. Larger response contracts, streaming, persistence, and concurrency are deferred. No build, native qualification or live operation has been verified.
+
+Web 1.0.0 test scope expanded with socketpair round-trip against a mocked `digit.router.dispatch` callback (success and error), plus intact failure counters. Tests remain unexecuted on the operator host.
