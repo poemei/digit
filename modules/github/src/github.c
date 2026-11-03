@@ -1330,10 +1330,10 @@ static int qualification(unsigned *executed,unsigned *passed,int *negative)
 
     {
         struct json_object *entries=json_object_new_array();
-        char out[512],seen[16][40]={{0}};
+        char out[512],seen[64][40]={{0}};
         unsigned pg;
         size_t i;
-        for(i=0;i<16U;++i){
+        for(i=0;i<64U;++i){
             struct json_object *entry=json_object_new_object();
             char name[40];
             snprintf(name,sizeof name,"item_%02zu",i);
@@ -1344,13 +1344,13 @@ static int qualification(unsigned *executed,unsigned *passed,int *negative)
         for(pg=1U;pg<=3U;++pg){
             CHECK(tree_page_from_array(entries,"acme","large-repo","",pg,out));
             CHECK(strlen(out)<512U);
-            CHECK(strstr(out,"16 entries")!=NULL);
+            CHECK(strstr(out,"64 entries")!=NULL);
             if(pg==1U)CHECK(strstr(out,"item_00")!=NULL);
             if(pg==3U)CHECK(strstr(out,"unavailable")!=NULL);
         }
         CHECK(tree_page_from_array(entries,"acme","large-repo","",2U,out));
-        CHECK(strstr(out,"item_15")!=NULL);
-        for(i=0;i<16U;++i){
+        CHECK(strstr(out,"item_63")!=NULL);
+        for(i=0;i<64U;++i){
             struct json_object *entry=json_object_array_get_idx(entries,i);
             snprintf(seen[i],sizeof seen[i],"%s",value(entry,"name"));
             CHECK(seen[i][0]!=0);
