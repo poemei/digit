@@ -1,5 +1,12 @@
 # Digit — CHANGELOG
 
+## Unreleased — 2026-11-03 — GitHub module 1.0.3 plain-English repository reporting
+
+- Operator demonstrated successful live `/github poemei/digit` replies but rejected the numbered, metadata-heavy output as unintelligible.
+- Replaced normal IRC responses with concise source-grounded English: explain GitHub's project description, primary language, and observed root folder roles instead of exposing REST fields, URLs, and pagination by default. Directory, file, issue, PR, and commit commands now return brief descriptive responses; explicit `page=N` requests remain for detailed evidence.
+- Extracted a pure metadata-and-root-listing explanation helper with offline fixture checks. Updated GitHub module descriptor, manifest, qualification version, and README to 1.0.3.
+- No Core, ABI, write permissions, or Rictus integration changes. Post-change native build, unit qualification and live IRC verification remain pending.
+
 ## Unreleased — 2026-11-03 — GitHub read-only module 1.0.2 paginated IRC evidence
 
 - **Observed:** The operator's successful live `/github poemei/digit` response ended midway through the root directory listing with `[truncated;`, because Core's single-reply ABI is limited to 511 characters.
