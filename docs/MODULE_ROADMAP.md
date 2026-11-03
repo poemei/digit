@@ -418,3 +418,11 @@ The shared `stnlabz/ABI` repository's README confirms the ABI 1.5 descriptor exp
 **Implemented:** Added `digit.llm.engineering.generate` as a separate Core-mediated service using the existing inference request/response shape, and updated GitHub `inspect` to request it explicitly. Coding requests use `keep_alive=0` and bounded generation; normal chat retains its original service. No global model switch or Core change. Coding inference failures surface through evidence-only fallback, never through the lite model. Ollama model must be installed by the operator.
 
 **Qualification gate:** Run `make -C modules/ollama clean all test` and `make -C modules/github clean all test`; install Ollama 1.1.2 before GitHub 1.0.7 through existing operator-controlled hotload. Verify lite chat, engineering inspection, unavailable model behavior, and model memory release under realistic load. No host build or live receipts for this increment yet. Exact single-model memory limits require separate host-level configuration and are not claimed here.
+
+### Ask 1.0.6 — return ordinary conversation to the lite model (2026-11-03)
+
+**Observed defect:** `Hello` returned unrelated web-search content; source traced to Ask 1.0.5's unconditional Research routing for every non-peer message.
+
+**Implemented:** Identity first; explicit `research `/`search ` invocation selects Research; ordinary messages select the existing `digit.llm.generate` lite service; peer commands keep their existing route. The independent Research command and dedicated GitHub engineering inference are untouched. Ordinary generated messages cannot silently become directed peer sends from a leading nickname.
+
+**Qualification gate:** Compile and run `make -C modules/ask clean all test`; operator-controlled install of Ask 1.0.6, then verify conversational `Hello`, explicit `research ` results, authorized Identity responses, peer-directed messages and GitHub engineering inspection still function. Source/test implementation is committed but host build, qualification, activation and IRC acceptance remain unverified.
