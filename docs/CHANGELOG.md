@@ -1,5 +1,13 @@
 # Digit — CHANGELOG
 
+## Unreleased — 2026-11-03 — Web Transport 1.0.1: outbound HTTP replaces unauthorized socket
+
+- Director authorized replacing the previous web module's Unix socket design with outbound HTTP to Digit's local ChAoS MVC server. The public chat route is `/chat`.
+- Replaced complete `modules/web/src/web_module.c`, tests, header, Makefile, and README. The module now initiates HTTP POST to the loopback-only `/chat/transport` operation, polls one pending message, invokes existing `digit.router.dispatch` service (as IRC does), and POSTs its correlated reply.
+- No Unix socket, inbound listener, new TCP port, Core edit, IRC change or other module alteration. No PHP UID setting or manually provisioned socket directory required. Uses established libcurl/json-c/pthread dependencies.
+- The separate ChAoS MVC module must implement the HTTP queue/response endpoint and restrict transport access to trusted local callers; browser-user authentication/authorization is not provided by Digit.
+- Existing Core router reply limit remains 511 text bytes. Offline local build and test passed 16/16 (using identical ABI/router header declarations in an isolated test checkout). Production build, hotload, PHP endpoint and end-to-end operation are unverified.
+
 ## Unreleased — 2026-11-03 — Web transport offline test improvement
 
 - Added Unix socketpair request/response round-trip cases with a mocked Core router service, verifying framing, successful delivery and unavailable-route errors.
