@@ -156,8 +156,8 @@ static const char *sender_name_reply(const char *sender,char *out,size_t cap)
  * It is evidence from the selected thread, not global model memory. */
 static const char *resume_reply(const char *input,char *output,size_t cap)
 {
- const char *start,*last,*p;
- size_t length;
+ const char *start,*last,*p,*tail;
+ size_t length,head_length,tail_length;
  int n;
  if(!input||strncmp(input,"[resume] ",9))return NULL;
  start=input+9;
@@ -166,10 +166,23 @@ static const char *resume_reply(const char *input,char *output,size_t cap)
  while((p=strstr(p," | User: "))!=NULL){last=p;++p;}
  if(!last||last<=start)return NULL;
  length=(size_t)(last-start);
- if(length>275U)length=275U;
- n=snprintf(output,cap,
+ if(length<=275U){
+  n=snprintf(output,cap,
     "Welcome back. From this conversation's recent record: %.*s. What would you like to continue?",
     (int)length,start);
+ }else{
+  /* Retain the project/conversation heading AND most recent exchange.
+   * Never truncate a UTF-8 sequence in the middle. */
+  head_length=90U;
+  while(head_length>0U &&
+        ((unsigned char)start[head_length]&0xc0U)==0x80U)head_length--;
+  tail=last-180;
+  while(tail<last && ((unsigned char)*tail&0xc0U)==0x80U)tail++;
+  tail_length=(size_t)(last-tail);
+  n=snprintf(output,cap,
+    "Welcome back. In %.*s ... most recently: %.*s. What would you like to continue?",
+    (int)head_length,start,(int)tail_length,tail);
+ }
  return n>0&&(size_t)n<cap?output:NULL;
 }
 static stnlabz_module_result_t controller(
