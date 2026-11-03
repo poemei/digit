@@ -445,47 +445,125 @@ static stnlabz_module_result_t report_service(const void *request,size_t req_siz
     if(used)*used=sizeof *out;
     return STNLABZ_MODULE_OK;
 }
-/* Core's route capture accepts one reply, at most 511 bytes, per command.
- * Longer evidence is available through the report service; never emit a
- * second callback or turn a valid route into INVALID_STATE. */
-static int command_reply_text(const char *report,char out[512])
+/* Digit Core captures exactly one reply of fewer than 512 bytes. Cycle 1
+ * offers explicit, stateless pages; each request retrieves a new bounded
+ * report. Pages from different requests need not represent one snapshot. */
+#define IRC_PAGE_CONTENT 320U
+#define IRC_MAX_PAGES 40U
+
+static int page_request(const char *raw,char query[512],unsigned *page)
 {
-    size_t i=0,n=0,length;
-    const char *suffix=" [truncated; use /github ... tree, file, commits, issues or prs]";
-    if(!report||!out||!report[0])return 0;
-    length=strlen(report);
-    while(i<length&&n<511U){
-        char c=report[i++];
-        if(c=='\n'||c=='\r'||c=='\t')c=' ';
-        if(c==' ' && (!n||out[n-1]==' '))continue;
-        out[n++]=c;
+    char *marker,*tail;
+    unsigned value=0;
+    size_t length;
+    if(!raw||!query||!page)return 0;
+    length=strlen(raw);
+    if(!length||length>=512U)return 0;
+    memcpy(query,raw,length+1U);
+    *page=1U;
+    marker=strstr(query," page=");
+    if(!marker)return 1;
+    tail=marker+6;
+    if(!*tail)return 0;
+    while(*tail){
+        unsigned char c=(unsigned char)*tail++;
+        if(c<'0'||c>'9')return 0;
+        value=value*10U+(unsigned)(c-'0');
+        if(value>IRC_MAX_PAGES)return 0;
     }
-    if(i<length){
-        size_t trailing=strlen(suffix);
-        if(trailing<n){
-            n-=trailing;
-            while(n&&out[n-1]==' ')--n;
-            memcpy(out+n,suffix,trailing);
-            n+=trailing;
+    if(!value)return 0;
+    *marker=0;
+    if(!query[0])return 0;
+    *page=value;
+    return 1;
+}
+static size_t flatten_report(const char *source,char *out,size_t cap)
+{
+    size_t n=0;
+    if(!source||!out||cap<2U)return 0;
+    while(*source&&n+1U<cap){
+        unsigned char c=(unsigned char)*source++;
+        if(c=='\n'||c=='\r'||c=='\t')c=' ';
+        if(c<32||c>126)continue;
+        if(c==' '&&(!n||out[n-1U]==' '))continue;
+        out[n++]=(char)c;
+    }
+    while(n&&out[n-1U]==' ')--n;
+    out[n]=0;
+    return n;
+}
+static size_t page_bounds(const char *text,size_t len,
+                          size_t starts[IRC_MAX_PAGES],
+                          size_t ends[IRC_MAX_PAGES])
+{
+    size_t offset=0,pages=0;
+    while(offset<len&&pages<IRC_MAX_PAGES){
+        size_t end=offset+IRC_PAGE_CONTENT;
+        size_t scan;
+        if(end>len)end=len;
+        if(end<len && text[end]!=' '){
+            scan=end;
+            while(scan>offset+IRC_PAGE_CONTENT/2U&&text[scan]!=' ')--scan;
+            if(text[scan]==' '&&scan>offset)end=scan;
+        }
+        starts[pages]=offset;
+        ends[pages]=end;
+        ++pages;
+        offset=end;
+        while(offset<len&&text[offset]==' ')++offset;
+    }
+    return offset==len?pages:0;
+}
+static int command_reply_page(const char *report,const char *base,
+                              unsigned page,char out[512])
+{
+    char text[DIGIT_GITHUB_REPORT_MAX];
+    size_t starts[IRC_MAX_PAGES],ends[IRC_MAX_PAGES];
+    size_t len,total,count;
+    int n;
+    if(!report||!base||!out||!page)return 0;
+    len=flatten_report(report,text,sizeof text);
+    if(!len)return 0;
+    total=page_bounds(text,len,starts,ends);
+    if(!total)return 0;
+    if(page>total){
+        n=snprintf(out,512,"Page %u unavailable; report has %zu page(s).",page,total);
+        return n>0&&n<512;
+    }
+    count=ends[page-1U]-starts[page-1U];
+    n=snprintf(out,512,"Page %u/%zu | %.*s",page,total,
+               (int)count,text+starts[page-1U]);
+    if(n<0||n>=512)return 0;
+    if(page<total){
+        int added=snprintf(out+n,512U-(size_t)n,
+                           " | Next: /github %s page=%u",base,page+1U);
+        if(added<0||added>=512-n){
+            added=snprintf(out+n,512U-(size_t)n," | Next: page=%u",page+1U);
+            if(added<0||added>=512-n)return 0;
         }
     }
-    while(n&&out[n-1]==' ')--n;
-    out[n]=0;
-    return n>0;
+    return 1;
 }
 static stnlabz_module_result_t command(const stnlabz_module_command_t *cmd,
     stnlabz_module_command_reply_fn reply,void *context,void *ctx)
 {
     digit_github_response_t *result;
-    char concise[512];
+    char query[512],single[512];
+    unsigned page;
     int accepted;
     (void)ctx;
     if(!cmd||!reply||!memchr(cmd->arguments,0,sizeof cmd->arguments))
         return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
+    if(!page_request(cmd->arguments,query,&page)){
+        return reply(context,
+            "Usage: /github owner/repo [summary|tree [path]|file path|commits|issues|prs] [page=N]")
+            ?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
+    }
     result=calloc(1,sizeof *result);
     if(!result)return STNLABZ_MODULE_ERR_INVALID_STATE;
-    result->status=run(cmd->arguments,result->report,sizeof result->report);
-    accepted=command_reply_text(result->report,concise) && reply(context,concise);
+    result->status=run(query,result->report,sizeof result->report);
+    accepted=command_reply_page(result->report,query,page,single) &&
+             reply(context,single);
     free(result);
     return accepted?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
 }
@@ -541,15 +619,38 @@ static int qualification(unsigned *executed,unsigned *passed,int *negative)
 
     CHECK(!strcmp(DIGIT_GITHUB_REPORT_SERVICE,"digit.github.report.v1"));
     {
-        char concise[512],long_text[1400];
-        memset(long_text,'A',sizeof long_text-1U);
+        char query[512],short_reply[512],long_text[1800];
+        unsigned page=0;
+        size_t i,pages=0;
+        CHECK(page_request("poemei/digit summary",query,&page));
+        CHECK(page==1U&&!strcmp(query,"poemei/digit summary"));
+        CHECK(page_request("poemei/digit tree modules page=2",query,&page));
+        CHECK(page==2U&&!strcmp(query,"poemei/digit tree modules"));
+        CHECK(!page_request("poemei/digit summary page=0",query,&page));
+        CHECK(!page_request("poemei/digit summary page=41",query,&page));
+        CHECK(!page_request("poemei/digit summary page=2abc",query,&page));
+        CHECK(!page_request("poemei/digit summary page=",query,&page));
+        CHECK(!page_request("poemei/digit summary page=4294967296",query,&page));
+        for(i=0;i<sizeof long_text-1U;++i)
+            long_text[i]=(i%15U)==14U?' ':'X';
         long_text[sizeof long_text-1U]=0;
-        CHECK(command_reply_text(long_text,concise));
-        CHECK(strlen(concise)<512U);
-        CHECK(strstr(concise,"[truncated;")!=NULL);
-        CHECK(command_reply_text("one\ntwo",concise));
-        CHECK(!strcmp(concise,"one two"));
-        CHECK(!command_reply_text("",concise));
+        CHECK(command_reply_page(long_text,"poemei/digit summary",1U,short_reply));
+        CHECK(strstr(short_reply,"Page 1/")!=NULL);
+        CHECK(strstr(short_reply,"Next: /github poemei/digit summary page=2")!=NULL);
+        CHECK(strlen(short_reply)<512U);
+        for(i=1U;i<=IRC_MAX_PAGES;++i){
+            CHECK(command_reply_page(long_text,"poemei/digit summary",
+                                     (unsigned)i,short_reply));
+            CHECK(strlen(short_reply)<512U);
+            if(strstr(short_reply,"Next:")==NULL){pages=i;break;}
+        }
+        CHECK(pages>1U&&pages<IRC_MAX_PAGES);
+        CHECK(command_reply_page(long_text,"poemei/digit summary",
+                                 (unsigned)(pages+1U),short_reply));
+        CHECK(strstr(short_reply,"unavailable")!=NULL);
+        CHECK(command_reply_page("one\ntwo","poemei/digit",1U,short_reply));
+        CHECK(strstr(short_reply,"one two")!=NULL);
+        CHECK(!command_reply_page("","poemei/digit",1U,short_reply));
     }
 #undef CHECK
     if(executed)*executed=e;
@@ -601,7 +702,7 @@ static stnlabz_module_result_t stop(void)
     return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
-    "github","Digit GitHub Read-Only",1,0,1,
+    "github","Digit GitHub Read-Only",1,0,2,
     STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
     qualify,start,stop
 };
