@@ -378,3 +378,11 @@ The shared `stnlabz/ABI` repository's README confirms the ABI 1.5 descriptor exp
 **Implemented:** Read-only `/github` paged commands using `page=N` (1–40) and single bounded Core replies. Full bounded service response, repository approval checks and read-only GitHub REST behavior are preserved. No Core, ABI, GitHub write access, or Rictus policy changes.
 
 **Qualification gate:** Run `make -C modules/github clean all test`, install the 1.0.2 module under operator control, and verify page 1, page 2, final page and invalid-page responses against a live authorized repository. Record exact module admission and command routing results. This gate is not yet complete.
+
+### GitHub Cycle 1 — human-readable reporting (1.0.3), 2026-11-03
+
+**Operator observation:** Live repository lookups worked but returned raw metadata and seven numbered pages rather than useful explanations.
+
+**Correction:** Standard read-only GitHub commands now answer in concise plain English. The default summary identifies only GitHub-supported description, language and observed project structure, explicitly distinguishing organization from tested code correctness. Detailed numbered pages remain optional. Offline checks cover representative project metadata and root entries.
+
+**Acceptance:** Build and qualify 1.0.3, install through the existing hot-loader with no Core changes, and confirm the ordinary IRC reply is both readable and faithful to source evidence. Still pending execution.
