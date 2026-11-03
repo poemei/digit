@@ -445,30 +445,47 @@ static stnlabz_module_result_t report_service(const void *request,size_t req_siz
     if(used)*used=sizeof *out;
     return STNLABZ_MODULE_OK;
 }
+/* Core's route capture accepts one reply, at most 511 bytes, per command.
+ * Longer evidence is available through the report service; never emit a
+ * second callback or turn a valid route into INVALID_STATE. */
+static int command_reply_text(const char *report,char out[512])
+{
+    size_t i=0,n=0,length;
+    const char *suffix=" [truncated; use /github ... tree, file, commits, issues or prs]";
+    if(!report||!out||!report[0])return 0;
+    length=strlen(report);
+    while(i<length&&n<511U){
+        char c=report[i++];
+        if(c=='\n'||c=='\r'||c=='\t')c=' ';
+        if(c==' ' && (!n||out[n-1]==' '))continue;
+        out[n++]=c;
+    }
+    if(i<length){
+        size_t trailing=strlen(suffix);
+        if(trailing<n){
+            n-=trailing;
+            while(n&&out[n-1]==' ')--n;
+            memcpy(out+n,suffix,trailing);
+            n+=trailing;
+        }
+    }
+    while(n&&out[n-1]==' ')--n;
+    out[n]=0;
+    return n>0;
+}
 static stnlabz_module_result_t command(const stnlabz_module_command_t *cmd,
     stnlabz_module_command_reply_fn reply,void *context,void *ctx)
 {
     digit_github_response_t *result;
-    size_t length,pos=0;
-    int accepted=1;
+    char concise[512];
+    int accepted;
     (void)ctx;
     if(!cmd||!reply||!memchr(cmd->arguments,0,sizeof cmd->arguments))
         return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
     result=calloc(1,sizeof *result);
     if(!result)return STNLABZ_MODULE_ERR_INVALID_STATE;
     result->status=run(cmd->arguments,result->report,sizeof result->report);
-    length=strlen(result->report);
-    /* Avoid IRC line truncation: bounded chunks, each independently replied. */
-    while(pos<length){
-        char chunk[410];
-        size_t count=length-pos;
-        if(count>390)count=390;
-        while(count>120&&pos+count<length&&result->report[pos+count]!='\n')--count;
-        memcpy(chunk,result->report+pos,count);chunk[count]=0;
-        if(!reply(context,chunk)){accepted=0;break;}
-        pos+=count;
-        while(pos<length&&result->report[pos]=='\n')++pos;
-    }
+    accepted=command_reply_text(result->report,concise) && reply(context,concise);
     free(result);
     return accepted?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
 }
@@ -523,6 +540,17 @@ static int qualification(unsigned *executed,unsigned *passed,int *negative)
     }
 
     CHECK(!strcmp(DIGIT_GITHUB_REPORT_SERVICE,"digit.github.report.v1"));
+    {
+        char concise[512],long_text[1400];
+        memset(long_text,'A',sizeof long_text-1U);
+        long_text[sizeof long_text-1U]=0;
+        CHECK(command_reply_text(long_text,concise));
+        CHECK(strlen(concise)<512U);
+        CHECK(strstr(concise,"[truncated;")!=NULL);
+        CHECK(command_reply_text("one\\ntwo",concise));
+        CHECK(!strcmp(concise,"one two"));
+        CHECK(!command_reply_text("",concise));
+    }
 #undef CHECK
     if(executed)*executed=e;
     if(passed)*passed=p;
@@ -573,7 +601,7 @@ static stnlabz_module_result_t stop(void)
     return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
-    "github","Digit GitHub Read-Only",1,0,0,
+    "github","Digit GitHub Read-Only",1,0,1,
     STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
     qualify,start,stop
 };
