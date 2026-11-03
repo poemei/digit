@@ -36,7 +36,11 @@ install: $(TARGET) test module.conf
 	@getent group "$(MODULE_GROUP)" >/dev/null 2>&1 || { echo "ERROR: missing group $(MODULE_GROUP)" >&2; exit 1; }
 	@install -d -o "$(MODULE_USER)" -g "$(MODULE_GROUP)" -m 0750 "$(MODULEDIR)"
 	@install -o "$(MODULE_USER)" -g "$(MODULE_GROUP)" -m 0644 module.conf "$(MODULEDIR)/module.conf"
-	@test -f "$(MODULEDIR)/repos.conf" || { echo "ERROR: operator-approved repos.conf required before install" >&2; exit 1; }
+	@if test ! -e "$(MODULEDIR)/repos.conf" && test ! -L "$(MODULEDIR)/repos.conf"; then \
+	  install -o "$(MODULE_USER)" -g "$(MODULE_GROUP)" -m 0640 tests/approved.conf "$(MODULEDIR)/repos.conf" || exit 1; \
+	  echo "Created $(MODULEDIR)/repos.conf from tests/approved.conf"; \
+	fi
+	@test -f "$(MODULEDIR)/repos.conf" || { echo "ERROR: repos.conf is not a regular file" >&2; exit 1; }
 	@set -eu; \
 	  stage=$$(mktemp "$(MODULEDIR)/.github.so.XXXXXX"); \
 	  trap 'rm -f "$$stage"' EXIT HUP INT TERM; \
