@@ -586,74 +586,202 @@ static int detected_languages(struct json_object *languages,char out[150],
     }
     return used>0;
 }
+/* File roles come from actual paths, not from GitHub language totals.
+ * Unknown languages are reported as unclassified, never guessed. */
+static int test_path(const char *path)
+{
+    const char *p=path;
+    if(!p)return 0;
+    if(!strncmp(p,"tests/",6)||!strncmp(p,"test/",5)||
+       !strncmp(p,"spec/",5)||!strncmp(p,"specs/",6)||
+       !strncmp(p,"testing/",8)||!strncmp(p,"__tests__/",10))
+        return 1;
+    while((p=strchr(p,'/'))!=NULL){
+        ++p;
+        if(!strncmp(p,"tests/",6)||!strncmp(p,"test/",5)||
+           !strncmp(p,"spec/",5)||!strncmp(p,"__tests__/",10))
+            return 1;
+    }
+    return 0;
+}
+static int build_path(const char *path)
+{
+    if(!path)return 0;
+    return !strncmp(path,"tools/",6)||!strncmp(path,"scripts/",8)||
+           !strncmp(path,"build/",6)||!strncmp(path,".github/",8)||
+           !strncmp(path,"vendor/",7)||!strncmp(path,"node_modules/",13);
+}
+static const char *file_language(const char *path)
+{
+    const char *name,*dot;
+    if(!path)return NULL;
+    name=strrchr(path,'/');
+    name=name?name+1:path;
+    if(!strcmp(name,"Makefile")||!strncmp(name,"Makefile.",9)||
+       !strcmp(name,"GNUmakefile"))return "Makefile";
+    dot=strrchr(name,'.');
+    if(!dot)return NULL;
+    if(!strcmp(dot,".c")||!strcmp(dot,".h"))return "C";
+    if(!strcmp(dot,".cpp")||!strcmp(dot,".cc")||!strcmp(dot,".cxx")||
+       !strcmp(dot,".hpp")||!strcmp(dot,".hh")||!strcmp(dot,".hxx"))return "C++";
+    if(!strcmp(dot,".php")||!strcmp(dot,".phtml"))return "PHP";
+    if(!strcmp(dot,".py")||!strcmp(dot,".pyw"))return "Python";
+    if(!strcmp(dot,".js")||!strcmp(dot,".mjs")||!strcmp(dot,".cjs"))return "JavaScript";
+    if(!strcmp(dot,".ts")||!strcmp(dot,".tsx"))return "TypeScript";
+    if(!strcmp(dot,".css"))return "CSS";
+    if(!strcmp(dot,".xsl")||!strcmp(dot,".xslt"))return "XSLT";
+    if(!strcmp(dot,".rs"))return "Rust";
+    if(!strcmp(dot,".go"))return "Go";
+    if(!strcmp(dot,".java"))return "Java";
+    if(!strcmp(dot,".rb"))return "Ruby";
+    if(!strcmp(dot,".cs"))return "C#";
+    if(!strcmp(dot,".swift"))return "Swift";
+    if(!strcmp(dot,".sh"))return "Shell";
+    return NULL;
+}
+typedef struct {
+    char name[48];
+    unsigned source,test,build;
+} language_role_t;
+static void classify_tree(struct json_object *tree,
+                          language_role_t roles[24],size_t *role_count,
+                          int *complete)
+{
+    struct json_object *entries=NULL,*truncated=NULL;
+    size_t i,n;
+    *role_count=0;
+    *complete=0;
+    if(!tree||!json_object_is_type(tree,json_type_object)||
+       !json_object_object_get_ex(tree,"tree",&entries)||
+       !json_object_is_type(entries,json_type_array))return;
+    if(json_object_object_get_ex(tree,"truncated",&truncated) &&
+       json_object_get_boolean(truncated))return;
+    n=json_object_array_length(entries);
+    for(i=0;i<n;++i){
+        struct json_object *item=json_object_array_get_idx(entries,i);
+        const char *path=value(item,"path");
+        const char *type=value(item,"type");
+        const char *lang;
+        size_t j;
+        if(!path||!type||strcmp(type,"blob"))continue;
+        lang=file_language(path);
+        if(!lang)continue;
+        for(j=0;j<*role_count;++j)
+            if(!strcmp(roles[j].name,lang))break;
+        if(j==*role_count){
+            if(j>=24U)continue;
+            memset(&roles[j],0,sizeof roles[j]);
+            snprintf(roles[j].name,sizeof roles[j].name,"%s",lang);
+            ++*role_count;
+        }
+        if(test_path(path))++roles[j].test;
+        else if(build_path(path)||!strcmp(lang,"Makefile"))
+            ++roles[j].build;
+        else ++roles[j].source;
+    }
+    *complete=1;
+}
+static const language_role_t *role_lookup(const language_role_t *roles,
+                                          size_t count,const char *name)
+{
+    size_t i;
+    for(i=0;i<count;++i)if(!strcmp(roles[i].name,name))return &roles[i];
+    return NULL;
+}
 static int summary_explanation(struct json_object *metadata,
                                struct json_object *entries,
-                               struct json_object *languages,char out[512])
+                               struct json_object *languages,
+                               struct json_object *tree,char out[512])
 {
-    const char *raw,*name;
-    char description[88],primary[38],items[145]={0},detected[150];
-    static const struct {const char *name,*meaning;} recognized[]={
-        {"src","source code"},{"modules","modules"},{"tests","tests"},
-        {"docs","documentation"},{"README.md","a README"},
-        {"Makefile","a build Makefile"},{"AGENTS.md","developer instructions"}
-    };
-    size_t i,j,used=0,found=0;
-    int n,mixed=0,has_languages;
+    const char *name,*raw;
+    language_role_t roles[24]={{0}};
+    char description[82],primary[42],detected[150];
+    char implementation[144]={0},support[128]={0},unclear[112]={0};
+    size_t count=0,i;
+    int complete=0,mixed=0,n,unknown=0;
+    struct json_object *language_map=languages;
     if(!metadata||!out)return 0;
     name=value(metadata,"full_name");
     if(!name)return 0;
     raw=value(metadata,"description");
-    plain(description,sizeof description,raw&&*raw?raw:"a project without a description");
+    plain(description,sizeof description,
+          raw&&*raw?raw:"a project without a description");
     raw=value(metadata,"language");
-    plain(primary,sizeof primary,raw&&*raw?raw:"unreported");
-    has_languages=detected_languages(languages,detected,&mixed);
-    if(entries && json_object_is_type(entries,json_type_array)){
-        for(j=0;j<sizeof recognized/sizeof recognized[0];++j){
-            for(i=0;i<json_object_array_length(entries);++i){
-                const char *file=value(json_object_array_get_idx(entries,i),"name");
-                size_t size=strlen(recognized[j].meaning);
-                if(!file||strcmp(file,recognized[j].name))continue;
-                if(used+size+3U>=sizeof items)break;
-                if(used){memcpy(items+used,", ",2);used+=2;}
-                memcpy(items+used,recognized[j].meaning,size);
-                used+=size;
-                items[used]=0;
-                ++found;
-                break;
-            }
+    plain(primary,sizeof primary,raw?raw:"unreported");
+    classify_tree(tree,roles,&count,&complete);
+    detected_languages(languages,detected,&mixed);
+    if(complete&&language_map){
+        json_object_object_foreach(language_map,key,val){
+            const language_role_t *role;
+            int64_t bytes;
+            char clean[48];
+            size_t len;
+            if(!json_object_is_type(val,json_type_int))continue;
+            bytes=json_object_get_int64(val);
+            if(bytes<=0)continue;
+            plain(clean,sizeof clean,key);
+            if(!clean[0])continue;
+            role=role_lookup(roles,count,clean);
+            if(!role){++unknown;continue;}
+            len=strlen(clean);
+            if(role->source){
+                size_t used=strlen(implementation);
+                if(used+len+3U<sizeof implementation)
+                    snprintf(implementation+used,sizeof implementation-used,
+                             "%s%s",used?", ":"",clean);
+            }else if(role->test||role->build){
+                size_t used=strlen(support);
+                const char *kind=role->test?"tests":"build files";
+                if(used+len+strlen(kind)+7U<sizeof support)
+                    snprintf(support+used,sizeof support-used,
+                             "%s%s (%s)",used?", ":"",clean,kind);
+            }else ++unknown;
         }
     }
-    n=snprintf(out,512,"I checked %.95s. GitHub calls it %.85s. ",
+    if(!implementation[0]&&complete&&count){
+        for(i=0;i<count;++i){
+            size_t used=strlen(implementation),len=strlen(roles[i].name);
+            if(!roles[i].source||used+len+3U>=sizeof implementation)continue;
+            snprintf(implementation+used,sizeof implementation-used,
+                     "%s%s",used?", ":"",roles[i].name);
+        }
+    }
+    n=snprintf(out,512,"I inspected %.95s. GitHub describes it as %.80s. ",
                name,description);
     if(n<0||n>=512)return 0;
-    if(has_languages)
+    if(!complete){
         n+=snprintf(out+(size_t)n,512-(size_t)n,
-                    "GitHub detects %s%s. ",detected,
-                    mixed?" (multiple languages)":"");
-    else
+            "GitHub lists %s as the main language, but I could not inspect "
+            "the full file tree to establish language roles. ",primary);
+    }else if(implementation[0]){
         n+=snprintf(out+(size_t)n,512-(size_t)n,
-                    "GitHub lists %s as the main language; I could not confirm a full language breakdown. ",
-                    primary);
+            "Files indicate implementation in %s. ",implementation);
+        if(support[0]&&n<512)
+            n+=snprintf(out+(size_t)n,512-(size_t)n,
+                        "Supporting files: %s. ",support);
+        if(unknown&&n<512)
+            n+=snprintf(out+(size_t)n,512-(size_t)n,
+                        "Other language roles remain unverified. ");
+    }else{
+        n+=snprintf(out+(size_t)n,512-(size_t)n,
+            "I found no confirmed implementation language in the inspected "
+            "file paths. GitHub's primary label is %s. ",primary);
+    }
     if(n<0||n>=512)return 0;
     if(!entries)
         n+=snprintf(out+(size_t)n,512-(size_t)n,
-            "I couldn't retrieve the files to explain the structure. ");
-    else if(found)
-        n+=snprintf(out+(size_t)n,512-(size_t)n,
-            "I found %s. ",items);
-    else
-        n+=snprintf(out+(size_t)n,512-(size_t)n,
-            "The root listing did not identify familiar project folders. ");
+                    "Root directory listing unavailable. ");
     if(n<0||n>=512)return 0;
     n+=snprintf(out+(size_t)n,512-(size_t)n,
-        "This tells us how it is organized, not whether the code works.");
+         "This is file classification, not a code review.");
     return n>0&&n<512;
 }
 static int everyday_summary(const char *owner,const char *repo,char out[512])
 {
     response_t *data=NULL;
-    struct json_object *metadata=NULL,*entries=NULL,*languages=NULL;
-    char endpoint[360];
+    struct json_object *metadata=NULL,*entries=NULL,*languages=NULL,*tree=NULL;
+    char endpoint[720],branch[100];
+    const char *raw;
     int ok=0;
     data=calloc(1,sizeof *data);
     if(!data)return 0;
@@ -661,12 +789,21 @@ static int everyday_summary(const char *owner,const char *repo,char out[512])
     if(!github_get(endpoint,data))goto done;
     metadata=decode(data,json_type_object);
     if(!metadata)goto done;
+    raw=value(metadata,"default_branch");
+    if(raw&&!segment(raw,79))raw=NULL;
+    snprintf(branch,sizeof branch,"%s",raw?raw:"");
     snprintf(endpoint,sizeof endpoint,"%s/%s/languages",owner,repo);
     if(github_get(endpoint,data))languages=decode(data,json_type_object);
     snprintf(endpoint,sizeof endpoint,"%s/%s/contents",owner,repo);
     if(github_get(endpoint,data))entries=decode(data,json_type_array);
-    ok=summary_explanation(metadata,entries,languages,out);
+    if(branch[0]){
+        snprintf(endpoint,sizeof endpoint,"%s/%s/git/trees/%s?recursive=1",
+                 owner,repo,branch);
+        if(github_get(endpoint,data))tree=decode(data,json_type_object);
+    }
+    ok=summary_explanation(metadata,entries,languages,tree,out);
 done:
+    if(tree)json_object_put(tree);
     if(languages)json_object_put(languages);
     if(entries)json_object_put(entries);
     if(metadata)json_object_put(metadata);
@@ -864,33 +1001,47 @@ static int qualification(unsigned *executed,unsigned *passed,int *negative)
     CHECK(!strcmp(DIGIT_GITHUB_REPORT_SERVICE,"digit.github.report.v1"));
     {
         struct json_object *meta=decode(&fixture,json_type_object);
+        struct json_object *root=json_tokener_parse(
+            "[{\"name\":\"src\"},{\"name\":\"modules\"},{\"name\":\"tests\"}]");
+        struct json_object *langs=json_tokener_parse(
+            "{\"C\":1200,\"Makefile\":100,\"Python\":90}");
         struct json_object *tree=json_tokener_parse(
-           "[{\"name\":\"src\"},{\"name\":\"modules\"},"
-           "{\"name\":\"tests\"},{\"name\":\"docs\"},"
-           "{\"name\":\"README.md\"},{\"name\":\"Makefile\"}]");
-        char explanation[512];
-        CHECK(summary_explanation(meta,tree,NULL,explanation));
-        CHECK(strstr(explanation,"I checked poemei/digit")!=NULL);
-        {
-            struct json_object *langs=json_tokener_parse(
-                "{\"C\":1000,\"C++\":800,\"PHP\":600,\"Python\":10}");
-            int mixed=0;
-            char detected[150];
-            CHECK(detected_languages(langs,detected,&mixed));
-            CHECK(mixed);
-            CHECK(strstr(detected,"C++")!=NULL && strstr(detected,"PHP")!=NULL);
-            CHECK(summary_explanation(meta,tree,langs,explanation));
-            CHECK(strstr(explanation,"multiple languages")!=NULL);
-            CHECK(strstr(explanation,"C++")!=NULL);
-            if(langs)json_object_put(langs);
-        }
-        CHECK(summary_explanation(meta,tree,NULL,explanation));
-        CHECK(strstr(explanation,"source code, modules, tests")!=NULL);
-        CHECK(strstr(explanation,"how it is organized")!=NULL);
-        CHECK(strstr(explanation,"Root entries")==NULL);
-        CHECK(strstr(explanation,"Page 1/")==NULL);
-        CHECK(strlen(explanation)<512U);
+            "{\"truncated\":false,\"tree\":["
+            "{\"path\":\"src/digit.c\",\"type\":\"blob\"},"
+            "{\"path\":\"src/main.c\",\"type\":\"blob\"},"
+            "{\"path\":\"tests/test_behavior.py\",\"type\":\"blob\"},"
+            "{\"path\":\"Makefile\",\"type\":\"blob\"}]}");
+        struct json_object *php=json_tokener_parse(
+            "{\"PHP\":1000,\"CSS\":200,\"XSLT\":100,\"JavaScript\":100}");
+        struct json_object *php_tree=json_tokener_parse(
+            "{\"truncated\":false,\"tree\":["
+            "{\"path\":\"app/controllers/home.php\",\"type\":\"blob\"},"
+            "{\"path\":\"public/css/site.css\",\"type\":\"blob\"},"
+            "{\"path\":\"assets/theme.xsl\",\"type\":\"blob\"},"
+            "{\"path\":\"public/js/app.js\",\"type\":\"blob\"}]}");
+        char result[512];
+        CHECK(summary_explanation(meta,root,langs,tree,result));
+        CHECK(strstr(result,"implementation in C")!=NULL);
+        CHECK(strstr(result,"Python (tests)")!=NULL);
+        CHECK(strstr(result,"Makefile (build files)")!=NULL);
+        CHECK(strstr(result,"implementation in C, Python")==NULL);
+        CHECK(summary_explanation(meta,root,php,php_tree,result));
+        CHECK(strstr(result,"implementation in PHP")!=NULL);
+        CHECK(strstr(result,"CSS")!=NULL);
+        CHECK(strstr(result,"XSLT")!=NULL);
+        CHECK(summary_explanation(meta,root,langs,NULL,result));
+        CHECK(strstr(result,"could not inspect the full file tree")!=NULL);
+        CHECK(test_path("tests/test_behavior.py"));
+        CHECK(!test_path("src/parser.py"));
+        CHECK(!build_path("src/main.c"));
+        CHECK(!strcmp(file_language("src/main.cpp"),"C++"));
+        CHECK(!strcmp(file_language("app/index.php"),"PHP"));
+        CHECK(!strcmp(file_language("assets/theme.xslt"),"XSLT"));
+        if(php_tree)json_object_put(php_tree);
+        if(php)json_object_put(php);
         if(tree)json_object_put(tree);
+        if(langs)json_object_put(langs);
+        if(root)json_object_put(root);
         if(meta)json_object_put(meta);
     }
 
@@ -978,7 +1129,7 @@ static stnlabz_module_result_t stop(void)
     return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
-    "github","Digit GitHub Read-Only",1,0,4,
+    "github","Digit GitHub Read-Only",1,0,5,
     STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
     qualify,start,stop
 };
