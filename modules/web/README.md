@@ -26,6 +26,12 @@ Provision `/run/digit-web` with ownership by the Digit runtime user, with no wor
 
 Set `DIGIT_WEB_ALLOWED_UID` in Digit's process environment to the trusted PHP runtime UID before operator-controlled module activation. Do not expose this server-side configuration publicly.
 
+## Socket ACL behavior
+
+At listener creation, the module sets an explicit minimal access ACL on the socket (owner read/write, owning group read/write, everyone else denied), replacing inherited default ACL entries that may silently remove group write access. Failure to set this ACL prevents listener startup. The runtime directory retains its operator-controlled permissions. The PHP worker must have socket directory traversal and belong to the socket's owning group; the existing `SO_PEERCRED` allowed-UID check remains independent and enforced. The permission setup is recreated automatically whenever Digit binds a new socket.
+
+Building requires POSIX ACL development headers and library (`libacl1-dev` on Ubuntu). The module's test target includes an ACL regression test.
+
 ## Build/qualification gate
 
 ```sh
