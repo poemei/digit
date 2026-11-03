@@ -1,6 +1,6 @@
 # Digit GitHub Read-Only Module — Cycle 1
 
-**Version:** 1.0.1 source candidate (post-fix build and live confirmation pending).
+**Version:** 1.0.2 source candidate (pagination qualification pending).
 
 **Purpose:** Let Digit retrieve inspectable information from explicitly allowed public GitHub repositories using the existing native STN-Labz ABI 1.5. Read-only repository inspection is a prerequisite for future engineering assessments. It is not certification.
 
@@ -17,11 +17,14 @@ Use the registered `/github` controller:
 /github poemei/digit commits
 /github poemei/digit issues
 /github poemei/digit prs
+/github poemei/digit summary page=2
+/github poemei/digit tree modules page=2
+/github poemei/digit file README.md page=3
 ```
 
 `summary` reports repository metadata, root entries, recent commits, open issues and pull requests, with evidence links where available. `tree` lists a bounded page of directory entries. `file` returns file metadata, source URL, blob SHA and a bounded printable text excerpt. `commits`, `issues`, and `prs` return bounded first-page references. Responses indicate unavailable data rather than inventing findings.
 
-**IRC command response contract:** Digit Core's `digit.router.dispatch` captures exactly one reply of at most 511 characters. The `/github` command returns one concise, possibly truncated response; it does not send multiple callback replies. The named `digit.github.report.v1` service retains the fuller bounded evidence report for capable consumers. This is deliberately distinct from Core's transport-agnostic one-response routing. A 1.0.1 `.so` replacement is eligible for the existing automatic hot-loader without restarting Digit, subject to runtime qualification and activation.
+**IRC command response contract:** Digit Core's `digit.router.dispatch` captures exactly one reply of at most 511 characters. The `/github` command now returns **one numbered page**, including a next-command hint when additional pages exist. Use the optional trailing `page=N` argument to retrieve subsequent pages, for example `/github poemei/digit summary page=2`. Valid page numbers are 1–40; the module responds explicitly when the requested page does not exist. There are no multiple callback replies. The named `digit.github.report.v1` service retains the longer bounded evidence report for other consumers. The generated report is still bounded (8 KB maximum) and list operations fetch bounded first-page GitHub API data; this is **not** an exhaustive repository export. Pages are stateless and each command fetches fresh GitHub data: if a repository changes between requests, page boundaries may change. No Core changes or Digit restart are needed for the existing hot-loader to evaluate an updated 1.0.2 `.so`.
 
 The ABI service `digit.github.report.v1` accepts `digit_github_request_t` and returns `digit_github_response_t` from `include/github_module.h`. It is separate from ordinary conversational Ask behavior and does not alter Core routing.
 
