@@ -1,6 +1,8 @@
-# Digit Web Transport 1.0.1 — Outbound HTTP
+# Digit Web Transport 1.0.2 — Outbound HTTP
 
 This replaces the unauthorized Unix socket implementation of 1.0.0. Digit initiates outbound HTTP communication to an existing local web server, like IRC initiates its own network connection. Digit does not expose a new listening port or Unix socket.
+
+Version 1.0.2 adds the authenticated ChAoS MVC account display name as a conversational sender label. The module descriptor version is incremented for Digit's strict hotload lifecycle; Core and ABI are unchanged.
 
 ## Integration contract for ChAoS MVC
 
