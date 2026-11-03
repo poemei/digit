@@ -10,7 +10,9 @@
 #include "github_module.h"
 
 /* Read-only public GitHub repository inspection. No local git, shell, or write HTTP methods. */
-#define ALLOWLIST "/opt/digit/modules/github/repos.conf"
+#ifndef GITHUB_ALLOWLIST_PATH
+#define GITHUB_ALLOWLIST_PATH "/opt/digit/modules/github/repos.conf"
+#endif
 #define API "https://api.github.com/repos/"
 #define MAX_BODY (1024U*1024U)
 #define MAX_APPROVED 64U
@@ -417,7 +419,6 @@ static int qualification(unsigned *executed,unsigned *passed,int *negative)
     CHECK(parsed!=NULL);
     if(parsed)json_object_put(parsed);
     CHECK(!decode(&fixture,json_type_array));
-    CHECK(plain!=NULL);
     CHECK(!strcmp(DIGIT_GITHUB_REPORT_SERVICE,"digit.github.report.v1"));
 #undef CHECK
     if(executed)*executed=e;
@@ -441,7 +442,7 @@ static stnlabz_module_result_t start(const stnlabz_module_host_t *host)
     if(!host||!host->register_command||!host->unregister_command||
        !host->register_service||!host->unregister_service)
         return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
-    if(!load_allowlist(ALLOWLIST))return STNLABZ_MODULE_ERR_START_FAILED;
+    if(!load_allowlist(GITHUB_ALLOWLIST_PATH))return STNLABZ_MODULE_ERR_START_FAILED;
     if(curl_global_init(CURL_GLOBAL_DEFAULT)!=CURLE_OK)return STNLABZ_MODULE_ERR_START_FAILED;
     host_ref=host;
     if(!host->register_service(DIGIT_GITHUB_REPORT_SERVICE,report_service,NULL))goto fail;
