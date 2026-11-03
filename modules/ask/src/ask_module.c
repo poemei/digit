@@ -152,6 +152,26 @@ static const char *sender_name_reply(const char *sender,char *out,size_t cap)
  len=snprintf(out,cap,"I know you here as %s.",sender);
  return len>0&&(size_t)len<cap?out:NULL;
 }
+/* A bounded, conversation-scoped memory excerpt supplied by the Chat module.
+ * It is evidence from the selected thread, not global model memory. */
+static const char *resume_reply(const char *input,char *output,size_t cap)
+{
+ const char *start,*last,*p;
+ size_t length;
+ int n;
+ if(!input||strncmp(input,"[resume] ",9))return NULL;
+ start=input+9;
+ last=NULL;
+ p=start;
+ while((p=strstr(p," | User: "))!=NULL){last=p;++p;}
+ if(!last||last<=start)return NULL;
+ length=(size_t)(last-start);
+ if(length>275U)length=275U;
+ n=snprintf(output,cap,
+    "Welcome back. From this conversation's recent record: %.*s. What would you like to continue?",
+    (int)length,start);
+ return n>0&&(size_t)n<cap?output:NULL;
+}
 static stnlabz_module_result_t controller(
  const stnlabz_module_command_t *cmd,
  stnlabz_module_command_reply_fn reply,void *ctx,void *unused)
@@ -175,6 +195,12 @@ static stnlabz_module_result_t controller(
  if(n>=sizeof identity_in.question||n>=sizeof llm_in.prompt)
   return reply_text(reply,ctx,"That question is too long.")?
    STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
+
+ {
+  const char *resume=resume_reply(cmd->arguments,message,sizeof message);
+  if(resume)return reply_text(reply,ctx,resume)?
+   STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
+ }
 
  if(asks_sender_name(cmd->arguments)){
   const char *answer=sender_name_reply(cmd->sender,message,sizeof message);
@@ -286,6 +312,11 @@ static int selftest(unsigned *e,unsigned *p,int *ne,int *np)
  CHECK(!standalone_greeting("hello can you debug this?"));
  CHECK(!standalone_greeting("hello research PHP 8.5"));
  CHECK(!standalone_greeting("hello: /github poemei/digit"));
+ CHECK(resume_reply("[resume] Project Sentinel; conversation sentinel-dev. User: tests | Digit: qualified | User: hey",message,sizeof message)!=NULL);
+ CHECK(strstr(message,"Project Sentinel")!=NULL);
+ CHECK(strstr(message,"qualified")!=NULL);
+ CHECK(!resume_reply("[resume] broken",message,sizeof message));
+ CHECK(!resume_reply("hey",message,sizeof message));
  CHECK(asks_sender_name("Who am I?"));
  CHECK(asks_sender_name("what is my name"));
  CHECK(asks_sender_name("Do you know my name?"));
@@ -349,7 +380,7 @@ static stnlabz_module_result_t stop(void)
  return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
- "ask","Digit Ask Controller",1,0,8,
+ "ask","Digit Ask Controller",1,0,9,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
