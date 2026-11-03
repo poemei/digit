@@ -1,5 +1,13 @@
 # Digit — CHANGELOG
 
+## Unreleased — 2026-11-03 — Digit local Web Transport 1.0.0 source baseline
+
+- Added native-C `modules/web`: local Unix socket, framed requests/replies, bounded input validation, filesystem isolation, mandatory Linux peer UID checks.
+- Uses existing `digit.router.dispatch` Core service already used by IRC. No Core modifications, ABI changes, IRC relay, publicly exposed port, or ChAoS MVC module.
+- Added C selftests, Makefile, descriptor/config, installation integrity gate and PHP integration protocol reference.
+- Existing `DIGIT_ROUTE_REPLY_MAX=512` applies; this transport does not falsely promise arbitrary-length replies. The public website, user authentication/authorization, streaming, persistence and concurrent sessions remain deferred.
+- Source committed and reviewed; Linux native build/tests, installed artifact and live IPC unverified.
+
 ## Unreleased — 2026-11-03 — GitHub 1.0.8 qualification fixture correction
 
 - Operator's native build compiled but qualification failed (0/0 reported by the public qualification wrapper), so the updated module was not qualified for installation.
