@@ -1,5 +1,13 @@
 # Digit — CHANGELOG
 
+## Unreleased — 2026-11-03 — Digit GitHub Read-Only Module 1.0.0
+
+- Added `modules/github` as a native ABI 1.5 module exposing a `github` command and `digit.github.report.v1` service; no Core or ABI changes.
+- Implemented human-controlled exact repository allowlisting, strict query/path validation, and fixed-origin HTTPS GET against public GitHub REST endpoints.
+- Added bounded repository summary, directory listing, source-file excerpt, recent commit, issue and pull-request reporting, with available URL and blob SHA evidence.
+- Added an offline fixture and tests for qualification, request denial, ABI registration/withdrawal and failure paths. Uses existing libcurl and JSON-C; no new dependencies.
+- **Evidence:** GitHub source commits only. Local native build, actual host tests, live network behavior and Director acceptance have not been verified. Cloning, pulling, checkout, diff, private access, writes and Rictus policy enforcement remain deferred.
+
 ## Unreleased — 2026-11-02 — S2 1.3.4 evidence-specific investigation reporting
 
 - Replaced repetitive HIGH/CRITICAL investigation journal leads with individual findings drawn from each matching Sentinel source record: observed request category, reported source timestamp, HTTP response, related address-match counts, continuity history and a targeted independent-verification action.
