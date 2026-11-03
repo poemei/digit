@@ -611,6 +611,15 @@ static int build_path(const char *path)
            !strncmp(path,"build/",6)||!strncmp(path,".github/",8)||
            !strncmp(path,"vendor/",7)||!strncmp(path,"node_modules/",13);
 }
+static int asset_path(const char *path,const char *language)
+{
+    if(!path||!language)return 0;
+    if(!strcmp(language,"CSS")||!strcmp(language,"XSLT"))return 1;
+    if(strcmp(language,"JavaScript")&&strcmp(language,"TypeScript"))return 0;
+    return !strncmp(path,"assets/",7)||!strncmp(path,"static/",7)||
+           !strncmp(path,"public/js/",10)||!strncmp(path,"public/assets/",14)||
+           !strncmp(path,"web/assets/",11);
+}
 static const char *file_language(const char *path)
 {
     const char *name,*dot;
@@ -675,8 +684,8 @@ static void classify_tree(struct json_object *tree,
             ++*role_count;
         }
         if(test_path(path))++roles[j].test;
-        else if(build_path(path)||!strcmp(lang,"Makefile"))
-            ++roles[j].build;
+        else if(build_path(path)||asset_path(path,lang)||
+                !strcmp(lang,"Makefile"))++roles[j].build;
         else ++roles[j].source;
     }
     *complete=1;
@@ -1034,6 +1043,9 @@ static int qualification(unsigned *executed,unsigned *passed,int *negative)
         CHECK(test_path("tests/test_behavior.py"));
         CHECK(!test_path("src/parser.py"));
         CHECK(!build_path("src/main.c"));
+        CHECK(asset_path("public/js/app.js","JavaScript"));
+        CHECK(!asset_path("src/main.js","JavaScript"));
+        CHECK(asset_path("assets/theme.xsl","XSLT"));
         CHECK(!strcmp(file_language("src/main.cpp"),"C++"));
         CHECK(!strcmp(file_language("app/index.php"),"PHP"));
         CHECK(!strcmp(file_language("assets/theme.xslt"),"XSLT"));
