@@ -83,14 +83,18 @@ static stnlabz_module_host_t mock_host={
  .send_message=mocked_send,.register_command=mock_register,
  .unregister_command=mock_unregister,.invoke_service=mocked_service
 };
-static stnlabz_module_result_t ask(int selected,const char *text)
+static stnlabz_module_result_t ask_from(int selected,const char *text,
+                                                  const char *sender)
 {
  stnlabz_module_command_t cmd={0};
  scenario=selected;calls_identity=calls_research=calls_llm=calls_peer=0;
  reply_buffer[0]=peer_buffer[0]=requested_query[0]=requested_prompt[0]=0;
  snprintf(cmd.arguments,sizeof cmd.arguments,"%s",text);
+ if(sender)snprintf(cmd.sender,sizeof cmd.sender,"%s",sender);
  return controller(&cmd,mocked_reply,NULL,NULL);
 }
+static stnlabz_module_result_t ask(int selected,const char *text)
+{return ask_from(selected,text,NULL);}
 int main(void)
 {
  stnlabz_module_qualification_result_t q={0};
@@ -102,6 +106,20 @@ int main(void)
  CHECK(q.negative_test_executed==1&&q.negative_test_passed==1);
  CHECK(start(&mock_host)==STNLABZ_MODULE_OK);
 
+ CHECK(stnlabz_module_get_descriptor()->version_patch==8);
+ CHECK(ask_from(1,"who am I?","Poe Mei")==STNLABZ_MODULE_OK);
+ CHECK(!strcmp(reply_buffer,"I know you here as Poe Mei."));
+ CHECK(calls_identity==0&&calls_research==0&&calls_llm==0);
+ CHECK(ask_from(1,"What is my name?","Poe Mei")==STNLABZ_MODULE_OK);
+ CHECK(!strcmp(reply_buffer,"I know you here as Poe Mei."));
+ CHECK(calls_identity==0&&calls_research==0&&calls_llm==0);
+ CHECK(ask_from(1,"Do you know my name?","digit-web")==STNLABZ_MODULE_OK);
+ CHECK(!strcmp(reply_buffer,"I do not have a name for this conversation."));
+ CHECK(calls_identity==0&&calls_research==0&&calls_llm==0);
+ CHECK(ask_from(1,"who are you?","Poe Mei")==STNLABZ_MODULE_OK);
+ CHECK(calls_identity==1);
+ CHECK(ask_from(1,"who am I and what can you do?","Poe Mei")==STNLABZ_MODULE_OK);
+ CHECK(calls_llm==1);
  CHECK(ask(1,"when are the New England Patriots playing again?")==STNLABZ_MODULE_OK);
  CHECK(!strcmp(reply_buffer,"Hello peer"));
  CHECK(!strcmp(requested_prompt,"when are the New England Patriots playing again?"));
