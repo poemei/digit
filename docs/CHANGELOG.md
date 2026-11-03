@@ -1,5 +1,12 @@
 # Digit — CHANGELOG
 
+## Unreleased — 2026-11-03 — Ask 1.0.7 restores standalone greetings
+
+- After Ask 1.0.6 went live, operator reported `Hello` failed through `digit.llm.generate`, although explicitly requested Research succeeded.
+- Restored deterministic standalone `Hello`, `Hi`, `Hey` in the Ask controller, without routing greeting-only input to Research or requiring inference. Identity still takes precedence; mixed greetings and technical requests continue through their normal route.
+- Full-file Ask tests updated for basic greetings even when LLM service fails, mixed commands, existing Research, Identity and peer logic.
+- **Not resolved:** the runtime failure of the lightweight inference service for general conversational prompts has not been diagnosed from host evidence. No execution, build, module activation or live acceptance claim is made here.
+
 ## Unreleased — 2026-11-03 — Ask 1.0.6 restores ordinary conversation routing
 
 - **Observed:** Both `digicat, Hello` and `digicat: Hello` returned an unrelated applicant-privacy headline, while GitHub source inspection successfully invoked engineering inference.
