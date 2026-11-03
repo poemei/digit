@@ -357,7 +357,36 @@ static int run(const char *query,char *out,size_t cap)
     }
     if(!emit(out,cap,&used,"Read-only GitHub evidence: %s/%s\nOperation: %s\n",
              owner,repo,action))goto done;
-    if(!strcmp(action,"summary"))result=repo_summary(response,out,cap,&used)?0:2;
+    if(!strcmp(action,"summary")){
+        result=repo_summary(response,out,cap,&used)?0:2;
+        if(result==0){
+            const char *sections[]={"contents","commits?per_page=5",
+                                     "issues?state=open&per_page=5",
+                                     "pulls?state=open&per_page=5"};
+            const char *labels[]={"Root entries","Recent commit references",
+                                  "Open issues (may include PRs)","Open pull requests"};
+            size_t section;
+            for(section=0;section<4;++section){
+                response_t *more=calloc(1,sizeof *more);
+                if(!more)break;
+                if(snprintf(endpoint,sizeof endpoint,"%s/%s/%s",
+                            owner,repo,sections[section])<(int)sizeof endpoint &&
+                   github_get(endpoint,more)){
+                    if(!emit(out,cap,&used,"\n") ||
+                       !list_items(more,labels[section],out,cap,&used)){
+                        free(more);
+                        break;
+                    }
+                }else if(!emit(out,cap,&used,
+                              "\n%s: unavailable; no results asserted.\n",
+                              labels[section])){
+                    free(more);
+                    break;
+                }
+                free(more);
+            }
+        }
+    }
     else if(!strcmp(action,"tree"))result=list_items(response,"Entries",out,cap,&used)?0:2;
     else if(!strcmp(action,"commits")){
         /* GitHub commit records contain a nested commit.message; use SHA and URL as stable evidence. */
