@@ -546,25 +546,67 @@ static int command_reply_page(const char *report,const char *base,
 }
 /* Normal conversation must explain findings, not print a REST response.
  * These statements are restricted to fields verified in the current reply. */
+/* GitHub's /languages endpoint reports detected source-byte counts, not
+ * compiler verification. Keep names dynamic; no language allowlist. */
+static int detected_languages(struct json_object *languages,char out[150],
+                              int *mixed)
+{
+    struct {char name[48];int64_t bytes;} best[4]={0};
+    size_t count=0,i,used=0;
+    if(mixed)*mixed=0;
+    if(!out)return 0;
+    out[0]=0;
+    if(!languages||!json_object_is_type(languages,json_type_object))return 0;
+    json_object_object_foreach(languages,key,val){
+        int64_t size;
+        char clean[48];
+        size_t slot;
+        if(!json_object_is_type(val,json_type_int))continue;
+        size=json_object_get_int64(val);
+        if(size<=0)continue;
+        ++count;
+        plain(clean,sizeof clean,key);
+        if(!clean[0])continue;
+        for(slot=0;slot<4U;++slot){
+            if(size>best[slot].bytes){
+                size_t k;
+                for(k=3U;k>slot;--k)best[k]=best[k-1U];
+                snprintf(best[slot].name,sizeof best[slot].name,"%s",clean);
+                best[slot].bytes=size;
+                break;
+            }
+        }
+    }
+    if(mixed)*mixed=count>1U;
+    for(i=0;i<4U && best[i].bytes>0;++i){
+        int n=snprintf(out+used,150U-used,"%s%s",
+                       used?", ":"",best[i].name);
+        if(n<0||(size_t)n>=150U-used)return 0;
+        used+=(size_t)n;
+    }
+    return used>0;
+}
 static int summary_explanation(struct json_object *metadata,
-                               struct json_object *entries,char out[512])
+                               struct json_object *entries,
+                               struct json_object *languages,char out[512])
 {
     const char *raw,*name;
-    char description[100],language[42],items[220]={0};
+    char description[88],primary[38],items[145]={0},detected[150];
     static const struct {const char *name,*meaning;} recognized[]={
         {"src","source code"},{"modules","modules"},{"tests","tests"},
         {"docs","documentation"},{"README.md","a README"},
         {"Makefile","a build Makefile"},{"AGENTS.md","developer instructions"}
     };
     size_t i,j,used=0,found=0;
-    int n;
+    int n,mixed=0,has_languages;
     if(!metadata||!out)return 0;
     name=value(metadata,"full_name");
     if(!name)return 0;
     raw=value(metadata,"description");
     plain(description,sizeof description,raw&&*raw?raw:"a project without a description");
     raw=value(metadata,"language");
-    plain(language,sizeof language,raw&&*raw?raw:"an unspecified language");
+    plain(primary,sizeof primary,raw&&*raw?raw:"unreported");
+    has_languages=detected_languages(languages,detected,&mixed);
     if(entries && json_object_is_type(entries,json_type_array)){
         for(j=0;j<sizeof recognized/sizeof recognized[0];++j){
             for(i=0;i<json_object_array_length(entries);++i){
@@ -581,8 +623,17 @@ static int summary_explanation(struct json_object *metadata,
             }
         }
     }
-    n=snprintf(out,512,"I checked %.100s. GitHub describes it as %.99s. "
-               "Its primary language is %.40s. ",name,description,language);
+    n=snprintf(out,512,"I checked %.95s. GitHub calls it %.85s. ",
+               name,description);
+    if(n<0||n>=512)return 0;
+    if(has_languages)
+        n+=snprintf(out+(size_t)n,512-(size_t)n,
+                    "GitHub detects %s%s. ",detected,
+                    mixed?" (multiple languages)":"");
+    else
+        n+=snprintf(out+(size_t)n,512-(size_t)n,
+                    "GitHub lists %s as the main language; I could not confirm a full language breakdown. ",
+                    primary);
     if(n<0||n>=512)return 0;
     if(!entries)
         n+=snprintf(out+(size_t)n,512-(size_t)n,
@@ -601,7 +652,7 @@ static int summary_explanation(struct json_object *metadata,
 static int everyday_summary(const char *owner,const char *repo,char out[512])
 {
     response_t *data=NULL;
-    struct json_object *metadata=NULL,*entries=NULL;
+    struct json_object *metadata=NULL,*entries=NULL,*languages=NULL;
     char endpoint[360];
     int ok=0;
     data=calloc(1,sizeof *data);
@@ -610,10 +661,13 @@ static int everyday_summary(const char *owner,const char *repo,char out[512])
     if(!github_get(endpoint,data))goto done;
     metadata=decode(data,json_type_object);
     if(!metadata)goto done;
+    snprintf(endpoint,sizeof endpoint,"%s/%s/languages",owner,repo);
+    if(github_get(endpoint,data))languages=decode(data,json_type_object);
     snprintf(endpoint,sizeof endpoint,"%s/%s/contents",owner,repo);
     if(github_get(endpoint,data))entries=decode(data,json_type_array);
-    ok=summary_explanation(metadata,entries,out);
+    ok=summary_explanation(metadata,entries,languages,out);
 done:
+    if(languages)json_object_put(languages);
     if(entries)json_object_put(entries);
     if(metadata)json_object_put(metadata);
     free(data);
@@ -815,8 +869,22 @@ static int qualification(unsigned *executed,unsigned *passed,int *negative)
            "{\"name\":\"tests\"},{\"name\":\"docs\"},"
            "{\"name\":\"README.md\"},{\"name\":\"Makefile\"}]");
         char explanation[512];
-        CHECK(summary_explanation(meta,tree,explanation));
+        CHECK(summary_explanation(meta,tree,NULL,explanation));
         CHECK(strstr(explanation,"I checked poemei/digit")!=NULL);
+        {
+            struct json_object *langs=json_tokener_parse(
+                "{\"C\":1000,\"C++\":800,\"PHP\":600,\"Python\":10}");
+            int mixed=0;
+            char detected[150];
+            CHECK(detected_languages(langs,detected,&mixed));
+            CHECK(mixed);
+            CHECK(strstr(detected,"C++")!=NULL && strstr(detected,"PHP")!=NULL);
+            CHECK(summary_explanation(meta,tree,langs,explanation));
+            CHECK(strstr(explanation,"multiple languages")!=NULL);
+            CHECK(strstr(explanation,"C++")!=NULL);
+            if(langs)json_object_put(langs);
+        }
+        CHECK(summary_explanation(meta,tree,NULL,explanation));
         CHECK(strstr(explanation,"source code, modules, tests")!=NULL);
         CHECK(strstr(explanation,"how it is organized")!=NULL);
         CHECK(strstr(explanation,"Root entries")==NULL);
@@ -910,7 +978,7 @@ static stnlabz_module_result_t stop(void)
     return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
-    "github","Digit GitHub Read-Only",1,0,3,
+    "github","Digit GitHub Read-Only",1,0,4,
     STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
     qualify,start,stop
 };
