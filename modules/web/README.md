@@ -15,10 +15,10 @@ Digit polls with an HTTP POST and `Content-Type: application/json`:
 The ChAoS module returns HTTP 204 when no message is pending, or HTTP 200 with exactly one queued request:
 
 ```json
-{"id":"request-001","message":"Hello"}
+{"id":"request-001","message":"Hello","display_name":"Mei Shaw"}
 ```
 
-Digit passes `message` to the existing Core-mediated `digit.router.dispatch` service, with sender `digit-web`, then POSTs the result back to the same operation:
+Digit passes `message` to the existing Core-mediated `digit.router.dispatch` service, using the authenticated website account’s `display_name` as the router sender, then POSTs the result back to the same operation. The existing `digit-web` sender is retained for legacy queue records without the optional `display_name` field. The transport does not assert a privileged router `account` identity or send PHP sessions:
 
 ```json
 {"type":"reply","id":"request-001","status":"ok","message":"Hello!"}
@@ -28,7 +28,7 @@ The website acknowledges with HTTP 200. `status` is `ok` or `error`. HTTP replie
 
 **Default local endpoint:** `http://127.0.0.1/chat/transport`. An optional `DIGIT_WEB_TRANSPORT_URL` environment variable can select another path under `http://127.0.0.1/chat/transport`, but cannot change host, scheme or port. Configure the existing web-server localhost virtual host so this route reaches the correct ChAoS MVC installation. No browser-side credentials, socket paths, ports or internal endpoints should be shown.
 
-**Security boundary:** The ChAoS MVC server must restrict the transport operation to loopback-origin requests and independently authorize each browser-side user before accepting messages for delivery. Digit currently has no individual browser-user authorization; sender is always `digit-web` and no user account is asserted. Do not expose the transport operation to internet clients. Restricting to 127.0.0.1 alone does not defend against untrusted processes already on the host.
+**Security boundary:** The ChAoS MVC server must restrict the transport operation to loopback-origin requests and independently authorize each browser-side user before accepting messages for delivery. Digit currently has no individual browser-user authorization; the authenticated website display name is supplied as a conversational sender label, but no Digit account authorization is asserted. The name is trusted only to the extent that the PHP queue and local transport endpoint are restricted. Do not expose the transport operation to internet clients. Restricting to 127.0.0.1 alone does not defend against untrusted processes already on the host.
 
 ## Existing Core contract
 
