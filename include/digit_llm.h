@@ -2,6 +2,7 @@
 #define DIGIT_LLM_H
 
 #define DIGIT_LLM_GENERATE_SERVICE "digit.llm.generate"
+#define DIGIT_LLM_ENGINEERING_SERVICE "digit.llm.engineering.generate"
 
 #define DIGIT_LLM_PROMPT_MAX 2048
 #define DIGIT_LLM_RESPONSE_MAX 512
