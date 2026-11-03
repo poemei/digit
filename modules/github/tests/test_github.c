@@ -56,7 +56,7 @@ int main(void)
     CHECK(!strcmp(m->id,"github"));
     CHECK(m->required_core_api_major==STNLABZ_MODULE_API_MAJOR);
     CHECK(m->required_core_api_minor==STNLABZ_MODULE_API_MINOR);
-    CHECK(m->version_major==1&&m->version_minor==0&&m->version_patch==6);
+    CHECK(m->version_major==1&&m->version_minor==0&&m->version_patch==7);
     CHECK(m->qualify(NULL)==STNLABZ_MODULE_ERR_INVALID_ARGUMENT);
     CHECK(m->qualify(&q)==STNLABZ_MODULE_OK);
     CHECK(q.tests_executed>=STNLABZ_MODULE_MIN_TESTS);
