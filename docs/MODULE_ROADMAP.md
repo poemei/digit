@@ -386,3 +386,11 @@ The shared `stnlabz/ABI` repository's README confirms the ABI 1.5 descriptor exp
 **Correction:** Standard read-only GitHub commands now answer in concise plain English. The default summary identifies only GitHub-supported description, language and observed project structure, explicitly distinguishing organization from tested code correctness. Detailed numbered pages remain optional. Offline checks cover representative project metadata and root entries.
 
 **Acceptance:** Build and qualify 1.0.3, install through the existing hot-loader with no Core changes, and confirm the ordinary IRC reply is both readable and faithful to source evidence. Still pending execution.
+
+### GitHub Cycle 1 — language-agnostic repository discovery (1.0.4), 2026-11-03
+
+**Purpose:** Preserve one read-only GitHub module across repositories written in C, C++, PHP and other languages, including mixed-language projects. No language-specific GitHub module, hardcoded language rejection or Core change.
+
+**Implemented:** Query GitHub's /languages metadata; report up to four prevalent detected languages in English, flag multiple-language repositories and distinguish unavailable language evidence. Offline fixture checks cover C/C++/PHP/Python and plain-language output. Existing module reporting and authorization remain intact.
+
+**Qualification gate:** Operator runs the existing Makefile qualification and install, then validates live mixed-language and unavailable-language responses. Actual source-code comprehension, build verification and certification remain separate, unproven capabilities.
