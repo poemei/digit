@@ -1,5 +1,12 @@
 # Digit — CHANGELOG
 
+## Unreleased — 2026-11-03 — GitHub 1.0.8 qualification fixture correction
+
+- Operator's native build compiled but qualification failed (0/0 reported by the public qualification wrapper), so the updated module was not qualified for installation.
+- Traced the internal test failure to the tree pagination fixture: out-of-range page 3 correctly produces `unavailable` rather than an entry count, while the fixture incorrectly demanded `64 entries` on all pages.
+- Corrected the complete GitHub source file's fixture to assert page 1/2 and page 2/2, every one of 64 fixture entries appearing exactly once across valid pages, page 3 unavailable, and correct navigation for root/subdirectory trees. Removed three reported compile warnings (misleading initialization braces and unused variables).
+- **Verification:** Source and fixture reviewed; native build and test have not been rerun in Digit's Linux environment. Operator qualification and runtime acceptance remain pending.
+
 ## Unreleased — 2026-11-03 — GitHub 1.0.8 directory pagination
 
 - Live evidence: `/github stnlabz/chaos-mvc tree` reported only four root items. Confirmed source root cause: `everyday_list()` stopped at `shown<4`; requests for later pages went through a different report formatter.
