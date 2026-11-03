@@ -1,5 +1,14 @@
 # Digit — CHANGELOG
 
+## Unreleased — 2026-11-03 — Ask 1.0.6 restores ordinary conversation routing
+
+- **Observed:** Both `digicat, Hello` and `digicat: Hello` returned an unrelated applicant-privacy headline, while GitHub source inspection successfully invoked engineering inference.
+- **Confirmed source cause:** Ask 1.0.5 called Research for every non-peer message, including greetings, rather than calling the existing lightweight language service.
+- **Correction:** Ask's conversation controller now sends normal messages to `digit.llm.generate`. Research runs only on explicit `research <query>` or `search <query>`; the separate Research-owned command remains unchanged. Identity remains authoritative, explicit peer commands retain their behavior, and unsolicited IRC nickname prefixes are stripped before ordinary reply delivery. The engineering service remains untouched.
+- **Coverage added:** Full-module offline test suite cases for `Hello`, ordinary technical questions, explicit search/research, denied/unavailable Research, Identity failures, peer-directed messages, language failures and accidental peer prefixes. Ask descriptor advanced from 1.0.5 to 1.0.6.
+- **Limitations:** No native build, executed qualification, activation or live IRC validation was performed for Ask 1.0.6. A general conversational model does not verify current facts; real-time research must be explicitly requested.
+- **Scope:** Ask source/tests/README and engineering records only. No Core, ABI, Research, Ollama or GitHub module source changes.
+
 ## Unreleased — 2026-11-03 — On-demand engineering inference (Ollama 1.1.2 / GitHub 1.0.7)
 
 - Director authorized model selection according to task: preserve the `llama3.2:1b` conversational generation service; add explicit engineering inference with `qwen2.5-coder:3b`.
