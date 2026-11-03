@@ -442,3 +442,11 @@ Operator witnessed `Hello` produce `Language inference failed` after Ask 1.0.6, 
 ### GitHub 1.0.8 qualification correction (2026-11-03)
 
 Operator native compile completed but module qualification failed. Root cause in test fixture: page 3 is out of range for 64 short entries (two valid pages); its `unavailable` response does not display `64 entries`, contrary to an unconditional test assertion. Corrected fixture and added exhaustive entry-presence tests plus explicit navigation/out-of-range assertions; cleaned reported C compiler warnings. Source committed, server build/qualification and hotload acceptance pending.
+
+### Digit Web Transport 1.0.0 — local IPC baseline (2026-11-03)
+
+Director authorized initial native transport implementation; `/digit-chat` ChAoS MVC module remains separate. `modules/web` provides protected Unix socket plus `SO_PEERCRED` caller UID verification and dispatches through the existing Core-mediated `digit.router.dispatch` service, not IRC. No Core or other module changes.
+
+**Gate:** Run `make -C modules/web clean all test`, provision a protected local runtime directory and trusted PHP process UID, manually install/activate and validate end-to-end. Website authentication and per-user permission checks must exist before public browser access.
+
+**Limitation:** Existing router reply cap is 512 bytes, so unbounded/extended web responses are not implemented. Larger response contracts, streaming, persistence, and concurrency are deferred. No build, native qualification or live operation has been verified.
