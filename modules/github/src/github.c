@@ -987,7 +987,7 @@ static int inspect_source(struct json_object *file,const char *path,
             "Path: %.300s; blob SHA: %.40s; first %u lines%s.\nSOURCE:\n%.1100s",
             path,sha,lines,partial?" (partial excerpt)":"",sample);
         if(n>0&&n<(int)sizeof request.prompt &&
-           host_ref->invoke_service(DIGIT_LLM_GENERATE_SERVICE,
+           host_ref->invoke_service(DIGIT_LLM_ENGINEERING_SERVICE,
                &request,sizeof request,&result,sizeof result,&written)==STNLABZ_MODULE_OK &&
            written==sizeof result &&
            memchr(result.text,0,sizeof result.text)&&result.text[0]){
@@ -1015,7 +1015,7 @@ static int inspect_source(struct json_object *file,const char *path,
         clean[j]=0;
         snprintf(out,512,
             "I read %s (SHA %.12s), first %u line(s)%s. "
-            "Ollama could not provide a grounded explanation. "
+            "The engineering model was unavailable or returned no usable explanation. "
             "Source begins: %.160s. No behavior verified.",
             path,sha_short,lines,partial?" of a longer file":"",clean);
     }
@@ -1107,6 +1107,7 @@ static int qualification(unsigned *executed,unsigned *passed,int *negative)
     CHECK(!path_allowed("/etc/passwd"));
     CHECK(parse_query("poemei/digit",owner,repo,action,path));
     CHECK(!strcmp(action,"summary"));
+    CHECK(!strcmp(DIGIT_LLM_ENGINEERING_SERVICE,"digit.llm.engineering.generate"));
     CHECK(parse_query("poemei/digit inspect src/main.c",owner,repo,action,path));
     CHECK(!strcmp(action,"inspect")&&!strcmp(path,"src/main.c"));
     CHECK(!parse_query("poemei/digit inspect",owner,repo,action,path));
@@ -1298,7 +1299,7 @@ static stnlabz_module_result_t stop(void)
     return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
-    "github","Digit GitHub Read-Only",1,0,6,
+    "github","Digit GitHub Read-Only",1,0,7,
     STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
     qualify,start,stop
 };
