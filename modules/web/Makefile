@@ -4,7 +4,7 @@ CPPFLAGS ?=
 CPPFLAGS += -Iinclude -I$(ROOT)/include
 CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Wpedantic
 LDFLAGS ?=
-LDLIBS ?= -pthread
+LDLIBS ?= -lcurl -ljson-c -pthread
 BUILD := build
 TARGET := $(BUILD)/web.so
 TEST := $(BUILD)/test_web
