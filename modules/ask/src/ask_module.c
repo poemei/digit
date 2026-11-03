@@ -63,19 +63,43 @@ static int reply_text(stnlabz_module_command_reply_fn reply,void *ctx,
  }
  return reply(ctx,out);
 }
+/* Research requires an explicit operator intent. Ordinary conversation must
+ * never be turned into a web search merely because it is a question. */
+static const char *research_query(const char *message)
+{
+ const char *query=NULL;
+ if(!message)return NULL;
+ if(!strncmp(message,"research ",9))query=message+9;
+ else if(!strncmp(message,"search ",7))query=message+7;
+ if(!query)return NULL;
+ while(*query==' '||*query=='\t')++query;
+ return *query?query:NULL;
+}
+static void strip_unrequested_peer(char *text)
+{
+ char *colon,*p;
+ size_t length;
+ if(!text||!text[0])return;
+ colon=strchr(text,':');
+ if(!colon||colon==text||(size_t)(colon-text)>32U||colon[1]!=' ')return;
+ for(p=text;p<colon;++p)if(!peer_char(*p))return;
+ p=colon+2;
+ length=strlen(p);
+ memmove(text,p,length+1U);
+}
 static stnlabz_module_result_t controller(
  const stnlabz_module_command_t *cmd,
  stnlabz_module_command_reply_fn reply,void *ctx,void *unused)
 {
  digit_identity_question_t identity_in={{0}};
  digit_identity_answer_t identity_out={{0}};
- research_request_t research_in={{0}};
- research_response_t *research_out=NULL;
  digit_llm_request_t llm_in={{0}};
  digit_llm_response_t llm_out={{0}};
  stnlabz_module_result_t rc;
  size_t n,used=0;
  char target[128]={0},message[ASK_REPLY_CAP];
+ const char *query;
+ int directed;
  (void)unused;
  if(!cmd||!reply||!host||!host->invoke_service||
     !memchr(cmd->arguments,0,sizeof cmd->arguments))
@@ -83,7 +107,7 @@ static stnlabz_module_result_t controller(
  n=strlen(cmd->arguments);
  if(!n)return reply_text(reply,ctx,"What would you like to know?")?
   STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
- if(n>=sizeof identity_in.question||n>=sizeof research_in.query)
+ if(n>=sizeof identity_in.question||n>=sizeof llm_in.prompt)
   return reply_text(reply,ctx,"That question is too long.")?
    STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
 
@@ -101,14 +125,19 @@ static stnlabz_module_result_t controller(
   return reply_text(reply,ctx,"My identity service is unavailable.")?
    STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
 
- /*
-  * An ordinary question goes straight to Research. Research formats its
-  * single provider response for IRC; Ask never sends it to inference.
-  */
- if(!peer(cmd->arguments,target,sizeof target)){
-  memcpy(research_in.query,cmd->arguments,n+1);
+ directed=peer(cmd->arguments,target,sizeof target);
+ /* Research only for explicit requests; /research remains Research-owned. */
+ query=directed?NULL:research_query(cmd->arguments);
+ if(query){
+  research_request_t research_in={{0}};
+  research_response_t *research_out;
+  size_t qlen=strlen(query);
+  if(qlen>=sizeof research_in.query)
+   return reply_text(reply,ctx,"That research question is too long.")?
+    STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
   research_out=calloc(1,sizeof *research_out);
   if(!research_out)return STNLABZ_MODULE_ERR_START_FAILED;
+  memcpy(research_in.query,query,qlen+1U);
   used=0;
   rc=host->invoke_service(DIGIT_RESEARCH_ANSWER_SERVICE,
     &research_in,sizeof research_in,research_out,sizeof *research_out,&used);
@@ -140,8 +169,9 @@ static stnlabz_module_result_t controller(
    STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
  }
 
- /* Explicit peer-directed messages retain their existing language service. */
- memcpy(llm_in.prompt,cmd->arguments,n+1);
+ /* Conversation and explicit peer messages use the existing lightweight
+  * generator. The coder service is selected by engineering modules only. */
+ memcpy(llm_in.prompt,cmd->arguments,n+1U);
  used=0;
  rc=host->invoke_service(DIGIT_LLM_GENERATE_SERVICE,
     &llm_in,sizeof llm_in,&llm_out,sizeof llm_out,&used);
@@ -150,9 +180,16 @@ static stnlabz_module_result_t controller(
   return reply_text(reply,ctx,"Language inference failed; no answer was generated.")?
    STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
  snprintf(message,sizeof message,"%s",llm_out.text);
- if(!prefix_peer(target,message,sizeof message)||!host->send_message)
-  return STNLABZ_MODULE_ERR_INVALID_STATE;
- return host->send_message(message)?
+ if(directed){
+  if(!prefix_peer(target,message,sizeof message)||!host->send_message)
+   return STNLABZ_MODULE_ERR_INVALID_STATE;
+  return host->send_message(message)?
+   STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
+ }
+ strip_unrequested_peer(message);
+ if(!message[0])return reply_text(reply,ctx,"Language inference returned no usable answer.")?
+  STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
+ return reply_text(reply,ctx,message)?
   STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
 }
 static int selftest(unsigned *e,unsigned *p,int *ne,int *np)
@@ -165,6 +202,18 @@ static int selftest(unsigned *e,unsigned *p,int *ne,int *np)
  CHECK(peer("say hello to rictus",target,sizeof target)&&!strcmp(target,"rictus"));
  CHECK(!peer("what is next SpaceX launch?",target,sizeof target));
  CHECK(!peer("hello",target,sizeof target));
+ CHECK(!research_query("Hello"));
+ CHECK(!research_query("What is PHP?"));
+ CHECK(research_query("research PHP 8.5")&&
+  !strcmp(research_query("research PHP 8.5"),"PHP 8.5"));
+ CHECK(research_query("search SpaceX launch")&&
+  !strcmp(research_query("search SpaceX launch"),"SpaceX launch"));
+ CHECK(!research_query("research "));
+ strcpy(message,"rictus: Hello");strip_unrequested_peer(message);
+ CHECK(!strcmp(message,"Hello"));
+ strcpy(message,"I checked: the source");strip_unrequested_peer(message);
+ CHECK(!strcmp(message,"I checked: the source"));
+
  CHECK(peer("ask [friend] why",target,sizeof target)&&!strcmp(target,"[friend]"));
  strcpy(message,"hello");CHECK(prefix_peer("rictus",message,sizeof message)&&
   !strcmp(message,"rictus: hello"));
@@ -205,7 +254,7 @@ static stnlabz_module_result_t stop(void)
  return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
- "ask","Digit Ask Controller",1,0,5,
+ "ask","Digit Ask Controller",1,0,6,
  STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
  qualify,start,stop
 };
