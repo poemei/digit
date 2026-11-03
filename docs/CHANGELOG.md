@@ -1,5 +1,12 @@
 # Digit — CHANGELOG
 
+## Unreleased — 2026-11-03 — GitHub 1.0.5 evidence-based language roles
+
+- **Observed:** Live read-only reports listed Python alongside C for Digit and CSS/XSLT/JavaScript alongside PHP for ChAoS MVC without distinguishing primary application code from tests and supporting assets. GitHub /languages reports byte counts, not engineering roles.
+- **Correction:** The standard GitHub summary inspects the repository's recursive Git tree to classify observed file paths as source implementation, test sources, build tooling or supporting assets. Python under test directories is reported as tests; C in src is reported as implementation. CSS/XSLT and browser asset files are reported as supporting assets. Unrecognized language roles are left unverified and a missing/truncated tree is reported as insufficient evidence rather than invented roles.
+- **Verification coverage added:** Offline JSON fixtures for C + Python tests + Makefile and PHP + CSS + XSLT + JavaScript, directory role checks and missing tree fallback. Synchronize descriptor, module.conf and test expectations to 1.0.5.
+- **Scope:** Read-only GitHub module only. No Core or ABI changes, write/clone access or deployment. **Status:** Source committed; native compilation, qualification, live activation and behavior remain unverified on the target host.
+
 ## Unreleased — 2026-11-03 — GitHub module 1.0.4 language-independent repository discovery
 
 - **Direction:** Digit's read-only GitHub inspection must not assume that every repository is C-only or impose a limited language allowlist. Mixed-language repositories such as C/C++/PHP must be recognized without implying engineering verification.
