@@ -5,7 +5,6 @@ CPPFLAGS += -Iinclude -I$(ROOT)/include
 CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Wpedantic
 LDFLAGS ?=
 LDLIBS ?= -pthread
-LDLIBS += -lacl
 BUILD := build
 TARGET := $(BUILD)/web.so
 TEST := $(BUILD)/test_web
