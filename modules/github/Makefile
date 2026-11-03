@@ -20,9 +20,11 @@ $(BUILD):
 	mkdir -p $@
 
 $(TARGET): src/github.c include/github_module.h | $(BUILD)
+	@mkdir -p "$(dir $@)"
 	$(CC) $(CPPFLAGS) $(CFLAGS) -fPIC -shared $(LDFLAGS) -o $@ src/github.c $(LDLIBS)
 
 $(TEST): tests/test_github.c tests/approved.conf src/github.c include/github_module.h | $(BUILD)
+	@mkdir -p "$(dir $@)"
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DGITHUB_ALLOWLIST_PATH='"$(CURDIR)/tests/approved.conf"' \
 	  $(LDFLAGS) -o $@ tests/test_github.c src/github.c $(LDLIBS)
 
