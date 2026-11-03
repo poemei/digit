@@ -650,7 +650,7 @@ static const char *file_language(const char *path)
 }
 typedef struct {
     char name[48];
-    unsigned source,test,build;
+    unsigned source,test,build,assets;
 } language_role_t;
 static void classify_tree(struct json_object *tree,
                           language_role_t roles[24],size_t *role_count,
@@ -684,8 +684,9 @@ static void classify_tree(struct json_object *tree,
             ++*role_count;
         }
         if(test_path(path))++roles[j].test;
-        else if(build_path(path)||asset_path(path,lang)||
-                !strcmp(lang,"Makefile"))++roles[j].build;
+        else if(asset_path(path,lang))++roles[j].assets;
+        else if(build_path(path)||!strcmp(lang,"Makefile"))
+            ++roles[j].build;
         else ++roles[j].source;
     }
     *complete=1;
@@ -738,9 +739,9 @@ static int summary_explanation(struct json_object *metadata,
                 if(used+len+3U<sizeof implementation)
                     snprintf(implementation+used,sizeof implementation-used,
                              "%s%s",used?", ":"",clean);
-            }else if(role->test||role->build){
+            }else if(role->test||role->build||role->assets){
                 size_t used=strlen(support);
-                const char *kind=role->test?"tests":"build files";
+                const char *kind=role->test?"tests":role->assets?"supporting assets":"build files";
                 if(used+len+strlen(kind)+7U<sizeof support)
                     snprintf(support+used,sizeof support-used,
                              "%s%s (%s)",used?", ":"",clean,kind);
@@ -1036,8 +1037,8 @@ static int qualification(unsigned *executed,unsigned *passed,int *negative)
         CHECK(strstr(result,"implementation in C, Python")==NULL);
         CHECK(summary_explanation(meta,root,php,php_tree,result));
         CHECK(strstr(result,"implementation in PHP")!=NULL);
-        CHECK(strstr(result,"CSS")!=NULL);
-        CHECK(strstr(result,"XSLT")!=NULL);
+        CHECK(strstr(result,"CSS (supporting assets)")!=NULL);
+        CHECK(strstr(result,"XSLT (supporting assets)")!=NULL);
         CHECK(summary_explanation(meta,root,langs,NULL,result));
         CHECK(strstr(result,"could not inspect the full file tree")!=NULL);
         CHECK(test_path("tests/test_behavior.py"));
