@@ -394,3 +394,11 @@ The shared `stnlabz/ABI` repository's README confirms the ABI 1.5 descriptor exp
 **Implemented:** Query GitHub's /languages metadata; report up to four prevalent detected languages in English, flag multiple-language repositories and distinguish unavailable language evidence. Offline fixture checks cover C/C++/PHP/Python and plain-language output. Existing module reporting and authorization remain intact.
 
 **Qualification gate:** Operator runs the existing Makefile qualification and install, then validates live mixed-language and unavailable-language responses. Actual source-code comprehension, build verification and certification remain separate, unproven capabilities.
+
+### GitHub Cycle 1 — role-aware file classification (1.0.5), 2026-11-03
+
+**Operator evidence:** Digit was called a C, Makefile and Python project although the application's native implementation is C and Python appears in tests; ChAoS MVC was classified without separating PHP implementation and front-end assets.
+
+**Change:** Inspect actual recursive Git file paths before attributing language roles. Test folders, build tool locations and supporting assets are reported separately from implementation. Source language classification is evidence-limited, supports mixed-language repositories and does not hardcode project identities or assume GitHub's byte counts imply runtime. An incomplete or unavailable tree prevents a determinate role claim.
+
+**Acceptance gate:** Run module tests and install with operator control, then check the two reported repositories against observed file paths. No live post-change receipts yet. Actual code comprehension and verification remain separate, deferred capabilities.
