@@ -707,9 +707,9 @@ static int summary_explanation(struct json_object *metadata,
                                struct json_object *tree,char out[512])
 {
     const char *name,*raw;
-    language_role_t roles[24]={{0}};
+    language_role_t roles[24]={0};
     char description[82],primary[42],detected[150];
-    char implementation[144]={0},support[128]={0},unclear[112]={0};
+    char implementation[144]={0},support[128]={0};
     size_t count=0,i;
     int complete=0,mixed=0,n,unknown=0;
     struct json_object *language_map=languages;
@@ -928,7 +928,7 @@ static int everyday_list(const char *owner,const char *repo,
                          const char *action,const char *path,char out[512])
 {
     response_t *data=calloc(1,sizeof *data);
-    struct json_object *array=NULL,*item=NULL;
+    struct json_object *array=NULL;
     char endpoint[720],names[290]={0},clean[55];
     const char *subject,*field_name="name";
     int n;
@@ -1330,8 +1330,7 @@ static int qualification(unsigned *executed,unsigned *passed,int *negative)
 
     {
         struct json_object *entries=json_object_new_array();
-        char out[512],seen[64][40]={{0}};
-        unsigned pg;
+        char out[512],first[512],second[512];
         size_t i;
         for(i=0;i<64U;++i){
             struct json_object *entry=json_object_new_object();
@@ -1341,22 +1340,32 @@ static int qualification(unsigned *executed,unsigned *passed,int *negative)
             json_object_object_add(entry,"type",json_object_new_string(i%3U?"file":"dir"));
             json_object_array_add(entries,entry);
         }
-        for(pg=1U;pg<=3U;++pg){
-            CHECK(tree_page_from_array(entries,"acme","large-repo","",pg,out));
-            CHECK(strlen(out)<512U);
-            CHECK(strstr(out,"64 entries")!=NULL);
-            if(pg==1U)CHECK(strstr(out,"item_00")!=NULL);
-            if(pg==3U)CHECK(strstr(out,"unavailable")!=NULL);
-        }
-        CHECK(tree_page_from_array(entries,"acme","large-repo","",2U,out));
-        CHECK(strstr(out,"item_63")!=NULL);
+        CHECK(tree_page_from_array(entries,"acme","large-repo","",1U,first));
+        CHECK(strlen(first)<512U);
+        CHECK(strstr(first,"64 entries")!=NULL);
+        CHECK(strstr(first,"page 1/2")!=NULL);
+        CHECK(strstr(first,"item_00")!=NULL);
+        CHECK(strstr(first,"Next: /github acme/large-repo tree page=2")!=NULL);
+        CHECK(tree_page_from_array(entries,"acme","large-repo","",2U,second));
+        CHECK(strlen(second)<512U);
+        CHECK(strstr(second,"64 entries")!=NULL);
+        CHECK(strstr(second,"page 2/2")!=NULL);
+        CHECK(strstr(second,"item_63")!=NULL);
+        CHECK(strstr(second,"Next:")==NULL);
+        /* All returned entries must appear in precisely one valid page. */
         for(i=0;i<64U;++i){
-            struct json_object *entry=json_object_array_get_idx(entries,i);
-            snprintf(seen[i],sizeof seen[i],"%s",value(entry,"name"));
-            CHECK(seen[i][0]!=0);
+            char name[40];
+            int first_has,second_has;
+            snprintf(name,sizeof name,"item_%02zu",i);
+            first_has=strstr(first,name)!=NULL;
+            second_has=strstr(second,name)!=NULL;
+            CHECK(first_has!=second_has);
         }
+        CHECK(tree_page_from_array(entries,"acme","large-repo","",3U,out));
+        CHECK(strstr(out,"unavailable")!=NULL);
+        CHECK(strstr(out,"2 page(s)")!=NULL);
         CHECK(tree_page_from_array(entries,"acme","large-repo","src",1U,out));
-        CHECK(strstr(out,"tree src page=2")!=NULL);
+        CHECK(strstr(out,"Next: /github acme/large-repo tree src page=2")!=NULL);
         json_object_put(entries);
     }
 
