@@ -823,6 +823,107 @@ done:
     free(data);
     return ok;
 }
+/* Tree uses item-boundary pages; never imply the first four records are all.
+ * Re-fetch for each page, as existing GitHub paging is stateless. */
+#define TREE_PAGE_BYTES 300U
+static int tree_page_from_array(struct json_object *array,
+ const char *owner,const char *repo,const char *path,
+ unsigned page,char out[512])
+{
+ size_t starts[IRC_MAX_PAGES],ends[IRC_MAX_PAGES];
+ size_t count,offset=0,pages=0,i,used=0;
+ char names[IRC_PAGE_CONTENT+32U],clean[300],item[310];
+ int n;
+ if(!array||!json_object_is_type(array,json_type_array)||!out||
+    !owner||!repo||!path||!page)return 0;
+ count=json_object_array_length(array);
+ if(!count){
+  n=snprintf(out,512,"Tree %s/%s%s%s: GitHub returned an empty directory.",
+    owner,repo,*path?"/":"",path);
+  return n>0&&n<512;
+ }
+ while(offset<count){
+  size_t bytes=0,start=offset;
+  if(pages>=IRC_MAX_PAGES){
+   snprintf(out,512,"Directory has %zu entries and exceeds the supported %u pages; listing is incomplete.",
+     count,IRC_MAX_PAGES);
+   return 1;
+  }
+  while(offset<count){
+   struct json_object *entry=json_object_array_get_idx(array,offset);
+   const char *raw=value(entry,"name"),*kind=value(entry,"type");
+   size_t length;
+   if(!raw||!kind)return 0;
+   plain(clean,sizeof clean,raw);
+   if(!clean[0])return 0;
+   n=snprintf(item,sizeof item,"%s%s",!strcmp(kind,"dir")?"/":"",clean);
+   if(n<1||n>=(int)sizeof item)return 0;
+   length=(size_t)n+(bytes?2U:0U);
+   if(bytes&&bytes+length>TREE_PAGE_BYTES)break;
+   if(length>TREE_PAGE_BYTES)return 0;
+   bytes+=length;
+   ++offset;
+  }
+  starts[pages]=start;
+  ends[pages]=offset;
+  ++pages;
+ }
+ if(page>pages){
+  n=snprintf(out,512,"Tree page %u unavailable; directory has %zu page(s).",page,pages);
+  return n>0&&n<512;
+ }
+ names[0]=0;
+ for(i=starts[page-1U];i<ends[page-1U];++i){
+  struct json_object *entry=json_object_array_get_idx(array,i);
+  const char *raw=value(entry,"name"),*kind=value(entry,"type");
+  plain(clean,sizeof clean,raw);
+  n=snprintf(item,sizeof item,"%s%s",!strcmp(kind,"dir")?"/":"",clean);
+  if(n<=0||n>=(int)sizeof item)return 0;
+  if(used+(used?2U:0U)+(size_t)n>=sizeof names)return 0;
+  if(used){memcpy(names+used,", ",2U);used+=2U;}
+  memcpy(names+used,item,(size_t)n);
+  used+=(size_t)n;
+  names[used]=0;
+ }
+ /* Keep the header short; caller's exact query is retained in Next. */
+ n=snprintf(out,512,"Tree %s/%s%s%.60s | %zu entries | page %u/%zu: %s",
+   owner,repo,*path?"/":"",path,count,page,pages,names);
+ if(n<0||n>=512)return 0;
+ if(page<pages){
+  char next[512];
+  int added=snprintf(next,sizeof next,
+   " | Next: /github %s/%s tree%s%s page=%u",
+   owner,repo,*path?" ":"",path,page+1U);
+  if(added>0&&added<(int)sizeof next&&n+added<512){
+   memcpy(out+(size_t)n,next,(size_t)added+1U);
+  }else{
+   added=snprintf(out+(size_t)n,512U-(size_t)n,
+     " | Next: page=%u (same tree command)",page+1U);
+   if(added<0||added>=512-n)return 0;
+  }
+ }
+ return 1;
+}
+static int everyday_tree(const char *owner,const char *repo,
+ const char *path,unsigned page,char out[512])
+{
+ response_t *data=calloc(1,sizeof *data);
+ struct json_object *array=NULL;
+ char endpoint[720];
+ int ok=0,n;
+ if(!data)return 0;
+ n=snprintf(endpoint,sizeof endpoint,"%s/%s/contents%s%s",
+   owner,repo,*path?"/":"",path);
+ if(n<0||n>=(int)sizeof endpoint)goto done;
+ if(!github_get(endpoint,data))goto done;
+ array=decode(data,json_type_array);
+ if(!array)goto done;
+ ok=tree_page_from_array(array,owner,repo,path,page,out);
+done:
+ if(array)json_object_put(array);
+ free(data);
+ return ok;
+}
 static int everyday_list(const char *owner,const char *repo,
                          const char *action,const char *path,char out[512])
 {
@@ -1040,7 +1141,7 @@ done:
     free(data);
     return ok;
 }
-static int everyday_reply(const char *query,char out[512])
+static int everyday_reply(const char *query,unsigned page,char out[512])
 {
     char owner[80],repo[80],action[32],path[320];
     if(!parse_query(query,owner,repo,action,path)){
@@ -1051,6 +1152,8 @@ static int everyday_reply(const char *query,char out[512])
         snprintf(out,512,"I cannot inspect %s/%s because it is not on my approved repository list.",owner,repo);
         return 1;
     }
+    if(!strcmp(action,"tree"))
+        return everyday_tree(owner,repo,path,page,out);
     if(!strcmp(action,"summary"))
         return everyday_summary(owner,repo,out);
     if(!strcmp(action,"file"))
@@ -1071,8 +1174,18 @@ static stnlabz_module_result_t command(const stnlabz_module_command_t *cmd,
     if(!page_request(cmd->arguments,query,&page))
         return reply(context,"Tell me which repository to inspect, like /github poemei/digit.")
             ?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
+    /* Item-aligned tree pages always use the same formatter. */
+    {
+        char o[80],r[80],action[32],path[320];
+        if(parse_query(query,o,r,action,path)&&!strcmp(action,"tree")){
+            if(!everyday_reply(query,page,answer))
+                snprintf(answer,sizeof answer,
+                  "GitHub directory listing unavailable; no entries asserted.");
+            return reply(context,answer)?STNLABZ_MODULE_OK:STNLABZ_MODULE_ERR_INVALID_STATE;
+        }
+    }
     if(page==1U){
-        if(!everyday_reply(query,answer))
+        if(!everyday_reply(query,page,answer))
             snprintf(answer,sizeof answer,
                 "I couldn't retrieve enough information to describe that repository reliably.");
         ok=reply(context,answer);
@@ -1216,6 +1329,38 @@ static int qualification(unsigned *executed,unsigned *passed,int *negative)
     }
 
     {
+        struct json_object *entries=json_object_new_array();
+        char out[512],seen[16][40]={{0}};
+        unsigned pg;
+        size_t i;
+        for(i=0;i<16U;++i){
+            struct json_object *entry=json_object_new_object();
+            char name[40];
+            snprintf(name,sizeof name,"item_%02zu",i);
+            json_object_object_add(entry,"name",json_object_new_string(name));
+            json_object_object_add(entry,"type",json_object_new_string(i%3U?"file":"dir"));
+            json_object_array_add(entries,entry);
+        }
+        for(pg=1U;pg<=3U;++pg){
+            CHECK(tree_page_from_array(entries,"acme","large-repo","",pg,out));
+            CHECK(strlen(out)<512U);
+            CHECK(strstr(out,"16 entries")!=NULL);
+            if(pg==1U)CHECK(strstr(out,"item_00")!=NULL);
+            if(pg==3U)CHECK(strstr(out,"unavailable")!=NULL);
+        }
+        CHECK(tree_page_from_array(entries,"acme","large-repo","",2U,out));
+        CHECK(strstr(out,"item_15")!=NULL);
+        for(i=0;i<16U;++i){
+            struct json_object *entry=json_object_array_get_idx(entries,i);
+            snprintf(seen[i],sizeof seen[i],"%s",value(entry,"name"));
+            CHECK(seen[i][0]!=0);
+        }
+        CHECK(tree_page_from_array(entries,"acme","large-repo","src",1U,out));
+        CHECK(strstr(out,"tree src page=2")!=NULL);
+        json_object_put(entries);
+    }
+
+    {
         char query[512],short_reply[512],long_text[1800];
         unsigned page=0;
         size_t i,pages=0;
@@ -1299,7 +1444,7 @@ static stnlabz_module_result_t stop(void)
     return STNLABZ_MODULE_OK;
 }
 static const stnlabz_module_descriptor_t descriptor={
-    "github","Digit GitHub Read-Only",1,0,7,
+    "github","Digit GitHub Read-Only",1,0,8,
     STNLABZ_MODULE_API_MAJOR,STNLABZ_MODULE_API_MINOR,
     qualify,start,stop
 };
