@@ -4,7 +4,7 @@
 
 static int calls_identity,calls_research,calls_llm,calls_peer,failures,checks;
 static int scenario;
-static char reply_buffer[1024],peer_buffer[1024],requested_query[512];
+static char reply_buffer[1024],peer_buffer[1024],requested_query[512],requested_prompt[2048];
 #define CHECK(x) do {++checks;if(!(x)){++failures;fprintf(stderr,"FAIL line %d: %s\n",__LINE__,#x);}}while(0)
 
 static stnlabz_module_result_t mocked_service(
@@ -57,7 +57,10 @@ static stnlabz_module_result_t mocked_service(
   if(!request||request_size!=sizeof(digit_llm_request_t)||!out||
      response_size<sizeof *out)return STNLABZ_MODULE_ERR_INVALID_ARGUMENT;
   memset(out,0,sizeof *out);
-  strcpy(out->text,"Hello peer");
+  strcpy(out->text,scenario==10?"rictus: Hello there":
+      scenario==11?"rictus: ":scenario==12?"HELLO THERE":"Hello peer");
+  snprintf(requested_prompt,sizeof requested_prompt,"%s",
+           ((const digit_llm_request_t *)request)->prompt);
   *response_used=sizeof *out;
   return STNLABZ_MODULE_OK;
  }
@@ -84,7 +87,7 @@ static stnlabz_module_result_t ask(int selected,const char *text)
 {
  stnlabz_module_command_t cmd={0};
  scenario=selected;calls_identity=calls_research=calls_llm=calls_peer=0;
- reply_buffer[0]=peer_buffer[0]=requested_query[0]=0;
+ reply_buffer[0]=peer_buffer[0]=requested_query[0]=requested_prompt[0]=0;
  snprintf(cmd.arguments,sizeof cmd.arguments,"%s",text);
  return controller(&cmd,mocked_reply,NULL,NULL);
 }
@@ -100,17 +103,26 @@ int main(void)
  CHECK(start(&mock_host)==STNLABZ_MODULE_OK);
 
  CHECK(ask(1,"when are the New England Patriots playing again?")==STNLABZ_MODULE_OK);
+ CHECK(!strcmp(reply_buffer,"Hello peer"));
+ CHECK(!strcmp(requested_prompt,"when are the New England Patriots playing again?"));
+ CHECK(calls_identity==1&&calls_research==0&&calls_llm==1&&calls_peer==0);
+ CHECK(ask(2,"C++ & C#")==STNLABZ_MODULE_OK);
+ CHECK(!strcmp(reply_buffer,"Hello peer"));
+ CHECK(calls_research==0&&calls_llm==1);
+ CHECK(ask(2,"Hello")==STNLABZ_MODULE_OK);
+ CHECK(!strcmp(reply_buffer,"Hello peer"));
+ CHECK(calls_research==0&&calls_llm==1&&calls_peer==0);
+ CHECK(ask(2,"What is PHP?")==STNLABZ_MODULE_OK);
+ CHECK(!strcmp(requested_prompt,"What is PHP?"));
+ CHECK(calls_research==0&&calls_llm==1);
+ CHECK(ask(1,"research when are the New England Patriots playing again?")==STNLABZ_MODULE_OK);
  CHECK(!strcmp(reply_buffer,expected));
  CHECK(!strcmp(requested_query,"when are the New England Patriots playing again?"));
- CHECK(calls_identity==1&&calls_research==1&&calls_llm==0&&calls_peer==0);
- CHECK(ask(2,"C++ & C#")==STNLABZ_MODULE_OK);
- CHECK(!strcmp(reply_buffer,expected));
- CHECK(!strcmp(requested_query,"C++ & C#"));
- CHECK(calls_research==1&&calls_llm==0);
- CHECK(ask(3,"custom safe subject")==STNLABZ_MODULE_OK);
+ CHECK(calls_research==1&&calls_llm==0&&calls_peer==0);
+ CHECK(ask(3,"search custom safe subject")==STNLABZ_MODULE_OK);
  CHECK(!strcmp(reply_buffer,"Search returned no results."));
  CHECK(calls_research==1&&calls_llm==0);
- CHECK(ask(4,"prohibited query")==STNLABZ_MODULE_OK);
+ CHECK(ask(4,"research prohibited query")==STNLABZ_MODULE_OK);
  CHECK(strstr(reply_buffer,"safety gate")!=NULL&&calls_llm==0);
  CHECK(ask(5,"what is your name?")==STNLABZ_MODULE_OK);
  CHECK(!strcmp(reply_buffer,"I am Digit.")&&calls_research==0&&calls_llm==0);
@@ -121,9 +133,15 @@ int main(void)
  CHECK(strstr(reply_buffer,"identity service")!=NULL&&calls_llm==0&&calls_research==0);
  CHECK(ask(8,"tell rictus hello")==STNLABZ_MODULE_OK);
  CHECK(strstr(reply_buffer,"Language inference failed")!=NULL&&calls_llm==1);
- CHECK(ask(9,"when does the event start?")==STNLABZ_MODULE_OK);
+ CHECK(ask(9,"research when does the event start?")==STNLABZ_MODULE_OK);
  CHECK(!strcmp(reply_buffer,"Research service unavailable."));
  CHECK(calls_research==1&&calls_llm==0);
+ CHECK(ask(10,"hello")==STNLABZ_MODULE_OK);
+ CHECK(!strcmp(reply_buffer,"Hello there")&&calls_peer==0);
+ CHECK(ask(11,"hello")==STNLABZ_MODULE_OK);
+ CHECK(strstr(reply_buffer,"no usable answer")!=NULL&&calls_peer==0);
+ CHECK(ask(12,"Hello")==STNLABZ_MODULE_OK);
+ CHECK(!strcmp(reply_buffer,"HELLO THERE")&&calls_research==0);
  CHECK(stop()==STNLABZ_MODULE_OK);
  printf("Ask controller: %d/%d checks passed\n",checks-failures,checks);
  return failures?1:0;
