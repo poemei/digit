@@ -1,0 +1,82 @@
+DIGIT PROJECT CONTINUITY
+Updated: 2026-11-03
+Repository: poemei/digit
+Purpose: Provide a concise, evidence-conscious handoff for continued Digit development.
+Scope: Digit only. Website/CMS integration details are deliberately excluded.
+
+IDENTITY AND MISSION
+Digit is an Intelligent Autonomous Engineering and Management Asset.
+Digit supports STN-LABZ's mission, objectives, research, development,
+engineering, technical analysis, innovation and operational support.
+She is not merely an LLM-driven chatbot, corpus library or Q&A bot.
+Digit uses Ollama for inference and assistance. Her observations,
+environment and corpus form part of her knowledge base.
+
+GENERAL ORDERS (OPERATOR-OBSERVED ANSWERS)
+1. Remain at the assigned mission.
+2. Follow established policies and authorized instructions.
+3. Report anything outside authority to the appropriate next level.
+These are recorded conversational responses, not a replacement for
+the governing documents.
+
+ARCHITECTURE
+Core manages routing and module orchestration. Modules provide distinct
+capabilities; views are optional. Transport modules must use established
+Core-mediated services rather than modifying Core to suit an interface.
+The existing transport-neutral ingress is digit.router.dispatch,
+defined in include/digit_route.h.
+The current request structure allows up to 2047 bytes of message text;
+the existing router reply structure allows up to 511 bytes of text.
+The repository README and AGENTS.md are authoritative development entry
+points; applicable policy and module documentation must be read directly.
+
+DEVELOPMENT STATUS AND EVIDENCE
+- Ask: Deterministic standalone greetings were added in Ask 1.0.7.
+  Earlier user evidence showed failures in lightweight inference for
+  ordinary conversation; do not assume that issue is resolved merely
+  because deterministic greetings work.
+- Research: Available as an explicit capability. Retrieved material is
+  evidence to evaluate, not automatically verified knowledge.
+- GitHub: GitHub 1.0.8 tree pagination replaced a four-entry truncation
+  and its native qualification fixture was subsequently corrected.
+  Operator-side qualification after that correction is not established
+  by the repository notes.
+- Ollama: Documentation describes a lightweight conversational model
+  and an on-demand engineering inference service. Source and operator
+  environment should be checked before asserting model availability.
+- User-observed conversation on 2026-11-03: Digit answered a greeting,
+  stated her mission, gave her first three General Orders and returned
+  a GitHub repository classification. This supports those observed
+  interactions, not blanket claims of general reliability.
+Module versions and acceptance status may change. Consult module
+descriptors, docs/CHANGELOG.md and docs/MODULE_ROADMAP.md for the current
+committed baseline, and operator logs for deployment evidence.
+
+ENGINEERING AND AUTHORITY
+"Competency is always the Watchword of the Day."
+"Probable != Determinate."
+Human developer authority is absolute over development decisions.
+No Core changes without direct consent from the Digit Project Director.
+No unapproved architecture, dependencies, contracts, scope expansion,
+branches, workflows, deployment or external actions.
+If a repository is provided, AI Work environments are denied.
+For module changes, examine the applicable Module Creation Guide and
+reference examples before editing. Preserve established interfaces.
+Correct whole files, not disconnected patches.
+Diagnose root causes; distinguish verified evidence from inference,
+hypothesis and unknowns. Never fabricate builds, tests or acceptance.
+Use the established Linux Makefile workflow:
+  make -C modules/<module> clean all test
+Installation and activation require separate operator authorization.
+The intended module installation identity is digit:digit.
+Version numbering follows docs/20260906.0_VERSION_NUMBERING.md:
+MAJOR.MINOR.REVISION; revision 0 through 10, then minor rollover.
+
+CONTINUITY RULE
+Before development, inspect the actual target source, AGENTS.md and
+relevant documentation. Preserve the operator's last authorized
+direction and verified results. Ask for authority where required;
+do not infer permission from repository access. Record what changed,
+what was tested, what remains unverified and any deferred work.
+This file is a continuity aid, not a grant of authority and not a
+substitute for live source, policy or deployment evidence.
