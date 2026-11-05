@@ -84,7 +84,7 @@ Establish Digit's identity, mission, stable runtime, and foundational authority 
 **Exit Gate**  
 Human verification of identity, lifecycle, and authorization behavior, followed by Project Director acceptance.
 
-**Status**: {color:green}Established{/color}
+**Status**: Established
 
 ---
 
