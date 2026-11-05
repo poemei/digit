@@ -414,3 +414,7 @@ Module-specific plans and implementation priorities belong in `DIGIT_MODULES.md`
 ---
 
 {small}DTG = Date Time Group. All recorded DTGs use UTC.{/small}
+
+### Core interactive terminal operation — source increment (2026-11-05)
+
+Director-authorized Core change: enable terminal conversation when Digit starts with an attached interactive TTY. Messages enter through the established Core router `digit.router.dispatch`; existing module hotloading and signals remain. `exit`/`quit` requests ordinary shutdown; no TTY means no terminal prompts or reads. Built-in line input is bounded by existing router limits. Core terminal regression target added; operator compilation, qualification, interactive WSL2 acceptance and service-mode regression pending. No separate terminal module or Core ABI change.
