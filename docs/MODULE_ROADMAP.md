@@ -458,3 +458,7 @@ Web 1.0.0 test scope expanded with socketpair round-trip against a mocked `digit
 Approved design: Digit initiates outbound HTTP requests to a local ChAoS MVC `/chat/transport` endpoint, retrieves pending messages, routes them through the existing `digit.router.dispatch` Core service, and posts the reply. This replaces the previous socket transport. Browser interface is `/chat`.
 
 Offline C build and 16/16 tests passed in an isolated environment. Native host build, installation, hotload and web integration are not verified. The PHP endpoint, browser authorization and queue behavior are separate implementation steps. Core remains unchanged and its existing reply length limit still applies.
+
+### Identity test fixture correction — 2026-11-05
+
+Updated the Identity native integration test expectations to match the existing Director-approved mission and General Order text in `data/identity.conf`. The observed WSL2 `13/13` selftest pass followed by approved mission failure was caused by mismatched test literals; no mission or model changes. Source consistency checked; native rerun pending.
