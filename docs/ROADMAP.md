@@ -104,7 +104,7 @@ Maintain understandable execution and independent module capabilities.
 **Exit Gate**  
 Positive and negative routing tests, module hot-replacement verification, and Project Director acceptance.
 
-**Status**: {color:green}Established{/color}
+**Status**: Established
 
 ---
 
@@ -161,11 +161,11 @@ Human verification using:
 Unverified claims must never be presented as established facts.
 
 **Status**
-- Research qualification: {color:green}Qualified{/color}
-- Live retrieval: {color:green}Observed{/color}
-- Source relevance: {color:amber}Open{/color}
-- Source currency: {color:amber}Open{/color}
-- Direct URL acceptance: {color:amber}Open{/color}
+- Research qualification: Qualified
+- Live retrieval: Observed
+- Source relevance: Open
+- Source currency: Open
+- Direct URL acceptance: Open
 
 ---
 
@@ -212,8 +212,8 @@ Assigned engineering functions must demonstrate correct behavior through practic
 Successful code generation, an explanation, or a passing isolated test does not independently establish engineering competence.
 
 **Status**
-- Engineering development: {color:amber}In Progress{/color}
-- General engineering certification: {color:red}Not Established{/color}
+- Engineering development: In Progress
+- General engineering certification: Not Established
 
 ---
 
@@ -233,8 +233,8 @@ Provide practical assistance to company personnel and authorized personal workfl
 Real-world user tasks must demonstrate successful authorized operations and correct denial of unauthorized requests.
 
 **Status**
-- Mission objective: {color:green}Established{/color}
-- Capability qualification: {color:amber}Pending Individual Acceptance{/color}
+- Mission objective: Established
+- Capability qualification: Pending Individual Acceptance
 
 ---
 
@@ -256,7 +256,7 @@ Certification requires a documented human assessment and explicit acceptance dec
 
 Module tests, account classification, access level, and AI inference capabilities do not independently confer certification.
 
-**Status**: {color:amber}Future Objective{/color}
+**Status**: Future Objective
 
 ---
 
@@ -387,7 +387,7 @@ Obtain the required human confirmation of operational readiness.
 
 **Current Priority**: Cycle 4 — Engineering and Technical Support.
 
-**Current Certification State**: {color:red}General Engineering Certification Not Established{/color}
+**Current Certification State**: General Engineering Certification Not Established
 
 ---
 
@@ -409,7 +409,7 @@ Module-specific plans and implementation priorities belong in `DIGIT_MODULES.md`
 **Company**: STN-LABZ, LLC.  
 **Project**: Digit  
 **DTG**: 20261103:0846Z  
-**Status**: {color:green}Approved{/color}
+**Status**: Approved
 
 ---
 
