@@ -1,5 +1,12 @@
 # Digit — CHANGELOG
 
+## Unreleased — 2026-11-05 — Identity qualification fixture correction
+
+- Corrected the complete `modules/identity/tests/test_identity.c` fixture to match Director-approved `data/identity.conf` wording for the mission and General Orders 1 and 3.
+- Root cause: test expected obsolete third-person and prior-order text, despite `identity_selftest` passing 13/13 and the negative test passing 1/1.
+- Verified the four hardcoded test reference strings against the repository's approved configuration. Native Linux/WSL2 build and test not executed in this change; operator rerun pending.
+- Approved mission record, model, Core and other modules unchanged.
+
 ## Unreleased — 2026-11-03 — Web Transport 1.0.1: outbound HTTP replaces unauthorized socket
 
 - Director authorized replacing the previous web module's Unix socket design with outbound HTTP to Digit's local ChAoS MVC server. The public chat route is `/chat`.
