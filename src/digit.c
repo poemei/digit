@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include "agent_root.h"
 #include "digit.h"
 #include "logging.h"
@@ -10,8 +11,39 @@
 #include "stnlabz_abi/module_registry.h"
 #include "stnlabz_abi/module_loader.h"
 #include "runtime.h"
+#include "digit_route.h"
 
 #define DIGIT_MODULE_DIRECTORY STNLABZ_INSTALL_PATH "/modules"
+
+/* Terminal input is a Core ingress, not a capability or module.
+ * It invokes the same existing transport-neutral router used by IRC/web. */
+static int digit_terminal_dispatch(void *context, const char *message,
+                                   char *output, size_t capacity)
+{
+    const stnlabz_module_host_t *host = context;
+    digit_route_request_t request = {0};
+    digit_route_reply_t reply = {0};
+    size_t length, used = 0;
+    stnlabz_module_result_t result;
+    if (!host || !host->invoke_service || !message || !output || !capacity)
+        return 0;
+    length = strlen(message);
+    if (!length || length >= sizeof request.text)
+        return 0;
+    memcpy(request.sender, "terminal", sizeof "terminal");
+    memcpy(request.text, message, length + 1U);
+    result = host->invoke_service(DIGIT_ROUTER_DISPATCH_SERVICE,
+                                  &request, sizeof request,
+                                  &reply, sizeof reply, &used);
+    if (result != STNLABZ_MODULE_OK || used != sizeof reply ||
+        !reply.replied || !memchr(reply.text, 0, sizeof reply.text) ||
+        !reply.text[0])
+        return 0;
+    length = strlen(reply.text);
+    if (length >= capacity) return 0;
+    memcpy(output, reply.text, length + 1U);
+    return 1;
+}
 
 /* Core identity and operations never depend on any one capability module. */
 int stnlabz_initialize(void)
@@ -65,6 +97,8 @@ int stnlabz_initialize(void)
 
     runtime.module_poll = (void (*)(void *))stnlabz_hotload_poll;
     runtime.module_poll_context = watch;
+    runtime.terminal_dispatch = digit_terminal_dispatch;
+    runtime.terminal_context = (void *)module_host;
 
     printf("%s\n", DIGIT_NAME);
     printf("[CORE] Agent Root verified: %s (revision %u)\n",
