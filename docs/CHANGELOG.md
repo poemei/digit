@@ -1,5 +1,12 @@
 # Digit — CHANGELOG
 
+## Unreleased — 2026-11-05 — Core interactive terminal ingress
+
+- Director explicitly directed that terminal operations belong in Digit Core, not in a standalone transport module.
+- Core runtime now reads bounded, line-oriented messages from standard input **only when attached to a TTY**, routes them via existing `digit.router.dispatch`, and displays the captured reply. Interactive `exit`/`quit` requests a normal graceful shutdown. Service/daemon operation without a TTY remains noninteractive.
+- Added `tests/test_core_terminal.c` and a `test-terminal` Makefile target. Module hotload and existing routing remain in place; no additional socket, HTTP listener, dependency or ABI change was introduced.
+- Source changes and test fixture committed. **Native build, full Core qualification, WSL2 terminal interaction and daemon regression remain unverified** until executed in the operator environment.
+
 ## Unreleased — 2026-11-05 — Identity qualification fixture correction
 
 - Corrected the complete `modules/identity/tests/test_identity.c` fixture to match Director-approved `data/identity.conf` wording for the mission and General Orders 1 and 3.
