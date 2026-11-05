@@ -36,7 +36,7 @@ ABI_OBJS := $(patsubst $(ABI_SRC_DIR)/%.c,$(BUILD_DIR)/abi/%.o,$(ABI_SRCS))
 OBJS := $(CORE_OBJS) $(ABI_OBJS)
 DEPS := $(OBJS:.o=.d)
 
-.PHONY: all clean install uninstall test test-contracts test-behavior test-hotload test-concurrency test-reentrant test-inflight
+.PHONY: all clean install uninstall test test-contracts test-behavior test-terminal test-hotload test-concurrency test-reentrant test-inflight
 all: $(TARGET)
 
 .PHONY: check-abi
@@ -69,6 +69,13 @@ test-contracts:
 
 test-behavior: $(BUILD_DIR)/test_core_behavior
 	./$(BUILD_DIR)/test_core_behavior
+
+$(BUILD_DIR)/test_core_terminal: tests/test_core_terminal.c src/runtime.c src/logging.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ tests/test_core_terminal.c src/logging.c
+
+test-terminal: $(BUILD_DIR)/test_core_terminal
+	./$(BUILD_DIR)/test_core_terminal
 
 # Test fixtures are compiled as separate real shared objects. Test staging,
 # module installation and log files remain under a disposable private /tmp tree.
@@ -124,7 +131,7 @@ $(BUILD_DIR)/test_core_hotload_inflight: tests/test_core_hotload_inflight.c $(HO
 test-inflight: $(BUILD_DIR)/test_core_hotload_inflight $(BUILD_DIR)/fixtures/blocking.so $(BUILD_DIR)/fixtures/good.so
 	./$(BUILD_DIR)/test_core_hotload_inflight $(BUILD_DIR)/fixtures/blocking.so $(BUILD_DIR)/fixtures/good.so
 
-test: $(TARGET) test-contracts test-behavior test-hotload test-concurrency test-reentrant test-inflight
+test: $(TARGET) test-contracts test-behavior test-terminal test-hotload test-concurrency test-reentrant test-inflight
 	@echo "Core source, C behavior, hotload integration, and threaded handler-withdrawal and self-unregister checks complete; live module concurrency qualification remains separate."
 
 install: $(TARGET)
